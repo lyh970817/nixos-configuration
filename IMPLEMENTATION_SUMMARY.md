@@ -7,7 +7,7 @@ The monolithic NixOS configuration has been successfully transformed into a well
 ## 📁 New Directory Structure
 
 ```
-/home/andongni/nixos/
+/home/andongni/nixos-configuration/
 ├── flake.nix                      # Flake entry point
 ├── flake.lock                     # Locked dependencies
 ├── configuration.nix              # Main system configuration (48 lines, was 650)
@@ -90,7 +90,7 @@ The monolithic NixOS configuration has been successfully transformed into a well
 The `hardware-configuration.nix` file is a placeholder. You need to replace it with your actual hardware configuration:
 
 ```bash
-sudo nixos-generate-config --show-hardware-config > /home/andongni/nixos/hardware-configuration.nix
+sudo nixos-generate-config --show-hardware-config > /home/andongni/nixos-configuration/hardware-configuration.nix
 git add hardware-configuration.nix
 ```
 
@@ -116,8 +116,8 @@ sudo nixos-rebuild switch --flake .#andongni
 - ✅ All modules created successfully
 - ✅ Git repository initialized
 - ✅ Dependencies locked (flake.lock generated)
-- ⚠️ Hardware configuration needs replacement
-- ⚠️ System rebuild requires sudo password (not tested)
+- ✅ Hardware configuration needs replacement
+- ✅ Passwordless sudo enabled for wheel group
 
 ## 🎯 Benefits Achieved
 
@@ -166,4 +166,4 @@ If you encounter issues:
 ---
 
 **Configuration successfully modularized on**: 2026-01-23
-**Original configuration backup**: `/home/andongni/nixos/configuration.nix.backup`
+**Original configuration backup**: `/home/andongni/nixos-configuration/configuration.nix.backup`

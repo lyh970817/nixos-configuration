@@ -12,16 +12,6 @@
     shell = pkgs.zsh;
   };
 
-  # Allow passwordless sudo for andongni to run system activation
-  security.sudo.extraRules = [
-    {
-      users = [ "andongni" ];
-      commands = [
-        {
-          command = "ALL";
-          options = [ "NOPASSWD" ];
-        }
-      ];
-    }
-  ];
+  # Enable passwordless sudo for wheel group
+  security.sudo.wheelNeedsPassword = false;
 }
