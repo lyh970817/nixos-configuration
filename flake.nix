@@ -1,5 +1,5 @@
 {
-  description = "nix-configuration for andongni";
+  description = "nixos-configuration for andongni";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
