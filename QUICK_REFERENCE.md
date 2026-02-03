@@ -6,7 +6,7 @@
 
 ```bash
 # Switch to new configuration
-cd /home/andongni/nixos
+cd /home/andongni/nixos-configuration
 sudo nixos-rebuild switch --flake .#andongni
 
 # Test configuration without activating
@@ -155,10 +155,10 @@ home-manager --version
 
 ## File Locations
 
-- **Main config**: `/home/andongni/nixos/configuration.nix`
-- **Flake**: `/home/andongni/nixos/flake.nix`
-- **Backup**: `/home/andongni/nixos/configuration.nix.backup`
-- **Hardware**: `/home/andongni/nixos/hardware-configuration.nix`
+- **Main config**: `/home/andongni/nixos-configuration/configuration.nix`
+- **Flake**: `/home/andongni/nixos-configuration/flake.nix`
+- **Backup**: `/home/andongni/nixos-configuration/configuration.nix.backup`
+- **Hardware**: `/home/andongni/nixos-configuration/hardware-configuration.nix`
 
 ## Useful Commands
 
