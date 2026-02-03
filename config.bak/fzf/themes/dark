@@ -1,0 +1,15 @@
+--color=fg:#4AB34D
+--color=bg:#000000
+--color=hl:#3CA23F
+--color=fg+:#4AB34D
+--color=bg+:#045C07
+--color=hl+:#4AB34D
+--color=info:#2E9031
+--color=prompt:#4AB34D
+--color=pointer:#4AB34D
+--color=marker:#3CA23F
+--color=spinner:#2E9031
+--color=header:#207F23
+--color=border:#126D15
+--color=label:#3CA23F
+--color=query:#4AB34D

@@ -1,0 +1,119 @@
+# Matrix-Style Green Theme for Alacritty Terminal
+# Black background with green gradient colors
+
+[colors]
+# Default colors
+[colors.primary]
+background = '#000000'  # Pure black background
+foreground = '#4AB34D'  # Bright Apple green text for readability
+
+# Cursor colors
+[colors.cursor]
+text = '#000000'        # Black text when cursor is over it
+cursor = '#3CA23F'      # American Green cursor block
+
+# Selection colors
+[colors.selection]
+text = '#000000'
+background = '#2E9031'  # Wageningen Green highlight
+
+# Normal colors - using green gradient
+[colors.normal]
+# black   = '#045C07'  # Deep Green (darkest)
+black   = '#000000'  # Deep Green (darkest)
+red     = '#126D15'  # Verse Green
+green   = '#207F23'  # Web Forest Green
+yellow  = '#2E9031'  # Wageningen Green
+blue    = '#3CA23F'  # American Green
+magenta = '#4AB34D'  # Apple (brightest)
+cyan    = '#3CA23F'  # American Green
+white   = '#4AB34D'  # Apple (brightest)
+
+# Bright colors - using lighter greens for emphasis
+[colors.bright]
+black   = '#126D15'  # Verse Green
+red     = '#207F23'  # Web Forest Green
+green   = '#2E9031'  # Wageningen Green
+yellow  = '#3CA23F'  # American Green
+blue    = '#4AB34D'  # Apple
+magenta = '#4AB34D'  # Apple
+cyan    = '#4AB34D'  # Apple
+white   = '#4AB34D'  # Apple (brightest)
+
+# Dim colors - using darker greens
+[colors.dim]
+black   = '#045C07'  # Deep Green (darkest)
+red     = '#045C07'  # Deep Green
+green   = '#126D15'  # Verse Green
+yellow  = '#207F23'  # Web Forest Green
+blue    = '#207F23'  # Web Forest Green
+magenta = '#2E9031'  # Wageningen Green
+cyan    = '#207F23'  # Web Forest Green
+white   = '#2E9031'  # Wageningen Green
+
+# Vi mode colors
+[colors.vi_mode_cursor]
+text = '#000000'
+cursor = '#4AB34D'
+
+# Search colors
+[colors.search]
+[colors.search.matches]
+foreground = '#000000'
+background = '#3CA23F'  # American Green
+[colors.search.focused_match]
+foreground = '#000000'
+background = '#4AB34D'  # Apple (brightest for focus)
+
+# Line indicator colors
+[colors.line_indicator]
+foreground = '#4AB34D'
+background = '#000000'
+
+# Footer bar (used in vi mode)
+[colors.footer_bar]
+foreground = '#4AB34D'
+background = '#045C07'  # Deep Green for contrast
+
+# Optional: Window settings
+[window]
+
+# Optional padding
+padding.x = 10
+padding.y = 10
+# Decorations
+decorations = "full"
+
+# Optional: Font settings
+[font]
+# Size for good readability
+size = 12.0
+# Normal font face
+normal.family = "Hack Nerd Font"
+normal.style = "Regular"
+# Bold font face
+bold.family = "Hack Nerd Font"
+bold.style = "Bold"
+# Italic font face
+italic.family = "Hack Nerd Font"
+italic.style = "Italic"
+# Bold italic font face
+bold_italic.family = "Hack Nerd Font"
+bold_italic.style = "Bold Italic"
+
+# Optional: Cursor settings
+[cursor]
+# Block cursor is most visible
+style.shape = "Block"
+style.blinking = "Off"
+unfocused_hollow = true
+
+# Optional: Selection settings
+[selection]
+save_to_clipboard = true
+
+# Optional: Bell settings
+[bell]
+# animation = "Linear"
+# duration = 100
+# color = '#4AB34D'  # Apple green flash

@@ -1,0 +1,25 @@
+general.import = ["~/.config/alacritty/current.toml"]
+
+# [[keyboard.bindings]]
+# key = "Return"
+# mods = "Alt|Shift"
+# # This sends \x1b (Escape) + [13;4u (Standard code for Alt+Shift+Enter)
+# chars = "\u001b[13;4u"
+
+[[keyboard.bindings]]
+key = "Return"
+mods = "Alt|Shift"
+chars = "\u001b[24;2~"  # This is Shift+F12
+
+[terminal]
+# 'new-session -A -s main' means:
+# Attach to session 'main' if it exists; otherwise create it.
+# shell = { program = "tmux", args = ["new-session", "-A", "-s", "main"] }
+
+[window]
+dynamic_padding = true
+
+[[keyboard.bindings]]
+key = "Return"
+mods = "Shift"
+chars = "\u001b\r"
