@@ -8,6 +8,7 @@
     rofi
     swaybg
     brave
+    chromium
     mako
     libnotify
     calibre
@@ -25,7 +26,7 @@
     imagemagick
     ueberzugpp
     ffmpegthumbnailer
-    poppler
+    poppler-utils
     adwaita-icon-theme
     gnome-themes-extra
     arc-theme

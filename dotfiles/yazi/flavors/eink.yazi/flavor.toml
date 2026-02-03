@@ -1,0 +1,219 @@
+# Yazi E-ink Display Theme
+# A high-contrast grayscale theme optimized for e-ink displays
+# Uses only black, white, and grayscale colors for maximum readability
+# Place this file at ~/.config/yazi/theme.toml
+
+[mgr]
+
+# Current working directory - bold black on white
+cwd = { fg = "black", bg = "white", bold = true }
+
+# Hovered file - white on dark gray for clear selection
+hovered = { fg = "white", bg = "#404040", bold = true }
+
+# Preview hovered - slightly lighter background
+preview_hovered = { fg = "white", bg = "#505050" }
+
+# Search highlights - inverted for visibility
+find_keyword = { fg = "black", bg = "#C0C0C0", bold = true }
+
+# Position indicator - subtle gray
+find_position = { fg = "#808080" }
+
+# File markers using different gray levels
+marker_copied = { fg = "#808080", bg = "#808080" }
+marker_cut = { fg = "#B0B0B0", bg = "#B0B0B0" }
+marker_marked = { fg = "black", bg = "black"}
+marker_selected = { fg = "black", bg = "black"}
+
+# Count indicators with subtle backgrounds
+count_copied = { fg = "black", bg = "#D0D0D0" }
+count_cut = { fg = "black", bg = "#B0B0B0" }
+count_selected = { fg = "white", bg = "#404040" }
+
+# Border using simple line with gray
+border_style = { fg = "#000000" }
+
+# Syntax highlighting theme for code preview (if needed)
+syntect_theme = "~/.config/yazi/bow-wob-light.tmTheme"
+
+[tabs]
+# Active tab - high contrast
+active = { fg = "black", bg = "white", bold = true }
+
+# Inactive tabs - lower contrast
+inactive = { fg = "#808080", bg = "#F0F0F0" }
+
+# Tab separators
+sep_inner = { open = "[", close = "]" }
+sep_outer = { open = "", close = "" }
+
+[mode]
+# Normal mode - clean black on white
+normal_main = { fg = "black", bg = "white", bold = true }
+normal_alt = { fg = "#404040", bg = "white" }
+
+# Select mode - inverted for distinction
+select_main = { fg = "white", bg = "black", bold = true }
+select_alt = { fg = "#C0C0C0", bg = "black" }
+
+# Unset mode - gray to show inactive state
+unset_main = { fg = "#808080", bg = "#F0F0F0" }
+unset_alt = { fg = "#A0A0A0", bg = "#F0F0F0" }
+
+[status]
+# Overall status bar
+# overall = { fg = "black", bg = "#E0E0E0" }
+overall = { fg = "black", bg = "white" }
+
+# Status separators
+sep_left = { open = "", close = "]" }
+sep_right = { open = "[", close = "" }
+
+# Permission indicators with varying gray levels
+perm_type = { fg = "black", bold = true }
+perm_read = { fg = "#404040" }
+perm_write = { fg = "#606060" }
+perm_exec = { fg = "black", bold = true }
+perm_sep = { fg = "#C0C0C0" }
+
+# Progress indicators
+progress_label = { fg = "black", bold = true }
+progress_normal = { fg = "white", bg = "#808080" }
+progress_error = { fg = "white", bg = "black", bold = true }
+
+[which]
+# Key help display
+cols = 2
+mask = { bg = "#E0E0E0" }
+cand = { fg = "black", bold = true }
+rest = { fg = "#404040" }
+desc = { fg = "#404040" }
+separator = " → "
+separator_style = { fg = "#808080" }
+
+[confirm]
+# Confirmation dialogs
+border = { fg = "black" }
+title = { fg = "black", bold = true }
+content = { fg = "black" }
+list = { fg = "#404040" }
+btn_yes = { fg = "black", bg = "white", bold = true }
+btn_no = { fg = "black", bg = "white" }
+
+[spot]
+# Search/spotlight features
+border = { fg = "#808080" }
+title = { fg = "black", bold = true }
+tbl_col = { fg = "white", bg = "#606060" }
+tbl_cell = { fg = "white", bg = "#404040" }
+
+[notify]
+# Notification styles - using bold for emphasis
+title_info = { fg = "black", bold = true }
+title_warn = { fg = "black", bg = "#D0D0D0", bold = true }
+title_error = { fg = "white", bg = "black", bold = true }
+
+[pick]
+# Picker dialogs
+border = { fg = "#808080" }
+active = { fg = "white", bg = "#404040", bold = true }
+inactive = { fg = "#606060" }
+
+[input]
+# Input fields
+border = { fg = "black" }
+title = { fg = "black", bold = true }
+value = { fg = "black" }
+selected = { fg = "white", bg = "#808080" }
+
+[cmp]
+# Completion menu
+border = { fg = "#808080" }
+active = { fg = "white", bg = "#404040", bold = true }
+inactive = { fg = "#606060" }
+# icon_file = "▸"
+# icon_folder = "▾"
+# icon_command = "›"
+
+[tasks]
+# Task manager
+border = { fg = "#808080" }
+title = { fg = "black", bold = true }
+hovered = { fg = "white", bg = "#606060" }
+
+[help]
+# Help menu
+on = { fg = "black", bold = true }
+run = { fg = "#404040" }
+desc = { fg = "#606060" }
+hovered = { fg = "white", bg = "#808080" }
+footer = { fg = "#808080", bg = "#F0F0F0" }
+# icon_info = "ℹ"
+# icon_warn = "⚠"
+# icon_error = "✕"
+
+[filetype]
+# File type rules using grayscale distinctions
+rules = [
+    # Directories - bold black
+    { name = "*/", fg = "black", bold = true },
+    
+    # Executables - dark gray with bold
+    { name = "*", is = "exec", fg = "#404040", bold = true },
+    
+    # Archives - medium gray
+    { mime = "application/zip", fg = "#606060" },
+    { mime = "application/x-tar", fg = "#606060" },
+    { mime = "application/x-gzip", fg = "#606060" },
+    { mime = "application/x-bzip", fg = "#606060" },
+    { mime = "application/x-7z-compressed", fg = "#606060" },
+    
+    # Documents - dark gray
+    { mime = "application/pdf", fg = "#404040" },
+    { mime = "application/msword", fg = "#404040" },
+    { mime = "application/vnd.*", fg = "#404040" },
+    
+    # Images - medium gray with underline
+    { mime = "image/*", fg = "#505050" },
+    
+    # Videos/Audio - darker gray with underline
+    { mime = "video/*", fg = "#606060" },
+    { mime = "audio/*", fg = "#606060" },
+    
+    # Text files - standard black
+    { mime = "text/*", fg = "black" },
+    
+    # Code files - black with different styles
+    { name = "*.py", fg = "black" },
+    { name = "*.js", fg = "black" },
+    { name = "*.rs", fg = "black" },
+    { name = "*.go", fg = "black" },
+    { name = "*.c", fg = "black" },
+    { name = "*.cpp", fg = "black" },
+    { name = "*.h", fg = "black" },
+    { name = "*.java", fg = "black" },
+    
+    # Config files - gray
+    { name = "*.toml", fg = "#707070" },
+    { name = "*.yaml", fg = "#707070" },
+    { name = "*.yml", fg = "#707070" },
+    { name = "*.json", fg = "#707070" },
+    { name = "*.xml", fg = "#707070" },
+    { name = "*.ini", fg = "#707070" },
+    
+    # Hidden files - light gray
+    { name = ".*", fg = "#909090" },
+    
+    # Symbolic links - gray italic (if supported)
+    { name = "*", is = "link", fg = "#808080", italic = true },
+    
+    # Broken links - black on gray background
+    { name = "*", is = "orphan", fg = "black", bg = "#D0D0D0" },
+    
+    # Empty files - light gray
+    { mime = "inode/empty", fg = "#B0B0B0" },
+    
+    # Fallback - medium gray
+    { name = "*", fg = "#606060" }
+]

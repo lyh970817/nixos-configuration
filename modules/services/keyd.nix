@@ -22,6 +22,12 @@
             # Optional: other useful shortcuts on this layer
             u = "pageup";
             d = "pagedown";
+            w = "C-right";
+            b = "C-left";
+          };
+          "nav+shift" = {
+            h = "home";
+            l = "end";
           };
         };
       };

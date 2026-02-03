@@ -1,0 +1,48 @@
+"$schema" = "https://yazi-rs.github.io/schemas/yazi.json"
+
+[mgr]
+# Layout ratios: [parent, current, preview]
+# Setting parent to 0 removes the left pane
+ratio = [0, 3, 4]
+
+# Show borders
+show_border = true
+
+linemode    = "size"
+sort_by     = "natural"
+
+[preview]
+wrap       = "yes"
+max_width  = 1500
+max_height = 1500
+
+[opener]
+edit = [
+	{ run = '$EDITOR "$@"', desc = "$EDITOR", block = true },
+]
+play = [
+	{ run = 'mpv --force-window "$@"' },
+]
+extract = [
+	{ run = 'ya pub extract --list "$@"', desc = "Extract here" },
+]
+subtitle = [
+	{ run = ''' echo sub-add "'$0'" | socat - /tmp/mpv.sock ''', desc = "Add sub to MPV" },
+]
+
+[open]
+prepend_rules = [
+	{ url = "*.{ass,srt,ssa,sty,sup,vtt}", use = [ "subtitle", "edit" ] },
+]
+
+[plugin]
+prepend_previewers = [
+	{ name = "*.pdf", run = "pdf" },
+	{ mime = "video/*", run = "video" },
+	{ mime = "audio/*", run = "video" },
+]
+
+prepend_fetchers = [
+	{ id = "git", url = "*", run = "git" },
+	{ id = "git", url = "*/", run = "git" },
+]

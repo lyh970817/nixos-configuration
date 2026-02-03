@@ -25,6 +25,7 @@
     ./programs/gemini.nix
     ./programs/launchers.nix
     ./programs/dotfiles.nix
+    ./programs/wine.nix
     ./desktop/theming.nix
     ./desktop/xdg.nix
     ./packages/base.nix

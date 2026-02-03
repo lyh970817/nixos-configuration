@@ -21,6 +21,7 @@
     ./modules/hardware/audio.nix
     ./modules/hardware/bluetooth.nix
     ./modules/hardware/printing.nix
+    ./modules/hardware/video.nix
 
     # System services
     ./modules/services/greetd.nix
@@ -32,6 +33,7 @@
     ./modules/programs/input-method.nix
     ./modules/programs/firefox.nix
     ./modules/programs/development.nix
+    ./modules/programs/wine.nix
 
     # User accounts
     ./users/andongni.nix
@@ -39,6 +41,14 @@
 
   # Allow unfree packages
   nixpkgs.config.allowUnfree = true;
+
+  # Enable firmware
+  hardware.enableRedistributableFirmware = true;
+
+  fonts.packages = with pkgs; [
+    wqy_microhei
+    wqy_zenhei
+  ];
 
   # System-level font directory (required for some applications)
   fonts.fontDir.enable = true;

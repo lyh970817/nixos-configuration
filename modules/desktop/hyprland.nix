@@ -17,6 +17,8 @@
 
   # Environment variables for Wayland/Hyprland
   environment.sessionVariables = {
+    PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers}";
+    PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = "true";
     # Force Electron and Chromium apps to use native Wayland
     NIXOS_OZONE_WL = "1";
     WLR_NO_HARDWARE_CURSORS = "1";
@@ -28,6 +30,6 @@
       "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}"
     ];
     XMODIFIERS = "@im=fcitx";
-    GLFW_IM_MODULE = "ibus";
+    GLFW_IM_MODULE = "fcitx";
   };
 }
