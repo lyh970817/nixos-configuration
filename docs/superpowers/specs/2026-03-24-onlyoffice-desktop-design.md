@@ -37,7 +37,7 @@ sudo nixos-rebuild switch --flake .#andongni --impure
 
 - Confirm the flake evaluates during rebuild.
 - Confirm the rebuild completes successfully.
-- Confirm `onlyoffice-desktopeditors` is present in the resulting user environment.
+- Confirm an ONLYOFFICE Desktop Editors launcher entry or `.desktop` file is present in the resulting user environment.
 
 ## Scope
 
