@@ -1,15 +1,17 @@
 #!/bin/bash
 
-# Listen to window focus events and lower unfocused floating windows
-handle() {
-  case $1 in
-    activewindow*)
-      # When a window gets focus, lower all other floating windows
-      hyprctl clients -j | jq -r '.[] | select(.floating == true and .focusHistoryID != 0) | .address' | while read addr; do
-        hyprctl dispatch alterzorder bottom "address:$addr" 2>/dev/null
-      done
-      ;;
-  esac
+lower_unfocused_floating() {
+  hyprctl clients -j | jq -r '.[] | select(.floating == true and .focusHistoryID != 0) | .address' | while read -r addr; do
+    hyprctl dispatch alterzorder bottom "address:$addr" 2>/dev/null
+  done
 }
 
-socat -U - UNIX-CONNECT:/tmp/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock | while read -r line; do handle "$line"; done
+last_window=""
+
+while sleep 0.5; do
+  current_window=$(hyprctl activewindow -j | jq -r '.address // empty')
+  if [[ -n "$current_window" && "$current_window" != "$last_window" ]]; then
+    last_window="$current_window"
+    lower_unfocused_floating
+  fi
+done

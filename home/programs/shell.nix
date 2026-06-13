@@ -11,6 +11,17 @@
       KEYTIMEOUT=1
       export LS_COLORS="''${LS_COLORS}:ln=01;36:or=01;31:"
 
+      # Persist directory stack across sessions
+      DIRSTACKFILE="''${XDG_CACHE_HOME:-$HOME/.cache}/zsh/dirs"
+      DIRSTACKSIZE=20
+      [[ -d "''${DIRSTACKFILE:h}" ]] || mkdir -p "''${DIRSTACKFILE:h}"
+      [[ -f "$DIRSTACKFILE" ]] && dirstack=("''${(@f)"$(< "$DIRSTACKFILE")"}")
+      chpwd_dirstack() {
+        print -l -- "$PWD" "''${(u)dirstack[@]}" > "$DIRSTACKFILE"
+      }
+      autoload -Uz add-zsh-hook
+      add-zsh-hook -Uz chpwd chpwd_dirstack
+
       # Define paths
       FZF_LINK="$HOME/.config/fzf/current_theme"
       NEWT_LINK="$HOME/.config/newt/current_theme"
@@ -29,7 +40,6 @@
       }
 
       # Add it to the precmd array (runs before every prompt)
-      autoload -Uz add-zsh-hook
       add-zsh-hook precmd load_shell_themes
 
       # Run it once immediately on startup
@@ -83,6 +93,15 @@
         zvm_bindkey vicmd '^o' silent-y
         # Restore Ctrl+r for fzf history search
         zvm_bindkey viins '^R' fzf-history-widget
+        # Dirhistory keybindings (Ctrl+arrow instead of Alt+arrow)
+        zvm_bindkey viins '^[[1;5D' dirhistory_zle_dirhistory_back    # Ctrl+Left
+        zvm_bindkey viins '^[[1;5C' dirhistory_zle_dirhistory_future  # Ctrl+Right
+        zvm_bindkey viins '^[[1;5A' dirhistory_zle_dirhistory_up      # Ctrl+Up
+        zvm_bindkey viins '^[[1;5B' dirhistory_zle_dirhistory_down    # Ctrl+Down
+        zvm_bindkey vicmd '^[[1;5D' dirhistory_zle_dirhistory_back
+        zvm_bindkey vicmd '^[[1;5C' dirhistory_zle_dirhistory_future
+        zvm_bindkey vicmd '^[[1;5A' dirhistory_zle_dirhistory_up
+        zvm_bindkey vicmd '^[[1;5B' dirhistory_zle_dirhistory_down
       }
 
       # Whai wrapper function
@@ -98,13 +117,16 @@
       # Symbol alias for whai (noglob prevents shell from expanding '?')
       alias ,='noglob _whai_wrapper'
 
+      # System rebuild alias
+      alias rebuild='sudo nixos-rebuild switch --flake /etc/nixos#andongni --impure'
+
       # Function to print a random poem with alignment
       function print_welcome_poem() {
         ${builtins.readFile ./print_poem.sh}
       }
 
       # Launch fastfetch on terminal open (delay allows terminal to initialize)
-      sleep 0.1 && fastfetch && print_welcome_poem
+      sleep 0.1 && fastfetch && print_welcome_poem && printf '\n'
     '';
 
     oh-my-zsh = {
@@ -118,11 +140,13 @@
         "battery"
         "catimg"
         "gitfast"
-        "zoxide"
         "extract"
         "zsh-interactive-cd"
         "direnv"
         "dircycle"
+        "zsh-navigation-tools"
+        "dirhistory"
+        "wd"
       ];
     };
 
@@ -159,5 +183,10 @@
     };
 
     autosuggestion.enable = true;
+  };
+
+  programs.zoxide = {
+    enable = true;
+    options = [ "--cmd cd" ];
   };
 }

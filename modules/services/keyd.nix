@@ -24,10 +24,7 @@
             d = "pagedown";
             w = "C-right";
             b = "C-left";
-          };
-          "nav+shift" = {
-            h = "home";
-            l = "end";
+            v = "S-right";
           };
         };
       };

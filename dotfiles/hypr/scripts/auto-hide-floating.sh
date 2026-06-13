@@ -5,17 +5,6 @@ SPECIAL_WORKSPACE="special:minimized"
 
 echo "Script started at $(date)" > "$LOG_FILE"
 
-SOCKET_PATH="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock"
-
-echo "Socket path: $SOCKET_PATH" >> "$LOG_FILE"
-
-if [[ ! -S "$SOCKET_PATH" ]]; then
-    echo "ERROR: Socket not found" >> "$LOG_FILE"
-    exit 1
-fi
-
-echo "Socket found, connecting..." >> "$LOG_FILE"
-
 is_floating() {
     local address=$1
     hyprctl clients -j | jq -r ".[] | select(.address == \"$address\") | .floating" 2>/dev/null
@@ -33,13 +22,17 @@ hide_all_floating() {
     done
 }
 
-socat -U - "UNIX-CONNECT:$SOCKET_PATH" | while read -r line; do
-    if [[ $line == activewindow* ]]; then
-        CURRENT_WINDOW=$(hyprctl activewindow -j | jq -r '.address')
+last_window=""
+
+while sleep 0.5; do
+    CURRENT_WINDOW=$(hyprctl activewindow -j | jq -r '.address // empty')
+
+    if [[ -n "$CURRENT_WINDOW" && "$CURRENT_WINDOW" != "$last_window" ]]; then
+        last_window="$CURRENT_WINDOW"
         CURRENT_FLOATING=$(is_floating "$CURRENT_WINDOW")
-        
+
         echo "Focus changed to: $CURRENT_WINDOW (floating: $CURRENT_FLOATING)" >> "$LOG_FILE"
-        
+
         # If current window is tiling, hide all floating windows
         if [[ "$CURRENT_FLOATING" == "false" ]]; then
             hide_all_floating

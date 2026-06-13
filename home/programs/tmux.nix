@@ -13,7 +13,15 @@
     keyMode = "vi";               # Enables Vi-style keys for copy mode
     focusEvents = true;           # Enables focus-events on
     baseIndex = 0;
+    plugins = with pkgs.tmuxPlugins; [
+      {
+        plugin = tmux-thumbs;
+      }
+    ];
     extraConfig = ''
+      # Remove the plugin's default prefix binding and expose it only in copy mode.
+      unbind Space
+
       set -g allow-passthrough on
       # --- Pane Management ---
       # Horizontal Split: Alt + Enter
@@ -62,6 +70,13 @@
       # 3. Key Bindings
       # Bind 'v' to start selection (Vi style)
       bind -T copy-mode-vi v send-keys -X begin-selection
+
+      # Use f in copy mode to invoke tmux-thumbs on the currently visible content.
+      bind -T copy-mode-vi f thumbs-pick
+
+      # Page through scrollback only after copy mode is active.
+      bind -T copy-mode-vi C-b send-keys -X page-up
+      bind -T copy-mode-vi C-f send-keys -X page-down
 
       # Bind 'y' to copy to Wayland clipboard
       bind -T copy-mode-vi y send-keys -X copy-pipe-and-cancel "wl-copy"
