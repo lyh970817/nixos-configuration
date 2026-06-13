@@ -8,7 +8,7 @@
   users.users.andongni = {
     isNormalUser = true;
     description = "andongni";
-    extraGroups = [ "networkmanager" "wheel" ];
+    extraGroups = [ "networkmanager" "wheel" "docker" ];
     shell = pkgs.zsh;
   };
 

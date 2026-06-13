@@ -4,7 +4,7 @@
   # Configuration Management Strategy:
   # - Simple configs: Managed by home-manager (git, tmux, htop, starship, etc.)
   # - Theme-aware: Home-manager + darkman hooks (alacritty, rofi, mako, fzf)
-  # - Complex/Active: Symlinked from ~/nixos-configuration/dotfiles (nvim, yazi, hypr)
+  # - Complex/Active: Symlinked from ~/Yandex.Disk/System/nixos-configuration/dotfiles (nvim, yazi, hypr)
   # - Sensitive: Manual (ssh)
 
   imports = [
@@ -25,7 +25,6 @@
     ./programs/gemini.nix
     ./programs/launchers.nix
     ./programs/dotfiles.nix
-    ./programs/wine.nix
     ./desktop/theming.nix
     ./desktop/xdg.nix
     ./packages/base.nix
@@ -43,7 +42,12 @@
     TERMINAL = "alacritty";
     JAVA_HOME = "${pkgs.jdk17}/lib/openjdk";
     SSH_AUTH_SOCK = "$HOME/.bitwarden-ssh-agent.sock";
+    NPM_CONFIG_PREFIX = "$HOME/.npm-global";
   };
+
+  home.sessionPath = [
+    "$HOME/.npm-global/bin"
+  ];
 
   # Let Home Manager manage itself
   programs.home-manager.enable = true;

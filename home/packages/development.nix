@@ -14,7 +14,6 @@
       pyyaml
     ]))
     python3Packages.pip
-    pipx
     uv
     (rWrapper.override {
       packages = with rPackages; [
@@ -37,8 +36,8 @@
     hunspell
     hunspellDicts.en_GB-large
     claude-code
-    antigravity
     gemini-cli
+    kreuzberg-cli
     (writeShellScriptBin "zcf" ''
       # Set npm prefix to user's home to avoid read-only errors
       export NPM_CONFIG_PREFIX="$HOME/.npm-global"

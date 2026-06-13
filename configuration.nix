@@ -33,7 +33,6 @@
     ./modules/programs/input-method.nix
     ./modules/programs/firefox.nix
     ./modules/programs/development.nix
-    ./modules/programs/wine.nix
 
     # User accounts
     ./users/andongni.nix
@@ -44,6 +43,11 @@
 
   # Enable firmware
   hardware.enableRedistributableFirmware = true;
+
+  services.envfs.enable = true;
+
+  # Docker
+  virtualisation.docker.enable = true;
 
   fonts.packages = with pkgs; [
     wqy_microhei
