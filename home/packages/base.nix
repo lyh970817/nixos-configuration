@@ -5,7 +5,6 @@
   home.packages = with pkgs; [
     neovim
     wget
-    git
     file
     tree
     unzip
@@ -18,17 +17,11 @@
     bat
     fzf
     jq
-    socat
     lsd
-    starship
     tealdeer
-    tmux
     yazi
-    zoxide
     duf
     ncdu
-    htop
     lazygit
-    gh
   ];
 }
