@@ -7,12 +7,12 @@ The monolithic NixOS configuration has been successfully transformed into a well
 ## 📁 New Directory Structure
 
 ```
-/home/andongni/nixos-configuration/
+/home/andongni/Yandex.Disk/System/nixos-configuration/
 ├── flake.nix                      # Flake entry point
 ├── flake.lock                     # Locked dependencies
 ├── configuration.nix              # Main system configuration (48 lines, was 650)
 ├── hardware-configuration.nix     # Hardware config (placeholder - needs replacement)
-├── clash-meta-config.yaml         # Mihomo proxy config (preserved)
+├── mihomo-config.yaml             # Mihomo proxy config (preserved)
 ├── configuration.nix.backup       # Backup of original config
 │
 ├── modules/                       # System-level modules
@@ -90,7 +90,7 @@ The monolithic NixOS configuration has been successfully transformed into a well
 The `hardware-configuration.nix` file is a placeholder. You need to replace it with your actual hardware configuration:
 
 ```bash
-sudo nixos-generate-config --show-hardware-config > /home/andongni/nixos-configuration/hardware-configuration.nix
+sudo nixos-generate-config --show-hardware-config > /home/andongni/Yandex.Disk/System/nixos-configuration/hardware-configuration.nix
 git add hardware-configuration.nix
 ```
 
@@ -98,7 +98,7 @@ git add hardware-configuration.nix
 To build and switch to the new configuration:
 
 ```bash
-cd /home/andongni/nixos
+cd /home/andongni/Yandex.Disk/System/nixos-configuration
 sudo nixos-rebuild switch --flake .#andongni
 ```
 
@@ -166,4 +166,4 @@ If you encounter issues:
 ---
 
 **Configuration successfully modularized on**: 2026-01-23
-**Original configuration backup**: `/home/andongni/nixos-configuration/configuration.nix.backup`
+**Original configuration backup**: `/home/andongni/Yandex.Disk/System/nixos-configuration/configuration.nix.backup`

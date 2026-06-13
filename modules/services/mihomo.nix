@@ -6,6 +6,6 @@
     enable = true;
     tunMode = true;
     webui = pkgs.metacubexd;
-    configFile = /. + "/home/andongni/nixos-configuration/clash-meta-config.yaml";
+    configFile = /. + "/home/andongni/Yandex.Disk/System/nixos-configuration/mihomo-config.yaml";
   };
 }
