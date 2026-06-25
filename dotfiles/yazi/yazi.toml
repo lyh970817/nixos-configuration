@@ -28,7 +28,7 @@ extract = [
 	{ run = 'ya pub extract --list "$@"', desc = "Extract here" },
 ]
 subtitle = [
-	{ run = ''' echo sub-add "'$0'" | socat - /tmp/mpv.sock ''', desc = "Add sub to MPV" },
+	{ run = ''' python3 -c 'import socket, sys; s = socket.socket(socket.AF_UNIX); s.connect("/tmp/mpv.sock"); s.sendall(f"sub-add \"{sys.argv[1]}\"\n".encode())' "$0" ''', desc = "Add sub to MPV" },
 ]
 
 [open]
@@ -41,6 +41,10 @@ prepend_previewers = [
 	{ name = "*.pdf", run = "pdf" },
 	{ mime = "video/*", run = "video" },
 	{ mime = "audio/*", run = "video" },
+	{ mime = "application/json", run = 'piper -- jq --color-output . "$1"' },
+	{ name = "*.json", run = 'piper -- jq --color-output . "$1"' },
+	{ name = "*.tar*", run = 'piper --format=url -- tar tf "$1"' },
+	{ name = "*.{csv,tsv,md}", run = 'piper -- bat -p --color=always "$1"' },
 ]
 
 prepend_fetchers = [

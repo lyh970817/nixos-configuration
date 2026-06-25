@@ -1,9 +1,4 @@
 [[plugin.deps]]
-use = "yazi-rs/plugins:full-border"
-rev = "4e55902"
-hash = "3996fc74044bc44144b323686f887e1"
-
-[[plugin.deps]]
 use = "Rolv-Apneseth/starship"
 rev = "eca1861"
 hash = "e519d894e94ded741e06aae4d4775981"
@@ -52,11 +47,6 @@ hash = "8a7c58225816a163a6e8730c0adafbc8"
 use = "yazi-rs/plugins:piper"
 rev = "4e55902"
 hash = "2dd68af59418b631b9703a03f606b31f"
-
-[[plugin.deps]]
-use = "yazi-rs/plugins:types"
-rev = "4e55902"
-hash = "a3564fe0d051557df2a191ca0b212c2d"
 
 [[plugin.deps]]
 use = "TKperson/yazip"

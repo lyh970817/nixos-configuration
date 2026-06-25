@@ -25,9 +25,9 @@ prepend_keymap = [
 	{ on = "N", run = "find_arrow --previous" },
 
 	# Goto
-  { on = [ "g", "r" ], run = 'shell -- ya emit cd "$(git rev-parse --show-toplevel)"', desc = "Jump to Git root" },
+	{ on = [ "g", "r" ], run = 'shell -- ya emit cd "$(git rev-parse --show-toplevel)"', desc = "Jump to Git root" },
 	# { on = [ "g", "v" ], run = 'shell -- ya emit cd "$(zoxide query Friends)"' },
-	# { on = [ "g", "c" ], run = "plugin vcs-files" },
+	{ on = [ "g", "c" ], run = "plugin vcs-files", desc = "Show Git file changes" },
 
 	# Shell
 	{ on = "$", run = "shell --block --interactive" },
@@ -36,6 +36,8 @@ prepend_keymap = [
 	{ on = "M",          run = "plugin mount" },
 	{ on = "<C-d>",      run = "plugin diff" },
 	{ on = [ "c", "m" ], run = "plugin chmod", desc = "Run chmod" },
+	{ on = "+", run = "plugin zoom 1", desc = "Zoom in hovered image" },
+	{ on = "-", run = "plugin zoom -1", desc = "Zoom out hovered image" },
 	{ on = "<C-1>", run = "plugin toggle-pane max-parent" },
 	{ on = "<C-2>", run = "plugin toggle-pane max-current" },
 	{ on = "<C-3>", run = "plugin toggle-pane max-preview" },
@@ -98,4 +100,3 @@ prepend_keymap = [
 
 
 [help]
-
