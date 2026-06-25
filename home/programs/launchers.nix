@@ -2,6 +2,22 @@
 
 {
   xdg.desktopEntries = {
+    baidunetdisk = {
+      name = "Baidu Netdisk";
+      genericName = "Cloud Storage";
+      comment = "Baidu cloud storage client";
+      exec = "${pkgs.nur.repos.xddxdd.baidunetdisk}/bin/baidunetdisk %U";
+      icon = "baidunetdisk";
+      terminal = false;
+      type = "Application";
+      categories = [ "Network" "FileTransfer" ];
+      startupNotify = true;
+      settings = {
+        Keywords = "baidu;netdisk;cloud;drive;sync;";
+        StartupWMClass = "baidunetdisk";
+      };
+    };
+
     hibernate = {
       name = "Hibernate";
       genericName = "System";

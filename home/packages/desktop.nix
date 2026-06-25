@@ -16,6 +16,8 @@
     wtype
     zoom-us
     teams-for-linux
+    pkgs."115browser"
+    nur.repos.xddxdd.baidunetdisk
     mpv
     yandex-disk
     gvfs

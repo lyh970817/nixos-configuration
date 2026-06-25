@@ -24,6 +24,7 @@
         config.allowUnfree = true;
       };
       customOverlay = final: prev: {
+        "115browser" = final.callPackage ./pkgs/115browser.nix { };
         kreuzberg-cli = final.callPackage ./pkgs/kreuzberg-cli.nix { };
         claude-code = claudeCodePkgs.claude-code;
       };
