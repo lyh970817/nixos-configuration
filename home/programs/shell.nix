@@ -5,6 +5,7 @@
 {
   programs.zsh = {
     enable = true;
+    dotDir = config.home.homeDirectory;
 
     initContent = ''
       unsetopt BEEP
@@ -119,6 +120,9 @@
 
       # System rebuild alias
       alias rebuild='sudo nixos-rebuild switch --flake /etc/nixos#andongni --impure'
+
+      # Codex with unrestricted filesystem access.
+      alias codexy='codex --yolo'
 
       # Function to print a random poem with alignment
       function print_welcome_poem() {
