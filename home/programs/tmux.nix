@@ -12,7 +12,7 @@
     mouse = true;
     keyMode = "vi";               # Enables Vi-style keys for copy mode
     focusEvents = true;           # Enables focus-events on
-    baseIndex = 0;
+    baseIndex = 1;
     plugins = with pkgs.tmuxPlugins; [
       {
         plugin = tmux-thumbs;
@@ -23,6 +23,7 @@
       unbind Space
 
       set -g allow-passthrough on
+
       # --- Pane Management ---
       # Horizontal Split: Alt + Enter
       bind -n M-Enter split-window -h -c "#{pane_current_path}"
@@ -38,6 +39,20 @@
       bind -n M-q kill-pane
 
       bind -n M-f resize-pane -Z
+
+      # --- Window Navigation ---
+      # Alt + 1..9 switches to that tmux window, creating it in the current
+      # directory if the slot does not exist. Alt + 0 targets window 10.
+      bind -n M-1 run-shell "tmux select-window -t '#{session_id}:=1' 2>/dev/null || tmux new-window -t '#{session_id}:=1' -c #{q:pane_current_path}"
+      bind -n M-2 run-shell "tmux select-window -t '#{session_id}:=2' 2>/dev/null || tmux new-window -t '#{session_id}:=2' -c #{q:pane_current_path}"
+      bind -n M-3 run-shell "tmux select-window -t '#{session_id}:=3' 2>/dev/null || tmux new-window -t '#{session_id}:=3' -c #{q:pane_current_path}"
+      bind -n M-4 run-shell "tmux select-window -t '#{session_id}:=4' 2>/dev/null || tmux new-window -t '#{session_id}:=4' -c #{q:pane_current_path}"
+      bind -n M-5 run-shell "tmux select-window -t '#{session_id}:=5' 2>/dev/null || tmux new-window -t '#{session_id}:=5' -c #{q:pane_current_path}"
+      bind -n M-6 run-shell "tmux select-window -t '#{session_id}:=6' 2>/dev/null || tmux new-window -t '#{session_id}:=6' -c #{q:pane_current_path}"
+      bind -n M-7 run-shell "tmux select-window -t '#{session_id}:=7' 2>/dev/null || tmux new-window -t '#{session_id}:=7' -c #{q:pane_current_path}"
+      bind -n M-8 run-shell "tmux select-window -t '#{session_id}:=8' 2>/dev/null || tmux new-window -t '#{session_id}:=8' -c #{q:pane_current_path}"
+      bind -n M-9 run-shell "tmux select-window -t '#{session_id}:=9' 2>/dev/null || tmux new-window -t '#{session_id}:=9' -c #{q:pane_current_path}"
+      bind -n M-0 run-shell "tmux select-window -t '#{session_id}:=10' 2>/dev/null || tmux new-window -t '#{session_id}:=10' -c #{q:pane_current_path}"
 
       # --- Pane Navigation ---
       # Use Alt + vim keys to switch panes
