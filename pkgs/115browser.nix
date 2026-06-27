@@ -7,6 +7,7 @@
   buildFHSEnv,
   writeScript,
   writeShellScriptBin,
+  symlinkJoin,
 }:
 
 let
@@ -230,8 +231,8 @@ let
         "$@"
     '';
   };
-in
-(writeShellScriptBin "115browser" ''
+
+  launcher = writeShellScriptBin "115browser" ''
   mkdir -p "$HOME/.cache/115browser-tmp/.X11-unix"
   mkdir -p "$HOME/.cache/115browser-run"
   mkdir -p "$HOME/Downloads"
@@ -248,16 +249,25 @@ in
   if [ -d "/media" ]; then ARGS+=(--bind "/media" "/media"); fi
 
   exec ${browserEnv}/bin/115browser-env --bwrap-flags "''${ARGS[*]}" "$@"
-'').overrideAttrs
-  (_old: {
-    inherit pname version;
+  '';
+in
+symlinkJoin {
+  name = "${pname}-${version}";
+  paths = [ launcher ];
 
-    meta = with lib; {
-      description = "115 Browser desktop client";
-      homepage = "https://115.com";
-      license = licenses.unfree;
-      mainProgram = "115browser";
-      platforms = [ "x86_64-linux" ];
-      sourceProvenance = with sourceTypes; [ binaryNativeCode ];
-    };
-  })
+  postBuild = ''
+    install -Dm444 ${browserSrc}/usr/local/115Browser/res/115Browser.png \
+      $out/share/icons/hicolor/256x256/apps/115browser.png
+    install -Dm444 ${browserSrc}/usr/local/115Browser/product_logo_48.png \
+      $out/share/icons/hicolor/48x48/apps/115browser.png
+  '';
+
+  meta = with lib; {
+    description = "115 Browser desktop client";
+    homepage = "https://115.com";
+    license = licenses.unfree;
+    mainProgram = "115browser";
+    platforms = [ "x86_64-linux" ];
+    sourceProvenance = with sourceTypes; [ binaryNativeCode ];
+  };
+}
