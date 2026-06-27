@@ -8,10 +8,10 @@
     enable = true;
     terminal = "tmux-256color"; # Use screen-256color or tmux-256color
     historyLimit = 1000000;
-    escapeTime = 10;              # Reduced from default 500 for better responsiveness
+    escapeTime = 10; # Reduced from default 500 for better responsiveness
     mouse = true;
-    keyMode = "vi";               # Enables Vi-style keys for copy mode
-    focusEvents = true;           # Enables focus-events on
+    keyMode = "vi"; # Enables Vi-style keys for copy mode
+    focusEvents = true; # Enables focus-events on
     baseIndex = 1;
     plugins = with pkgs.tmuxPlugins; [
       {
@@ -90,7 +90,10 @@
       bind -T copy-mode-vi f thumbs-pick
 
       # Page through scrollback only after copy mode is active.
-      bind -T copy-mode-vi C-b send-keys -X page-up
+      # C-b is the tmux prefix, so use non-conflicting Vim-style paging keys.
+      unbind -T copy-mode-vi C-b
+      bind -T copy-mode-vi C-u send-keys -X page-up
+      bind -T copy-mode-vi C-d send-keys -X page-down
       bind -T copy-mode-vi C-f send-keys -X page-down
 
       # Bind 'y' to copy to Wayland clipboard
