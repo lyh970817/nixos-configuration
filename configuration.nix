@@ -1,6 +1,11 @@
 # NixOS Configuration
 # Modular configuration with Flakes and Home Manager
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 {
   imports = [

@@ -1,4 +1,9 @@
-{ pkgs, lib, config, ... }:
+{
+  pkgs,
+  lib,
+  config,
+  ...
+}:
 
 let
   settings = {
@@ -20,11 +25,22 @@ let
     includeCoAuthoredBy = false;
     permissions = {
       allow = [
-        "Bash" "BashOutput" "Edit" "Glob" "Grep" "KillShell"
-        "NotebookEdit" "Read" "SlashCommand" "Task" "TodoWrite"
-        "WebFetch" "WebSearch" "Write"
-        ];
-      deny = [];
+        "Bash"
+        "BashOutput"
+        "Edit"
+        "Glob"
+        "Grep"
+        "KillShell"
+        "NotebookEdit"
+        "Read"
+        "SlashCommand"
+        "Task"
+        "TodoWrite"
+        "WebFetch"
+        "WebSearch"
+        "Write"
+      ];
+      deny = [ ];
     };
     model = "opus";
     statusLine = {
@@ -33,7 +49,8 @@ let
     };
   };
 
-in {
+in
+{
   home.file.".claude/settings.json".text = builtins.toJSON settings;
 
   home.file.".claude/statusline.sh" = {

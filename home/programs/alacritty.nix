@@ -14,17 +14,17 @@
         {
           key = "Return";
           mods = "Alt|Shift";
-          chars = "\\u001b[21;2~";  # Shift+F10 for tmux vertical split
+          chars = "\\u001b[21;2~"; # Shift+F10 for tmux vertical split
         }
         {
           key = "Return";
           mods = "Control";
-          chars = "\\u001b[13;5u";  # Kitty protocol Ctrl+Enter for multi-line input
+          chars = "\\u001b[13;5u"; # Kitty protocol Ctrl+Enter for multi-line input
         }
         {
           key = "Return";
           mods = "Shift";
-          chars = "\\u005c\\r";  # Sends \ (backslash) + Enter for multi-line input
+          chars = "\\u005c\\r"; # Sends \ (backslash) + Enter for multi-line input
         }
       ];
 

@@ -233,22 +233,22 @@ let
   };
 
   launcher = writeShellScriptBin "115browser" ''
-  mkdir -p "$HOME/.cache/115browser-tmp/.X11-unix"
-  mkdir -p "$HOME/.cache/115browser-run"
-  mkdir -p "$HOME/Downloads"
-  mkdir -p "$HOME/115"
+    mkdir -p "$HOME/.cache/115browser-tmp/.X11-unix"
+    mkdir -p "$HOME/.cache/115browser-run"
+    mkdir -p "$HOME/Downloads"
+    mkdir -p "$HOME/115"
 
-  ARGS=()
-  ARGS+=(--bind "$HOME/.cache/115browser-tmp" "/tmp")
-  ARGS+=(--bind "$HOME/.cache/115browser-tmp" "/var/tmp")
-  ARGS+=(--ro-bind "/tmp/.X11-unix" "/tmp/.X11-unix")
+    ARGS=()
+    ARGS+=(--bind "$HOME/.cache/115browser-tmp" "/tmp")
+    ARGS+=(--bind "$HOME/.cache/115browser-tmp" "/var/tmp")
+    ARGS+=(--ro-bind "/tmp/.X11-unix" "/tmp/.X11-unix")
 
-  if [ -d "/dev/shm" ]; then ARGS+=(--bind "/dev/shm" "/dev/shm"); fi
-  if [ -d "/mnt" ]; then ARGS+=(--bind "/mnt" "/mnt"); fi
-  if [ -d "/run/media" ]; then ARGS+=(--bind "/run/media" "/run/media"); fi
-  if [ -d "/media" ]; then ARGS+=(--bind "/media" "/media"); fi
+    if [ -d "/dev/shm" ]; then ARGS+=(--bind "/dev/shm" "/dev/shm"); fi
+    if [ -d "/mnt" ]; then ARGS+=(--bind "/mnt" "/mnt"); fi
+    if [ -d "/run/media" ]; then ARGS+=(--bind "/run/media" "/run/media"); fi
+    if [ -d "/media" ]; then ARGS+=(--bind "/media" "/media"); fi
 
-  exec ${browserEnv}/bin/115browser-env --bwrap-flags "''${ARGS[*]}" "$@"
+    exec ${browserEnv}/bin/115browser-env --bwrap-flags "''${ARGS[*]}" "$@"
   '';
 in
 symlinkJoin {

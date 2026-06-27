@@ -10,7 +10,11 @@
       icon = "115browser";
       terminal = false;
       type = "Application";
-      categories = [ "Network" "WebBrowser" "FileTransfer" ];
+      categories = [
+        "Network"
+        "WebBrowser"
+        "FileTransfer"
+      ];
       startupNotify = true;
       settings = {
         Keywords = "115;browser;cloud;drive;sync;";
@@ -26,7 +30,10 @@
       icon = "baidunetdisk";
       terminal = false;
       type = "Application";
-      categories = [ "Network" "FileTransfer" ];
+      categories = [
+        "Network"
+        "FileTransfer"
+      ];
       startupNotify = true;
       settings = {
         Keywords = "baidu;netdisk;cloud;drive;sync;";
@@ -55,7 +62,10 @@
       exec = "systemctl reboot";
       icon = "system-reboot";
       terminal = false;
-      categories = [ "System" "Utility" ];
+      categories = [
+        "System"
+        "Utility"
+      ];
       settings = {
         Keywords = "restart;reset;power;";
       };
@@ -68,7 +78,10 @@
       exec = "systemctl poweroff";
       icon = "system-shutdown";
       terminal = false;
-      categories = [ "System" "Utility" ];
+      categories = [
+        "System"
+        "Utility"
+      ];
       settings = {
         Keywords = "power;off;halt;stop;";
       };
@@ -97,13 +110,27 @@
       terminal = true;
       type = "Application";
       icon = "lvim";
-      categories = [ "Utility" "TextEditor" ];
+      categories = [
+        "Utility"
+        "TextEditor"
+      ];
       startupNotify = false;
       mimeType = [
-        "text/english" "text/plain" "text/x-makefile" "text/x-c++hdr"
-        "text/x-c++src" "text/x-chdr" "text/x-csrc" "text/x-java"
-        "text/x-moc" "text/x-pascal" "text/x-tcl" "text/x-tex"
-        "application/x-shellscript" "text/x-c" "text/x-c++"
+        "text/english"
+        "text/plain"
+        "text/x-makefile"
+        "text/x-c++hdr"
+        "text/x-c++src"
+        "text/x-chdr"
+        "text/x-csrc"
+        "text/x-java"
+        "text/x-moc"
+        "text/x-pascal"
+        "text/x-tcl"
+        "text/x-tex"
+        "application/x-shellscript"
+        "text/x-c"
+        "text/x-c++"
       ];
       settings = {
         TryExec = "lvim";

@@ -28,7 +28,8 @@ let
     };
   };
 
-in {
+in
+{
   home.file.".gemini/settings.json".text = builtins.toJSON settings;
   home.file.".gemini/GEMINI.md".text = "Always respond in English\n";
 

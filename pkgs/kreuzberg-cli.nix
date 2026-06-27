@@ -1,4 +1,10 @@
-{ lib, stdenv, fetchurl, autoPatchelfHook, gcc-unwrapped }:
+{
+  lib,
+  stdenv,
+  fetchurl,
+  autoPatchelfHook,
+  gcc-unwrapped,
+}:
 
 stdenv.mkDerivation rec {
   pname = "kreuzberg-cli";

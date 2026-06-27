@@ -1,11 +1,16 @@
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 {
   # Development tools and utilities
   programs.direnv.enable = true;
   programs.direnv.nix-direnv.enable = true;
 
-programs.nix-ld.enable = true;
+  programs.nix-ld.enable = true;
 
   programs.ssh.startAgent = lib.mkForce false;
 

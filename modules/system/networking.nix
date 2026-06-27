@@ -1,4 +1,9 @@
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 {
   # Hostname
@@ -61,7 +66,10 @@
   };
 
   # Firewall configuration
-  networking.firewall.allowedTCPPorts = [ 9090 53 ];
+  networking.firewall.allowedTCPPorts = [
+    9090
+    53
+  ];
   networking.firewall.allowedUDPPorts = [ 53 ];
   networking.firewall.trustedInterfaces = [ "utun" ];
   networking.firewall.checkReversePath = false;

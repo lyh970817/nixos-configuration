@@ -7,7 +7,7 @@
 {
   programs.rofi = {
     enable = true;
-    package = pkgs.rofi;  # rofi-wayland has been merged into rofi
+    package = pkgs.rofi; # rofi-wayland has been merged into rofi
     extraConfig = {
       modi = "drun,run,window";
       show-icons = false;
@@ -15,7 +15,7 @@
       display-run = "Run";
       display-window = "Windows";
     };
-    theme = "current";  # References the symlink managed by darkman
+    theme = "current"; # References the symlink managed by darkman
   };
 
   # Theme files for darkman switching
