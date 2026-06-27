@@ -90,8 +90,7 @@
       bind -T copy-mode-vi f thumbs-pick
 
       # Page through scrollback only after copy mode is active.
-      # C-b is the tmux prefix, so use non-conflicting Vim-style paging keys.
-      unbind -T copy-mode-vi C-b
+      bind -T copy-mode-vi C-b send-keys -X page-up
       bind -T copy-mode-vi C-u send-keys -X page-up
       bind -T copy-mode-vi C-d send-keys -X page-down
       bind -T copy-mode-vi C-f send-keys -X page-down
