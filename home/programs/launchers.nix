@@ -2,6 +2,22 @@
 
 {
   xdg.desktopEntries = {
+    "115browser" = {
+      name = "115 Browser";
+      genericName = "Web Browser";
+      comment = "115 cloud storage desktop client";
+      exec = "${pkgs."115browser"}/bin/115browser %U";
+      icon = "115browser";
+      terminal = false;
+      type = "Application";
+      categories = [ "Network" "WebBrowser" "FileTransfer" ];
+      startupNotify = true;
+      settings = {
+        Keywords = "115;browser;cloud;drive;sync;";
+        StartupWMClass = "115Browser";
+      };
+    };
+
     baidunetdisk = {
       name = "Baidu Netdisk";
       genericName = "Cloud Storage";
