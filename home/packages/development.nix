@@ -10,9 +10,11 @@
     rustc
     nodejs_latest
     nodePackages.neovim
-    (python3.withPackages (ps: with ps; [
-      pyyaml
-    ]))
+    (python3.withPackages (
+      ps: with ps; [
+        pyyaml
+      ]
+    ))
     python3Packages.pip
     uv
     (rWrapper.override {
@@ -29,6 +31,7 @@
     nf-test
     apptainer
     graphviz
+    nixfmt
     tree-sitter
     ast-grep
     lua
