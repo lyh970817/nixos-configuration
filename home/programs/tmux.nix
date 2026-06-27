@@ -24,6 +24,11 @@
 
       set -g allow-passthrough on
 
+      # Use C-a as the tmux prefix so C-b remains available for copy-mode paging.
+      set -g prefix C-a
+      unbind -T prefix C-b
+      bind -T prefix C-a send-prefix
+
       # --- Pane Management ---
       # Horizontal Split: Alt + Enter
       bind -n M-Enter split-window -h -c "#{pane_current_path}"
