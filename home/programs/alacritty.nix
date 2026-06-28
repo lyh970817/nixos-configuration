@@ -24,7 +24,7 @@
         {
           key = "Return";
           mods = "Shift";
-          chars = "\\u005c\\r"; # Sends \ (backslash) + Enter for multi-line input
+          chars = "\\u001b[13;2u"; # CSI-u Shift+Enter for Codex multiline input
         }
         {
           key = "Insert";
