@@ -8,6 +8,7 @@
     jdk17
     cargo
     rustc
+    go
     nodejs_latest
     nodePackages.neovim
     (python3.withPackages (
@@ -16,6 +17,7 @@
       ]
     ))
     python3Packages.pip
+    yt-dlp
     uv
     (rWrapper.override {
       packages = with rPackages; [
@@ -41,6 +43,7 @@
     claude-code
     gemini-cli
     kreuzberg-cli
+    digg-pp-cli
     (writeShellScriptBin "zcf" ''
       # Set npm prefix to user's home to avoid read-only errors
       export NPM_CONFIG_PREFIX="$HOME/.npm-global"
