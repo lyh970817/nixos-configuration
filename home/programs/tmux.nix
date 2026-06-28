@@ -37,6 +37,10 @@
       set -s extended-keys on
       set -as terminal-features 'xterm*:extkeys'
 
+      # Pass Shift+Enter through to Codex as CSI-u. Without this explicit root
+      # binding, tmux can collapse it back to Enter and submit the composer.
+      bind -n S-Enter send-keys Escape "[13;2u"
+
       # Bind the specific escape code to your desired action
       bind -n S-F10 split-window -v -c "#{pane_current_path}"
 
