@@ -26,6 +26,11 @@
           mods = "Shift";
           chars = "\\u005c\\r"; # Sends \ (backslash) + Enter for multi-line input
         }
+        {
+          key = "Insert";
+          mods = "Shift";
+          action = "Paste"; # OpenWhispr's terminal fallback should use CLIPBOARD, not PRIMARY
+        }
       ];
 
       window.dynamic_padding = true;
