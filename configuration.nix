@@ -33,6 +33,8 @@
     ./modules/services/yandex-disk.nix
     ./modules/services/mihomo.nix
     ./modules/services/keyd.nix
+    ./modules/services/gnome-keyring.nix
+    ./modules/services/ydotool.nix
 
     # Programs
     ./modules/programs/input-method.nix

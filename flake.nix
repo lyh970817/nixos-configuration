@@ -44,6 +44,7 @@
       customOverlay = final: prev: {
         "115browser" = final.callPackage ./pkgs/115browser.nix { };
         kreuzberg-cli = final.callPackage ./pkgs/kreuzberg-cli.nix { };
+        openwhispr = final.callPackage ./pkgs/openwhispr.nix { };
         claude-code = claudeCodePkgs.claude-code;
       };
       preCommitCheck = pre-commit-hooks.lib.${system}.run {

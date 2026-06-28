@@ -41,6 +41,26 @@
       };
     };
 
+    openwhispr = {
+      name = "OpenWhispr";
+      genericName = "Voice Dictation";
+      comment = "Voice-to-text dictation, transcription, notes, and AI actions";
+      exec = "${pkgs.openwhispr}/bin/openwhispr";
+      icon = "audio-input-microphone";
+      terminal = false;
+      type = "Application";
+      categories = [
+        "AudioVideo"
+        "Office"
+        "Utility"
+      ];
+      startupNotify = true;
+      settings = {
+        Keywords = "voice;dictation;speech;transcription;whisper;";
+        StartupWMClass = "OpenWhispr";
+      };
+    };
+
     hibernate = {
       name = "Hibernate";
       genericName = "System";
@@ -138,4 +158,19 @@
       };
     };
   };
+
+  xdg.configFile."autostart/openwhispr.desktop".text = ''
+    [Desktop Entry]
+    Type=Application
+    Name=OpenWhispr
+    GenericName=Voice Dictation
+    Comment=Voice-to-text dictation, transcription, notes, and AI actions
+    Exec=${pkgs.openwhispr}/bin/openwhispr
+    Icon=audio-input-microphone
+    Terminal=false
+    Categories=AudioVideo;Office;Utility;
+    StartupNotify=true
+    StartupWMClass=OpenWhispr
+    Keywords=voice;dictation;speech;transcription;whisper;
+  '';
 }

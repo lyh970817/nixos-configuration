@@ -17,6 +17,8 @@
       "networkmanager"
       "wheel"
       "docker"
+      "input"
+      "uinput"
     ];
     shell = pkgs.zsh;
   };
