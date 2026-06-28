@@ -3,6 +3,10 @@
   fetchurl,
   appimageTools,
   runtimeShell,
+  pkg-config,
+  stdenv,
+  at-spi2-core,
+  glib,
   hyprland,
   jq,
   ydotool,
@@ -18,9 +22,36 @@ let
     hash = "sha256-590A9noHhuHtBt0lEGBoohS8SJItOtD9xUMsDLAwa4E=";
   };
 
+  linuxTextMonitor = stdenv.mkDerivation {
+    pname = "openwhispr-linux-text-monitor";
+    inherit version;
+    src = ./openwhispr-linux-text-monitor.c;
+
+    dontUnpack = true;
+    nativeBuildInputs = [ pkg-config ];
+    buildInputs = [
+      at-spi2-core
+      glib
+    ];
+
+    buildPhase = ''
+      runHook preBuild
+      $CC -O2 "$src" -o linux-text-monitor $(pkg-config --cflags --libs atspi-2 gobject-2.0)
+      runHook postBuild
+    '';
+
+    installPhase = ''
+      runHook preInstall
+      install -Dm755 linux-text-monitor "$out/bin/linux-text-monitor"
+      runHook postInstall
+    '';
+  };
+
   appimageContents = appimageTools.extractType2 {
     inherit pname version src;
     postExtract = ''
+            cp ${linuxTextMonitor}/bin/linux-text-monitor "$out/resources/bin/linux-text-monitor"
+
             fast_paste="$out/resources/bin/linux-fast-paste"
             mv "$fast_paste" "$fast_paste.real"
             cat > "$fast_paste" <<'EOF'
@@ -87,6 +118,7 @@ appimageTools.wrapAppImage {
   src = appimageContents;
 
   extraPkgs = pkgs: [
+    at-spi2-core
     hyprland
     jq
     ydotool
