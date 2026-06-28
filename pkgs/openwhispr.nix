@@ -26,17 +26,15 @@ let
             cat > "$fast_paste" <<'EOF'
       #!${runtimeShell}
       args=()
-      force_shift_insert=0
-      has_paste_mode=0
+      terminal_target=0
+      real_has_paste_mode=0
       for arg in "$@"; do
         case "$arg" in
           --terminal)
-            has_paste_mode=1
-            force_shift_insert=1
-            args+=("--shift-insert")
+            terminal_target=1
             ;;
           --shift-insert)
-            has_paste_mode=1
+            real_has_paste_mode=1
             args+=("--shift-insert")
             ;;
           *)
@@ -45,7 +43,7 @@ let
         esac
       done
 
-      if [ "$force_shift_insert" -eq 0 ] && command -v hyprctl >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+      if command -v hyprctl >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
         active_window="$(
           hyprctl activewindow -j 2>/dev/null \
             | jq -r '[
@@ -58,13 +56,24 @@ let
         )"
         case "$active_window" in
           *alacritty* | *kitty* | *wezterm* | *foot* | *ghostty* | *terminal*)
-            force_shift_insert=1
+            terminal_target=1
             ;;
         esac
       fi
 
-      if [ "$force_shift_insert" -eq 1 ] && [ "$has_paste_mode" -eq 0 ]; then
-        args+=("--shift-insert")
+      if [ "$terminal_target" -eq 1 ]; then
+        sleep 0.05
+        if command -v wtype >/dev/null 2>&1 \
+          && wtype -M ctrl -M shift -k v -m shift -m ctrl; then
+          exit 0
+        fi
+        if command -v ydotool >/dev/null 2>&1 \
+          && ydotool key 29:1 42:1 47:1 47:0 42:0 29:0; then
+          exit 0
+        fi
+        if [ "$real_has_paste_mode" -eq 0 ]; then
+          args+=("--shift-insert")
+        fi
       fi
 
       exec "$(dirname "$0")/linux-fast-paste.real" "''${args[@]}"

@@ -31,6 +31,11 @@
           mods = "Shift";
           action = "Paste"; # OpenWhispr's terminal fallback should use CLIPBOARD, not PRIMARY
         }
+        {
+          key = "V";
+          mods = "Control|Shift";
+          action = "Paste";
+        }
       ];
 
       window.dynamic_padding = true;
