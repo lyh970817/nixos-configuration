@@ -3,6 +3,8 @@
   fetchurl,
   appimageTools,
   runtimeShell,
+  hyprland,
+  jq,
   ydotool,
   wtype,
   xdotool,
@@ -24,11 +26,17 @@ let
             cat > "$fast_paste" <<'EOF'
       #!${runtimeShell}
       args=()
+      force_shift_insert=0
+      has_paste_mode=0
       for arg in "$@"; do
         case "$arg" in
           --terminal)
-            # Codex uses Ctrl+V for image paste. OpenWhispr's terminal mode can
-            # arrive as Ctrl+V in Codex, so force the terminal-safe paste shortcut.
+            has_paste_mode=1
+            force_shift_insert=1
+            args+=("--shift-insert")
+            ;;
+          --shift-insert)
+            has_paste_mode=1
             args+=("--shift-insert")
             ;;
           *)
@@ -36,6 +44,29 @@ let
             ;;
         esac
       done
+
+      if [ "$force_shift_insert" -eq 0 ] && command -v hyprctl >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+        active_window="$(
+          hyprctl activewindow -j 2>/dev/null \
+            | jq -r '[
+                .class // "",
+                .initialClass // "",
+                .title // "",
+                .initialTitle // ""
+              ] | join("\n")' 2>/dev/null \
+            | tr '[:upper:]' '[:lower:]'
+        )"
+        case "$active_window" in
+          *alacritty* | *kitty* | *wezterm* | *foot* | *ghostty* | *terminal*)
+            force_shift_insert=1
+            ;;
+        esac
+      fi
+
+      if [ "$force_shift_insert" -eq 1 ] && [ "$has_paste_mode" -eq 0 ]; then
+        args+=("--shift-insert")
+      fi
+
       exec "$(dirname "$0")/linux-fast-paste.real" "''${args[@]}"
       EOF
             chmod +x "$fast_paste"
@@ -47,6 +78,8 @@ appimageTools.wrapAppImage {
   src = appimageContents;
 
   extraPkgs = pkgs: [
+    hyprland
+    jq
     ydotool
     wtype
     xdotool
