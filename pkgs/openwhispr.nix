@@ -24,7 +24,7 @@ writeShellApplication {
     xdotool
   ];
   text = ''
-    export YDOTOOL_SOCKET=/run/ydotoold/socket
+    export YDOTOOL_SOCKET=/tmp/.ydotool_socket
     exec appimage-run ${appimage} "$@"
   '';
 

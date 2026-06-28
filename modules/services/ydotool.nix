@@ -1,10 +1,12 @@
 { pkgs, ... }:
 
 let
-  socketPath = "/run/ydotoold/socket";
+  userName = "andongni";
+  socketPath = "/tmp/.ydotool_socket";
   ydotooldForUser = pkgs.writeShellScript "ydotoold-andongni" ''
-    uid="$(${pkgs.coreutils}/bin/id -u andongni)"
-    gid="$(${pkgs.coreutils}/bin/id -g andongni)"
+    uid="$(${pkgs.coreutils}/bin/id -u ${userName})"
+    gid="$(${pkgs.coreutils}/bin/id -g ${userName})"
+    ${pkgs.coreutils}/bin/rm -f ${socketPath}
     exec ${pkgs.ydotool}/bin/ydotoold \
       --socket-path=${socketPath} \
       --socket-own="$uid:$gid" \
@@ -29,7 +31,6 @@ in
       ExecStart = ydotooldForUser;
       Restart = "on-failure";
       RestartSec = "1s";
-      RuntimeDirectory = "ydotoold";
     };
   };
 }
