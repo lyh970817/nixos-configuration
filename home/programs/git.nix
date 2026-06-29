@@ -6,6 +6,9 @@
     ignores = [
       "**/.claude/settings.local.json"
     ];
+    settings = {
+      safe.directory = "*";
+    };
   };
 
   programs.gh = {
