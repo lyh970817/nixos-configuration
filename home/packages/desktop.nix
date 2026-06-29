@@ -25,7 +25,6 @@
     imagemagick
     ueberzugpp
     ffmpegthumbnailer
-    openwhispr
     poppler-utils
     whisper-cpp
     adwaita-icon-theme

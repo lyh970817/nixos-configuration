@@ -46,6 +46,7 @@
         kreuzberg-cli = final.callPackage ./pkgs/kreuzberg-cli.nix { };
         digg-pp-cli = final.callPackage ./pkgs/digg-pp-cli.nix { };
         openwhispr = final.callPackage ./pkgs/openwhispr.nix { };
+        openwhispr-cli = final.callPackage ./pkgs/openwhispr-cli.nix { };
         claude-code = claudeCodePkgs.claude-code;
       };
       preCommitCheck = pre-commit-hooks.lib.${system}.run {
