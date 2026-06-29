@@ -29,7 +29,7 @@
         {
           key = "Insert";
           mods = "Shift";
-          action = "Paste"; # OpenWhispr's terminal fallback should use CLIPBOARD, not PRIMARY
+          action = "Paste";
         }
         {
           key = "V";

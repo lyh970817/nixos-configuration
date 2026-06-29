@@ -44,7 +44,6 @@
     gemini-cli
     kreuzberg-cli
     digg-pp-cli
-    openwhispr-cli
     (writeShellScriptBin "zcf" ''
       # Set npm prefix to user's home to avoid read-only errors
       export NPM_CONFIG_PREFIX="$HOME/.npm-global"
