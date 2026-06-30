@@ -105,11 +105,11 @@
       bind -T copy-mode-vi C-f send-keys -X page-down
 
       # Bind 'y' to copy to Wayland clipboard
-      bind -T copy-mode-vi y send-keys -X copy-pipe-and-cancel "wl-copy"
+      bind -T copy-mode-vi y send-keys -X copy-pipe "wl-copy"
 
       # 4. Mouse Dragging
       # When you release the mouse click after selecting, copy to clipboard automatically
-      bind -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel "wl-copy"
+      bind -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-pipe "wl-copy"
 
       # --- Matrix Green Theme (10% Dimmer Colors) ---
 
