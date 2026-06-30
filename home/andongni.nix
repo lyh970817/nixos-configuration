@@ -23,6 +23,7 @@
     ./programs/fastfetch.nix
     ./programs/claude.nix
     ./programs/gemini.nix
+    ./programs/hyprwhspr.nix
     ./programs/launchers.nix
     ./programs/dotfiles.nix
     ./desktop/theming.nix
