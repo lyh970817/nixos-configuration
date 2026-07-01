@@ -21,6 +21,10 @@ Always apply configuration changes by running `sudo nixos-rebuild switch --flake
 
 Use two-space indentation in Nix files. Keep modules focused on one concern and name files by feature, for example `modules/services/keyd.nix` or `home/programs/tmux.nix`. Prefer explicit imports in aggregator files over hidden dynamic loading. Keep comments brief around hardware, network, or host-specific behavior.
 
+## hyprwhspr Packaging
+
+`pkgs/hyprwhspr.nix` should package upstream runtime files that shipped commands depend on, including `bin`, `config`, `lib`, `share`, `scripts`, and `utils`. Expose user-facing upstream launchers with wrappers in `$out/bin`; auxiliary tools such as `meeting-recorder` must not live only under `$out/lib/hyprwhspr/bin`. Copy upstream docs, contrib files, and license material to `$out/share/doc/hyprwhspr`. The local host uses hyprwhspr with the REST backend; do not assume local backends such as `pywhispercpp` work unless their Python dependencies are explicitly added to the Nix environment.
+
 ## Testing Guidelines
 
 There is no unit test suite. Run `nix flake check` for all edits. Use `sudo nixos-rebuild dry-build --flake .#andongni --impure` only for risky changes, such as boot, hardware, networking, proxy, service, package, overlay, or broad module/import changes. For small Home Manager program tweaks, a direct `sudo nixos-rebuild switch --flake .#andongni --impure` is sufficient after evaluation. For networking or proxy changes, prefer the Mihomo safe rebuild script.

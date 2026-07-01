@@ -76,8 +76,10 @@ stdenvNoCC.mkDerivation rec {
     runHook preInstall
 
     appdir="$out/lib/hyprwhspr"
-    mkdir -p "$appdir" "$out/bin"
-    cp -R bin config lib share requirements.txt requirements-visualizer.txt "$appdir/"
+    docdir="$out/share/doc/hyprwhspr"
+    mkdir -p "$appdir" "$out/bin" "$docdir"
+    cp -R bin config lib share scripts utils requirements.txt requirements-visualizer.txt "$appdir/"
+    cp -R README.md LICENSE contrib docs "$docdir/"
 
     makeWrapper ${bash}/bin/bash "$out/bin/hyprwhspr" \
       --add-flags "$appdir/bin/hyprwhspr" \
@@ -86,9 +88,20 @@ stdenvNoCC.mkDerivation rec {
       --prefix PATH : "${runtimePath}" \
       --prefix PYTHONPATH : "$appdir/lib:$appdir/lib/src"
 
+    makeWrapper ${bash}/bin/bash "$out/bin/meeting-recorder" \
+      --add-flags "$appdir/bin/meeting-recorder" \
+      --set HYPRWHSPR_ROOT "$appdir" \
+      --set PYTHONUNBUFFERED "1" \
+      --prefix PATH : "${runtimePath}" \
+      --prefix PYTHONPATH : "$appdir/lib:$appdir/lib/src"
+
     substituteInPlace "$appdir/bin/hyprwhspr" \
       --replace-fail 'local system_path="/usr/bin:/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/sbin"' \
         'local system_path="${pythonEnv}/bin"' \
+      --replace-fail 'VENV_PYTHON="''${XDG_DATA_HOME:-$HOME/.local/share}/hyprwhspr/venv/bin/python"' \
+        'VENV_PYTHON="${pythonEnv}/bin/python"'
+
+    substituteInPlace "$appdir/bin/meeting-recorder" \
       --replace-fail 'VENV_PYTHON="''${XDG_DATA_HOME:-$HOME/.local/share}/hyprwhspr/venv/bin/python"' \
         'VENV_PYTHON="${pythonEnv}/bin/python"'
 
