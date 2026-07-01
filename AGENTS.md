@@ -23,7 +23,7 @@ Use two-space indentation in Nix files. Keep modules focused on one concern and 
 
 ## Testing Guidelines
 
-There is no unit test suite. Treat evaluation and dry builds as required checks. Run `nix flake check` for all edits, and run `sudo nixos-rebuild dry-build --flake .#andongni --impure` before changes that affect modules, packages, overlays, services, or Home Manager imports. For networking or proxy changes, prefer the Mihomo safe rebuild script.
+There is no unit test suite. Run `nix flake check` for all edits. Use `sudo nixos-rebuild dry-build --flake .#andongni --impure` only for risky changes, such as boot, hardware, networking, proxy, service, package, overlay, or broad module/import changes. For small Home Manager program tweaks, a direct `sudo nixos-rebuild switch --flake .#andongni --impure` is sufficient after evaluation. For networking or proxy changes, prefer the Mihomo safe rebuild script.
 
 ## Commit & Pull Request Guidelines
 
