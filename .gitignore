@@ -1,3 +1,4 @@
 mihomo-config.yaml
 .worktrees/
 .pre-commit-config.yaml
+secrets/
