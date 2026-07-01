@@ -19,6 +19,7 @@ let
   recorderPort = 8765;
   recorderChunkSecs = 120;
   longformArchiveDir = "${homeDir}/.local/share/hyprwhspr/longform";
+  longformMinRewriteChars = 40;
   recorderTranscriptDir = "${longformArchiveDir}/recorder";
 
   terminalPasteKeys = {
@@ -166,6 +167,7 @@ let
       ARCHIVE_DIR = Path(${builtins.toJSON longformArchiveDir})
       RAW_DIR = ARCHIVE_DIR / "raw"
       POLISHED_DIR = ARCHIVE_DIR / "polished"
+      MIN_REWRITE_CHARS = ${toString longformMinRewriteChars}
       PASTE_KEYS = ${builtins.toJSON terminalPasteKeys}
 
       SYSTEMCTL = "${pkgs.systemd}/bin/systemctl"
@@ -182,6 +184,7 @@ let
       - Produce plain Markdown-compatible prose.
       - Usually return one to four coherent paragraphs.
       - Do not add a title, headings, bullets, meeting-note sections, explanations, prefixes, or suffixes.
+      - Remove recorder speaker labels such as [You] or [System].
       - Use a list only when the speaker clearly dictated a list.
       - Remove filler, false starts, repeated fragments, and obvious ASR errors.
       - You may reorder sentences and merge related fragments when it makes the passage clearer.
@@ -317,6 +320,18 @@ let
           return content.strip()
 
 
+      def clean_transcript(transcript: str) -> str:
+          cleaned_lines = []
+          for line in transcript.splitlines():
+              line = line.strip()
+              for prefix in ("[You]", "[System]"):
+                  if line.startswith(prefix):
+                      line = line[len(prefix):].strip()
+              if line:
+                  cleaned_lines.append(line)
+          return "\n\n".join(cleaned_lines).strip()
+
+
       def prepare_archive_dirs() -> None:
           for path in (RAW_DIR, POLISHED_DIR):
               path.mkdir(parents=True, exist_ok=True)
@@ -421,6 +436,11 @@ let
               print("long-form recording is not active", file=sys.stderr)
               return 3
 
+          if cancel:
+              notify("Long-form dictation canceling", "Finalizing transcript")
+          else:
+              notify("Long-form dictation processing", "Transcribing and polishing")
+
           try:
               result = request("POST", "/stop", timeout=900.0)
           except Exception as exc:
@@ -441,6 +461,7 @@ let
 
           raw_suffix = "_canceled" if cancel else ""
           raw_path = save_text(RAW_DIR, "transcript", raw_suffix, ".txt", transcript)
+          cleaned_transcript = clean_transcript(transcript)
 
           if cancel:
               print("Transcript: " + str(raw_path))
@@ -448,13 +469,18 @@ let
               return 0
 
           polished_is_fallback = False
-          try:
-              polished = rewrite_prose(transcript)
-          except Exception as exc:
-              polished = transcript
-              polished_is_fallback = True
-              print("prose rewrite failed: " + str(exc), file=sys.stderr)
-              notify("Long-form polish failed", "Pasting raw transcript")
+          rewrite_skipped = False
+          if len(cleaned_transcript) < MIN_REWRITE_CHARS:
+              polished = cleaned_transcript or transcript
+              rewrite_skipped = True
+          else:
+              try:
+                  polished = rewrite_prose(cleaned_transcript)
+              except Exception as exc:
+                  polished = cleaned_transcript or transcript
+                  polished_is_fallback = True
+                  print("prose rewrite failed: " + str(exc), file=sys.stderr)
+                  notify("Long-form polish failed", "Pasting raw transcript")
 
           polished_suffix = "_unpolished" if polished_is_fallback else ""
           polished_path = save_text(POLISHED_DIR, "prose", polished_suffix, ".md", polished)
@@ -470,7 +496,10 @@ let
 
           print("Transcript: " + str(raw_path))
           print("Prose:      " + str(polished_path))
-          notify("Long-form dictation ready", "Pasted polished prose")
+          if rewrite_skipped:
+              notify("Long-form dictation ready", "Pasted cleaned transcript")
+          else:
+              notify("Long-form dictation ready", "Pasted polished prose")
           return 0
 
 
