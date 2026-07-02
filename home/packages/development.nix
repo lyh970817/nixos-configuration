@@ -11,6 +11,7 @@
     go
     nodejs_latest
     nodePackages.neovim
+    sqlite
     (python3.withPackages (
       ps: with ps; [
         pyyaml
