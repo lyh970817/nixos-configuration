@@ -109,6 +109,15 @@ stdenvNoCC.mkDerivation rec {
     substituteInPlace "$appdir/lib/src/cli_commands.py" \
       --replace-fail '        version = "0.1.0"' '        version = "${ydotool.version}"'
 
+    substituteInPlace "$appdir/lib/src/text_injector.py" \
+      --replace-fail 'Env: HYPRWHSPR_MODEL, HYPRWHSPR_BACKEND. 5s timeout. Any error' \
+        'Env: HYPRWHSPR_MODEL, HYPRWHSPR_BACKEND. 12s timeout. Any error' \
+      --replace-fail 'text=True, timeout=5.0, env=env,' 'text=True, timeout=12.0, env=env,'
+
+    substituteInPlace "$appdir/share/config.schema.json" \
+      --replace-fail 'Subject to a 5s timeout; errors pass through the original text.' \
+        'Subject to a 12s timeout; errors pass through the original text.'
+
     runHook postInstall
   '';
 
