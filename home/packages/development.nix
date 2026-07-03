@@ -41,7 +41,6 @@
     luarocks
     hunspell
     hunspellDicts.en_GB-large
-    claude-code
     gemini-cli
     kreuzberg-cli
     digg-pp-cli

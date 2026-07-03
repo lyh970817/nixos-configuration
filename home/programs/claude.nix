@@ -6,6 +6,79 @@
 }:
 
 let
+  claudeContainerLauncher = pkgs.writeShellApplication {
+    name = "claude";
+    runtimeInputs = [
+      pkgs.coreutils
+    ];
+    text = ''
+      container="claude-uk"
+      nixos_container="/run/current-system/sw/bin/nixos-container"
+      sudo="/run/wrappers/bin/sudo"
+
+      if [ ! -x "$nixos_container" ]; then
+        echo "nixos-container is not installed yet; run nixos-rebuild switch first." >&2
+        exit 127
+      fi
+
+      workdir="$PWD"
+      case "$workdir" in
+        /home/andongni|/home/andongni/*)
+          container_workdir="$workdir"
+          ;;
+        *)
+          echo "claude container only has /home/andongni mounted; run claude from /home/andongni or one of its subdirectories." >&2
+          exit 66
+          ;;
+      esac
+
+      env_dir="$HOME/.cache/claude-container"
+      env_file="$env_dir/env.$$"
+      trap 'rm -f "$env_file"' EXIT INT TERM
+
+      mkdir -p "$env_dir"
+      umask 077
+      : > "$env_file"
+
+      forward_env() {
+        local name="$1"
+        if [ -n "''${!name+x}" ]; then
+          printf '%s=%s\0' "$name" "''${!name}" >> "$env_file"
+        fi
+      }
+
+      for name in \
+        ANTHROPIC_AUTH_TOKEN \
+        ANTHROPIC_BASE_URL \
+        ANTHROPIC_DEFAULT_HAIKU_MODEL \
+        ANTHROPIC_DEFAULT_OPUS_MODEL \
+        ANTHROPIC_DEFAULT_SONNET_MODEL \
+        CLAUDE_CODE_SUBAGENT_MODEL \
+        CLAUDE_CONFIG_DIR \
+        GITHUB_TOKEN \
+        GH_TOKEN \
+        GIT_ASKPASS \
+        NIX_CONFIG \
+        SSH_AUTH_SOCK \
+        VISUAL \
+        EDITOR
+      do
+        forward_env "$name"
+      done
+
+      "$sudo" "$nixos_container" start "$container" >/dev/null
+      "$sudo" "$nixos_container" run "$container" -- \
+        /run/current-system/sw/bin/claude-container-entry \
+        "$container_workdir" \
+        "''${TERM:-xterm-256color}" \
+        "''${COLORTERM:-}" \
+        "$env_file" \
+        "$@"
+      status="$?"
+      exit "$status"
+    '';
+  };
+
   settings = {
     env = {
       # ANTHROPIC_AUTH_TOKEN = "test";
@@ -55,6 +128,10 @@ let
 
 in
 {
+  home.packages = [
+    claudeContainerLauncher
+  ];
+
   home.file.".claude/settings.json".text = builtins.toJSON settings;
 
   home.file.".claude/statusline.sh" = {

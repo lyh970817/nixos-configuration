@@ -40,6 +40,7 @@
     ./modules/programs/input-method.nix
     ./modules/programs/firefox.nix
     ./modules/programs/development.nix
+    ./modules/programs/claude-container.nix
 
     # User accounts
     ./users/andongni.nix
