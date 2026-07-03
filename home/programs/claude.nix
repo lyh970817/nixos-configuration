@@ -21,24 +21,43 @@ let
         exit 127
       fi
 
-      workdir="$PWD"
-      case "$workdir" in
-        /home/andongni|/home/andongni/*)
-          container_workdir="$workdir"
-          ;;
-        *)
-          echo "claude container only has /home/andongni mounted; run claude from /home/andongni or one of its subdirectories." >&2
-          exit 66
-          ;;
-      esac
-
+      workdir="$(pwd -P)"
       env_dir="$HOME/.cache/claude-container"
       env_file="$env_dir/env.$$"
-      trap 'rm -f "$env_file"' EXIT INT TERM
+      cleanup() {
+        rm -f "$env_file"
+        if [ -n "''${mount_dir:-}" ]; then
+          if /run/current-system/sw/bin/mountpoint -q "$mount_dir"; then
+            "$sudo" /run/current-system/sw/bin/umount -R "$mount_dir" \
+              || "$sudo" /run/current-system/sw/bin/umount -l "$mount_dir" \
+              || true
+          fi
+          rmdir "$mount_dir" 2>/dev/null || true
+        fi
+      }
+      trap cleanup EXIT
+      trap 'cleanup; exit 130' INT TERM
 
       mkdir -p "$env_dir"
       umask 077
       : > "$env_file"
+
+      case "$workdir" in
+        /home/andongni|/home/andongni/*)
+          container_workdir="$workdir"
+          ;;
+        /*)
+          mount_dir="$HOME/.cache/claude-container/work.$$"
+          mkdir -p "$mount_dir"
+          "$sudo" /run/current-system/sw/bin/mount --bind "$workdir" "$mount_dir"
+          "$sudo" /run/current-system/sw/bin/mount --make-private "$mount_dir"
+          container_workdir="$mount_dir"
+          ;;
+        *)
+          echo "claude container requires an absolute working directory." >&2
+          exit 66
+          ;;
+      esac
 
       forward_env() {
         local name="$1"
@@ -75,6 +94,8 @@ let
         "$env_file" \
         "$@"
       status="$?"
+      trap - EXIT
+      cleanup
       exit "$status"
     '';
   };

@@ -55,7 +55,8 @@ let
       shift 4
 
       if [ ! -d "$workdir" ]; then
-        workdir="/home/andongni"
+        echo "claude container cannot access working directory: $workdir" >&2
+        exit 66
       fi
 
       forwarded_env=()
@@ -96,7 +97,7 @@ let
         CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS="${ukEnvironment.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS}" \
         MCP_TIMEOUT="${ukEnvironment.MCP_TIMEOUT}" \
         PATH=/run/current-system/sw/bin:/nix/var/nix/profiles/default/bin \
-        bash -lc "cd \"\$1\"; shift; exec claude \"\$@\"" -- "$workdir" "$@"
+        bash -lc "cd \"\$1\" || exit 66; shift; exec claude \"\$@\"" -- "$workdir" "$@"
     '';
   };
 in
