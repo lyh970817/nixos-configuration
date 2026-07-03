@@ -112,6 +112,11 @@ in
       isReadOnly = false;
     };
 
+    bindMounts."/lib64" = {
+      hostPath = "/lib64";
+      isReadOnly = true;
+    };
+
     config =
       { pkgs, ... }:
       {
@@ -136,6 +141,7 @@ in
           shell = pkgs.zsh;
         };
 
+        programs.nix-ld.enable = true;
         programs.zsh.enable = true;
 
         nix.settings.experimental-features = [

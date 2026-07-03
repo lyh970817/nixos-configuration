@@ -4,9 +4,6 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
-    # Keep claude-code on an independently updatable nixpkgs pin
-    nixpkgs-claude-code.url = "github:nixos/nixpkgs/nixos-unstable";
-
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -25,7 +22,6 @@
     {
       self,
       nixpkgs,
-      nixpkgs-claude-code,
       home-manager,
       nur,
       pre-commit-hooks,
@@ -37,16 +33,12 @@
         inherit system;
         config.allowUnfree = true;
       };
-      claudeCodePkgs = import nixpkgs-claude-code {
-        inherit system;
-        config.allowUnfree = true;
-      };
       customOverlay = final: prev: {
         "115browser" = final.callPackage ./pkgs/115browser.nix { };
+        claude-code = final.callPackage ./pkgs/claude-code.nix { };
         kreuzberg-cli = final.callPackage ./pkgs/kreuzberg-cli.nix { };
         digg-pp-cli = final.callPackage ./pkgs/digg-pp-cli.nix { };
         hyprwhspr = final.callPackage ./pkgs/hyprwhspr.nix { };
-        claude-code = claudeCodePkgs.claude-code;
       };
       preCommitCheck = pre-commit-hooks.lib.${system}.run {
         src = ./.;
