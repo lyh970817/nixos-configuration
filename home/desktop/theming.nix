@@ -3,6 +3,20 @@
 let
   lightWallpaper = "$HOME/.local/share/wallpapers/Taiji_mandala.png";
   hyprCurrentTheme = "$HOME/.local/state/hypr/current-theme.conf";
+  setClaudeTheme = theme: ''
+    claude_settings="$HOME/.config/claude/settings.json"
+    mkdir -p "$(dirname "$claude_settings")"
+    if [ ! -e "$claude_settings" ]; then
+      printf '{}\n' > "$claude_settings"
+    fi
+    claude_settings_tmp="$(${pkgs.coreutils}/bin/mktemp "$claude_settings.XXXXXX")"
+    if ${pkgs.jq}/bin/jq --arg theme "${theme}" '.theme = $theme' "$claude_settings" > "$claude_settings_tmp"; then
+      ${pkgs.coreutils}/bin/mv "$claude_settings_tmp" "$claude_settings"
+    else
+      ${pkgs.coreutils}/bin/rm -f "$claude_settings_tmp"
+      echo "Failed to update Claude Code theme in $claude_settings" >&2
+    fi
+  '';
 
   # Dark Mode Script
   darkModeHook = pkgs.writeShellScript "dark-mode-hook" ''
@@ -42,6 +56,8 @@ let
 
       # Alacritty: Update symlink (alacritty auto-reloads on import changes)
       ln -sf $HOME/.config/alacritty/themes/dark.toml $HOME/.config/alacritty/current.toml
+
+      ${setClaudeTheme "dark-ansi"}
 
       # Mako: Switch mode
       ${pkgs.mako}/bin/makoctl mode -a dark
@@ -88,6 +104,8 @@ let
 
     # Alacritty: Update symlink (alacritty auto-reloads on import changes)
     ln -sf $HOME/.config/alacritty/themes/light.toml $HOME/.config/alacritty/current.toml
+
+    ${setClaudeTheme "light-ansi"}
 
     # Mako: Remove dark mode
     ${pkgs.mako}/bin/makoctl mode -r dark
