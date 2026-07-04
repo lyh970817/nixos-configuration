@@ -6,7 +6,7 @@ This repository is a NixOS flake for the `andongni` host. Entry points are `flak
 
 ## Build, Test, and Development Commands
 
-- `nix flake check`: evaluate the flake and catch Nix errors.
+- `nix flake check --impure`: evaluate the flake and catch Nix errors. This host's Mihomo configuration reads an absolute `/home/...` path, so plain pure evaluation fails.
 - `sudo nixos-rebuild dry-build --flake .#andongni --impure`: build the system closure without switching generations.
 - `sudo nixos-rebuild switch --flake .#andongni --impure`: apply the configuration to the local host.
 - `sudo ./scripts/mihomo-safe-rebuild.sh`: rebuild with rollback protection for Mihomo connectivity changes.
@@ -27,7 +27,7 @@ Use two-space indentation in Nix files. Keep modules focused on one concern and 
 
 ## Testing Guidelines
 
-There is no unit test suite. Run `nix flake check` for all edits. Use `sudo nixos-rebuild dry-build --flake .#andongni --impure` only for risky changes, such as boot, hardware, networking, proxy, service, package, overlay, or broad module/import changes. For small Home Manager program tweaks, a direct `sudo nixos-rebuild switch --flake .#andongni --impure` is sufficient after evaluation. For networking or proxy changes, prefer the Mihomo safe rebuild script.
+There is no unit test suite. Run `nix flake check --impure` for all edits; do not use plain `nix flake check` in this repo because the Mihomo module requires impure access to a host-local `/home/...` path. Use `sudo nixos-rebuild dry-build --flake .#andongni --impure` only for risky changes, such as boot, hardware, networking, proxy, service, package, overlay, or broad module/import changes. For small Home Manager program tweaks, a direct `sudo nixos-rebuild switch --flake .#andongni --impure` is sufficient after evaluation. For networking or proxy changes, prefer the Mihomo safe rebuild script.
 
 ## Commit & Pull Request Guidelines
 
