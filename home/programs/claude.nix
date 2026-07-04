@@ -114,7 +114,7 @@ let
       DISABLE_ERROR_REPORTING = "1";
       HTTP_PROXY = "http://127.0.0.1:7890";
       HTTPS_PROXY = "http://127.0.0.1:7890";
-      ALL_PROXY = "socks5://127.0.0.1:7890";
+      ALL_PROXY = "socks5h://127.0.0.1:7890";
       NO_PROXY = "localhost,127.0.0.1,::1,.local,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12";
       # CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1";
       MCP_TIMEOUT = "60000";

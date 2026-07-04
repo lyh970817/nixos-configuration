@@ -16,7 +16,7 @@ let
     LANGUAGE = "en_GB:en";
     HTTP_PROXY = "http://127.0.0.1:7890";
     HTTPS_PROXY = "http://127.0.0.1:7890";
-    ALL_PROXY = "socks5://127.0.0.1:7890";
+    ALL_PROXY = "socks5h://127.0.0.1:7890";
     NO_PROXY = "localhost,127.0.0.1,::1,.local,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12";
     DISABLE_TELEMETRY = "1";
     DISABLE_ERROR_REPORTING = "1";
