@@ -1,6 +1,36 @@
 { pkgs, ... }:
 
 {
+  xdg.dataFile = {
+    "applications/firefox.desktop" = {
+      force = true;
+      text = ''
+        [Desktop Entry]
+        Version=1.0
+        Type=Application
+        Name=Firefox
+        GenericName=Web Browser
+        Comment=Browse the Web
+        Exec=${pkgs.firefox}/bin/firefox %U
+        Icon=firefox
+        Terminal=false
+        Categories=Network;WebBrowser;
+        MimeType=text/html;text/xml;application/xhtml+xml;application/xml;application/rss+xml;application/rdf+xml;image/gif;image/jpeg;image/png;x-scheme-handler/http;x-scheme-handler/https;
+        StartupNotify=true
+        StartupWMClass=firefox
+        Keywords=web;browser;internet;
+      '';
+    };
+
+    "applications/uuctl.desktop".text = ''
+      [Desktop Entry]
+      Version=1.0
+      Type=Application
+      Name=uuctl
+      Hidden=true
+    '';
+  };
+
   xdg.desktopEntries = {
     "115browser" = {
       name = "115 Browser";
