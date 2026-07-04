@@ -41,6 +41,25 @@
       };
     };
 
+    wemeetapp = {
+      name = "Tencent Meeting";
+      genericName = "Video Conference";
+      comment = "Tencent Meeting desktop client";
+      exec = "${pkgs.wemeet}/bin/wemeet %u";
+      icon = "wemeet";
+      terminal = false;
+      type = "Application";
+      categories = [
+        "AudioVideo"
+        "Network"
+      ];
+      startupNotify = true;
+      mimeType = [ "x-scheme-handler/wemeet" ];
+      settings = {
+        Keywords = "tencent;meeting;wemeet;conference;video;";
+      };
+    };
+
     hibernate = {
       name = "Hibernate";
       genericName = "System";
