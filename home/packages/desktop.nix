@@ -15,6 +15,7 @@
     bitwarden-cli
     wtype
     zoom-us
+    wemeet
     teams-for-linux
     pkgs."115browser"
     nur.repos.xddxdd.baidunetdisk
