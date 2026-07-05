@@ -7,6 +7,7 @@
 
 let
   claudeCodePackage = pkgs.claude-code;
+  containerNixPath = "nixpkgs=${pkgs.path}:nixos-config=/etc/nixos/configuration.nix";
   hostSystemProfile = "/run/host-system/sw";
   hostUserProfile = "/etc/profiles/per-user/andongni";
   localeArchive = "${pkgs.glibcLocales}/lib/locale/locale-archive";
@@ -98,6 +99,7 @@ let
         ENABLE_EXPERIMENTAL_MCP_CLI="${ukEnvironment.ENABLE_EXPERIMENTAL_MCP_CLI}" \
         CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS="${ukEnvironment.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS}" \
         MCP_TIMEOUT="${ukEnvironment.MCP_TIMEOUT}" \
+        NIX_PATH="${containerNixPath}" \
         PATH=/run/current-system/sw/bin:${hostUserProfile}/bin:${hostSystemProfile}/bin:/nix/var/nix/profiles/default/bin \
         bash -lc "cd \"\$1\" || exit 66; shift; exec claude \"\$@\"" -- "$workdir" "$@"
     '';
@@ -160,6 +162,7 @@ in
           "nix-command"
           "flakes"
         ];
+        nix.nixPath = lib.splitString ":" containerNixPath;
 
         environment.systemPackages = with pkgs; [
           bash
