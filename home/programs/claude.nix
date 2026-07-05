@@ -1,105 +1,43 @@
 { pkgs, ... }:
 
 let
-  claudeContainerLauncher = pkgs.writeShellApplication {
+  claudeHostLauncher = pkgs.writeShellApplication {
     name = "claude";
-    runtimeInputs = [
-      pkgs.coreutils
-    ];
     text = ''
-      container="claude-uk"
-      nixos_container="/run/current-system/sw/bin/nixos-container"
-      sudo="/run/wrappers/bin/sudo"
-
-      if [ ! -x "$nixos_container" ]; then
-        echo "nixos-container is not installed yet; run nixos-rebuild switch first." >&2
-        exit 127
-      fi
-
-      workdir="$(pwd -P)"
-      env_dir="$HOME/.cache/claude-container"
       export CLAUDE_CONFIG_DIR="''${CLAUDE_CONFIG_DIR:-$HOME/.config/claude}"
-      env_file="$env_dir/env.$$"
-      cleanup() {
-        rm -f "$env_file"
-        if [ -n "''${mount_dir:-}" ]; then
-          if /run/current-system/sw/bin/mountpoint -q "$mount_dir"; then
-            "$sudo" /run/current-system/sw/bin/umount -R "$mount_dir" \
-              || "$sudo" /run/current-system/sw/bin/umount -l "$mount_dir" \
-              || true
-          fi
-          rmdir "$mount_dir" 2>/dev/null || true
-        fi
-      }
-      trap cleanup EXIT
-      trap 'cleanup; exit 130' INT TERM
 
-      mkdir -p "$env_dir" "$CLAUDE_CONFIG_DIR"
-      umask 077
-      : > "$env_file"
+      export TZ="Europe/London"
+      export TZDIR="${pkgs.tzdata}/share/zoneinfo"
 
-      case "$workdir" in
-        /home/andongni|/home/andongni/*)
-          container_workdir="$workdir"
-          ;;
-        /*)
-          mount_dir="$HOME/.cache/claude-container/work.$$"
-          mkdir -p "$mount_dir"
-          "$sudo" /run/current-system/sw/bin/mount --bind "$workdir" "$mount_dir"
-          "$sudo" /run/current-system/sw/bin/mount --make-private "$mount_dir"
-          container_workdir="$mount_dir"
-          ;;
-        *)
-          echo "claude container requires an absolute working directory." >&2
-          exit 66
-          ;;
-      esac
+      export LANG="en_GB.UTF-8"
+      export LC_ALL="en_GB.UTF-8"
+      export LANGUAGE="en_GB:en"
+      export LOCALE_ARCHIVE="${pkgs.glibcLocales}/lib/locale/locale-archive"
 
-      forward_env() {
-        local name="$1"
-        if [ -n "''${!name+x}" ]; then
-          printf '%s=%s\0' "$name" "''${!name}" >> "$env_file"
-        fi
-      }
+      export HTTP_PROXY="''${HTTP_PROXY:-http://127.0.0.1:7890}"
+      export HTTPS_PROXY="''${HTTPS_PROXY:-http://127.0.0.1:7890}"
+      export ALL_PROXY="''${ALL_PROXY:-socks5h://127.0.0.1:7890}"
+      export NO_PROXY="''${NO_PROXY:-localhost,127.0.0.1,::1,.local,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12}"
 
-      for name in \
-        ANTHROPIC_AUTH_TOKEN \
-        ANTHROPIC_BASE_URL \
-        ANTHROPIC_DEFAULT_HAIKU_MODEL \
-        ANTHROPIC_DEFAULT_OPUS_MODEL \
-        ANTHROPIC_DEFAULT_SONNET_MODEL \
-        CLAUDE_CODE_SUBAGENT_MODEL \
-        CLAUDE_CONFIG_DIR \
-        GITHUB_TOKEN \
-        GH_TOKEN \
-        GIT_ASKPASS \
-        NIX_CONFIG \
-        SSH_AUTH_SOCK \
-        VISUAL \
-        EDITOR
-      do
-        forward_env "$name"
-      done
+      export http_proxy="$HTTP_PROXY"
+      export https_proxy="$HTTPS_PROXY"
+      export all_proxy="$ALL_PROXY"
+      export no_proxy="$NO_PROXY"
 
-      "$sudo" "$nixos_container" start "$container" >/dev/null
-      "$sudo" "$nixos_container" run "$container" -- \
-        /run/current-system/sw/bin/claude-container-entry \
-        "$container_workdir" \
-        "''${TERM:-xterm-256color}" \
-        "''${COLORTERM:-}" \
-        "$env_file" \
-        "$@"
-      status="$?"
-      trap - EXIT
-      cleanup
-      exit "$status"
+      export DISABLE_TELEMETRY="1"
+      export DISABLE_ERROR_REPORTING="1"
+      export ENABLE_EXPERIMENTAL_MCP_CLI="true"
+      export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS="1"
+      export MCP_TIMEOUT="60000"
+
+      exec ${pkgs.claude-code}/bin/claude "$@"
     '';
   };
 
 in
 {
   home.packages = [
-    claudeContainerLauncher
+    claudeHostLauncher
   ];
 
   home.sessionVariables.CLAUDE_CONFIG_DIR = "$HOME/.config/claude";
