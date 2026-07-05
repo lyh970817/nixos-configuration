@@ -7,6 +7,8 @@
 
 let
   claudeCodePackage = pkgs.claude-code;
+  hostSystemProfile = "/run/host-system/sw";
+  hostUserProfile = "/etc/profiles/per-user/andongni";
   localeArchive = "${pkgs.glibcLocales}/lib/locale/locale-archive";
   ukLocale = "en_GB.UTF-8";
   ukEnvironment = {
@@ -96,7 +98,7 @@ let
         ENABLE_EXPERIMENTAL_MCP_CLI="${ukEnvironment.ENABLE_EXPERIMENTAL_MCP_CLI}" \
         CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS="${ukEnvironment.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS}" \
         MCP_TIMEOUT="${ukEnvironment.MCP_TIMEOUT}" \
-        PATH=/run/current-system/sw/bin:/nix/var/nix/profiles/default/bin \
+        PATH=/run/current-system/sw/bin:${hostUserProfile}/bin:${hostSystemProfile}/bin:/nix/var/nix/profiles/default/bin \
         bash -lc "cd \"\$1\" || exit 66; shift; exec claude \"\$@\"" -- "$workdir" "$@"
     '';
   };
@@ -114,6 +116,16 @@ in
 
     bindMounts."/lib64" = {
       hostPath = "/lib64";
+      isReadOnly = true;
+    };
+
+    bindMounts.${hostSystemProfile} = {
+      hostPath = "/run/current-system/sw";
+      isReadOnly = true;
+    };
+
+    bindMounts.${hostUserProfile} = {
+      hostPath = "/etc/profiles/per-user/andongni";
       isReadOnly = true;
     };
 
