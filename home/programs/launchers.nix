@@ -1,5 +1,10 @@
 { pkgs, ... }:
 
+let
+  codexLauncher = pkgs.writeShellScript "launch-codex" ''
+    exec ${pkgs.alacritty}/bin/alacritty --class Codex,codex --command ${pkgs.zsh}/bin/zsh -lc 'exec codex'
+  '';
+in
 {
   xdg.dataFile = {
     "applications/firefox.desktop" = {
@@ -29,6 +34,26 @@
       Name=uuctl
       Hidden=true
     '';
+
+    "applications/codex.desktop" = {
+      force = true;
+      text = ''
+        [Desktop Entry]
+        Version=1.0
+        Type=Application
+        Name=Codex
+        GenericName=AI Coding Agent
+        Comment=OpenAI Codex terminal coding agent
+        Exec=${codexLauncher}
+        Icon=utilities-terminal
+        Terminal=false
+        Categories=Development;Utility;
+        StartupNotify=true
+        StartupWMClass=codex
+        TryExec=${pkgs.codex}/bin/codex
+        Keywords=openai;codex;agent;ai;coding;terminal;
+      '';
+    };
   };
 
   xdg.desktopEntries = {
