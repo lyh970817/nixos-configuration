@@ -34,6 +34,5 @@
     gsettings-desktop-schemas
     darkman
     slack
-    codex
   ];
 }
