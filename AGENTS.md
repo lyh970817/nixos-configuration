@@ -6,16 +6,12 @@ This repository is a NixOS flake for the `andongni` host. Entry points are `flak
 
 ## Build, Test, and Development Commands
 
-- `nix flake check --impure`: evaluate the flake and catch Nix errors. This host's Mihomo configuration reads an absolute `/home/...` path, so plain pure evaluation fails.
-- `sudo nixos-rebuild dry-build --flake .#andongni --impure`: build the system closure without switching generations.
 - `sudo nixos-rebuild switch --flake .#andongni --impure`: apply the configuration to the local host.
-- `sudo ./scripts/mihomo-safe-rebuild.sh`: rebuild with rollback protection for Mihomo connectivity changes.
-- `sudo ./scripts/mihomo-safe-rebuild.sh cancel`: cancel rollback after a successful rebuild.
 - `find . -name '*.nix' -print0 | xargs -0 nixfmt`: format Nix files.
 
 ## Rebuild Policy
 
-Always apply configuration changes by running `sudo nixos-rebuild switch --flake .#andongni --impure`.
+For configuration changes, do not run standalone verification commands before rebuilding. Stage and commit the scoped change first so the configured pre-commit hooks run verification, then apply the committed configuration with `sudo nixos-rebuild switch --flake .#andongni --impure`.
 
 ## Coding Style & Naming Conventions
 
@@ -25,15 +21,11 @@ Use two-space indentation in Nix files. Keep modules focused on one concern and 
 
 `pkgs/hyprwhspr.nix` should package upstream runtime files that shipped commands depend on, including `bin`, `config`, `lib`, `share`, `scripts`, and `utils`. Expose user-facing upstream launchers with wrappers in `$out/bin`; auxiliary tools such as `meeting-recorder` must not live only under `$out/lib/hyprwhspr/bin`. Copy upstream docs, contrib files, and license material to `$out/share/doc/hyprwhspr`. The local host uses hyprwhspr with the REST backend; do not assume local backends such as `pywhispercpp` work unless their Python dependencies are explicitly added to the Nix environment.
 
-## Testing Guidelines
-
-There is no unit test suite. Run `nix flake check --impure` for all edits; do not use plain `nix flake check` in this repo because the Mihomo module requires impure access to a host-local `/home/...` path. Use `sudo nixos-rebuild dry-build --flake .#andongni --impure` only for risky changes, such as boot, hardware, networking, proxy, service, package, overlay, or broad module/import changes. For small Home Manager program tweaks, a direct `sudo nixos-rebuild switch --flake .#andongni --impure` is sufficient after evaluation. For networking or proxy changes, prefer the Mihomo safe rebuild script.
-
 ## Commit & Pull Request Guidelines
 
 Recent history uses short imperative subjects such as `Add 115 Browser launcher` and `Fix tmux copy-mode paging keys`. Follow that style: start with a verb, keep the subject specific, and avoid unrelated changes in one commit. Pull requests should summarize changes, list validation commands, call out host-specific effects, and include screenshots only for UI changes.
 
-After a successful rebuild and final review, make a commit so the working configuration has a matching history entry.
+Commit configuration changes before rebuilding. Treat the pre-commit hooks as the verification gate before `sudo nixos-rebuild switch --flake .#andongni --impure`; if the rebuild fails, make a follow-up fix commit and rebuild again.
 
 ## Security & Configuration Tips
 
