@@ -1,8 +1,22 @@
 #!/usr/bin/env bash
 
-# Get current date and time
-current_date=$(date "+%A, %B %d, %Y")
-current_time=$(date "+%H:%M:%S")
+now=$(date +%s)
+
+system_date=$(date -d "@${now}" "+%A, %B %d, %Y")
+system_day=$(date -d "@${now}" "+%F")
+
+beijing_time=$(TZ=Asia/Shanghai date -d "@${now}" "+%H:%M")
+
+uk_day=$(TZ=Europe/London date -d "@${now}" "+%F")
+uk_time=$(TZ=Europe/London date -d "@${now}" "+%H:%M")
+
+uk_day_note=""
+if [[ "$uk_day" < "$system_day" ]]; then
+  uk_day_note=" -1d"
+fi
 
 # Send notification
-notify-send "$current_time" "$current_date" --urgency=normal
+notify-send \
+  "${beijing_time}  ${uk_time}${uk_day_note}" \
+  "${system_date}" \
+  --urgency=normal
