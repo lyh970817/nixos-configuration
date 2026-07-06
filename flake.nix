@@ -16,6 +16,11 @@
       url = "github:cachix/pre-commit-hooks.nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    codex-desktop-linux = {
+      url = "github:ilysenko/codex-desktop-linux";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -25,6 +30,7 @@
       home-manager,
       nur,
       pre-commit-hooks,
+      codex-desktop-linux,
       ...
     }:
     let
@@ -75,7 +81,12 @@
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
             home-manager.backupFileExtension = "backup";
-            home-manager.users.andongni = import ./home/andongni.nix;
+            home-manager.users.andongni = {
+              imports = [
+                codex-desktop-linux.homeManagerModules.default
+                ./home/andongni.nix
+              ];
+            };
           }
         ];
       };
