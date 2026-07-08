@@ -36,7 +36,12 @@
     graphviz
     nixfmt
     tree-sitter
+    typst
+    tinymist
+    typstyle
+    websocat
     ast-grep
+    curl
     lua
     luarocks
     hunspell
