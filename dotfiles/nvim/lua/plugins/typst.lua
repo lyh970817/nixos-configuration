@@ -48,14 +48,4 @@ return {
       add_undo_breakpoints = true,
     },
   },
-  {
-    "neovim/nvim-lspconfig",
-    opts = {
-      servers = {
-        tinymist = {
-          mason = false,
-        },
-      },
-    },
-  },
 }

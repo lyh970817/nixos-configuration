@@ -35,6 +35,10 @@
     apptainer
     graphviz
     nixfmt
+    nil
+    harper
+    marksman
+    lua-language-server
     tree-sitter
     typst
     tinymist
@@ -44,6 +48,7 @@
     curl
     lua
     luarocks
+    nodePackages.vscode-langservers-extracted
     hunspell
     hunspellDicts.en_GB-large
     gemini-cli

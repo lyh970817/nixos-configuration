@@ -1,4 +1,4 @@
-# 💤 LazyVim
+# Neovim
 
-A starter template for [LazyVim](https://github.com/LazyVim/LazyVim).
-Refer to the [documentation](https://lazyvim.github.io/installation) to get started.
+This is a focused Neovim configuration for review, navigation, and Typst/math
+authoring. It uses `lazy.nvim` directly and does not import LazyVim.

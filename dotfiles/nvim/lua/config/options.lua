@@ -1,46 +1,70 @@
--- Options are automatically loaded before lazy.nvim startup
--- Default options that are always set: https://github.com/LazyVim/LazyVim/blob/main/lua/lazyvim/config/options.lua
--- Add any additional options here
+vim.g.mapleader = " "
+vim.g.maplocalleader = "\\"
 
--- Disable the highlight of the line where the cursor is
-vim.opt.cursorline = false
+local opt = vim.opt
 
--- Remove the tilde (~) characters from empty lines at the end of buffer
-vim.opt.fillchars = { eob = " " }
+opt.autowrite = true
+opt.clipboard = vim.env.SSH_CONNECTION and "" or "unnamedplus"
+opt.completeopt = "menu,menuone,noselect"
+opt.conceallevel = 2
+opt.confirm = true
+opt.cursorline = false
+opt.equalalways = false
+opt.expandtab = true
+opt.fillchars = {
+  foldopen = "",
+  foldclose = "",
+  fold = " ",
+  foldsep = " ",
+  diff = "╱",
+  eob = " ",
+}
+opt.foldlevel = 99
+opt.foldmethod = "indent"
+opt.foldtext = ""
+opt.formatoptions = "jcroqlnt"
+opt.grepformat = "%f:%l:%c:%m"
+opt.grepprg = "rg --vimgrep"
+opt.ignorecase = true
+opt.inccommand = "nosplit"
+opt.jumpoptions = "view"
+opt.laststatus = 3
+opt.linebreak = true
+opt.list = true
+opt.mouse = "a"
+opt.number = true
+opt.pumblend = 10
+opt.pumheight = 10
+opt.relativenumber = true
+opt.ruler = false
+opt.scrolloff = 4
+opt.shiftround = true
+opt.shiftwidth = 2
+opt.shortmess:append({ W = true, I = true, c = true, C = true })
+opt.showmode = false
+opt.sidescrolloff = 8
+opt.signcolumn = "yes"
+opt.smartcase = true
+opt.smartindent = true
+opt.smoothscroll = true
+opt.spelllang = { "en" }
+opt.splitbelow = true
+opt.splitkeep = "screen"
+opt.splitright = true
+opt.tabstop = 2
+opt.termguicolors = true
+opt.timeoutlen = 300
+opt.undofile = true
+opt.undolevels = 10000
+opt.updatetime = 200
+opt.virtualedit = "block"
+opt.wildmode = "longest:full,full"
+opt.winminwidth = 5
+opt.wrap = false
 
--- Sync with system clipboard
-vim.opt.clipboard = "unnamedplus"
+vim.g.markdown_recommended_style = 0
 
-vim.opt.equalalways = false
-
--- 1. Helper function to check system theme via gsettings
-local function get_system_theme()
-  -- Run the command and get output
-  local handle = io.popen("gsettings get org.gnome.desktop.interface color-scheme")
-  if not handle then
-    return "prefer-dark"
-  end -- Fallback if command fails
-
-  local result = handle:read("*a")
-  handle:close()
-
-  -- Clean up the output (remove quotes, newlines, whitespace)
-  result = result:gsub("['\"\n\r]", "")
-  return result
-end
-
--- 2. Determine mode and apply IMMEDIATELY
-local mode = get_system_theme()
-
-if mode == "prefer-light" then
-  vim.opt.background = "light"
-  -- Use pcall to prevent errors if the local file is missing during a fresh install
-  pcall(vim.cmd, "colorscheme bow-wob")
-else
-  -- Default to dark for safety
-  vim.opt.background = "dark"
-  pcall(vim.cmd, "colorscheme matrix")
-end
+require("config.theme").apply_system()
 
 vim.api.nvim_create_autocmd("VimResized", {
   pattern = "*",
