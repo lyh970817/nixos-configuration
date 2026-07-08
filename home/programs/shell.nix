@@ -124,6 +124,9 @@
       # Codex with unrestricted filesystem access.
       alias codexy='codex --yolo'
 
+      # Claude Code with the mattpocock skills profile (separate CLAUDE_CONFIG_DIR).
+      alias claude-matt='CLAUDE_CONFIG_DIR="$HOME/.config/claude-mattpocock" claude'
+
       # Function to print a random poem with alignment
       function print_welcome_poem() {
         ${builtins.readFile ./print_poem.sh}
@@ -131,6 +134,11 @@
 
       # Launch fastfetch on terminal open (delay allows terminal to initialize)
       sleep 0.1 && fastfetch && print_welcome_poem && printf '\n'
+
+      # Keep zoxide's hook last so its doctor check passes (we register
+      # chpwd/precmd hooks above, after zoxide's early init).
+      add-zsh-hook -d chpwd __zoxide_hook 2>/dev/null
+      add-zsh-hook chpwd __zoxide_hook
     '';
 
     oh-my-zsh = {
