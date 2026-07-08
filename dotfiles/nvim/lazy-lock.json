@@ -1,6 +1,5 @@
 {
   "LazyVim": { "branch": "main", "commit": "28db03f958d58dfff3c647ce28fdc1cb88ac158d" },
-  "R.nvim": { "branch": "main", "commit": "bbb4e72c609eadfb240119fa9aae1b0d34bcff7d" },
   "LuaSnip": { "branch": "master", "commit": "0abc8f390b278c3b4aabc4c004ac8a088b65cf24" },
   "SchemaStore.nvim": { "branch": "main", "commit": "a025c78b147affef1aabb8aa360c92be2e0377a0" },
   "auto-dark-mode.nvim": { "branch": "master", "commit": "e300259ec777a40b4b9e3c8e6ade203e78d15881" },
