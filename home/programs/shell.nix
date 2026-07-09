@@ -12,6 +12,14 @@
       KEYTIMEOUT=1
       export LS_COLORS="''${LS_COLORS}:ln=01;36:or=01;31:"
 
+      # Silence zoxide's one-time doctor nag. It only checks that __zoxide_hook
+      # is present in chpwd_functions (not that it is "last"), and fires
+      # spuriously in non-interactive login shells such as Claude Code's bash
+      # tool, where the hook ends up unregistered. Interactive shells register
+      # it fine below, so this just suppresses the false positive. Set early so
+      # it applies even if the rest of this file is cut short in those shells.
+      export _ZO_DOCTOR=0
+
       # Persist directory stack across sessions
       DIRSTACKFILE="''${XDG_CACHE_HOME:-$HOME/.cache}/zsh/dirs"
       DIRSTACKSIZE=20
@@ -135,8 +143,9 @@
       # Launch fastfetch on terminal open (delay allows terminal to initialize)
       sleep 0.1 && fastfetch && print_welcome_poem && printf '\n'
 
-      # Keep zoxide's hook last so its doctor check passes (we register
-      # chpwd/precmd hooks above, after zoxide's early init).
+      # Re-register zoxide's chpwd hook after the oh-my-zsh/plugin chpwd hooks
+      # loaded above, so directory tracking keeps working (some plugins reassign
+      # chpwd_functions and would otherwise drop zoxide's hook).
       add-zsh-hook -d chpwd __zoxide_hook 2>/dev/null
       add-zsh-hook chpwd __zoxide_hook
     '';
