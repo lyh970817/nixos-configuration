@@ -62,13 +62,13 @@ return {
         willRename = true,
       }
 
-      local lspconfig = require("lspconfig")
       local root = require("config.root")
 
       local function setup(server, opts)
         opts = opts or {}
         opts.capabilities = vim.tbl_deep_extend("force", capabilities, opts.capabilities or {})
-        lspconfig[server].setup(opts)
+        vim.lsp.config(server, opts)
+        vim.lsp.enable(server)
       end
 
       if executable("tinymist") then
