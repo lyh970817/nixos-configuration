@@ -12,6 +12,16 @@
 
       keyboard.bindings = [
         {
+          key = "1";
+          mods = "Control";
+          chars = "\\u001b[49;5u"; # CSI-u Ctrl+1 for tmux scratch note split
+        }
+        {
+          key = "1";
+          mods = "Control|Shift";
+          chars = "\\u001b[49;6u"; # CSI-u Ctrl+Shift+1 for tmux scratch note split
+        }
+        {
           key = "Return";
           mods = "Alt|Shift";
           chars = "\\u001b[21;2~"; # Shift+F10 for tmux vertical split

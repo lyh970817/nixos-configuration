@@ -27,6 +27,7 @@
     ./programs/hyprwhspr.nix
     ./programs/launchers.nix
     ./programs/dotfiles.nix
+    ./directories.nix
     ./desktop/theming.nix
     ./desktop/xdg.nix
     ./packages/base.nix
@@ -45,6 +46,7 @@
     JAVA_HOME = "${pkgs.jdk17}/lib/openjdk";
     SSH_AUTH_SOCK = "$HOME/.bitwarden-ssh-agent.sock";
     NPM_CONFIG_PREFIX = "$HOME/.npm-global";
+    SCRATCH_DIR = "$HOME/.scratch";
   };
 
   home.sessionPath = [

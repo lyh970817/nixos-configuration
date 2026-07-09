@@ -3,6 +3,44 @@
 # Original: ~/.tmux.conf
 { config, pkgs, ... }:
 
+let
+  scratchNote = pkgs.writeShellScript "tmux-scratch-note" ''
+    set -eu
+
+    direction="''${1:?missing split direction}"
+    target_pane="''${2:?missing target pane}"
+    pane_path="''${3:?missing pane path}"
+    scratch_dir="''${SCRATCH_DIR:-$HOME/.scratch}"
+
+    case "$direction" in
+      horizontal)
+        split_flag="-h"
+        ;;
+      vertical)
+        split_flag="-v"
+        ;;
+      *)
+        echo "unknown split direction: $direction" >&2
+        exit 2
+        ;;
+    esac
+
+    ${pkgs.coreutils}/bin/mkdir -p "$scratch_dir"
+    ${pkgs.coreutils}/bin/chmod 700 "$scratch_dir"
+
+    stamp="$(${pkgs.coreutils}/bin/date +%Y-%m-%d-%H%M)"
+    note="$scratch_dir/$stamp.md"
+    suffix=1
+
+    while [ -e "$note" ]; do
+      note="$scratch_dir/$stamp-$suffix.md"
+      suffix=$((suffix + 1))
+    done
+
+    : > "$note"
+    ${pkgs.tmux}/bin/tmux split-window "$split_flag" -t "$target_pane" -c "$pane_path" "nvim '$note'"
+  '';
+in
 {
   programs.tmux = {
     enable = true;
@@ -32,6 +70,11 @@
       # --- Pane Management ---
       # Horizontal Split: Alt + Enter
       bind -n M-Enter split-window -h -c "#{pane_current_path}"
+
+      # Scratch notes: create a timestamped Markdown file in $SCRATCH_DIR and
+      # open it in Neovim in a split from the current tmux pane.
+      bind -n C-1 run-shell -b "${scratchNote} horizontal #{q:pane_id} #{q:pane_current_path}"
+      bind -n C-S-1 run-shell -b "${scratchNote} vertical #{q:pane_id} #{q:pane_current_path}"
 
       # Enable extended keys so tmux recognizes the code sent by Alacritty
       set -s extended-keys on
