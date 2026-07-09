@@ -70,6 +70,22 @@
       ZVM_INSERT_MODE_CURSOR=$'\e[5 q'
       ZVM_OPPEND_MODE_CURSOR=$'\e[5 q'
 
+      # fzf shell integration (keybindings + completion). Loaded here instead of
+      # via the oh-my-zsh "fzf" plugin so we can swallow the harmless
+      # "can't change option: zle" that fzf 0.67.0's `--zsh` output prints while
+      # snapshotting and restoring shell options. The FZF_DEFAULT_COMMAND block
+      # preserves the behaviour the plugin used to provide.
+      if (( ''${+commands[fzf]} )); then
+        eval "$(fzf --zsh)" 2>/dev/null
+        if [[ -z "$FZF_DEFAULT_COMMAND" ]]; then
+          if (( ''${+commands[fd]} )); then
+            export FZF_DEFAULT_COMMAND='fd --type f --hidden --exclude .git'
+          elif (( ''${+commands[rg]} )); then
+            export FZF_DEFAULT_COMMAND='rg --files --hidden --glob "!.git/*"'
+          fi
+        fi
+      fi
+
       # Yazi wrapper function - cd to directory on exit
       function y() {
         local tmp="$(mktemp -t "yazi-cwd.XXXXXX")" cwd
@@ -155,7 +171,6 @@
       plugins = [
         "git"
         "sudo"
-        "fzf"
         "aliases"
         "alias-finder"
         "battery"
