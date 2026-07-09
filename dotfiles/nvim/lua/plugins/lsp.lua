@@ -162,7 +162,6 @@ return {
           map("n", "gD", vim.lsp.buf.declaration, "Goto Declaration")
           map("n", "K", vim.lsp.buf.hover, "Hover")
           map("n", "gK", vim.lsp.buf.signature_help, "Signature Help")
-          map("i", "<C-k>", vim.lsp.buf.signature_help, "Signature Help")
           map({ "n", "x" }, "<leader>ca", vim.lsp.buf.code_action, "Code Action")
           map("n", "<leader>cr", vim.lsp.buf.rename, "Rename")
           map("n", "<leader>ss", function() require("snacks").picker.lsp_symbols() end, "LSP Symbols")

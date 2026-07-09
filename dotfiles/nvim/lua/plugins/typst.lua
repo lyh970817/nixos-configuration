@@ -32,13 +32,13 @@ return {
         desc = "Toggle Typstar snippets",
       },
       {
-        "<M-j>",
+        "<C-j>",
         "<Cmd>TypstarSmartJump<CR>",
         mode = { "s", "i" },
         desc = "Typstar next snippet stop",
       },
       {
-        "<M-k>",
+        "<C-k>",
         "<Cmd>TypstarSmartJumpBack<CR>",
         mode = { "s", "i" },
         desc = "Typstar previous snippet stop",
