@@ -60,6 +60,27 @@ is_dashboard() {
     [ "$address" = "$registered" ] || register_dashboard "$address"
 }
 
+restore_dashboard() {
+    local address=$1
+    local starting_workspace
+    local fullscreen
+
+    starting_workspace=$(active_workspace)
+    hyprctl dispatch movetoworkspacesilent "$protected_workspace,address:$address" >/dev/null
+    fullscreen=$(hyprctl clients -j | jq -r --arg address "$address" \
+        '.[] | select(.address == $address) | .fullscreen')
+
+    if [ "$starting_workspace" = "$protected_workspace" ] || [ "$fullscreen" != "1" ]; then
+        hyprctl dispatch focuswindow "address:$address" >/dev/null
+    fi
+    if [ "$fullscreen" != "1" ]; then
+        hyprctl dispatch fullscreen 1 >/dev/null
+    fi
+    if [ "$starting_workspace" != "$protected_workspace" ]; then
+        hyprctl dispatch workspace "$starting_workspace" >/dev/null
+    fi
+}
+
 last_normal_workspace() {
     local workspace=1
 
@@ -183,10 +204,7 @@ run_daemon() {
                     previous=${known_workspaces["$address"]:-}
                     if is_dashboard "$address"; then
                         if [ "$workspace" != "$protected_workspace" ]; then
-                            hyprctl dispatch movetoworkspacesilent "$protected_workspace,address:$address" >/dev/null
-                            if [ "$(active_workspace)" = "$protected_workspace" ]; then
-                                hyprctl dispatch focuswindow "address:$address" >/dev/null
-                            fi
+                            restore_dashboard "$address"
                             known_workspaces["$address"]=$protected_workspace
                         fi
                     elif is_locked && [ "$workspace" = "$protected_workspace" ]; then
