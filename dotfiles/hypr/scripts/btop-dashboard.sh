@@ -11,7 +11,8 @@
     starting_workspace=$(hyprctl activeworkspace -j | jq -r '.id')
 
     for _ in {1..20}; do
-        dashboard_address=$(hyprctl clients -j | jq -r '.[] | select(.class == "Alacritty-btop") | .address' | head -1)
+        dashboard_address=$(hyprctl clients -j | jq -r --argjson pid "$PPID" \
+            '.[] | select(.pid == $pid) | .address' | head -1)
         if [ -n "$dashboard_address" ]; then
             hyprctl dispatch focuswindow "address:$dashboard_address"
             hyprctl dispatch fullscreen 1

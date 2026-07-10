@@ -5,6 +5,10 @@ if [ "$(hyprctl activewindow -j | jq -r '.class // ""')" = "Alacritty-btop" ]; t
     exit 0
 fi
 
+if btop-workspace is-locked; then
+    exit 0
+fi
+
 # Get the active window address
 window=$(hyprctl activewindow -j | jq -r '.address')
 

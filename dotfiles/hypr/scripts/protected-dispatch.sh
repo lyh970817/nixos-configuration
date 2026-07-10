@@ -6,4 +6,9 @@ if [ "$(hyprctl activewindow -j | jq -r '.class // ""')" = "Alacritty-btop" ]; t
     exit 0
 fi
 
+# Workspace 10 is reserved for the managed dashboard while its guard is locked.
+if [ "${1:-}" = "movetoworkspace" ] && [ "${2:-}" = "10" ] && btop-workspace is-locked; then
+    exit 0
+fi
+
 exec hyprctl dispatch "$@"
