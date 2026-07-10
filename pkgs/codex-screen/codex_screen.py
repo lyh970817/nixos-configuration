@@ -188,7 +188,6 @@ def command_begin(_: argparse.Namespace) -> dict[str, Any]:
     }
     atomic_json(path / "session.json", data)
     audit("begin", session=session)
-    notify("Visual verification started", f"Session {session[-6:]}")
     return {"session": session, "mode": data["mode"]}
 
 

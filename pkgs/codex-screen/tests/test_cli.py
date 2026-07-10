@@ -90,6 +90,7 @@ PY
 
     def test_focused_capture_is_private_notified_and_audited(self) -> None:
         session = self.begin()
+        self.assertFalse(any(command[0] == "notify-send" for command in self.commands()))
         result = self.cli("capture", "--session", session)
 
         capture = Path(result["path"])
@@ -97,6 +98,12 @@ PY
         self.assertEqual(capture.stat().st_mode & 0o777, 0o600)
         self.assertIn(["grim", "-o", "DP-1", str(capture)], self.commands())
         self.assertTrue(any(command[0] == "notify-send" for command in self.commands()))
+        capture_commands = [
+            command[0]
+            for command in self.commands()
+            if command[0] in {"grim", "notify-send"}
+        ]
+        self.assertEqual(capture_commands, ["grim", "notify-send"])
 
         audit = (self.state / "codex-screen/audit.jsonl").read_text()
         self.assertIn('"event":"capture"', audit)
