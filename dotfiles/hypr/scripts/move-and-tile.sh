@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+# Keep the dedicated btop dashboard fixed on workspace 10.
+if [ "$(hyprctl activewindow -j | jq -r '.class // ""')" = "Alacritty-btop" ]; then
+    exit 0
+fi
+
 # Get the active window address
 window=$(hyprctl activewindow -j | jq -r '.address')
 
@@ -13,4 +18,3 @@ fi
 
 # Move to workspace 10
 hyprctl dispatch movetoworkspacesilent 10
-
