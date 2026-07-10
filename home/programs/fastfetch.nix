@@ -1,6 +1,81 @@
 { config, pkgs, ... }:
 
+let
+  fastfetchAudio = pkgs.writeShellApplication {
+    name = "fastfetch-audio";
+    runtimeInputs = with pkgs; [
+      coreutils
+      gawk
+      gnugrep
+      gnused
+      wireplumber
+    ];
+    text = ''
+      endpoint_value() {
+        local selector="$1"
+        local expected_class="$2"
+        local value_kind="$3"
+        local inspect associated media_class name volume percentage
+
+        if ! inspect=$(wpctl inspect "$selector" 2>/dev/null); then
+          if wpctl status >/dev/null 2>&1; then
+            printf 'None'
+          else
+            printf 'Unknown'
+          fi
+          return
+        fi
+
+        media_class=$(printf '%s\n' "$inspect" | sed -n 's/.*media.class = "\(.*\)"/\1/p; T; q')
+        if [[ "$media_class" != "$expected_class" ]] || printf '%s\n' "$inspect" | grep -q 'node.virtual = "true"'; then
+          printf 'None'
+          return
+        fi
+
+        case "$value_kind" in
+          device)
+            associated=$(wpctl inspect --associated "$selector" 2>/dev/null || true)
+            name=$(printf '%s\n' "$associated" | sed -n 's/.*device.description = "\(.*\)"/\1/p; T; q')
+            if [[ -z "$name" ]]; then
+              name=$(printf '%s\n' "$inspect" | sed -n 's/.*node.description = "\(.*\)"/\1/p; T; q')
+            fi
+            printf '%s' "''${name:-Unknown}"
+            ;;
+          volume)
+            if ! volume=$(wpctl get-volume "$selector" 2>/dev/null); then
+              printf 'Unknown'
+              return
+            fi
+            percentage=$(awk '{ printf "%.0f", $2 * 100 }' <<< "$volume")
+            if [[ "$volume" == *"[MUTED]"* ]]; then
+              printf '%s%% (muted)' "$percentage"
+            else
+              printf '%s%%' "$percentage"
+            fi
+            ;;
+        esac
+      }
+
+      case "''${1:-}" in
+        device | volume)
+          printf 'Output: '
+          endpoint_value '@DEFAULT_AUDIO_SINK@' 'Audio/Sink' "$1"
+          printf ' | Input: '
+          endpoint_value '@DEFAULT_AUDIO_SOURCE@' 'Audio/Source' "$1"
+          printf '\n'
+          ;;
+        *)
+          printf 'Usage: fastfetch-audio {device|volume}\n' >&2
+          exit 2
+          ;;
+      esac
+    '';
+  };
+in
+
 {
+  home.packages = [ fastfetchAudio ];
+
   programs.fastfetch = {
     enable = true;
     settings = {
@@ -22,7 +97,6 @@
           text = "echo \"$(TZ='Asia/Shanghai' date +'%H:%M:%S') | $(TZ='Europe/London' date +'%H:%M:%S')\"";
         }
         "OS"
-        "Terminal"
         "Disk"
         "Memory"
         "Battery"
@@ -33,6 +107,16 @@
           text = "status=$(systemctl is-active mihomo 2>/dev/null); if [ \"$status\" = \"active\" ]; then config=$(curl -s http://127.0.0.1:9090/configs 2>/dev/null); mode=$(echo \"$config\" | jq -r '.mode' 2>/dev/null); tun=$(echo \"$config\" | jq -r 'if .tun.enable then \"TUN\" else \"noTUN\" end' 2>/dev/null); proxy=$(curl -s http://127.0.0.1:9090/proxies 2>/dev/null | jq -r '[.proxies | to_entries[] | select(.value.type == \"Selector\" and .key != \"GLOBAL\")] | .[0].value.now' 2>/dev/null); echo \"$mode | $proxy | $tun\"; else echo \"inactive\"; fi";
         }
         "Bluetooth"
+        {
+          type = "command";
+          key = "Audio Device";
+          text = "fastfetch-audio device";
+        }
+        {
+          type = "command";
+          key = "Audio Volume";
+          text = "fastfetch-audio volume";
+        }
       ];
     };
   };
