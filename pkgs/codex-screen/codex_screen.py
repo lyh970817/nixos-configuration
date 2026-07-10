@@ -9,142 +9,43 @@ import os
 import secrets
 import shutil
 import signal
-import stat
 import subprocess
 import sys
 import time
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from codex_screen_lib.desktop import (
+    ADAPTER_COMMANDS,
+    ADAPTER_NAMES,
+    active_window_geometry,
+    associated_window,
+    current_mode,
+    expected_mode,
+    focused_monitor,
+    notify,
+    run_json,
+)
+from codex_screen_lib.preview import (
+    command_preview_gsettings,
+    command_preview_hypr_keyword,
+    command_preview_mako_mode,
+    command_preview_symlink,
+    restore_previews,
+)
+from codex_screen_lib.state import (
+    ScreenError,
+    atomic_json,
+    audit,
+    now,
+    private_dir,
+    read_json,
+    runtime_root,
+    session_dir,
+)
+
 
 SESSION_TTL_SECONDS = 24 * 60 * 60
-AUDIT_TTL_DAYS = 90
-AUDIT_MAX_BYTES = 1024 * 1024
-
-
-class ScreenError(RuntimeError):
-    pass
-
-
-def now() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def runtime_root() -> Path:
-    base = os.environ.get("XDG_RUNTIME_DIR")
-    if not base:
-        base = f"/run/user/{os.getuid()}"
-    return Path(base) / "codex-screen"
-
-
-def state_root() -> Path:
-    base = os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state"))
-    return Path(base) / "codex-screen"
-
-
-def private_dir(path: Path) -> None:
-    path.mkdir(mode=0o700, parents=True, exist_ok=True)
-    path.chmod(0o700)
-
-
-def atomic_json(path: Path, value: Any) -> None:
-    temporary = path.with_suffix(".tmp")
-    temporary.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
-    temporary.chmod(0o600)
-    temporary.replace(path)
-
-
-def read_json(path: Path) -> Any:
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError) as error:
-        raise ScreenError(f"Invalid or missing session: {path.parent.name}") from error
-
-
-def run_json(command: list[str]) -> Any:
-    try:
-        result = subprocess.run(command, check=True, capture_output=True, text=True)
-        return json.loads(result.stdout)
-    except (OSError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
-        raise ScreenError(f"Command failed: {command[0]}") from error
-
-
-def notify(summary: str, body: str) -> None:
-    try:
-        subprocess.run(
-            ["notify-send", "--app-name=Codex screen", summary, body],
-            check=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    except OSError:
-        pass
-
-
-def current_mode() -> str:
-    try:
-        result = subprocess.run(
-            ["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        return "light" if "light" in result.stdout else "dark"
-    except (OSError, subprocess.CalledProcessError):
-        return "unknown"
-
-
-def audit(
-    event: str,
-    *,
-    session: str,
-    target: str | None = None,
-    monitor: str | None = None,
-    outcome: str = "ok",
-) -> None:
-    root = state_root()
-    private_dir(root)
-    path = root / "audit.jsonl"
-    rotate_audit(path)
-    entry = {
-        "time": now().isoformat(),
-        "session": session,
-        "event": event,
-        "outcome": outcome,
-    }
-    if target is not None:
-        entry["target"] = target
-    if monitor is not None:
-        entry["monitor"] = monitor
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(entry, separators=(",", ":")) + "\n")
-    path.chmod(0o600)
-
-
-def rotate_audit(path: Path) -> None:
-    if not path.exists():
-        return
-    cutoff = now() - timedelta(days=AUDIT_TTL_DAYS)
-    retained: list[str] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        try:
-            entry = json.loads(line)
-            timestamp = datetime.fromisoformat(entry["time"])
-        except (json.JSONDecodeError, KeyError, ValueError):
-            continue
-        if timestamp >= cutoff:
-            retained.append(json.dumps(entry, separators=(",", ":")))
-    encoded = "\n".join(retained)
-    if encoded:
-        encoded += "\n"
-    while len(encoded.encode()) > AUDIT_MAX_BYTES and retained:
-        retained.pop(0)
-        encoded = "\n".join(retained)
-        if encoded:
-            encoded += "\n"
-    path.write_text(encoded, encoding="utf-8")
-    path.chmod(0o600)
 
 
 def purge_abandoned() -> None:
@@ -158,25 +59,17 @@ def purge_abandoned() -> None:
             continue
         session = child.name
         terminate_owned_processes(child)
+        try:
+            restore_previews(child)
+        except ScreenError:
+            audit("purge", session=session, outcome="restore-failed")
+            continue
         shutil.rmtree(child)
         audit("purge", session=session)
 
 
-def session_dir(session: str) -> Path:
-    if not session or any(character not in "abcdefghijklmnopqrstuvwxyz0123456789-" for character in session):
-        raise ScreenError("Invalid session identifier")
-    path = runtime_root() / session
-    if not path.is_dir() or path.is_symlink():
-        raise ScreenError(f"Invalid or missing session: {session}")
-    mode = stat.S_IMODE(path.stat().st_mode)
-    if mode & 0o077:
-        raise ScreenError("Session directory is not private")
-    return path
-
-
 def command_begin(_: argparse.Namespace) -> dict[str, Any]:
-    purge_abandoned()
-    session = f"{int(time.time())}-{secrets.token_hex(6)}"
+    session = secrets.token_hex(12)
     path = runtime_root() / session
     private_dir(path)
     data = {
@@ -189,29 +82,6 @@ def command_begin(_: argparse.Namespace) -> dict[str, Any]:
     atomic_json(path / "session.json", data)
     audit("begin", session=session)
     return {"session": session, "mode": data["mode"]}
-
-
-def focused_monitor() -> str:
-    workspace = run_json(["hyprctl", "activeworkspace", "-j"])
-    monitor = workspace.get("monitor")
-    if not isinstance(monitor, str) or not monitor:
-        raise ScreenError("Hyprland did not report a focused monitor")
-    return monitor
-
-
-def active_window_geometry() -> str:
-    window = run_json(["hyprctl", "activewindow", "-j"])
-    position = window.get("at")
-    size = window.get("size")
-    if not (
-        isinstance(position, list)
-        and isinstance(size, list)
-        and len(position) == 2
-        and len(size) == 2
-        and all(isinstance(value, int) for value in position + size)
-    ):
-        raise ScreenError("Hyprland did not report active-window geometry")
-    return f"{position[0]},{position[1]} {size[0]}x{size[1]}"
 
 
 def capture_command(
@@ -245,7 +115,6 @@ def capture_command(
 
 
 def command_capture(args: argparse.Namespace) -> dict[str, Any]:
-    purge_abandoned()
     path = session_dir(args.session)
     data = read_json(path / "session.json")
     capture_number = int(data.get("captures", 0)) + 1
@@ -281,48 +150,7 @@ def process_start_time(pid: int) -> str:
     return fields[21]
 
 
-def descendant_pids(parent: int) -> set[int]:
-    descendants = {parent}
-    changed = True
-    while changed:
-        changed = False
-        for status in Path("/proc").glob("[0-9]*/status"):
-            try:
-                lines = status.read_text(encoding="utf-8").splitlines()
-                pid = int(status.parent.name)
-                ppid = int(
-                    next(line for line in lines if line.startswith("PPid:")).split()[1]
-                )
-            except (FileNotFoundError, PermissionError, StopIteration, ValueError):
-                continue
-            if ppid in descendants and pid not in descendants:
-                descendants.add(pid)
-                changed = True
-    return descendants
-
-
-def associated_window(pid: int, wait_seconds: float) -> dict[str, Any] | None:
-    deadline = time.monotonic() + wait_seconds
-    while True:
-        try:
-            clients = run_json(["hyprctl", "clients", "-j"])
-        except ScreenError:
-            return None
-        if isinstance(clients, list):
-            owned_pids = descendant_pids(pid)
-            for client in clients:
-                if client.get("pid") in owned_pids:
-                    return {
-                        "address": client.get("address"),
-                        "pid": client.get("pid"),
-                    }
-        if time.monotonic() >= deadline:
-            return None
-        time.sleep(0.1)
-
-
 def command_launch(args: argparse.Namespace) -> dict[str, Any]:
-    purge_abandoned()
     path = session_dir(args.session)
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
     if not command:
@@ -359,24 +187,6 @@ def command_launch(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def command_adapter(args: argparse.Namespace) -> dict[str, Any]:
-    adapters = {
-        "alacritty": ["alacritty", "--class", "Codex-visual-alacritty"],
-        "neovim": [
-            "alacritty",
-            "--class",
-            "Codex-visual-neovim",
-            "-e",
-            "nvim",
-        ],
-        "btop": [
-            "alacritty",
-            "--class",
-            "Codex-visual-btop",
-            "-e",
-            "btop",
-        ],
-        "rofi": ["rofi", "-show", "drun"],
-    }
     if args.name == "desktop":
         mode_result = command_ensure_mode(argparse.Namespace(session=args.session))
         audit("adapter", session=args.session)
@@ -387,7 +197,7 @@ def command_adapter(args: argparse.Namespace) -> dict[str, Any]:
         return {"adapter": args.name, "owned": False}
     launch_args = argparse.Namespace(
         session=args.session,
-        command=adapters[args.name],
+        command=ADAPTER_COMMANDS[args.name],
         keep_open=args.keep_open,
         wait_seconds=args.wait_seconds,
     )
@@ -419,17 +229,6 @@ def terminate_owned_processes(path: Path) -> int:
     return terminated
 
 
-def expected_mode() -> str:
-    try:
-        result = subprocess.run(
-            ["darkman", "get"], check=True, capture_output=True, text=True
-        )
-        value = result.stdout.strip()
-        return value if value in {"dark", "light"} else "unknown"
-    except (OSError, subprocess.CalledProcessError):
-        return "unknown"
-
-
 def command_ensure_mode(args: argparse.Namespace) -> dict[str, Any]:
     path = session_dir(args.session)
     data = read_json(path / "session.json")
@@ -450,6 +249,7 @@ def command_end(args: argparse.Namespace) -> dict[str, Any]:
     path = session_dir(args.session)
     data = read_json(path / "session.json")
     terminated = terminate_owned_processes(path)
+    restored_previews = restore_previews(path)
     desired_mode = expected_mode()
     if desired_mode == "unknown":
         desired_mode = data.get("restore_mode", "unknown")
@@ -461,7 +261,12 @@ def command_end(args: argparse.Namespace) -> dict[str, Any]:
     shutil.rmtree(path)
     audit("end", session=args.session)
     notify("Visual verification finished", f"Cleaned session {args.session[-6:]}")
-    return {"cleaned": True, "terminated": terminated, "restored_mode": desired_mode}
+    return {
+        "cleaned": True,
+        "terminated": terminated,
+        "restored_previews": restored_previews,
+        "restored_mode": desired_mode,
+    }
 
 
 def command_status(args: argparse.Namespace) -> dict[str, Any]:
@@ -504,11 +309,45 @@ def parser() -> argparse.ArgumentParser:
     adapter.add_argument("--session", required=True)
     adapter.add_argument("--keep-open", action="store_true")
     adapter.add_argument("--wait-seconds", type=float, default=5.0)
-    adapter.add_argument(
-        "name",
-        choices=["desktop", "alacritty", "neovim", "btop", "rofi", "notification"],
-    )
+    adapter.add_argument("name", choices=ADAPTER_NAMES)
     adapter.set_defaults(handler=command_adapter)
+
+    preview = commands.add_parser(
+        "preview", help="apply a session-managed reversible visual preview"
+    )
+    preview_kinds = preview.add_subparsers(dest="preview_kind", required=True)
+
+    preview_symlink = preview_kinds.add_parser(
+        "symlink", help="temporarily point a theme/config symlink at a source"
+    )
+    preview_symlink.add_argument("--session", required=True)
+    preview_symlink.add_argument("--target", required=True)
+    preview_symlink.add_argument("--source", required=True)
+    preview_symlink.set_defaults(handler=command_preview_symlink)
+
+    preview_gsettings = preview_kinds.add_parser(
+        "gsettings", help="temporarily set a GTK/GSettings value"
+    )
+    preview_gsettings.add_argument("--session", required=True)
+    preview_gsettings.add_argument("--schema", required=True)
+    preview_gsettings.add_argument("--key", required=True)
+    preview_gsettings.add_argument("--value", required=True)
+    preview_gsettings.set_defaults(handler=command_preview_gsettings)
+
+    preview_hypr = preview_kinds.add_parser(
+        "hypr-keyword", help="temporarily set a Hyprland runtime keyword"
+    )
+    preview_hypr.add_argument("--session", required=True)
+    preview_hypr.add_argument("--keyword", required=True)
+    preview_hypr.add_argument("--value", required=True)
+    preview_hypr.set_defaults(handler=command_preview_hypr_keyword)
+
+    preview_mako = preview_kinds.add_parser(
+        "mako-mode", help="temporarily replace the active Mako modes"
+    )
+    preview_mako.add_argument("--session", required=True)
+    preview_mako.add_argument("--mode", required=True)
+    preview_mako.set_defaults(handler=command_preview_mako_mode)
 
     ensure_mode = commands.add_parser(
         "ensure-mode", help="return the desktop to the session starting mode"
@@ -529,6 +368,7 @@ def parser() -> argparse.ArgumentParser:
 def main() -> int:
     try:
         arguments = parser().parse_args()
+        purge_abandoned()
         result = arguments.handler(arguments)
         print(json.dumps(result, separators=(",", ":")))
         return 0

@@ -9,6 +9,7 @@
   grim,
   hyprland,
   libnotify,
+  mako,
   procps,
   slurp,
 }:
@@ -30,6 +31,7 @@ stdenvNoCC.mkDerivation {
   installPhase = ''
     runHook preInstall
     install -Dm755 codex_screen.py $out/libexec/codex-screen/codex_screen.py
+    cp -r codex_screen_lib $out/libexec/codex-screen/codex_screen_lib
     makeWrapper ${python3}/bin/python $out/bin/codex-screen \
       --add-flags "$out/libexec/codex-screen/codex_screen.py" \
       --prefix PATH : ${
@@ -40,6 +42,7 @@ stdenvNoCC.mkDerivation {
           grim
           hyprland
           libnotify
+          mako
           procps
           slurp
         ]

@@ -20,8 +20,10 @@ mode, unless the user explicitly requested both modes.
 ## 2. Preview reversibly
 
 Use a runtime override, application reload, or isolated temporary config only
-when its inverse is reliable. Snapshot the affected runtime state first. Use
-the normal commit-and-rebuild path when a safe preview does not exist.
+when its inverse is reliable. Apply symlinked themes, GTK settings, Hyprland
+keywords, and Mako modes through `codex-screen preview`; the session snapshots
+and restores them. Use the normal commit-and-rebuild path when a supported safe
+preview does not exist.
 
 Launch test surfaces through `codex-screen adapter` or `codex-screen launch` so
 the session owns them. Read [COMMANDS.md](COMMANDS.md) when choosing targets,

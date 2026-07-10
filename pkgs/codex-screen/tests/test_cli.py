@@ -86,6 +86,7 @@ PY
     def begin(self) -> str:
         result = self.cli("begin")
         self.assertEqual(result["mode"], "dark")
+        self.assertRegex(result["session"], r"^[0-9a-f]{24}$")
         return result["session"]
 
     def test_focused_capture_is_private_notified_and_audited(self) -> None:
@@ -247,6 +248,99 @@ if [ "$1" = clients ]; then pid=$(cat {pid_file} 2>/dev/null || printf 0); print
         ended = self.cli("end", "--session", session)
         self.assertEqual(ended["restored_mode"], "light")
         self.assertEqual(mode_file.read_text(), "light")
+
+    def test_reversible_preview_adapters_restore_state_on_end(self) -> None:
+        actions = self.root / "actions"
+        target = self.root / "home/.config/alacritty/current.toml"
+        original = self.root / "original.toml"
+        preview = self.root / "preview.toml"
+        target.parent.mkdir(parents=True)
+        original.write_text("original")
+        preview.write_text("preview")
+        target.symlink_to(original)
+        self.fake(
+            "gsettings",
+            f"""#!/bin/sh
+if [ "$1" = get ]; then printf "'prefer-dark'\\n"; else printf 'gsettings %s\\n' "$*" >> {actions}; fi
+""",
+        )
+        self.fake(
+            "hyprctl",
+            f"""#!/bin/sh
+if [ "$1" = getoption ]; then printf '%s\\n' '{{"custom":"4"}}'; elif [ "$1" = keyword ]; then printf 'hyprctl %s\\n' "$*" >> {actions}; else printf '%s\\n' '{{"monitor":"DP-1"}}'; fi
+""",
+        )
+        self.fake(
+            "makoctl",
+            f"""#!/bin/sh
+if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoctl %s\\n' "$*" >> {actions}; fi
+""",
+        )
+        session = self.begin()
+
+        self.cli(
+            "preview",
+            "symlink",
+            "--session",
+            session,
+            "--target",
+            str(target),
+            "--source",
+            str(preview),
+        )
+        self.cli(
+            "preview",
+            "gsettings",
+            "--session",
+            session,
+            "--schema",
+            "org.example",
+            "--key",
+            "theme",
+            "--value",
+            "'preview'",
+        )
+        self.cli(
+            "preview",
+            "hypr-keyword",
+            "--session",
+            session,
+            "--keyword",
+            "general:gaps_in",
+            "--value",
+            "20",
+        )
+        self.cli(
+            "preview",
+            "mako-mode",
+            "--session",
+            session,
+            "--mode",
+            "dark",
+        )
+        self.assertEqual(target.resolve(), preview)
+
+        result = self.cli("end", "--session", session)
+
+        self.assertEqual(result["restored_previews"], 4)
+        self.assertEqual(target.resolve(), original)
+        action_lines = actions.read_text().splitlines()
+        self.assertIn("gsettings set org.example theme 'preview'", action_lines)
+        self.assertIn("gsettings set org.example theme 'prefer-dark'", action_lines)
+        self.assertIn("hyprctl keyword general:gaps_in 20", action_lines)
+        self.assertIn("hyprctl keyword general:gaps_in 4", action_lines)
+        self.assertIn("makoctl mode -s dark", action_lines)
+        self.assertIn("makoctl mode -s default", action_lines)
+
+    def test_every_command_purges_abandoned_sessions(self) -> None:
+        old_session = self.begin()
+        old_path = self.runtime / "codex-screen" / old_session
+        old_time = time.time() - 25 * 60 * 60
+        os.utime(old_path, (old_time, old_time))
+
+        self.cli("status", "--session", old_session, check=False)
+
+        self.assertFalse(old_path.exists())
 
 
 if __name__ == "__main__":

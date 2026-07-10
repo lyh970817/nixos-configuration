@@ -51,6 +51,22 @@ uses an argument vector without shell evaluation. The helper records the
 process start time and associated Hyprland window so cleanup does not act on a
 reused PID or pre-existing window.
 
+## Reversible previews
+
+```sh
+codex-screen preview symlink --session ID --target ~/.config/alacritty/current.toml --source /path/to/preview.toml
+codex-screen preview gsettings --session ID --schema org.gnome.desktop.interface --key gtk-theme --value "'PreviewTheme'"
+codex-screen preview hypr-keyword --session ID --keyword general:gaps_in --value 20
+codex-screen preview mako-mode --session ID --mode dark
+```
+
+These operations snapshot state into the private session before applying the
+override. `end` restores previews in reverse order before deleting the session.
+Symlink targets are restricted to the user's home directory. If restoration
+fails, cleanup retains the session and its recovery state instead of silently
+discarding the snapshot. Use isolated application arguments for Neovim and
+other surfaces that can preview without mutating shared runtime state.
+
 ## Audit data
 
 Metadata is stored at `$XDG_STATE_HOME/codex-screen/audit.jsonl`, mode `0600`.
