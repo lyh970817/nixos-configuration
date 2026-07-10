@@ -18,15 +18,15 @@ let
         local inspect associated media_class name volume percentage
 
         if ! inspect=$(wpctl inspect "$selector" 2>/dev/null); then
-          if wpctl status >/dev/null 2>&1; then
-            printf 'None'
-          else
-            printf 'Unknown'
-          fi
+          printf 'Unknown'
           return
         fi
 
         media_class=$(printf '%s\n' "$inspect" | sed -n 's/.*media.class = "\(.*\)"/\1/p; T; q')
+        if [[ -z "$media_class" ]]; then
+          printf 'Unknown'
+          return
+        fi
         if [[ "$media_class" != "$expected_class" ]] || printf '%s\n' "$inspect" | grep -q 'node.virtual = "true"'; then
           printf 'None'
           return
@@ -34,7 +34,10 @@ let
 
         case "$value_kind" in
           device)
-            associated=$(wpctl inspect --associated "$selector" 2>/dev/null || true)
+            if ! associated=$(wpctl inspect --associated "$selector" 2>/dev/null); then
+              printf 'Unknown'
+              return
+            fi
             name=$(printf '%s\n' "$associated" | sed -n 's/.*device.description = "\(.*\)"/\1/p; T; q')
             if [[ -z "$name" ]]; then
               name=$(printf '%s\n' "$inspect" | sed -n 's/.*node.description = "\(.*\)"/\1/p; T; q')
