@@ -8,7 +8,6 @@
     brave
     chromium
     libnotify
-    netcat-openbsd
     calibre
     sioyek
     libreoffice-fresh

@@ -16,6 +16,5 @@ if [ "$is_floating" = "true" ]; then
     hyprctl dispatch togglefloating address:$window
 fi
 
-# Keep minimized windows in workspace 10's foreground overlay. It stays hidden
-# until workspace 10 itself is active.
-hyprctl dispatch movetoworkspacesilent special:btop-overlay
+# Move to workspace 10
+hyprctl dispatch movetoworkspacesilent 10
