@@ -13,6 +13,14 @@ This repository is a NixOS flake for the `andongni` host. Entry points are `flak
 
 For configuration changes, do not run standalone verification commands before rebuilding. Stage and commit the scoped change first so the configured pre-commit hooks run verification, then apply the committed configuration with `sudo nixos-rebuild switch --flake .#andongni --impure`.
 
+For visual changes, apply the `visual-verification` skill automatically. Treat
+the mode active at task start as the entire change scope; change or inspect the
+other mode only when the user explicitly requests it. Before committing, a
+visual preview may use reliably reversible runtime overrides or isolated
+temporary configs. It must not run an uncommitted Home Manager activation or
+NixOS rebuild. Commit and rebuild the selected result, then visually inspect the
+installed result through `codex-screen`.
+
 ## Coding Style & Naming Conventions
 
 Use two-space indentation in Nix files. Keep modules focused on one concern and name files by feature, for example `modules/services/keyd.nix` or `home/programs/tmux.nix`. Prefer explicit imports in aggregator files over hidden dynamic loading. Keep comments brief around hardware, network, or host-specific behavior.
