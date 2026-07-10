@@ -57,6 +57,9 @@ let
       # Alacritty: Update symlink (alacritty auto-reloads on import changes)
       ln -sf $HOME/.config/alacritty/themes/dark.toml $HOME/.config/alacritty/current.toml
 
+      # Btop: select the Matrix palette for new instances
+      ln -sf $HOME/.config/btop/themes/matrix.theme $HOME/.config/btop/themes/current.theme
+
       ${setClaudeTheme "dark-ansi"}
 
       # Mako: Switch mode
@@ -105,6 +108,9 @@ let
     # Alacritty: Update symlink (alacritty auto-reloads on import changes)
     ln -sf $HOME/.config/alacritty/themes/light.toml $HOME/.config/alacritty/current.toml
 
+    # Btop: select the monochrome e-ink palette for new instances
+    ln -sf $HOME/.config/btop/themes/eink.theme $HOME/.config/btop/themes/current.theme
+
     ${setClaudeTheme "light-ansi"}
 
     # Mako: Remove dark mode
@@ -140,6 +146,7 @@ in
   systemd.user.tmpfiles.rules = [
     "d %h/.local/state/hypr 0755 - - -"
     "L %h/.local/state/hypr/current-theme.conf - - - - %h/.config/hypr/themes/dark.conf"
+    "L+ %h/.config/btop/themes/current.theme - - - - %h/.config/btop/themes/matrix.theme"
     "L+ %h/.local/share/dark-mode.d/10-nixos-hook.sh - - - - ${darkModeHook}"
     "L+ %h/.local/share/light-mode.d/10-nixos-hook.sh - - - - ${lightModeHook}"
   ];

@@ -15,6 +15,7 @@
     ./programs/starship.nix
     ./programs/tmux.nix
     ./programs/htop.nix
+    ./programs/btop.nix
     ./programs/alacritty.nix
     ./programs/mako.nix
     ./programs/rofi.nix
