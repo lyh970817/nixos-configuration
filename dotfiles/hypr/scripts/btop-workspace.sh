@@ -7,8 +7,9 @@ readonly runtime_dir="${XDG_RUNTIME_DIR:?}/btop-workspace"
 readonly lock_file="$runtime_dir/locked"
 readonly dashboard_file="$runtime_dir/dashboard-address"
 readonly last_workspace_file="$runtime_dir/last-normal-workspace"
+readonly origins_dir="$runtime_dir/origins"
 
-mkdir -p "$runtime_dir"
+mkdir -p "$runtime_dir" "$origins_dir"
 
 active_workspace() {
     hyprctl activeworkspace -j | jq -r '.id'
@@ -72,6 +73,29 @@ remember_workspace() {
     fi
 }
 
+origin_file() {
+    printf '%s/%s\n' "$origins_dir" "${1#0x}"
+}
+
+remember_origin() {
+    local address=$1
+    local workspace=$2
+
+    if [[ "$workspace" =~ ^[0-9]+$ ]] && [ "$workspace" -ne "$protected_workspace" ]; then
+        printf '%s\n' "$workspace" > "$(origin_file "$address")"
+    fi
+}
+
+window_origin() {
+    local file
+    file=$(origin_file "$1")
+    [ -r "$file" ] && head -n 1 "$file"
+}
+
+forget_origin() {
+    rm -f "$(origin_file "$1")"
+}
+
 reject_window() {
     local address=$1
     local destination=${2:-}
@@ -97,7 +121,8 @@ reconcile() {
 
     while read -r address; do
         if ! is_dashboard "$address"; then
-            reject_window "$address" "$fallback"
+            reject_window "$address" "$(window_origin "$address" || printf '%s\n' "$fallback")"
+            forget_origin "$address"
         fi
     done < <(hyprctl clients -j | jq -r --argjson workspace "$protected_workspace" \
         '.[] | select(.workspace.id == $workspace) | .address')
@@ -114,6 +139,7 @@ run_daemon() {
 
     : > "$lock_file"
     rm -f "$dashboard_file"
+    rm -f "$origins_dir"/*
     remember_workspace "$(active_workspace)"
 
     while read -r address workspace; do
@@ -141,6 +167,7 @@ run_daemon() {
                     known_workspaces["$address"]=$workspace
                     if is_locked && [ "$workspace" = "$protected_workspace" ] && ! is_dashboard "$address"; then
                         reject_window "$address"
+                        forget_origin "$address"
                     fi
                     ;;
                 movewindow\>\>*|movewindowv2\>\>*)
@@ -158,7 +185,13 @@ run_daemon() {
                         fi
                     elif is_locked && [ "$workspace" = "$protected_workspace" ]; then
                         reject_window "$address" "$previous"
+                        forget_origin "$address"
                     else
+                        if [ "$workspace" = "$protected_workspace" ]; then
+                            remember_origin "$address" "$previous"
+                        else
+                            forget_origin "$address"
+                        fi
                         known_workspaces["$address"]=$workspace
                     fi
                     ;;
@@ -167,6 +200,7 @@ run_daemon() {
                     address=${address#0x}
                     address="0x$address"
                     unset 'known_workspaces[$address]'
+                    forget_origin "$address"
                     ;;
             esac
         done < <(socat -U - "UNIX-CONNECT:$socket")
