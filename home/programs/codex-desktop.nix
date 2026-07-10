@@ -6,7 +6,7 @@ let
     text = ''
       user_codex="''${CODEX_USER_CLI_PATH:-$HOME/.npm-global/bin/codex}"
       if [ -x "$user_codex" ]; then
-        exec "$user_codex" "$@"
+        exec "$user_codex" --profile desktop "$@"
       fi
 
       echo "Codex CLI not found at $user_codex" >&2
