@@ -81,7 +81,6 @@ def audit(
     root = state_root()
     private_dir(root)
     path = root / "audit.jsonl"
-    rotate_audit(path)
     entry = {
         "time": now().isoformat(),
         "session": session,
@@ -95,6 +94,7 @@ def audit(
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(entry, separators=(",", ":")) + "\n")
     path.chmod(0o600)
+    rotate_audit(path)
 
 
 def rotate_audit(path: Path) -> None:

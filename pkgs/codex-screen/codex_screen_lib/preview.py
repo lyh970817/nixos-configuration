@@ -15,9 +15,11 @@ from .state import ScreenError, atomic_json, audit, read_json, session_dir
 
 
 def home_path(value: str) -> Path:
-    path = Path(value).expanduser().absolute()
+    requested = Path(value).expanduser().absolute()
+    home = Path.home().resolve()
+    path = requested.parent.resolve() / requested.name
     try:
-        path.relative_to(Path.home())
+        path.relative_to(home)
     except ValueError as error:
         raise ScreenError("Preview targets must be inside the home directory") from error
     return path

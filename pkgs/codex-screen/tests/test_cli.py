@@ -197,6 +197,27 @@ PY
 
         self.assertNotIn('"session":"old"', audit_path.read_text())
 
+    def test_audit_is_strictly_capped_after_each_event(self) -> None:
+        audit_dir = self.state / "codex-screen"
+        audit_dir.mkdir(parents=True)
+        audit_path = audit_dir / "audit.jsonl"
+        audit_path.write_text(
+            json.dumps(
+                {
+                    "time": "2099-01-01T00:00:00+00:00",
+                    "session": "large",
+                    "event": "begin",
+                    "outcome": "ok",
+                    "padding": "x" * (1024 * 1024),
+                }
+            )
+            + "\n"
+        )
+
+        self.begin()
+
+        self.assertLessEqual(audit_path.stat().st_size, 1024 * 1024)
+
     def test_launch_associates_a_window_without_auditing_identity(self) -> None:
         session = self.begin()
         pid_file = self.root / "client-pid"
@@ -331,6 +352,39 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
         self.assertIn("hyprctl keyword general:gaps_in 4", action_lines)
         self.assertIn("makoctl mode -s dark", action_lines)
         self.assertIn("makoctl mode -s default", action_lines)
+
+    def test_symlink_preview_rejects_a_parent_that_resolves_outside_home(self) -> None:
+        outside = self.root / "outside"
+        outside.mkdir()
+        escape = self.root / "home/escape"
+        escape.parent.mkdir(parents=True)
+        escape.symlink_to(outside, target_is_directory=True)
+        source = self.root / "source"
+        source.write_text("preview")
+        session = self.begin()
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT),
+                "preview",
+                "symlink",
+                "--session",
+                session,
+                "--target",
+                str(escape / "theme"),
+                "--source",
+                str(source),
+            ],
+            env=self.environment,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("inside the home directory", result.stderr)
+        self.assertFalse((outside / "theme").exists())
+        self.cli("end", "--session", session)
 
     def test_every_command_purges_abandoned_sessions(self) -> None:
         old_session = self.begin()
