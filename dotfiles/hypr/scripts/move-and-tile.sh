@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Keep the dedicated btop dashboard fixed on workspace 10.
-if [ "$(hyprctl activewindow -j | jq -r '.class // ""')" = "Alacritty-btop" ]; then
+if btop-workspace is-dashboard-active; then
     exit 0
 fi
 

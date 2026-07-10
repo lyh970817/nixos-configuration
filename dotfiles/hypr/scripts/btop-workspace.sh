@@ -15,6 +15,15 @@ active_workspace() {
     hyprctl activeworkspace -j | jq -r '.id'
 }
 
+normalize_address() {
+    printf '0x%s\n' "${1#0x}"
+}
+
+window_workspace() {
+    hyprctl clients -j | jq -r --arg address "$1" \
+        '.[] | select(.address == $address) | .workspace.id'
+}
+
 is_locked() {
     [ -e "$lock_file" ]
 }
@@ -159,11 +168,8 @@ run_daemon() {
                     ;;
                 openwindow\>\>*|openwindowv2\>\>*)
                     payload=${event#*>>}
-                    address=${payload%%,*}
-                    address=${address#0x}
-                    address="0x$address"
-                    workspace=$(hyprctl clients -j | jq -r --arg address "$address" \
-                        '.[] | select(.address == $address) | .workspace.id')
+                    address=$(normalize_address "${payload%%,*}")
+                    workspace=$(window_workspace "$address")
                     known_workspaces["$address"]=$workspace
                     if is_locked && [ "$workspace" = "$protected_workspace" ] && ! is_dashboard "$address"; then
                         reject_window "$address"
@@ -172,15 +178,15 @@ run_daemon() {
                     ;;
                 movewindow\>\>*|movewindowv2\>\>*)
                     payload=${event#*>>}
-                    address=${payload%%,*}
-                    address=${address#0x}
-                    address="0x$address"
-                    workspace=$(hyprctl clients -j | jq -r --arg address "$address" \
-                        '.[] | select(.address == $address) | .workspace.id')
+                    address=$(normalize_address "${payload%%,*}")
+                    workspace=$(window_workspace "$address")
                     previous=${known_workspaces["$address"]:-}
                     if is_dashboard "$address"; then
                         if [ "$workspace" != "$protected_workspace" ]; then
                             hyprctl dispatch movetoworkspacesilent "$protected_workspace,address:$address" >/dev/null
+                            if [ "$(active_workspace)" = "$protected_workspace" ]; then
+                                hyprctl dispatch focuswindow "address:$address" >/dev/null
+                            fi
                             known_workspaces["$address"]=$protected_workspace
                         fi
                     elif is_locked && [ "$workspace" = "$protected_workspace" ]; then
@@ -196,9 +202,7 @@ run_daemon() {
                     fi
                     ;;
                 closewindow\>\>*)
-                    address=${event#*>>}
-                    address=${address#0x}
-                    address="0x$address"
+                    address=$(normalize_address "${event#*>>}")
                     unset 'known_workspaces[$address]'
                     forget_origin "$address"
                     ;;
@@ -235,6 +239,9 @@ case "${1:-}" in
         ;;
     is-locked)
         is_locked
+        ;;
+    is-dashboard-active)
+        is_dashboard "$(hyprctl activewindow -j | jq -r '.address // ""')"
         ;;
     exec)
         shift
