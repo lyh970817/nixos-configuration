@@ -19,7 +19,6 @@ if [ -d "$poem_dir" ]; then
      # Create padding string
      title_pad=$(printf "%${pad_len}s")
 
-     echo "" # Add some separation
      # Indent every line of the poem
      sed "s/^/$indent/" "$poem"
      

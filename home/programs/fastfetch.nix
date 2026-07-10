@@ -14,7 +14,6 @@ let
       endpoint_value() {
         local selector="$1"
         local expected_class="$2"
-        local value_kind="$3"
         local inspect associated media_class name volume volume_level percentage
 
         if ! inspect=$(wpctl inspect "$selector" 2>/dev/null); then
@@ -32,50 +31,40 @@ let
           return
         fi
 
-        case "$value_kind" in
-          device)
-            if ! associated=$(wpctl inspect --associated "$selector" 2>/dev/null); then
-              printf 'Unknown'
-              return
-            fi
-            name=$(printf '%s\n' "$associated" | sed -n 's/.*device.description = "\(.*\)"/\1/p; T; q')
-            if [[ -z "$name" ]]; then
-              name=$(printf '%s\n' "$inspect" | sed -n 's/.*node.description = "\(.*\)"/\1/p; T; q')
-            fi
-            printf '%s' "''${name:-Unknown}"
-            ;;
-          volume)
-            if ! volume=$(wpctl get-volume "$selector" 2>/dev/null); then
-              printf 'Unknown'
-              return
-            fi
-            if ! volume_level=$(awk '$1 == "Volume:" && $2 ~ /^[0-9]+([.][0-9]+)?$/ { print $2; found = 1 } END { if (!found) exit 1 }' <<< "$volume"); then
-              printf 'Unknown'
-              return
-            fi
-            percentage=$(awk '{ printf "%.0f", $1 * 100 }' <<< "$volume_level")
-            if [[ "$volume" == *"[MUTED]"* ]]; then
-              printf '%s%% (muted)' "$percentage"
-            else
-              printf '%s%%' "$percentage"
-            fi
-            ;;
-        esac
+        if ! associated=$(wpctl inspect --associated "$selector" 2>/dev/null); then
+          printf 'Unknown'
+          return
+        fi
+        name=$(printf '%s\n' "$associated" | sed -n 's/.*device.description = "\(.*\)"/\1/p; T; q')
+        if [[ -z "$name" ]]; then
+          name=$(printf '%s\n' "$inspect" | sed -n 's/.*node.description = "\(.*\)"/\1/p; T; q')
+        fi
+        if [[ -z "$name" ]]; then
+          printf 'Unknown'
+          return
+        fi
+
+        if ! volume=$(wpctl get-volume "$selector" 2>/dev/null); then
+          printf 'Unknown'
+          return
+        fi
+        if ! volume_level=$(awk '$1 == "Volume:" && $2 ~ /^[0-9]+([.][0-9]+)?$/ { print $2; found = 1 } END { if (!found) exit 1 }' <<< "$volume"); then
+          printf 'Unknown'
+          return
+        fi
+        percentage=$(awk '{ printf "%.0f", $1 * 100 }' <<< "$volume_level")
+
+        printf '%s %s%%' "$name" "$percentage"
+        if [[ "$volume" == *"[MUTED]"* ]]; then
+          printf ' (muted)'
+        fi
       }
 
-      case "''${1:-}" in
-        device | volume)
-          printf 'Output: '
-          endpoint_value '@DEFAULT_AUDIO_SINK@' 'Audio/Sink' "$1"
-          printf ' | Input: '
-          endpoint_value '@DEFAULT_AUDIO_SOURCE@' 'Audio/Source' "$1"
-          printf '\n'
-          ;;
-        *)
-          printf 'Usage: fastfetch-audio {device|volume}\n' >&2
-          exit 2
-          ;;
-      esac
+      printf 'Output: '
+      endpoint_value '@DEFAULT_AUDIO_SINK@' 'Audio/Sink'
+      printf ' | Input: '
+      endpoint_value '@DEFAULT_AUDIO_SOURCE@' 'Audio/Source'
+      printf '\n'
     '';
   };
 in
@@ -117,13 +106,9 @@ in
         {
           type = "command";
           key = "Audio Device";
-          text = "fastfetch-audio device";
+          text = "fastfetch-audio";
         }
-        {
-          type = "command";
-          key = "Audio Volume";
-          text = "fastfetch-audio volume";
-        }
+        "Break"
       ];
     };
   };
