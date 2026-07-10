@@ -15,7 +15,7 @@ let
         local selector="$1"
         local expected_class="$2"
         local value_kind="$3"
-        local inspect associated media_class name volume percentage
+        local inspect associated media_class name volume volume_level percentage
 
         if ! inspect=$(wpctl inspect "$selector" 2>/dev/null); then
           printf 'Unknown'
@@ -49,7 +49,11 @@ let
               printf 'Unknown'
               return
             fi
-            percentage=$(awk '{ printf "%.0f", $2 * 100 }' <<< "$volume")
+            if ! volume_level=$(awk '$1 == "Volume:" && $2 ~ /^[0-9]+([.][0-9]+)?$/ { print $2; found = 1 } END { if (!found) exit 1 }' <<< "$volume"); then
+              printf 'Unknown'
+              return
+            fi
+            percentage=$(awk '{ printf "%.0f", $1 * 100 }' <<< "$volume_level")
             if [[ "$volume" == *"[MUTED]"* ]]; then
               printf '%s%% (muted)' "$percentage"
             else
