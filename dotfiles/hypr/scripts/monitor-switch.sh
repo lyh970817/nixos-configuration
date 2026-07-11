@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 
 current_mode() {
+  # Monitor presence is the sole automatic theme trigger. The DSC e-ink
+  # display selects light mode; its absence selects dark mode. This setup does
+  # not use Darkman's time, location, or GeoClue transition mechanisms.
   if hyprctl monitors | grep -q "DSC"; then
     echo "light"
   else
@@ -30,7 +33,8 @@ if [ "$mode" = "dark" ]; then
   alacritty --class Alacritty-main --command tmux new-session -A -s main &
 fi
 
-# Poll monitor state so this script has no socat runtime dependency.
+# Poll monitor state so this script has no socat runtime dependency. Apply the
+# theme scripts directly rather than asking Darkman to schedule a transition.
 while sleep 2; do
   next_mode=$(current_mode)
   if [ "$next_mode" != "$mode" ]; then

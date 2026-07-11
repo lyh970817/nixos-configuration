@@ -127,7 +127,12 @@ in
     (pkgs.writeShellScriptBin "switch-light" "${lightModeHook}")
   ];
 
-  # Darkman service
+  # Monitor presence in hypr/scripts/monitor-switch.sh is the sole automatic
+  # theme trigger; it calls switch-light/switch-dark directly. Darkman's
+  # time-, location-, and GeoClue-based transitions are intentionally unused,
+  # so this setup does not manage coordinates or an automatic schedule.
+  # These Darkman declarations are legacy integration; do not treat this unit
+  # as the source of automatic switching.
   systemd.user.services.darkman = {
     Unit = {
       Description = "Darkman Service";
@@ -142,7 +147,8 @@ in
     };
   };
 
-  # Darkman hook symlinks
+  # Legacy Darkman hook locations expose the same theme actions, but the
+  # monitor-switch script is what selects and invokes a mode automatically.
   systemd.user.tmpfiles.rules = [
     "d %h/.local/state/hypr 0755 - - -"
     "L %h/.local/state/hypr/current-theme.conf - - - - %h/.config/hypr/themes/dark.conf"
