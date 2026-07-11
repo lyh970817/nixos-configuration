@@ -16,6 +16,7 @@ return {
         "markdown",
         "markdown_inline",
         "nix",
+        "python",
         "r",
         "rnoweb",
         "toml",
