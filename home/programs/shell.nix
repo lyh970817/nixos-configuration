@@ -159,6 +159,9 @@
       alias gp='git push'
       alias gpf='git push --force'
 
+      # Git status shortcut.
+      alias gs='git status'
+
       # Function to print a random poem with alignment
       function print_welcome_poem() {
         ${builtins.readFile ./print_poem.sh}
