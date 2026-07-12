@@ -48,6 +48,15 @@
       preCommitCheck = pre-commit-hooks.lib.${system}.run {
         src = ./.;
         hooks.nixfmt.enable = true;
+        hooks.nix-gc = {
+          enable = true;
+          name = "nix garbage collect";
+          entry = "sh -c 'sudo -n nix-collect-garbage --delete-older-than 14d >/dev/null 2>&1 || true'";
+          language = "system";
+          pass_filenames = false;
+          always_run = true;
+          stages = [ "pre-push" ];
+        };
       };
     in
     {
