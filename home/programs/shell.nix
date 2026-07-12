@@ -146,10 +146,18 @@
       alias rebuild='sudo nixos-rebuild switch --flake /etc/nixos#andongni --impure'
 
       # Codex with unrestricted filesystem access.
-      alias codexy='codex --yolo'
+      alias cdy='codex --yolo'
 
       # Claude Code with the mattpocock skills profile (separate CLAUDE_CONFIG_DIR).
       alias claude-matt='CLAUDE_CONFIG_DIR="$HOME/.config/claude-mattpocock" claude'
+
+      # Claude Code / claude-matt bypassing all permission checks.
+      alias cly='claude --dangerously-skip-permissions'
+      alias clty='claude-matt --dangerously-skip-permissions'
+
+      # Git push shortcuts.
+      alias gp='git push'
+      alias gpf='git push --force'
 
       # Function to print a random poem with alignment
       function print_welcome_poem() {
