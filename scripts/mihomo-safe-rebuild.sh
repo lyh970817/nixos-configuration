@@ -147,7 +147,7 @@ load_state() {
   [[ ${expires_at:-} =~ ^[0-9]+$ ]] || die "invalid expiration time in state"
   [[ ${attempt:-} =~ ^[0-9]+$ ]] || die "invalid attempt count in state"
   case ${phase:-} in
-    prepared|armed|active|activation-failed|confirming|rollback-attempt|rollback-failed|confirmed) ;;
+    prepared|armed|active|activation-failed|confirming|rollback-attempt|rollback-failed|rolled-back|confirmed) ;;
     *) die "invalid transaction phase in state" ;;
   esac
 }
@@ -184,14 +184,21 @@ clear_state() {
   sync -f "$STATE_DIR"
 }
 
-archive_failed_state() {
+archive_state() {
   local archive
+  local outcome=$1
 
-  archive="$HISTORY_DIR/failed-${transaction}-$(date -u +%Y%m%dT%H%M%SZ).env"
+  [[ $outcome =~ ^[a-z-]+$ ]] || die "internal error: invalid archive outcome"
+  archive="$HISTORY_DIR/${outcome}-${transaction}-$(date -u +%Y%m%dT%H%M%SZ).env"
   cp --preserve=mode,ownership,timestamps "$STATE_FILE" "$archive"
   sync -f "$archive"
   sync -f "$HISTORY_DIR"
-  note "rollback failed; durable state is preserved at $archive"
+  note "transaction state archived at $archive"
+}
+
+archive_failed_state() {
+  archive_state failed
+  note "rollback failed; durable state remains available for boot recovery"
 }
 
 acquire_transaction_lock() {
@@ -285,9 +292,15 @@ restore_known_good_once() {
   local result=0
 
   note "restoring known-good closure $known_good"
-  run_bounded "$PROFILE_TIMEOUT_SECONDS" nix-env --profile "$SYSTEM_PROFILE" --set "$known_good" || result=1
+  if [[ $(profile_system) != "$known_good" ]]; then
+    run_bounded "$PROFILE_TIMEOUT_SECONDS" nix-env --profile "$SYSTEM_PROFILE" --set "$known_good" || result=1
+  fi
   run_bounded "$BOOT_TIMEOUT_SECONDS" "$known_good/bin/switch-to-configuration" boot || result=1
-  run_bounded "$ACTIVATION_TIMEOUT_SECONDS" "$known_good/bin/switch-to-configuration" test || result=1
+  if [[ $(current_system) != "$known_good" ]]; then
+    run_bounded "$ACTIVATION_TIMEOUT_SECONDS" "$known_good/bin/switch-to-configuration" test || result=1
+  else
+    note "known-good closure is already active; skipping live activation"
+  fi
 
   [[ $(current_system) == "$known_good" ]] || result=1
   [[ $(profile_system) == "$known_good" ]] || result=1
@@ -305,6 +318,8 @@ perform_rollback() {
     write_state rollback-attempt "$number"
     note "rollback attempt $number of $ROLLBACK_ATTEMPTS"
     if restore_known_good_once; then
+      write_state rolled-back "$number"
+      archive_state rolled-back
       note "rollback completed; known-good closure is active and bootable"
       clear_state
       return 0
@@ -468,8 +483,8 @@ rollback_from_timer() {
     note "timer $expected_transaction does not own pending transaction $transaction"
     return 0
   fi
-  if [[ $phase == confirmed ]]; then
-    note "transaction $transaction was already confirmed"
+  if [[ $phase == confirmed || $phase == rolled-back ]]; then
+    note "transaction $transaction was already finalized (phase: $phase)"
     clear_state
     return 0
   fi
@@ -483,8 +498,8 @@ boot_recovery() {
   if ! load_state; then
     return 0
   fi
-  if [[ $phase == confirmed ]]; then
-    note "removing completed transaction record $transaction"
+  if [[ $phase == confirmed || $phase == rolled-back ]]; then
+    note "removing completed transaction record $transaction (phase: $phase)"
     clear_state
     return 0
   fi

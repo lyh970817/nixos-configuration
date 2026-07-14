@@ -43,6 +43,7 @@ in
   systemd.services.mihomo-safe-rebuild-boot-recovery = {
     description = "Recover any unconfirmed guarded Mihomo deployment after boot";
     wantedBy = [ "multi-user.target" ];
+    restartIfChanged = false;
     before = [
       "network.target"
       "network-online.target"
@@ -50,6 +51,7 @@ in
     after = [ "local-fs.target" ];
     serviceConfig = {
       Type = "oneshot";
+      RemainAfterExit = true;
       UMask = "0077";
       ExecStart = "${mihomoSafeRebuild}/bin/mihomo-safe-rebuild boot-recovery";
     };
