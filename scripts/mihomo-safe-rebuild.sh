@@ -145,7 +145,9 @@ clear_state() {
 }
 
 archive_failed_state() {
-  local archive="$HISTORY_DIR/failed-${transaction}-$(date -u +%Y%m%dT%H%M%SZ).env"
+  local archive
+
+  archive="$HISTORY_DIR/failed-${transaction}-$(date -u +%Y%m%dT%H%M%SZ).env"
   cp --preserve=mode,ownership,timestamps "$STATE_FILE" "$archive"
   sync -f "$archive"
   sync -f "$HISTORY_DIR"
