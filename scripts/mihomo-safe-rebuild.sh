@@ -13,7 +13,7 @@ readonly STATE_DIR="/run/mihomo-safe-rebuild"
 readonly STATE_FILE="$STATE_DIR/current"
 readonly LOCK_FILE="/run/lock/mihomo-safe-rebuild.lock"
 readonly TIMER_PREFIX="mihomo-safe-rebuild-rollback"
-readonly ROLLBACK_SECONDS=60
+readonly ROLLBACK_SECONDS=90
 readonly CONFIRM_DELAY_SECONDS=20
 readonly BUILD_TIMEOUT_SECONDS=3600
 # This only bounds the caller's wait. Work already submitted to PID 1 may
@@ -168,7 +168,8 @@ load_state() {
     die "invalid rollback helper in transaction state"
   [[ $activated_at =~ ^[0-9]+$ ]] || die "invalid activation time in transaction state"
   [[ $expires_at =~ ^[0-9]+$ ]] || die "invalid expiration time in transaction state"
-  [[ $phase == armed || $phase == confirmed ]] || die "invalid transaction phase in transaction state"
+  [[ $phase == armed || $phase == confirmed || $phase == rolled-back ]] ||
+    die "invalid transaction phase in transaction state"
 }
 
 timer_service_unit() {
@@ -180,8 +181,34 @@ timer_is_armed() {
 }
 
 stop_rollback_units() {
-  run_bounded "$SYSTEMCTL_TIMEOUT_SECONDS" systemctl stop "$timer_unit" "$(timer_service_unit)" ||
-    die "could not disarm rollback units for transaction $transaction"
+  local load_state
+  local unit
+
+  for unit in "$timer_unit" "$(timer_service_unit)"; do
+    load_state=$(run_bounded "$SYSTEMCTL_TIMEOUT_SECONDS" \
+      systemctl show --value -p LoadState "$unit" 2>/dev/null || true)
+    [[ $load_state == not-found ]] && continue
+    [[ -n $load_state ]] || die "could not inspect rollback unit $unit"
+    if ! run_bounded "$SYSTEMCTL_TIMEOUT_SECONDS" systemctl stop "$unit"; then
+      load_state=$(run_bounded "$SYSTEMCTL_TIMEOUT_SECONDS" \
+        systemctl show --value -p LoadState "$unit" 2>/dev/null || true)
+      [[ $load_state == not-found ]] ||
+        die "could not stop rollback unit $unit"
+    fi
+  done
+}
+
+known_good_command_path() {
+  local command_name=$1
+  local path="$known_good/sw/bin/$command_name"
+
+  if [[ ! -x $path ]]; then
+    path=$(command -v "$command_name")
+  fi
+  [[ -x $path ]] || die "required recovery command is unavailable: $command_name"
+  # Preserve the symlink basename. NixOS Coreutils dispatches applets through
+  # argv[0], so resolving this path to the multicall binary would break it.
+  printf '%s\n' "$path"
 }
 
 write_rollback_helper() {
@@ -198,16 +225,16 @@ write_rollback_helper() {
   local timeout_path
 
   prepare_state_dir
-  bash_path=$(readlink -f "$(command -v bash)")
-  curl_path=$(readlink -f "$(command -v curl)")
-  date_path=$(readlink -f "$(command -v date)")
-  flock_path=$(readlink -f "$(command -v flock)")
-  nix_env_path=$(readlink -f "$(command -v nix-env)")
-  readlink_path=$(readlink -f "$(command -v readlink)")
-  rm_path=$(readlink -f "$(command -v rm)")
-  sleep_path=$(readlink -f "$(command -v sleep)")
-  systemctl_path=$(readlink -f "$(command -v systemctl)")
-  timeout_path=$(readlink -f "$(command -v timeout)")
+  bash_path=$(known_good_command_path bash)
+  curl_path=$(known_good_command_path curl)
+  date_path=$(known_good_command_path date)
+  flock_path=$(known_good_command_path flock)
+  nix_env_path=$(known_good_command_path nix-env)
+  readlink_path=$(known_good_command_path readlink)
+  rm_path=$(known_good_command_path rm)
+  sleep_path=$(known_good_command_path sleep)
+  systemctl_path=$(known_good_command_path systemctl)
+  timeout_path=$(known_good_command_path timeout)
   rollback_helper="$STATE_DIR/rollback-$transaction"
   temporary=$(mktemp "$STATE_DIR/.rollback.XXXXXX")
   chmod 0700 "$temporary"
@@ -345,7 +372,7 @@ clear_completed_volatile_state() {
     return 0
   fi
 
-  if [[ $phase == confirmed ]] && ! timer_is_armed; then
+  if [[ $phase == confirmed || $phase == rolled-back ]] && ! timer_is_armed; then
     clear_state
     return 0
   fi
@@ -476,6 +503,8 @@ confirm_candidate() {
   acquire_lock
   load_state || die "there is no pending transaction to confirm"
   [[ $requested_transaction == "$transaction" ]] || die "transaction id does not match the pending transaction"
+  [[ $phase != rolled-back ]] ||
+    die "transaction $transaction was rolled back; rerun rollback to finish cleanup"
 
   if [[ $phase == armed ]]; then
     timer_is_armed || die "transaction $transaction is no longer armed"
@@ -512,10 +541,16 @@ manual_rollback() {
   acquire_lock
   load_state || die "there is no pending transaction to roll back"
   [[ $requested_transaction == "$transaction" ]] || die "transaction id does not match the pending transaction"
-  [[ $phase == armed ]] || die "transaction $transaction is already confirmed; rerun confirm to finish cleanup"
+  if [[ $phase == rolled-back ]]; then
+    stop_rollback_units
+    clear_state
+    note "transaction $transaction rollback cleanup completed"
+    return 0
+  fi
+  [[ $phase == armed ]] || die "transaction $transaction is confirmed; rerun confirm to finish cleanup"
 
   restore_known_good || die "rollback failed; rollback remains armed"
-  phase=confirmed
+  phase=rolled-back
   write_state
   stop_rollback_units
   clear_state

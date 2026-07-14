@@ -40,7 +40,7 @@ sudo scripts/mihomo-safe-rebuild.sh rollback TRANSACTION_ID
 
 `switch` completely builds the candidate before it records the current
 `/run/current-system` closure. It refuses to begin unless that closure is also
-the persistent system profile and then arms a fixed 60-second root-owned
+the persistent system profile and then arms a fixed 90-second root-owned
 transient systemd timer. The timer runs a root-owned helper in `/run` which
 takes the transaction lock and restores the recorded profile, boot target, and
 live closure directly. It never evaluates the flake, rebuilds, uses the
