@@ -29,7 +29,7 @@ local configuration. Its tracked, non-secret identity is
 YAML's SHA-256 hash without committing or printing the YAML itself. Changes to
 the identity file and/or `modules/services/mihomo.nix` must be made in a
 dedicated commit containing no other paths, then deployed only with the guarded
-workflow after the guard infrastructure has been installed:
+workflow:
 
 ```sh
 sudo scripts/mihomo-safe-rebuild.sh switch
@@ -38,17 +38,36 @@ sudo scripts/mihomo-safe-rebuild.sh confirm TRANSACTION_ID
 sudo scripts/mihomo-safe-rebuild.sh rollback TRANSACTION_ID
 ```
 
-`switch` builds before it arms a fixed 120-second systemd rollback timer, then
-activates the candidate without changing the persistent system profile or boot
-target. It verifies that the ignored YAML matches the committed identity; dirty
-files outside the identity and Mihomo service module do not block deployment.
-Do not use a plain `nixos-rebuild switch` for those changes. Confirm only after
-at least 20 seconds and a fresh round trip through the agent; it requires the
-transaction ID shown by `status`, checks the armed transaction, active
-candidate, and active `mihomo.service` before making the candidate persistent.
-A lost connection, activation error, or reboot before confirmation restores the
-recorded known-good closure; this never re-evaluates the flake, rebuilds,
-accesses the network, or reverts Git.
+`switch` completely builds the candidate before it records the current
+`/run/current-system` closure. It refuses to begin unless that closure is also
+the persistent system profile and then arms a fixed 60-second root-owned
+transient systemd timer. The timer runs a root-owned helper in `/run` which
+takes the transaction lock and restores the recorded profile, boot target, and
+live closure directly. It never evaluates the flake, rebuilds, uses the
+network, or reads repository state. The candidate is activated with `test`, so
+the known-good profile and boot target remain in place until confirmation. The
+candidate activation command waits at most 10 seconds; systemd work it already
+submitted may continue, so readiness is determined by the active closure,
+`mihomo.service`, and its localhost REST API before the fixed deadline. The
+independent rollback helper remains responsible for recovery. It verifies the
+ignored YAML against its committed identity before and after the
+build/activation; dirty files outside the identity and Mihomo service module do
+not block deployment. Do not use a plain `nixos-rebuild switch` for these
+changes.
+
+Confirm only after at least 20 seconds and a fresh round trip through the
+agent. It requires the transaction ID from `status`, an armed timer, the active
+candidate, active `mihomo.service`, a responsive localhost REST API, and an
+unexpired stored deadline. It promotes the exact tested closure
+without rebuilding while the timer remains armed, marks the transaction
+confirmed, then stops the timer and helper before it releases the transaction
+lock. A lost connection, activation error, or promotion error leaves the timer
+armed to restore the known-good closure. Recovery bounds any required profile,
+boot-target, and live-activation commands separately, then polls the active
+closure, persistent profile, service, and REST API; it removes volatile state
+only after all are healthy. A reboot before confirmation naturally boots the
+still-default known-good closure. The root-only state record and helper live
+only in `/run`. Neither recovery path reverts Git.
 
 ## Coding Style & Naming Conventions
 
