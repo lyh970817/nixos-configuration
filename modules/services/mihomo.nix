@@ -15,5 +15,5 @@
   };
 
   # Inert marker for the guarded-deployment confirmation drill.
-  systemd.services.mihomo.environment.MIHOMO_SAFE_REBUILD_DRILL = "confirm";
+  systemd.services.mihomo.environment.MIHOMO_SAFE_REBUILD_DRILL = "confirm-guarded";
 }
