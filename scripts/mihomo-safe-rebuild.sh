@@ -74,6 +74,46 @@ timer_unit() {
   printf '%s@%s.timer\n' "$TIMER_PREFIX" "$1"
 }
 
+timer_deadline_epoch() {
+  local found_next=""
+  local found_unit=""
+  local json
+  local matched
+  local next_count=0
+  local next_pattern='"next"[[:space:]]*:[[:space:]]*([0-9]+)'
+  local next_usec
+  local remainder
+  local requested_unit=$1
+  local unit_count=0
+  local unit_pattern='"unit"[[:space:]]*:[[:space:]]*"([^"]+)"'
+
+  json=$(run_bounded "$SYSTEMCTL_TIMEOUT_SECONDS" systemctl list-timers \
+    "$requested_unit" --no-pager --output=json) || return 1
+  [[ $json == \[*\] ]] || return 1
+
+  remainder=$json
+  while [[ $remainder =~ $unit_pattern ]]; do
+    matched=${BASH_REMATCH[0]}
+    found_unit=${BASH_REMATCH[1]}
+    unit_count=$((unit_count + 1))
+    remainder=${remainder#*"$matched"}
+  done
+
+  remainder=$json
+  while [[ $remainder =~ $next_pattern ]]; do
+    matched=${BASH_REMATCH[0]}
+    found_next=${BASH_REMATCH[1]}
+    next_count=$((next_count + 1))
+    remainder=${remainder#*"$matched"}
+  done
+
+  (( unit_count == 1 && next_count == 1 )) || return 1
+  [[ $found_unit == "$requested_unit" && $found_next =~ ^[0-9]+$ ]] || return 1
+  next_usec=$found_next
+  (( next_usec > 0 )) || return 1
+  printf '%s\n' "$((next_usec / 1000000))"
+}
+
 run_bounded() {
   local seconds=$1
   shift
@@ -281,7 +321,6 @@ perform_rollback() {
 }
 
 switch_candidate() {
-  local deadline_text
   local unit
 
   [[ $# -eq 0 ]] || die "usage: $0 switch"
@@ -318,9 +357,7 @@ switch_candidate() {
     die "could not arm $unit; candidate was not activated"
   fi
 
-  deadline_text=$(run_bounded "$SYSTEMCTL_TIMEOUT_SECONDS" systemctl show \
-    --property=NextElapseUSecRealtime --value "$unit")
-  if [[ -z $deadline_text || $deadline_text == n/a ]] || ! expires_at=$(date -d "$deadline_text" +%s); then
+  if ! expires_at=$(timer_deadline_epoch "$unit"); then
     run_bounded "$SYSTEMCTL_TIMEOUT_SECONDS" systemctl stop "$unit" 2>/dev/null || true
     clear_state
     die "could not read the deadline from $unit; candidate was not activated"
@@ -349,6 +386,7 @@ switch_candidate() {
 }
 
 confirm_candidate() {
+  local live_expires_at
   local now
   local requested_transaction=${1:-}
   local unit
@@ -363,7 +401,8 @@ confirm_candidate() {
   now=$(date +%s)
   unit=$(timer_unit "$transaction")
   run_bounded "$SYSTEMCTL_TIMEOUT_SECONDS" systemctl is-active --quiet "$unit" || die "transaction $transaction is no longer armed"
-  (( now < expires_at )) || die "transaction $transaction has expired"
+  live_expires_at=$(timer_deadline_epoch "$unit") || die "could not read the authoritative deadline for transaction $transaction"
+  (( now < live_expires_at )) || die "transaction $transaction has expired"
   (( now >= activated_at + CONFIRM_DELAY_SECONDS )) || die "wait at least $CONFIRM_DELAY_SECONDS seconds after activation before confirming"
   assert_active_candidate
 
@@ -388,7 +427,7 @@ confirm_candidate() {
   fi
 
   now=$(date +%s)
-  if (( now >= expires_at )); then
+  if ! live_expires_at=$(timer_deadline_epoch "$unit") || (( now >= live_expires_at )); then
     note "confirmation crossed the fixed deadline; rolling back immediately"
     perform_rollback || true
     die "candidate was not confirmed before the deadline"
@@ -454,7 +493,9 @@ boot_recovery() {
 }
 
 show_status() {
+  local deadline_display
   local expires_display
+  local live_expires_at
   local now
   local remaining
   local unit
@@ -474,9 +515,21 @@ show_status() {
     expires_display="pending timer activation"
     remaining="unknown"
   fi
-  printf 'transaction: %s\nphase: %s\nknown_good: %s\ncandidate: %s\ncreated_at: %s\nactivated_at: %s\ndeadline: %s\nremaining_seconds: %s\nattempt: %s\nevent_log: %s\n' \
+  deadline_display=$expires_display
+  case $phase in
+    armed|active|activation-failed|confirming)
+      run_bounded "$SYSTEMCTL_TIMEOUT_SECONDS" systemctl is-active --quiet "$unit" ||
+        die "pending transaction $transaction has no active rollback timer"
+      live_expires_at=$(timer_deadline_epoch "$unit") ||
+        die "could not read the authoritative deadline for transaction $transaction"
+      (( now < live_expires_at )) || die "transaction $transaction has expired"
+      deadline_display=$(date -d "@$live_expires_at" --iso-8601=seconds)
+      remaining=$((live_expires_at - now))
+      ;;
+  esac
+  printf 'transaction: %s\nphase: %s\nknown_good: %s\ncandidate: %s\ncreated_at: %s\nactivated_at: %s\nstored_deadline: %s\ndeadline: %s\nremaining_seconds: %s\nattempt: %s\nevent_log: %s\n' \
     "$transaction" "$phase" "$known_good" "$candidate" "$created_at" "$activated_at" \
-    "$expires_display" "$remaining" "$attempt" "$EVENT_LOG"
+    "$expires_display" "$deadline_display" "$remaining" "$attempt" "$EVENT_LOG"
   printf 'active_system: %s\npersistent_system: %s\n' "$(current_system)" "$(profile_system)"
   if run_bounded "$SYSTEMCTL_TIMEOUT_SECONDS" systemctl is-active --quiet "$unit"; then
     printf 'rollback_timer: armed (%s)\n' "$unit"
