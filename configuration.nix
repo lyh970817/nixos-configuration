@@ -32,6 +32,7 @@
     ./modules/services/greetd.nix
     ./modules/services/yandex-disk.nix
     ./modules/services/mihomo.nix
+    ./modules/services/mihomo-safe-rebuild.nix
     ./modules/services/keyd.nix
     ./modules/services/gnome-keyring.nix
     ./modules/services/ydotool.nix

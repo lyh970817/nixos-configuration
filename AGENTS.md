@@ -21,6 +21,35 @@ temporary configs. It must not run an uncommitted Home Manager activation or
 NixOS rebuild. Commit and rebuild the selected result, then visually inspect the
 installed result through `codex-screen`.
 
+## Guarded Mihomo Deployments
+
+`mihomo-config.yaml` is intentionally ignored because it may contain sensitive
+local configuration. Its tracked, non-secret identity is
+`mihomo-config.sha256`. After changing the YAML, update that file with the
+YAML's SHA-256 hash without committing or printing the YAML itself. Changes to
+the identity file and/or `modules/services/mihomo.nix` must be made in a
+dedicated commit containing no other paths, then deployed only with the guarded
+workflow after the guard infrastructure has been installed:
+
+```sh
+sudo scripts/mihomo-safe-rebuild.sh switch
+sudo scripts/mihomo-safe-rebuild.sh status
+sudo scripts/mihomo-safe-rebuild.sh confirm TRANSACTION_ID
+sudo scripts/mihomo-safe-rebuild.sh rollback TRANSACTION_ID
+```
+
+`switch` builds before it arms a fixed 120-second systemd rollback timer, then
+activates the candidate without changing the persistent system profile or boot
+target. It verifies that the ignored YAML matches the committed identity; dirty
+files outside the identity and Mihomo service module do not block deployment.
+Do not use a plain `nixos-rebuild switch` for those changes. Confirm only after
+at least 20 seconds and a fresh round trip through the agent; it requires the
+transaction ID shown by `status`, checks the armed transaction, active
+candidate, and active `mihomo.service` before making the candidate persistent.
+A lost connection, activation error, or reboot before confirmation restores the
+recorded known-good closure; this never re-evaluates the flake, rebuilds,
+accesses the network, or reverts Git.
+
 ## Coding Style & Naming Conventions
 
 Use two-space indentation in Nix files. Keep modules focused on one concern and name files by feature, for example `modules/services/keyd.nix` or `home/programs/tmux.nix`. Prefer explicit imports in aggregator files over hidden dynamic loading. Keep comments brief around hardware, network, or host-specific behavior.
