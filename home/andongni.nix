@@ -23,6 +23,7 @@
     ./programs/r.nix
     ./programs/fastfetch.nix
     ./programs/claude.nix
+    ./programs/codex-desktop.nix
     ./programs/codex-visual-verification.nix
     ./programs/gemini.nix
     ./programs/hyprwhspr.nix

@@ -17,6 +17,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    codex-desktop-linux = {
+      url = "github:ilysenko/codex-desktop-linux";
+    };
+
   };
 
   outputs =
@@ -26,6 +30,7 @@
       home-manager,
       nur,
       pre-commit-hooks,
+      codex-desktop-linux,
       ...
     }:
     let
@@ -86,7 +91,10 @@
             home-manager.useUserPackages = true;
             home-manager.backupFileExtension = "backup";
             home-manager.users.andongni = {
-              imports = [ ./home/andongni.nix ];
+              imports = [
+                codex-desktop-linux.homeManagerModules.default
+                ./home/andongni.nix
+              ];
             };
           }
         ];
