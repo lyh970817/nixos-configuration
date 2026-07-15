@@ -36,10 +36,11 @@ The ordinary local deployment command is always:
 rebuild
 ```
 
-A rebuild is not blocked when the Mihomo configuration changes. Near the end of
+A rebuild is not blocked when the Mihomo configuration changes. During
 activation it compares the candidate's exact immutable configuration with the
-accepted SHA. If they differ, the rebuild output asks the user to test the
-connection and routing and, only if they work, run:
+accepted SHA. If they differ, the rebuild output asks the user to wait for the
+rebuild command to finish, test the connection and routing, and, only if they
+work, run:
 
 ```sh
 sudo mihomo-config accept

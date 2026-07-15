@@ -6,7 +6,10 @@
 }:
 
 let
-  mihomoConfig = /. + "/home/andongni/Yandex.Disk/System/nixos-configuration/mihomo-config.yaml";
+  mihomoConfig = builtins.path {
+    name = "mihomo-config.yaml";
+    path = /. + "/home/andongni/Yandex.Disk/System/nixos-configuration/mihomo-config.yaml";
+  };
   acceptedStateDir = "/var/lib/mihomo-config";
   acceptedShaFile = "${acceptedStateDir}/accepted-config.sha256";
 
@@ -31,14 +34,19 @@ let
       active_config_path() {
         local candidate
         local canonical
+        local canonical_unit
         local -a config_paths=()
 
-        [[ -f "$UNIT_FILE" && ! -L "$UNIT_FILE" ]] ||
+        canonical_unit=$(realpath -e -- "$UNIT_FILE") ||
           die "active Mihomo service unit is unavailable: $UNIT_FILE"
+        [[ "$canonical_unit" == /nix/store/* ]] ||
+          die "active Mihomo service unit is outside /nix/store"
+        [[ -f "$canonical_unit" && ! -L "$canonical_unit" ]] ||
+          die "active Mihomo service unit does not resolve to a regular store file"
 
         while IFS= read -r candidate; do
           config_paths+=("$candidate")
-        done < <(sed -n 's|^LoadCredential=config\.yaml:\(/nix/store/[^[:space:]]\+\)$|\1|p' "$UNIT_FILE")
+        done < <(sed -n 's|^LoadCredential=config\.yaml:\(/nix/store/[^[:space:]]\+\)$|\1|p' "$canonical_unit")
 
         (( ''${#config_paths[@]} == 1 )) ||
           die "expected exactly one config.yaml LoadCredential in the active Mihomo service unit"
@@ -171,21 +179,29 @@ in
   environment.systemPackages = [ mihomoConfigCli ];
 
   system.activationScripts.mihomoConfigAcceptance = lib.stringAfter [ "etc" ] ''
-        candidate_sha="$(${pkgs.coreutils}/bin/sha256sum -- ${lib.escapeShellArg (toString mihomoConfig)} | ${pkgs.coreutils}/bin/cut -d ' ' -f 1)"
+        candidate_sha="$(${pkgs.coreutils}/bin/sha256sum -- ${lib.escapeShellArg mihomoConfig} | ${pkgs.coreutils}/bin/cut -d ' ' -f 1)"
         accepted_sha=""
-        if [ -f ${lib.escapeShellArg acceptedShaFile} ] && [ ! -L ${lib.escapeShellArg acceptedShaFile} ]; then
-          accepted_sha="$(${pkgs.coreutils}/bin/head -n 1 -- ${lib.escapeShellArg acceptedShaFile})"
+        if [ -e ${lib.escapeShellArg acceptedShaFile} ] || [ -L ${lib.escapeShellArg acceptedShaFile} ]; then
+          if [ -f ${lib.escapeShellArg acceptedShaFile} ] \
+            && [ ! -L ${lib.escapeShellArg acceptedShaFile} ] \
+            && [ "$(${pkgs.coreutils}/bin/wc -c < ${lib.escapeShellArg acceptedShaFile})" -eq 65 ] \
+            && ${pkgs.gnugrep}/bin/grep -Eq '^[0-9a-f]{64}$' ${lib.escapeShellArg acceptedShaFile}; then
+            accepted_sha="$(${pkgs.coreutils}/bin/head -n 1 -- ${lib.escapeShellArg acceptedShaFile})"
+          else
+            echo "Warning: Mihomo accepted configuration state is malformed or a symlink; treating it as unaccepted." >&2
+          fi
         fi
 
         if [ "$candidate_sha" != "$accepted_sha" ]; then
           ${pkgs.coreutils}/bin/cat <<'EOF'
 
     Mihomo configuration has changed and has not been accepted yet.
-    Test your connection and routing now. If everything works, run:
+    Wait until the rebuild command finishes. Then test your connection and
+    routing. If everything works, run:
 
       sudo mihomo-config accept
 
-    Until it is accepted, this reminder will appear after each rebuild.
+    Until it is accepted, this reminder will appear during each rebuild.
     EOF
         fi
   '';
