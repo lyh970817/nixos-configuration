@@ -6,12 +6,13 @@ This repository is a NixOS flake for the `andongni` host. Entry points are `flak
 
 ## Build, Test, and Development Commands
 
-- `sudo nixos-rebuild switch --flake .#andongni --impure`: apply the configuration to the local host.
+- `rebuild`: apply the configuration to the local host. The alias invokes `sudo nixos-rebuild switch --flake /etc/nixos#andongni --impure`, so it works from any directory through the stable `/etc/nixos` checkout symlink.
+- `sudo nixos-rebuild switch --flake .#andongni --impure`: apply the configuration directly when already in this checkout.
 - `find . -name '*.nix' -print0 | xargs -0 nixfmt`: format Nix files.
 
 ## Rebuild Policy
 
-For configuration changes, do not run standalone verification commands before rebuilding. Stage and commit the scoped change first so the configured pre-commit hooks run verification, then apply the committed configuration with `sudo nixos-rebuild switch --flake .#andongni --impure`.
+For configuration changes, do not run standalone verification commands before rebuilding. Stage and commit the scoped change first so the configured pre-commit hooks run verification, then apply the committed configuration with `rebuild`.
 
 For visual changes, apply the `visual-verification` skill automatically. Treat
 the mode active at task start as the entire change scope; change or inspect the
@@ -21,53 +22,40 @@ temporary configs. It must not run an uncommitted Home Manager activation or
 NixOS rebuild. Commit and rebuild the selected result, then visually inspect the
 installed result through `codex-screen`.
 
-## Guarded Mihomo Deployments
+## Mihomo Configuration Acceptance
 
 `mihomo-config.yaml` is intentionally ignored because it may contain sensitive
-local configuration. Its tracked, non-secret identity is
-`mihomo-config.sha256`. After changing the YAML, update that file with the
-YAML's SHA-256 hash without committing or printing the YAML itself. Changes to
-the identity file and/or `modules/services/mihomo.nix` must be made in a
-dedicated commit containing no other paths, then deployed only with the guarded
-workflow:
+local configuration. There is no tracked configuration-identity file: never
+create or commit `mihomo-config.sha256`. Runtime state at
+`/var/lib/mihomo-config/accepted-config.sha256` records the SHA-256 of the exact
+active store-backed configuration that the user last accepted.
+
+The ordinary local deployment command is always:
 
 ```sh
-sudo scripts/mihomo-safe-rebuild.sh switch
-sudo scripts/mihomo-safe-rebuild.sh status
-sudo scripts/mihomo-safe-rebuild.sh confirm TRANSACTION_ID
-sudo scripts/mihomo-safe-rebuild.sh rollback TRANSACTION_ID
+rebuild
 ```
 
-`switch` completely builds the candidate before it records the current
-`/run/current-system` closure. It refuses to begin unless that closure is also
-the persistent system profile and then arms a fixed 90-second root-owned
-transient systemd timer. The timer runs a root-owned helper in `/run` which
-takes the transaction lock and restores the recorded profile, boot target, and
-live closure directly. It never evaluates the flake, rebuilds, uses the
-network, or reads repository state. The candidate is activated with `test`, so
-the known-good profile and boot target remain in place until confirmation. The
-candidate activation command waits at most 10 seconds; systemd work it already
-submitted may continue, so readiness is determined by the active closure,
-`mihomo.service`, and its localhost REST API before the fixed deadline. The
-independent rollback helper remains responsible for recovery. It verifies the
-ignored YAML against its committed identity before and after the
-build/activation; dirty files outside the identity and Mihomo service module do
-not block deployment. Do not use a plain `nixos-rebuild switch` for these
-changes.
+A rebuild is not blocked when the Mihomo configuration changes. Near the end of
+activation it compares the candidate's exact immutable configuration with the
+accepted SHA. If they differ, the rebuild output asks the user to test the
+connection and routing and, only if they work, run:
 
-Confirm only after at least 20 seconds and a fresh round trip through the
-agent. It requires the transaction ID from `status`, an armed timer, the active
-candidate, active `mihomo.service`, a responsive localhost REST API, and an
-unexpired stored deadline. It promotes the exact tested closure
-without rebuilding while the timer remains armed, marks the transaction
-confirmed, then stops the timer and helper before it releases the transaction
-lock. A lost connection, activation error, or promotion error leaves the timer
-armed to restore the known-good closure. Recovery bounds any required profile,
-boot-target, and live-activation commands separately, then polls the active
-closure, persistent profile, service, and REST API; it removes volatile state
-only after all are healthy. A reboot before confirmation naturally boots the
-still-default known-good closure. The root-only state record and helper live
-only in `/run`. Neither recovery path reverts Git.
+```sh
+sudo mihomo-config accept
+```
+
+The acceptance command resolves the exact active deployed configuration from
+the active `mihomo.service` unit. It refuses to write state unless the active
+system closure is also the persistent system profile and `mihomo.service` is
+active. It then atomically records the active configuration SHA in root-owned
+runtime state. It does not rebuild or reactivate the system.
+
+Inspect the current acceptance status with:
+
+```sh
+mihomo-config status
+```
 
 ## Coding Style & Naming Conventions
 
@@ -81,7 +69,7 @@ Use two-space indentation in Nix files. Keep modules focused on one concern and 
 
 Recent history uses short imperative subjects such as `Add 115 Browser launcher` and `Fix tmux copy-mode paging keys`. Follow that style: start with a verb, keep the subject specific, and avoid unrelated changes in one commit. Pull requests should summarize changes, list validation commands, call out host-specific effects, and include screenshots only for UI changes.
 
-Commit configuration changes before rebuilding. Treat the pre-commit hooks as the verification gate before `sudo nixos-rebuild switch --flake .#andongni --impure`; if the rebuild fails, make a follow-up fix commit and rebuild again.
+Commit configuration changes before rebuilding. Treat the pre-commit hooks as the verification gate before `rebuild`; if the rebuild fails, make a follow-up fix commit and rebuild again.
 
 ## Security & Configuration Tips
 

@@ -142,7 +142,8 @@
       # Symbol alias for whai (noglob prevents shell from expanding '?')
       alias ,='noglob _whai_wrapper'
 
-      # System rebuild alias
+      # System rebuild alias. /etc/nixos is the stable symlink to this checkout,
+      # so this works from any directory.
       alias rebuild='sudo nixos-rebuild switch --flake /etc/nixos#andongni --impure'
 
       # Codex with unrestricted filesystem access.
