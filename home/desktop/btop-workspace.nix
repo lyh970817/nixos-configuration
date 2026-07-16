@@ -17,6 +17,14 @@ in
 {
   home.packages = [ btopWorkspace ];
 
+  systemd.user.targets.hyprland-session.Unit = {
+    Description = "Hyprland graphical session";
+    BindsTo = [ "graphical-session.target" ];
+    Wants = [ "graphical-session-pre.target" ];
+    After = [ "graphical-session-pre.target" ];
+    Before = [ "graphical-session.target" ];
+  };
+
   systemd.user.services = {
     btop-workspace-guard = {
       Unit = {
