@@ -11,6 +11,7 @@
 
   # Enable networking
   networking.networkmanager.enable = true;
+  services.tailscale.enable = true;
   networking.networkmanager.settings = {
     connectivity = {
       enabled = true;
