@@ -11,65 +11,46 @@ let
       wireplumber
     ];
     text = ''
-      # Keep the complete audio value no wider than the longest regular
-      # Fastfetch value (the 41-character Date value). The two device names
-      # share whatever remains after their labels and volume/mute states.
-      max_audio_value_length=41
-
       truncate_name() {
         local value="$1"
-        local max_length="$2"
 
-        awk -v max_length="$max_length" '
+        awk -v max_length=41 '
           length($0) <= max_length { print; next }
-          max_length <= 0 { print ""; next }
-          max_length <= 3 { print substr("...", 1, max_length); next }
           {
-            prefix_length = max_length - 3
-            shortened = substr($0, 1, prefix_length)
-            next_character = substr($0, prefix_length + 1, 1)
-
-            # When the cut lands inside a word, prefer the preceding complete
-            # word. Keep a character cut for unbroken device names.
-            if (shortened !~ /[[:space:]]$/ && next_character !~ /[[:space:]]/) {
-              at_boundary = shortened
-              sub(/[[:space:]]+[^[:space:]]*$/, "", at_boundary)
-              if (at_boundary != "") {
-                shortened = at_boundary
+            shortened = substr($0, 1, max_length - 3)
+            if (substr($0, max_length - 2, 1) !~ /[[:space:]]/) {
+              sub(/[[:space:]]+[^[:space:]]*$/, "", shortened)
+              if (shortened == "") {
+                shortened = substr($0, 1, max_length - 3)
               }
             }
-            sub(/[[:space:]]+$/, "", shortened)
             print shortened "..."
           }
         ' <<< "$value"
       }
 
-      endpoint_details() {
+      endpoint_value() {
         local selector="$1"
         local expected_class="$2"
         local inspect associated media_class name volume volume_level percentage
 
         if ! inspect=$(wpctl inspect "$selector" 2>/dev/null); then
-          endpoint_name="Unknown"
-          endpoint_suffix=""
+          printf 'Unknown'
           return
         fi
 
         media_class=$(printf '%s\n' "$inspect" | sed -n 's/.*media.class = "\(.*\)"/\1/p; T; q')
         if [[ -z "$media_class" ]]; then
-          endpoint_name="Unknown"
-          endpoint_suffix=""
+          printf 'Unknown'
           return
         fi
         if [[ "$media_class" != "$expected_class" ]] || printf '%s\n' "$inspect" | grep -q 'node.virtual = "true"'; then
-          endpoint_name="None"
-          endpoint_suffix=""
+          printf 'None'
           return
         fi
 
         if ! associated=$(wpctl inspect --associated "$selector" 2>/dev/null); then
-          endpoint_name="Unknown"
-          endpoint_suffix=""
+          printf 'Unknown'
           return
         fi
         name=$(printf '%s\n' "$associated" | sed -n 's/.*device.description = "\(.*\)"/\1/p; T; q')
@@ -77,56 +58,32 @@ let
           name=$(printf '%s\n' "$inspect" | sed -n 's/.*node.description = "\(.*\)"/\1/p; T; q')
         fi
         if [[ -z "$name" ]]; then
-          endpoint_name="Unknown"
-          endpoint_suffix=""
+          printf 'Unknown'
           return
         fi
+        name=$(truncate_name "$name")
 
         if ! volume=$(wpctl get-volume "$selector" 2>/dev/null); then
-          endpoint_name="Unknown"
-          endpoint_suffix=""
+          printf 'Unknown'
           return
         fi
         if ! volume_level=$(awk '$1 == "Volume:" && $2 ~ /^[0-9]+([.][0-9]+)?$/ { print $2; found = 1 } END { if (!found) exit 1 }' <<< "$volume"); then
-          endpoint_name="Unknown"
-          endpoint_suffix=""
+          printf 'Unknown'
           return
         fi
         percentage=$(awk '{ printf "%.0f", $1 * 100 }' <<< "$volume_level")
 
-        endpoint_name="$name"
-        endpoint_suffix=" $percentage%"
+        printf '%s %s%%' "$name" "$percentage"
         if [[ "$volume" == *"[MUTED]"* ]]; then
-          endpoint_suffix+=' (muted)'
+          printf ' (muted)'
         fi
       }
 
-      endpoint_details '@DEFAULT_AUDIO_SINK@' 'Audio/Sink'
-      output_name="$endpoint_name"
-      output_suffix="$endpoint_suffix"
-      endpoint_details '@DEFAULT_AUDIO_SOURCE@' 'Audio/Source'
-      input_name="$endpoint_name"
-      input_suffix="$endpoint_suffix"
-
-      fixed_length=$((18 + ''${#output_suffix} + ''${#input_suffix}))
-      remaining_length=$((max_audio_value_length - fixed_length))
-      if (( remaining_length < 0 )); then
-        remaining_length=0
-      fi
-
-      output_budget=$((remaining_length / 2))
-      input_budget=$((remaining_length - output_budget))
-      if (( ''${#output_name} < output_budget )); then
-        input_budget=$((input_budget + output_budget - ''${#output_name}))
-        output_budget=''${#output_name}
-      elif (( ''${#input_name} < input_budget )); then
-        output_budget=$((output_budget + input_budget - ''${#input_name}))
-        input_budget=''${#input_name}
-      fi
-
-      output_name=$(truncate_name "$output_name" "$output_budget")
-      input_name=$(truncate_name "$input_name" "$input_budget")
-      printf 'Output: %s%s | Input: %s%s\n' "$output_name" "$output_suffix" "$input_name" "$input_suffix"
+      printf 'Output: '
+      endpoint_value '@DEFAULT_AUDIO_SINK@' 'Audio/Sink'
+      printf ' | Input: '
+      endpoint_value '@DEFAULT_AUDIO_SOURCE@' 'Audio/Source'
+      printf '\n'
     '';
   };
 in
