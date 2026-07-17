@@ -14,7 +14,7 @@ let
       truncate_name() {
         local value="$1"
 
-        awk -v max_length=48 '
+        awk -v max_length=41 '
           length($0) <= max_length { print; next }
           {
             shortened = substr($0, 1, max_length - 3)
