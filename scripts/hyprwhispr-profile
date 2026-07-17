@@ -196,7 +196,9 @@ change_profile() {
     printf '%s\n' 'hyprwhispr-profile: requested immutable profile is unavailable' >&2
     return 1
   }
+  previous="$(stored_mode)"
   if busy="$(busy_reason)"; then
+    notify 'Hyprwhispr profile unchanged' "Current profile is $previous; dictation is busy ($busy)." || true
     printf '%s\n' "hyprwhispr-profile: dictation is busy ($busy); profile unchanged" >&2
     return 3
   fi
