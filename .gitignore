@@ -3,3 +3,7 @@ mihomo-configbk.yaml
 .worktrees/
 .pre-commit-config.yaml
 secrets/
+
+# Generated per-machine facts, never tracked
+hardware-configuration.nix
+local.nix

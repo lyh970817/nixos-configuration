@@ -73,7 +73,7 @@
         ];
       };
 
-      nixosConfigurations.andongni = nixpkgs.lib.nixosSystem {
+      nixosConfigurations.system = nixpkgs.lib.nixosSystem {
         inherit system;
         modules = [
           # Import NUR modules and custom overlay

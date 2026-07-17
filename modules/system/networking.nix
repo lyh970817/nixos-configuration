@@ -6,8 +6,7 @@
 }:
 
 {
-  # Hostname
-  networking.hostName = "andongni";
+  # Hostname comes only from the generated /etc/nixos/local.nix (out-of-tree).
 
   # Enable networking
   networking.networkmanager.enable = true;
