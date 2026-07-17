@@ -1,0 +1,24 @@
+{
+  "$schema": "https://raw.githubusercontent.com/goodroot/hyprwhspr/main/share/config.schema.json",
+  "transcription_backend": "rest-api",
+  "rest_api_provider": "openrouter",
+  "rest_endpoint_url": "https://openrouter.ai/api/v1/audio/transcriptions",
+  "rest_body": {
+    "model": "openai/gpt-4o-transcribe"
+  },
+  "rest_timeout": 60,
+  "rest_audio_format": "wav",
+  "recording_mode": "toggle",
+  "use_hypr_bindings": true,
+  "primary_shortcut": "CTRL+SHIFT+O",
+  "cancel_shortcut": "SUPER+ESCAPE",
+  "applications": {
+    "alacritty": { "auto_paste": "ctrl+shift+v" },
+    "alacritty-float": { "auto_paste": "ctrl+shift+v" },
+    "alacritty-main": { "auto_paste": "ctrl+shift+v" }
+  },
+  "paste_mode": "ctrl",
+  "prefer_clipboard_paste": true,
+  "post_transcription_hook": null,
+  "whisper_prompt": ""
+}

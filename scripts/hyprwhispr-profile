@@ -1,0 +1,194 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly default_mode=4o
+readonly profiles_dir="${HYPRWHISPR_PROFILE_PROFILES_DIR:?HYPRWHISPR_PROFILE_PROFILES_DIR is required}"
+readonly state_home="${HYPRWHISPR_PROFILE_STATE_HOME:-${XDG_STATE_HOME:-$HOME/.local/state}}"
+readonly runtime_dir="${HYPRWHISPR_PROFILE_RUNTIME_DIR:-${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}/hyprwhspr}"
+readonly state_dir="$state_home/hyprwhispr-profile"
+readonly state_file="$state_dir/mode"
+readonly active_config="$runtime_dir/config.json"
+readonly service_name="${HYPRWHISPR_PROFILE_SERVICE:-hyprwhspr.service}"
+
+usage() {
+  printf '%s\n' 'usage: hyprwhispr-profile {toggle|set 4o|set 4o-mini|status}' >&2
+}
+
+is_mode() {
+  [[ "$1" == 4o || "$1" == 4o-mini ]]
+}
+
+profile_path() {
+  local mode="$1"
+  printf '%s/%s.json\n' "$profiles_dir" "$mode"
+}
+
+stored_mode() {
+  local mode=''
+  if [[ -r "$state_file" ]]; then
+    IFS= read -r mode < "$state_file" || true
+  fi
+  if is_mode "$mode" && [[ -f "$(profile_path "$mode")" ]]; then
+    printf '%s\n' "$mode"
+  else
+    printf '%s\n' "$default_mode"
+  fi
+}
+
+write_mode() {
+  local mode="$1"
+  local temporary
+  mkdir -p "$state_dir"
+  temporary="$(mktemp "$state_dir/.mode.XXXXXX")"
+  printf '%s\n' "$mode" > "$temporary"
+  mv -f "$temporary" "$state_file"
+}
+
+activate_profile() {
+  local mode="$1"
+  local profile temporary
+  profile="$(profile_path "$mode")"
+  [[ -f "$profile" ]] || {
+    printf '%s\n' "hyprwhispr-profile: immutable profile is unavailable" >&2
+    return 1
+  }
+  mkdir -p "$runtime_dir"
+  temporary="$runtime_dir/.config.json.XXXXXX"
+  ln -s "$profile" "$temporary"
+  mv -Tf "$temporary" "$active_config"
+}
+
+normal_activity() {
+  local recording_file="$runtime_dir/recording_status"
+  local visualizer_file="$runtime_dir/visualizer_state"
+  if [[ -r "$recording_file" ]] && [[ "$(<"$recording_file")" == true ]]; then
+    printf '%s\n' normal-recording
+    return
+  fi
+  if [[ -r "$visualizer_file" ]]; then
+    case "$(<"$visualizer_file")" in
+      recording) printf '%s\n' normal-recording ;;
+      processing) printf '%s\n' normal-processing ;;
+    esac
+  fi
+}
+
+longform_activity() {
+  local response
+  response="$(curl --fail --silent --show-error --max-time 1 http://127.0.0.1:"${HYPRWHISPR_PROFILE_LONGFORM_PORT:-8765}"/status 2>/dev/null || true)"
+  if [[ "$response" =~ \"recording\"[[:space:]]*:[[:space:]]*true ]]; then
+    printf '%s\n' longform-recording
+  fi
+}
+
+activity() {
+  if [[ -n "${HYPRWHISPR_PROFILE_ACTIVITY_ADAPTER:-}" ]]; then
+    "$HYPRWHISPR_PROFILE_ACTIVITY_ADAPTER"
+  else
+    normal_activity
+    longform_activity
+  fi
+}
+
+busy_reason() {
+  local busy
+  busy="$(activity || true)"
+  if [[ -n "$busy" ]]; then
+    printf '%s\n' "${busy%%$'\n'*}"
+    return 0
+  fi
+  return 1
+}
+
+service() {
+  local action="$1"
+  local mode="$2"
+  if [[ -n "${HYPRWHISPR_PROFILE_SERVICE_ADAPTER:-}" ]]; then
+    "$HYPRWHISPR_PROFILE_SERVICE_ADAPTER" "$action" "$mode"
+  elif [[ "$action" == restart ]]; then
+    systemctl --user restart "$service_name"
+  else
+    systemctl --user is-active --quiet "$service_name"
+  fi
+}
+
+notify() {
+  local title="$1"
+  local body="$2"
+  if [[ -n "${HYPRWHISPR_PROFILE_NOTIFY_ADAPTER:-}" ]]; then
+    "$HYPRWHISPR_PROFILE_NOTIFY_ADAPTER" "$title" "$body"
+  else
+    notify-send "$title" "$body"
+  fi
+}
+
+ensure_current_profile() {
+  local mode
+  mode="$(stored_mode)"
+  write_mode "$mode"
+  activate_profile "$mode"
+  printf '%s\n' "$mode"
+}
+
+change_profile() {
+  local requested="$1"
+  local previous busy
+  is_mode "$requested" || {
+    printf '%s\n' "hyprwhispr-profile: unknown profile '$requested'; expected 4o or 4o-mini" >&2
+    return 2
+  }
+  [[ -f "$(profile_path "$requested")" ]] || {
+    printf '%s\n' 'hyprwhispr-profile: requested immutable profile is unavailable' >&2
+    return 1
+  }
+  if busy="$(busy_reason)"; then
+    printf '%s\n' "hyprwhispr-profile: dictation is busy ($busy); profile unchanged" >&2
+    return 3
+  fi
+  previous="$(ensure_current_profile)"
+  write_mode "$requested"
+  activate_profile "$requested"
+  if service restart "$requested" && service health "$requested"; then
+    notify 'Hyprwhispr profile active' "$requested"
+    printf '%s\n' "$requested"
+    return 0
+  fi
+  write_mode "$previous"
+  activate_profile "$previous"
+  service restart "$previous" || true
+  service health "$previous" || true
+  notify 'Hyprwhispr profile change failed' "Restored $previous"
+  printf '%s\n' "hyprwhispr-profile: restart failed; restored $previous" >&2
+  return 1
+}
+
+main() {
+  local command="${1:-}"
+  case "$command" in
+    status)
+      [[ $# == 1 ]] || { usage; return 2; }
+      ensure_current_profile
+      ;;
+    toggle)
+      [[ $# == 1 ]] || { usage; return 2; }
+      if [[ "$(stored_mode)" == 4o ]]; then
+        change_profile 4o-mini
+      else
+        change_profile 4o
+      fi
+      ;;
+    set)
+      [[ $# == 2 ]] || { usage; return 2; }
+      change_profile "$2"
+      ;;
+    *)
+      usage
+      return 2
+      ;;
+  esac
+}
+
+mkdir -p "$state_home"
+exec 9>"${state_home}/hyprwhispr-profile.lock"
+flock -x 9
+main "$@"
