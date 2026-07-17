@@ -718,7 +718,7 @@ in
       Description = "hyprwhspr speech-to-text";
       Documentation = "https://github.com/goodroot/hyprwhspr";
       ConditionPathExists = [
-        "%t/hyprwhspr/config.json"
+        "%h/.config/hyprwhspr/profiles/4o.json"
         "%h/.local/share/hyprwhspr/credentials"
       ];
       PartOf = [ "graphical-session.target" ];
@@ -763,7 +763,7 @@ in
       Description = "hyprwhspr long-form recorder";
       Documentation = "https://github.com/goodroot/hyprwhspr";
       ConditionPathExists = [
-        "%t/hyprwhspr/config.json"
+        "%h/.config/hyprwhspr/profiles/4o.json"
         "%h/.local/share/hyprwhspr/credentials"
       ];
       After = [
@@ -778,6 +778,7 @@ in
 
     Service = {
       Type = "simple";
+      ExecStartPre = "${hyprwhisprProfile}/bin/hyprwhispr-profile status";
       ExecStart = "${pkgs.hyprwhspr}/bin/meeting-recorder";
       Environment = [
         "HYPRWHSPR_ROOT=${pkgs.hyprwhspr}/lib/hyprwhspr"
