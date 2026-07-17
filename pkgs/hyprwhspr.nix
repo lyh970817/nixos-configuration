@@ -7,6 +7,7 @@
   bash,
   python3,
   coreutils,
+  diffutils,
   dbus,
   ffmpeg,
   glib,
@@ -62,7 +63,10 @@ let
 
   selectorForInstallCheck = writeShellApplication {
     name = "hyprwhispr-profile";
-    runtimeInputs = [ coreutils ];
+    runtimeInputs = [
+      coreutils
+      diffutils
+    ];
     text = builtins.readFile ../scripts/hyprwhispr-profile;
   };
 in
