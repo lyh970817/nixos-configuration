@@ -133,7 +133,7 @@ daemon_ready() {
   for _ in $(seq 1 40); do
     if systemctl --user is-active --quiet "$normal_service_name" \
       && [[ "$(readlink -f "$active_config")" == "$profile" ]] \
-      && XDG_CONFIG_HOME="${runtime_dir%/hyprwhspr}" hyprwhspr --quiet status >/dev/null 2>&1 \
+      && XDG_CONFIG_HOME="${runtime_dir%/hyprwhspr}" hyprwhspr status >/dev/null 2>&1 \
       && [[ -p "$runtime_dir/recording_control" ]]; then
       return 0
     fi
