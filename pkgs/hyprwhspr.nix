@@ -3,6 +3,7 @@
   stdenvNoCC,
   fetchFromGitHub,
   makeWrapper,
+  writeShellApplication,
   bash,
   python3,
   coreutils,
@@ -58,6 +59,12 @@ let
     wtype
     ydotool
   ];
+
+  selectorForInstallCheck = writeShellApplication {
+    name = "hyprwhispr-profile";
+    runtimeInputs = [ coreutils ];
+    text = builtins.readFile ../scripts/hyprwhispr-profile;
+  };
 in
 stdenvNoCC.mkDerivation rec {
   pname = "hyprwhspr";
@@ -71,6 +78,7 @@ stdenvNoCC.mkDerivation rec {
   };
 
   nativeBuildInputs = [ makeWrapper ];
+  nativeInstallCheckInputs = [ selectorForInstallCheck ];
 
   installPhase = ''
     runHook preInstall
@@ -171,7 +179,7 @@ stdenvNoCC.mkDerivation rec {
   installCheckPhase = ''
     runHook preInstallCheck
     HYPRWHSPR_APPDIR="$out/lib/hyprwhspr" \
-      HYPRWHISPR_SELECTOR=${../scripts/hyprwhispr-profile} \
+      HYPRWHISPR_SELECTOR=${lib.getExe selectorForInstallCheck} \
       HYPRWHISPR_PROFILES=${../config/hyprwhspr/profiles} \
       ${pythonEnv}/bin/python ${./hyprwhspr-provider-failure-test.py}
     runHook postInstallCheck
