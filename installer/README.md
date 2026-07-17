@@ -14,6 +14,14 @@ not part of this directory and is not covered by tests.
   `[[ "${BASH_SOURCE[0]}" == "${0}" ]]`.
 - `tests/decisions.bats` -- bats tests that source the library and assert on
   its external behaviour (stdout + exit code) for representative inputs.
+- `install.sh` -- the destructive installer itself. Sources `lib/decisions.sh`
+  for target selection, swap sizing, and the erase confirmation, then does
+  the actual partition/format/mount/`nixos-install` work those functions
+  deliberately stay free of. Not part of the automated test seam above; it
+  takes `MOUNT_ROOT`, `INSTALL_DEVICE_TABLE_FILE`, `SECRETS_SOURCE_DIR`,
+  `FLAKE_REF`, and `GITHUB_REMOTE_URL` environment overrides so it can be
+  driven against a loopback disk for manual verification (see the top-of-file
+  config block for defaults).
 
 ## Device table input format
 
