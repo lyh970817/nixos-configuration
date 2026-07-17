@@ -144,9 +144,9 @@ def run_case(mode: str, failure: str):
                 "HYPRWHISPR_PROFILE_RUNTIME_DIR": str(runtime_dir),
             }
         )
+        assert status(env) == mode
         before_files = sorted(str(path.relative_to(root)) for path in root.rglob("*"))
         before_target = activation.resolve()
-        assert status(env) == mode
 
         calls = []
 
@@ -189,11 +189,16 @@ def run_case(mode: str, failure: str):
         assert "[WARN] No transcription generated" in log
         assert_redacted(log, profile)
 
-        assert status(env) == mode
         assert (mode_dir / "mode").read_text() == f"{mode}\n"
         assert activation.is_symlink()
         assert activation.resolve() == before_target
-        assert sorted(str(path.relative_to(root)) for path in root.rglob("*")) == before_files
+        after_files = sorted(str(path.relative_to(root)) for path in root.rglob("*"))
+        assert after_files == before_files, (
+            "failed transcription changed isolated profile tree; "
+            f"added={sorted(set(after_files) - set(before_files))}, "
+            f"removed={sorted(set(before_files) - set(after_files))}"
+        )
+        assert status(env) == mode
 
         success_calls = []
 
