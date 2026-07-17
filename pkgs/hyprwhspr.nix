@@ -8,11 +8,20 @@
   coreutils,
   dbus,
   ffmpeg,
+  gdk-pixbuf,
   glib,
   gnugrep,
   gnused,
+  gobject-introspection,
+  graphene,
+  gsettings-desktop-schemas,
+  gtk4,
+  gtk4-layer-shell,
+  harfbuzz,
   hyprland,
   libnotify,
+  librsvg,
+  pango,
   pipewire,
   pulseaudio,
   which,
@@ -59,6 +68,32 @@ let
     ydotool
   ];
 
+  # GObject-introspection typelibs and GSettings schemas required by the
+  # GTK4 layer-shell mic OSD; NixOS ships none of these under /usr.
+  giTypelibPath = lib.makeSearchPath "lib/girepository-1.0" (
+    map lib.getLib [
+      gdk-pixbuf
+      glib
+      gobject-introspection
+      graphene
+      gtk4
+      gtk4-layer-shell
+      harfbuzz
+      librsvg
+      pango
+    ]
+  );
+
+  gtkLibraryPath = lib.makeLibraryPath [
+    gtk4
+    gtk4-layer-shell
+  ];
+
+  gsettingsSchemasPath = lib.concatStringsSep ":" [
+    "${gsettings-desktop-schemas}/share/gsettings-schemas/${gsettings-desktop-schemas.name}"
+    "${gtk4}/share/gsettings-schemas/${gtk4.name}"
+  ];
+
 in
 stdenvNoCC.mkDerivation rec {
   pname = "hyprwhspr";
@@ -92,7 +127,10 @@ stdenvNoCC.mkDerivation rec {
       --set HYPRWHSPR_ROOT "$appdir" \
       --set PYTHONUNBUFFERED "1" \
       --prefix PATH : "${runtimePath}" \
-      --prefix PYTHONPATH : "$appdir/lib:$appdir/lib/src"
+      --prefix PYTHONPATH : "$appdir/lib:$appdir/lib/src" \
+      --prefix GI_TYPELIB_PATH : "${giTypelibPath}" \
+      --prefix LD_LIBRARY_PATH : "${gtkLibraryPath}" \
+      --prefix XDG_DATA_DIRS : "${gsettingsSchemasPath}"
 
     makeWrapper ${bash}/bin/bash "$out/bin/meeting-recorder" \
       --add-flags "$appdir/bin/meeting-recorder" \
@@ -110,6 +148,13 @@ stdenvNoCC.mkDerivation rec {
     substituteInPlace "$appdir/bin/meeting-recorder" \
       --replace-fail 'VENV_PYTHON="''${XDG_DATA_HOME:-$HOME/.local/share}/hyprwhspr/venv/bin/python"' \
         'VENV_PYTHON="${pythonEnv}/bin/python"'
+
+    # Upstream's gtk4-layer-shell LD_PRELOAD auto-detection only globs
+    # /usr/lib*, which is empty on NixOS; put the store path first in both
+    # search lists so only the mic OSD subprocess gets the preload.
+    substituteInPlace "$appdir/lib/mic_osd/runner.py" \
+      --replace-fail "'/usr/lib64/libgtk4-layer-shell.so*'," \
+        "'${gtk4-layer-shell}/lib/libgtk4-layer-shell.so*', '/usr/lib64/libgtk4-layer-shell.so*',"
 
     # Nixpkgs ydotoold reports "unknown" for --version; trust the pinned package version.
     substituteInPlace "$appdir/lib/src/cli_commands.py" \
