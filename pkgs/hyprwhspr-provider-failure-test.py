@@ -88,11 +88,21 @@ def make_app(profile: dict[str, object]):
 def status(env: dict[str, str]) -> str:
     result = subprocess.run(
         [SELECTOR, "status"],
-        check=True,
         capture_output=True,
         text=True,
         env=env,
     )
+    if result.returncode != 0:
+        safe_stderr = result.stderr.strip()
+        for name in (
+            "HYPRWHISPR_PROFILE_PROFILES_DIR",
+            "HYPRWHISPR_PROFILE_STATE_HOME",
+            "HYPRWHISPR_PROFILE_RUNTIME_DIR",
+        ):
+            safe_stderr = safe_stderr.replace(env[name], f"<{name.lower()}>")
+        raise AssertionError(
+            f"hyprwhispr-profile status exited {result.returncode}: {safe_stderr}"
+        )
     return result.stdout.strip()
 
 

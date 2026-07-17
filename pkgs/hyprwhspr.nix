@@ -17,6 +17,7 @@
   libnotify,
   pipewire,
   pulseaudio,
+  util-linux,
   which,
   wl-clipboard,
   wtype,
@@ -66,6 +67,7 @@ let
     runtimeInputs = [
       coreutils
       diffutils
+      util-linux
     ];
     text = builtins.readFile ../scripts/hyprwhispr-profile;
   };
