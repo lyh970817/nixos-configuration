@@ -632,6 +632,7 @@ let
     runtimeInputs = [
       pkgs.coreutils
       pkgs.curl
+      pkgs.diffutils
       pkgs.gnugrep
       pkgs.hyprwhspr
       pkgs.libnotify
@@ -641,6 +642,19 @@ let
     text = ''
       export HYPRWHISPR_PROFILE_PROFILES_DIR=${lib.escapeShellArg "${homeDir}/.config/hyprwhspr/profiles"}
       ${builtins.readFile ../../scripts/hyprwhispr-profile}
+    '';
+  };
+
+  hyprwhisprProfileEnsure = pkgs.writeShellApplication {
+    name = "hyprwhispr-profile-ensure";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.diffutils
+    ];
+    text = ''
+      export HYPRWHISPR_PROFILE_PROFILES_DIR=${lib.escapeShellArg "${homeDir}/.config/hyprwhspr/profiles"}
+      export HYPRWHISPR_PROFILE_SELECTOR=${lib.escapeShellArg "${hyprwhisprProfile}/bin/hyprwhispr-profile"}
+      ${builtins.readFile ../../scripts/hyprwhispr-profile-ensure}
     '';
   };
 in
@@ -738,7 +752,7 @@ in
       Type = "simple";
       ExecStartPre = [
         "${pkgs.bash}/bin/bash -lc 'for i in $(${pkgs.coreutils}/bin/seq 1 60); do ${pkgs.coreutils}/bin/ls \"$XDG_RUNTIME_DIR\"/wayland-* >/dev/null 2>&1 && exit 0; ${pkgs.coreutils}/bin/sleep 0.25; done; echo \"Wayland socket not found\"; exit 1'"
-        "${hyprwhisprProfile}/bin/hyprwhispr-profile status"
+        "${hyprwhisprProfileEnsure}/bin/hyprwhispr-profile-ensure"
       ];
       ExecStart = "${pkgs.hyprwhspr}/bin/hyprwhspr";
       ExecStopPost = "${pkgs.bash}/bin/bash -c '(${pkgs.procps}/bin/pkill -9 -f \"hyprwhspr-virtual-keyboard\" 2>/dev/null; ${pkgs.procps}/bin/pkill -9 -f \"hyprwhspr-ydotool.sock\" 2>/dev/null) || true'";
@@ -779,7 +793,7 @@ in
 
     Service = {
       Type = "simple";
-      ExecStartPre = "${hyprwhisprProfile}/bin/hyprwhispr-profile status";
+      ExecStartPre = "${hyprwhisprProfileEnsure}/bin/hyprwhispr-profile-ensure";
       ExecStart = "${pkgs.hyprwhspr}/bin/meeting-recorder";
       Environment = [
         "HYPRWHSPR_ROOT=${pkgs.hyprwhspr}/lib/hyprwhspr"

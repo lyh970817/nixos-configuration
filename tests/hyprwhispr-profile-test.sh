@@ -3,6 +3,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 selector="$repo_root/scripts/hyprwhispr-profile"
+profile_ensure="$repo_root/scripts/hyprwhispr-profile-ensure"
 fixtures="$repo_root/config/hyprwhspr/profiles"
 workdir="$(mktemp -d)"
 trap 'rm -rf "$workdir"' EXIT
@@ -61,9 +62,43 @@ export TEST_EVENT_LOG="$event_log"
 credential_sentinel='openrouter-credential-sentinel-do-not-print'
 export HYPRWHISPR_PROFILE_CREDENTIAL_SENTINEL="$credential_sentinel"
 
+ensure_selector="$adapter_dir/ensure-selector"
+ensure_log="$workdir/ensure.log"
+cat > "$ensure_selector" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$TEST_ENSURE_LOG"
+exec "$TEST_REAL_SELECTOR" "$@"
+EOF
+chmod +x "$ensure_selector"
+export HYPRWHISPR_PROFILE_SELECTOR="$ensure_selector"
+export TEST_ENSURE_LOG="$ensure_log"
+export TEST_REAL_SELECTOR="$selector"
+
 assert_eq "$("$selector" status)" 4o
 assert_eq "$(<"$workdir/state/hyprwhispr-profile/mode")" 4o
 assert_eq "$(readlink -f "$workdir/runtime/config.json")" "$fixtures/4o.json"
+
+"$profile_ensure"
+[[ ! -e "$ensure_log" ]] || fail 'matching prestart re-entered the selector'
+
+ln -sfn "$fixtures/4o-mini.json" "$workdir/runtime/config.json"
+"$profile_ensure"
+assert_eq "$(<"$ensure_log")" status
+assert_eq "$(readlink -f "$workdir/runtime/config.json")" "$fixtures/4o.json"
+
+: > "$ensure_log"
+printf 'invalid\n' > "$workdir/state/hyprwhispr-profile/mode"
+"$profile_ensure"
+assert_eq "$(<"$ensure_log")" status
+assert_eq "$(<"$workdir/state/hyprwhispr-profile/mode")" 4o
+
+: > "$ensure_log"
+rm "$workdir/runtime/config.json"
+"$profile_ensure"
+assert_eq "$(<"$ensure_log")" status
+assert_eq "$(readlink -f "$workdir/runtime/config.json")" "$fixtures/4o.json"
+rm "$ensure_log"
+
 printf 'obsolete\n' > "$workdir/state/hyprwhispr-profile/mode"
 assert_eq "$("$selector" status)" 4o
 printf '4o\n\n' > "$workdir/state/hyprwhispr-profile/mode"
