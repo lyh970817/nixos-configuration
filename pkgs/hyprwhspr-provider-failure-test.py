@@ -15,8 +15,17 @@ import tempfile
 
 
 APPDIR = Path(os.environ["HYPRWHSPR_APPDIR"])
-SELECTOR = Path(os.environ["HYPRWHISPR_SELECTOR"])
+SELECTOR_ROOT = Path(os.environ["HYPRWHISPR_SELECTOR"])
+SELECTOR = (
+    SELECTOR_ROOT / "bin" / "hyprwhispr-profile"
+    if SELECTOR_ROOT.is_dir()
+    else SELECTOR_ROOT
+)
 PROFILES = Path(os.environ["HYPRWHISPR_PROFILES"])
+
+assert SELECTOR.is_file() and os.access(SELECTOR, os.X_OK), (
+    f"hyprwhispr profile selector is not executable: {SELECTOR}"
+)
 
 sys.path[:0] = [str(APPDIR / "lib"), str(APPDIR / "lib" / "src")]
 
