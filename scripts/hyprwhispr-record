@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-state_home="${HYPRWHISPR_PROFILE_STATE_HOME:-${XDG_STATE_HOME:-$HOME/.local/state}}"
 runtime_home="${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}"
 runtime_dir="$runtime_home/hyprwhspr"
 record_command="${HYPRWHISPR_RECORD_COMMAND:-hyprwhspr}"
 
-mkdir -p "$state_home"
-exec 9>"$state_home/hyprwhispr-profile.lock"
+# Serialize concurrent record presses so a rapid double-press cannot
+# toggle the recorder twice.
+mkdir -p "$runtime_dir"
+exec 9>"$runtime_dir/.record.lock"
 flock -x 9
 
 was_recording=false

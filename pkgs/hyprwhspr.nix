@@ -3,11 +3,9 @@
   stdenvNoCC,
   fetchFromGitHub,
   makeWrapper,
-  writeShellApplication,
   bash,
   python3,
   coreutils,
-  diffutils,
   dbus,
   ffmpeg,
   glib,
@@ -17,7 +15,6 @@
   libnotify,
   pipewire,
   pulseaudio,
-  util-linux,
   which,
   wl-clipboard,
   wtype,
@@ -62,15 +59,6 @@ let
     ydotool
   ];
 
-  selectorForInstallCheck = writeShellApplication {
-    name = "hyprwhispr-profile";
-    runtimeInputs = [
-      coreutils
-      diffutils
-      util-linux
-    ];
-    text = builtins.readFile ../scripts/hyprwhispr-profile;
-  };
 in
 stdenvNoCC.mkDerivation rec {
   pname = "hyprwhspr";
@@ -89,7 +77,6 @@ stdenvNoCC.mkDerivation rec {
   patches = [ ./hyprwhspr-realtime-connect-wait.patch ];
 
   nativeBuildInputs = [ makeWrapper ];
-  nativeInstallCheckInputs = [ selectorForInstallCheck ];
 
   installPhase = ''
     runHook preInstall
@@ -190,8 +177,7 @@ stdenvNoCC.mkDerivation rec {
   installCheckPhase = ''
     runHook preInstallCheck
     HYPRWHSPR_APPDIR="$out/lib/hyprwhspr" \
-      HYPRWHISPR_SELECTOR=${lib.getExe selectorForInstallCheck} \
-      HYPRWHISPR_PROFILES=${../config/hyprwhspr/profiles} \
+      HYPRWHISPR_CONFIG=${../config/hyprwhspr/config.json} \
       ${pythonEnv}/bin/python ${./hyprwhspr-provider-failure-test.py}
     runHook postInstallCheck
   '';

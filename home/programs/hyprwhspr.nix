@@ -604,12 +604,11 @@ let
 
           args = parser.parse_args()
           state_home = Path(
-              os.environ.get("HYPRWHISPR_PROFILE_STATE_HOME")
-              or os.environ.get("XDG_STATE_HOME")
+              os.environ.get("XDG_STATE_HOME")
               or Path.home() / ".local/state"
           )
           state_home.mkdir(parents=True, exist_ok=True)
-          with (state_home / "hyprwhispr-profile.lock").open("w") as lock_file:
+          with (state_home / "hyprwhspr-longform.lock").open("w") as lock_file:
               fcntl.flock(lock_file, fcntl.LOCK_EX)
               return args.func(args)
 
@@ -636,34 +635,16 @@ let
     pkgs.ydotool
   ];
 
-  hyprwhisprProfile = pkgs.writeShellApplication {
-    name = "hyprwhispr-profile";
-    runtimeInputs = [
-      pkgs.coreutils
-      pkgs.curl
-      pkgs.diffutils
-      pkgs.gnugrep
-      pkgs.hyprwhspr
-      pkgs.libnotify
-      pkgs.systemd
-      pkgs.util-linux
-    ];
+  # The daemon runs with XDG_CONFIG_HOME=%t so its mutable runtime files
+  # (recording_status, control pipe) stay on tmpfs; link the static config
+  # into that directory before start.
+  hyprwhisprConfigLink = pkgs.writeShellApplication {
+    name = "hyprwhispr-config-link";
+    runtimeInputs = [ pkgs.coreutils ];
     text = ''
-      export HYPRWHISPR_PROFILE_PROFILES_DIR=${lib.escapeShellArg "${homeDir}/.config/hyprwhspr/profiles"}
-      ${builtins.readFile ../../scripts/hyprwhispr-profile}
-    '';
-  };
-
-  hyprwhisprProfileEnsure = pkgs.writeShellApplication {
-    name = "hyprwhispr-profile-ensure";
-    runtimeInputs = [
-      pkgs.coreutils
-      pkgs.diffutils
-    ];
-    text = ''
-      export HYPRWHISPR_PROFILE_PROFILES_DIR=${lib.escapeShellArg "${homeDir}/.config/hyprwhspr/profiles"}
-      export HYPRWHISPR_PROFILE_SELECTOR=${lib.escapeShellArg "${hyprwhisprProfile}/bin/hyprwhispr-profile"}
-      ${builtins.readFile ../../scripts/hyprwhispr-profile-ensure}
+      runtime_dir="''${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}/hyprwhspr"
+      mkdir -p "$runtime_dir"
+      ln -sfn ${lib.escapeShellArg "${homeDir}/.config/hyprwhspr/config.json"} "$runtime_dir/config.json"
     '';
   };
 
@@ -680,7 +661,6 @@ in
 {
   home.packages = [
     pkgs.hyprwhspr
-    hyprwhisprProfile
     hyprwhisprRecord
     hyprwhsprLongform
   ];
@@ -691,18 +671,17 @@ in
   };
 
   xdg.configFile = {
-    "hyprwhspr/profiles/realtime.json".source = ../../config/hyprwhspr/profiles/realtime.json;
-    "hyprwhspr/profiles/4o-mini.json".source = ../../config/hyprwhspr/profiles/4o-mini.json;
+    "hyprwhspr/config.json".source = ../../config/hyprwhspr/config.json;
 
-    "hyprwhspr/README-nixos-rest.md".text = ''
-      # hyprwhspr REST setup
+    "hyprwhspr/README-nixos.md".text = ''
+      # hyprwhspr setup
 
       This directory is managed by Home Manager.
 
       Managed files:
 
-      - `~/.config/hyprwhspr/profiles/realtime.json`
-      - `~/.config/hyprwhspr/profiles/4o-mini.json`
+      - `~/.config/hyprwhspr/config.json`: the static realtime websocket
+        configuration (streamed transcription via OpenAI)
       - `~/.local/share/hyprwhspr/credentials` as an out-of-store symlink
 
       The actual credential file is ignored by Git and lives in the Nix
@@ -716,26 +695,20 @@ in
 
       ```sh
       {
-        "openrouter": "YOUR_OPENROUTER_API_KEY",
         "openai": "YOUR_OPENAI_API_KEY",
         "custom": "YOUR_SILICONFLOW_API_KEY"
       }
       ```
 
-      The `openai` key must be a direct OpenAI API key; the `realtime`
-      profile streams over OpenAI's websocket endpoint, which OpenRouter
-      does not provide.
+      The `openai` key must be a direct OpenAI API key; dictation streams
+      over OpenAI's realtime websocket endpoint. The `custom` key is the
+      SiliconFlow key used for long-form polishing. Other legacy keys
+      (for example `openrouter`) may remain in the file; nothing reads
+      them anymore.
 
-      Short dictation uses `Ctrl+Shift+O`. Its selected profile is
-      stored symbolically under `~/.local/state/hyprwhispr-profile/`; the active
-      runtime configuration is an atomic link under `$XDG_RUNTIME_DIR`. Use:
-
-      ```sh
-      hyprwhispr-profile status
-      hyprwhispr-profile set realtime
-      hyprwhispr-profile set 4o-mini
-      hyprwhispr-profile toggle
-      ```
+      Short dictation uses `Ctrl+Shift+O`. The daemon runs with
+      `XDG_CONFIG_HOME` pointed at `$XDG_RUNTIME_DIR`, where a service
+      pre-start step links `config.json` to the managed static config.
 
       Long-form prose dictation uses
       `Ctrl+Shift+L`, archives raw/polished text under
@@ -747,7 +720,7 @@ in
       Validate:
 
       ```sh
-      hyprwhispr-profile status
+      systemctl --user status hyprwhspr.service
       hyprwhspr-longform status
       ```
     '';
@@ -758,7 +731,7 @@ in
       Description = "hyprwhspr speech-to-text";
       Documentation = "https://github.com/goodroot/hyprwhspr";
       ConditionPathExists = [
-        "%h/.config/hyprwhspr/profiles/4o-mini.json"
+        "%h/.config/hyprwhspr/config.json"
         "%h/.local/share/hyprwhspr/credentials"
       ];
       PartOf = [ "graphical-session.target" ];
@@ -777,7 +750,7 @@ in
       Type = "simple";
       ExecStartPre = [
         "${pkgs.bash}/bin/bash -lc 'for i in $(${pkgs.coreutils}/bin/seq 1 60); do ${pkgs.coreutils}/bin/ls \"$XDG_RUNTIME_DIR\"/wayland-* >/dev/null 2>&1 && exit 0; ${pkgs.coreutils}/bin/sleep 0.25; done; echo \"Wayland socket not found\"; exit 1'"
-        "${hyprwhisprProfileEnsure}/bin/hyprwhispr-profile-ensure"
+        "${hyprwhisprConfigLink}/bin/hyprwhispr-config-link"
       ];
       ExecStart = "${pkgs.hyprwhspr}/bin/hyprwhspr";
       ExecStopPost = "${pkgs.bash}/bin/bash -c '(${pkgs.procps}/bin/pkill -9 -f \"hyprwhspr-virtual-keyboard\" 2>/dev/null; ${pkgs.procps}/bin/pkill -9 -f \"hyprwhspr-ydotool.sock\" 2>/dev/null) || true'";
@@ -803,7 +776,7 @@ in
       Description = "hyprwhspr long-form recorder";
       Documentation = "https://github.com/goodroot/hyprwhspr";
       ConditionPathExists = [
-        "%h/.config/hyprwhspr/profiles/4o-mini.json"
+        "%h/.config/hyprwhspr/config.json"
         "%h/.local/share/hyprwhspr/credentials"
       ];
       After = [
@@ -818,7 +791,7 @@ in
 
     Service = {
       Type = "simple";
-      ExecStartPre = "${hyprwhisprProfileEnsure}/bin/hyprwhispr-profile-ensure";
+      ExecStartPre = "${hyprwhisprConfigLink}/bin/hyprwhispr-config-link";
       ExecStart = "${pkgs.hyprwhspr}/bin/meeting-recorder";
       Environment = [
         "HYPRWHSPR_ROOT=${pkgs.hyprwhspr}/lib/hyprwhspr"

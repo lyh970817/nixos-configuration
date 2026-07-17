@@ -59,6 +59,24 @@ realtime profile rather than silently reverting. Recover manually with
   `realtime_transcription_delay` (minimal|low|medium|high|xhigh), but its
   accent accuracy is unproven, so it was not chosen.
 - Accuracy escape hatch: if accent accuracy suffers, switch the
-  `websocket_model` in `config/hyprwhspr/profiles/realtime.json` to
-  `gpt-4o-transcribe`, which the realtime endpoint also serves, at the cost
-  of some streaming latency.
+  `websocket_model` in the static config to `gpt-4o-transcribe`, which the
+  realtime endpoint also serves, at the cost of some streaming latency.
+
+## Stage 3: experiment concluded
+
+The A/B experiment is over: the realtime websocket backend won and is now
+the sole backend. The REST profile and the whole selector machinery —
+`config/hyprwhspr/profiles/`, `hyprwhispr-profile`, the boot-time ensure
+step, and the Ctrl+Shift+P toggle — were removed. The sections above
+describing the profile pair are historical; git history holds the full
+A/B setup if a REST fallback is ever needed again.
+
+The daemon now reads one static config: `config/hyprwhspr/config.json` in
+this repo, installed at `~/.config/hyprwhspr/config.json` and linked into
+`$XDG_RUNTIME_DIR/hyprwhspr/config.json` by a service pre-start step (the
+daemon keeps `XDG_CONFIG_HOME` on the runtime dir so its mutable state
+stays on tmpfs). Startup failures stay loud: the daemon fail-fasts,
+systemd restarts it, and the connect-wait patch keeps record presses from
+killing an in-flight websocket handshake. The `openai` credential remains
+required; `openrouter` is no longer read but may stay in the secrets file
+(`custom` is still used by long-form polishing).

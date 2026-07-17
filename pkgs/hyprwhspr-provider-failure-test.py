@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Behavior checks for terminal, redacted provider transcription failures."""
+"""Behavior checks for the realtime backend and redacted provider failures."""
 
 from __future__ import annotations
 
@@ -9,15 +9,12 @@ import io
 import json
 import os
 from pathlib import Path
-import subprocess
 import sys
 import tempfile
-from unittest import mock
 
 
 APPDIR = Path(os.environ["HYPRWHSPR_APPDIR"])
-SELECTOR = Path(os.environ["HYPRWHISPR_SELECTOR"])
-PROFILES = Path(os.environ["HYPRWHISPR_PROFILES"])
+CONFIG = Path(os.environ["HYPRWHISPR_CONFIG"])
 
 sys.path[:0] = [str(APPDIR / "lib"), str(APPDIR / "lib" / "src")]
 
@@ -25,6 +22,21 @@ main = importlib.import_module("main")
 whisper_manager_module = importlib.import_module("whisper_manager")
 np = whisper_manager_module.np
 requests = whisper_manager_module.requests
+
+
+# Inline REST configuration kept solely to exercise the package's REST
+# log-redaction patches (substituteInPlace in hyprwhspr.nix); the deployed
+# static config uses the realtime-ws backend only.
+REST_CONFIG = {
+    "transcription_backend": "rest-api",
+    "rest_api_provider": "openrouter",
+    "rest_endpoint_url": "https://openrouter.ai/api/v1/audio/transcriptions",
+    "rest_body": {"model": "openai/gpt-4o-mini-transcribe"},
+    "rest_timeout": 60,
+    "rest_audio_format": "wav",
+    "post_transcription_hook": None,
+    "whisper_prompt": "",
+}
 
 
 class Config:
@@ -107,201 +119,86 @@ def make_app(profile: dict[str, object]):
     return app
 
 
-def status(env: dict[str, str]) -> str:
-    result = subprocess.run(
-        [SELECTOR, "status"],
-        capture_output=True,
-        text=True,
-        env=env,
-    )
-    if result.returncode != 0:
-        safe_stderr = result.stderr.strip()
-        for name in (
-            "HYPRWHISPR_PROFILE_PROFILES_DIR",
-            "HYPRWHISPR_PROFILE_STATE_HOME",
-            "HYPRWHISPR_PROFILE_RUNTIME_DIR",
-        ):
-            safe_stderr = safe_stderr.replace(env[name], f"<{name.lower()}>")
-        raise AssertionError(
-            f"hyprwhispr-profile status exited {result.returncode}: {safe_stderr}"
-        )
-    return result.stdout.strip()
-
-
 def assert_redacted(log: str, forbidden: list[str]):
     for value in forbidden:
         assert value not in log, f"sensitive provider value leaked: {value}"
 
 
-@contextlib.contextmanager
-def isolated_profile_env(mode: str, profile_path: Path):
-    with tempfile.TemporaryDirectory() as temp:
-        root = Path(temp)
-        state_home = root / "state"
-        runtime_dir = root / "runtime"
-        isolated_home = root / "home"
-        isolated_config = root / "config"
-        isolated_cache = root / "cache"
-        isolated_data = root / "data"
-        isolated_tmp = root / "tmp"
-        mode_dir = state_home / "hyprwhispr-profile"
-        mode_dir.mkdir(parents=True)
-        runtime_dir.mkdir()
-        for directory in (
-            isolated_home,
-            isolated_config,
-            isolated_cache,
-            isolated_data,
-            isolated_tmp,
-        ):
-            directory.mkdir()
-        (mode_dir / "mode").write_text(f"{mode}\n")
-        activation = runtime_dir / "config.json"
-        activation.symlink_to(profile_path)
-
-        env = os.environ.copy()
-        env.update(
-            {
-                "HYPRWHISPR_PROFILE_PROFILES_DIR": str(PROFILES),
-                "HYPRWHISPR_PROFILE_STATE_HOME": str(state_home),
-                "HYPRWHISPR_PROFILE_RUNTIME_DIR": str(runtime_dir),
-                "HOME": str(isolated_home),
-                "XDG_CONFIG_HOME": str(isolated_config),
-                "XDG_CACHE_HOME": str(isolated_cache),
-                "XDG_DATA_HOME": str(isolated_data),
-                "XDG_STATE_HOME": str(state_home),
-                "XDG_RUNTIME_DIR": str(runtime_dir),
-                "TMPDIR": str(isolated_tmp),
-            }
-        )
-        yield root, env, activation, mode_dir
-
-
-def assert_profile_state_intact(
-    root: Path,
-    activation: Path,
-    mode_dir: Path,
-    mode: str,
-    before_files: list[str],
-    before_target: Path,
-):
-    assert (mode_dir / "mode").read_text() == f"{mode}\n"
-    assert activation.is_symlink()
-    assert activation.resolve() == before_target
-    after_files = sorted(str(path.relative_to(root)) for path in root.rglob("*"))
-    assert after_files == before_files, (
-        "failed transcription changed isolated profile tree; "
-        f"added={sorted(set(after_files) - set(before_files))}, "
-        f"removed={sorted(set(before_files) - set(after_files))}"
+def load_static_config() -> dict[str, object]:
+    config = json.loads(CONFIG.read_text())
+    assert config["transcription_backend"] == "realtime-ws"
+    assert config["websocket_provider"] == "openai"
+    assert config["websocket_model"] == "gpt-4o-mini-transcribe"
+    assert config["realtime_mode"] == "transcribe"
+    assert config["realtime_timeout"] == 30
+    assert config["post_transcription_hook"] is None
+    assert "realtime_transcription_delay" not in config
+    assert not any(key.startswith("rest_") for key in config), (
+        "static config must not carry REST settings"
     )
+    return config
 
 
-def run_rest_case(mode: str, failure: str):
-    profile_path = PROFILES / f"{mode}.json"
-    profile = json.loads(profile_path.read_text())
+def run_rest_redaction_case(failure: str):
+    profile = REST_CONFIG
 
-    with isolated_profile_env(mode, profile_path) as (root, env, activation, mode_dir):
-        assert status(env) == mode
-        before_files = sorted(str(path.relative_to(root)) for path in root.rglob("*"))
-        before_target = activation.resolve()
+    calls = []
 
-        calls = []
+    def post(endpoint, *, files, data, headers, timeout):
+        calls.append((endpoint, files, data, headers, timeout))
+        if failure == "timeout":
+            raise requests.exceptions.Timeout(
+                "exception-secret https://secret.invalid request-body-secret"
+            )
+        return Response()
 
-        def post(endpoint, *, files, data, headers, timeout):
-            calls.append((endpoint, files, data, headers, timeout))
-            if failure == "timeout":
-                raise requests.exceptions.Timeout(
-                    "exception-secret https://secret.invalid request-body-secret"
-                )
-            return Response()
+    original_post = requests.post
+    original_credential = whisper_manager_module.get_credential
+    requests.post = post
+    whisper_manager_module.get_credential = lambda _provider: "credential-secret"
+    app = make_app(profile)
+    audio = np.full(1_600, 0.1, dtype=np.float32)
+    output = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(output):
+            app._process_audio(audio)
+    finally:
+        requests.post = original_post
+        whisper_manager_module.get_credential = original_credential
 
-        original_post = requests.post
-        original_credential = whisper_manager_module.get_credential
-        requests.post = post
-        whisper_manager_module.get_credential = lambda _provider: "credential-secret"
-        app = make_app(profile)
-        audio = np.full(1_600, 0.1, dtype=np.float32)
-        output = io.StringIO()
-        try:
-            with mock.patch.dict(os.environ, env, clear=False), contextlib.redirect_stdout(output):
-                app._process_audio(audio)
-        finally:
-            requests.post = original_post
-            whisper_manager_module.get_credential = original_credential
-
-        log = output.getvalue()
-        assert len(calls) == 1
-        endpoint, files, data, headers, _timeout = calls[0]
-        assert endpoint == profile["rest_endpoint_url"]
-        assert data["model"] == profile["rest_body"]["model"]
-        assert data["model"] == f"openai/gpt-{mode}-transcribe"
-        assert files["file"][1] == b"wav-audio-secret"
-        assert headers["Authorization"] == "Bearer credential-secret"
-        assert app.injected == []
-        assert app.current_transcription == ""
-        assert app.audio_manager.error_count == 1
-        assert app.results == [False]
-        assert app.is_processing is False
-        assert "ERROR: REST API" in log
-        assert "[WARN] No transcription generated" in log
-        assert_redacted(
-            log,
-            [
-                profile["rest_endpoint_url"],
-                profile["rest_body"]["model"],
-                "credential-secret",
-                "wav-audio-secret",
-                "provider-response-secret",
-                "provider-json-secret",
-                "provider-metadata-secret",
-                "exception-secret",
-            ],
-        )
-
-        assert_profile_state_intact(root, activation, mode_dir, mode, before_files, before_target)
-        assert status(env) == mode
-
-        success_calls = []
-
-        def successful_post(endpoint, **kwargs):
-            success_calls.append((endpoint, kwargs))
-            return SuccessResponse()
-
-        requests.post = successful_post
-        whisper_manager_module.get_credential = lambda _provider: "credential-secret"
-        try:
-            with contextlib.redirect_stdout(io.StringIO()):
-                app._process_audio(audio)
-        finally:
-            requests.post = original_post
-            whisper_manager_module.get_credential = original_credential
-
-        assert len(success_calls) == 1
-        assert success_calls[0][1]["data"]["model"] == profile["rest_body"]["model"]
-        assert app.injected == ["fresh success"]
-        assert app.results == [False, True]
-        assert app.is_processing is False
-        assert status(env) == mode
-
-
-def load_realtime_profile() -> dict[str, object]:
-    profile = json.loads((PROFILES / "realtime.json").read_text())
-    assert profile["transcription_backend"] == "realtime-ws"
-    assert profile["websocket_provider"] == "openai"
-    assert profile["websocket_model"] == "gpt-4o-mini-transcribe"
-    assert profile["realtime_mode"] == "transcribe"
-    assert profile["realtime_timeout"] == 30
-    assert "realtime_transcription_delay" not in profile
-    assert not any(key.startswith("rest_") for key in profile), (
-        "realtime profile must not carry REST settings"
+    log = output.getvalue()
+    assert len(calls) == 1
+    endpoint, files, data, headers, _timeout = calls[0]
+    assert endpoint == profile["rest_endpoint_url"]
+    assert data["model"] == profile["rest_body"]["model"]
+    assert files["file"][1] == b"wav-audio-secret"
+    assert headers["Authorization"] == "Bearer credential-secret"
+    assert app.injected == []
+    assert app.current_transcription == ""
+    assert app.audio_manager.error_count == 1
+    assert app.results == [False]
+    assert app.is_processing is False
+    assert "ERROR: REST API" in log
+    assert "[WARN] No transcription generated" in log
+    assert_redacted(
+        log,
+        [
+            profile["rest_endpoint_url"],
+            profile["rest_body"]["model"],
+            "credential-secret",
+            "wav-audio-secret",
+            "provider-response-secret",
+            "provider-json-secret",
+            "provider-metadata-secret",
+            "exception-secret",
+        ],
     )
-    return profile
 
 
 def run_realtime_startup_rejection():
     """Startup must fail terminally, without a client, when the openai key is absent."""
-    profile = load_realtime_profile()
-    manager = whisper_manager_module.WhisperManager(Config(profile))
+    config = load_static_config()
+    manager = whisper_manager_module.WhisperManager(Config(config))
     original_credential = whisper_manager_module.get_credential
     whisper_manager_module.get_credential = lambda _provider: None
     output = io.StringIO()
@@ -319,71 +216,60 @@ def run_realtime_startup_rejection():
 
 
 def run_realtime_case(failure: str):
-    profile_path = PROFILES / "realtime.json"
-    profile = load_realtime_profile()
-    mode = "realtime"
+    config = load_static_config()
 
-    with isolated_profile_env(mode, profile_path) as (root, env, activation, mode_dir):
-        assert status(env) == mode
-        before_files = sorted(str(path.relative_to(root)) for path in root.rglob("*"))
-        before_target = activation.resolve()
+    def forbidden_post(*_args, **_kwargs):
+        raise AssertionError("realtime backend must not fall back to REST")
 
-        def forbidden_post(*_args, **_kwargs):
-            raise AssertionError("realtime backend must not fall back to REST")
+    original_post = requests.post
+    original_credential = whisper_manager_module.get_credential
+    requests.post = forbidden_post
+    whisper_manager_module.get_credential = lambda _provider: "credential-secret"
+    app = make_app(config)
+    if failure == "disconnected":
+        client = FakeRealtimeClient(connected=False)
+    else:
+        client = FakeRealtimeClient(error=RuntimeError("simulated websocket commit failure"))
+    app.whisper_manager._realtime_client = client
+    audio = np.full(1_600, 0.1, dtype=np.float32)
+    output = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(output):
+            app._process_audio(audio)
+    finally:
+        requests.post = original_post
+        whisper_manager_module.get_credential = original_credential
 
-        original_post = requests.post
-        original_credential = whisper_manager_module.get_credential
-        requests.post = forbidden_post
-        whisper_manager_module.get_credential = lambda _provider: "credential-secret"
-        app = make_app(profile)
-        if failure == "disconnected":
-            client = FakeRealtimeClient(connected=False)
-        else:
-            client = FakeRealtimeClient(error=RuntimeError("simulated websocket commit failure"))
-        app.whisper_manager._realtime_client = client
-        audio = np.full(1_600, 0.1, dtype=np.float32)
-        output = io.StringIO()
-        try:
-            with mock.patch.dict(os.environ, env, clear=False), contextlib.redirect_stdout(output):
-                app._process_audio(audio)
-        finally:
-            requests.post = original_post
-            whisper_manager_module.get_credential = original_credential
+    log = output.getvalue()
+    if failure == "disconnected":
+        assert client.commits == 0
+        assert "[REALTIME] Client not connected" in log
+    else:
+        assert client.commits == 1
+        assert "[REALTIME] Transcription failed" in log
+    assert app.injected == []
+    assert app.current_transcription == ""
+    assert app.audio_manager.error_count == 1
+    assert app.results == [False]
+    assert app.is_processing is False
+    assert "[WARN] No transcription generated" in log
+    assert_redacted(log, ["credential-secret", "wav-audio-secret", "exception-secret"])
 
-        log = output.getvalue()
-        if failure == "disconnected":
-            assert client.commits == 0
-            assert "[REALTIME] Client not connected" in log
-        else:
-            assert client.commits == 1
-            assert "[REALTIME] Transcription failed" in log
-        assert app.injected == []
-        assert app.current_transcription == ""
-        assert app.audio_manager.error_count == 1
-        assert app.results == [False]
-        assert app.is_processing is False
-        assert "[WARN] No transcription generated" in log
-        assert_redacted(log, ["credential-secret", "wav-audio-secret", "exception-secret"])
+    app.whisper_manager._realtime_client = FakeRealtimeClient(result="fresh success")
+    requests.post = forbidden_post
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            app._process_audio(audio)
+    finally:
+        requests.post = original_post
 
-        assert_profile_state_intact(root, activation, mode_dir, mode, before_files, before_target)
-        assert status(env) == mode
-
-        app.whisper_manager._realtime_client = FakeRealtimeClient(result="fresh success")
-        requests.post = forbidden_post
-        try:
-            with contextlib.redirect_stdout(io.StringIO()):
-                app._process_audio(audio)
-        finally:
-            requests.post = original_post
-
-        assert app.injected == ["fresh success"]
-        assert app.results == [False, True]
-        assert app.is_processing is False
-        assert status(env) == mode
+    assert app.injected == ["fresh success"]
+    assert app.results == [False, True]
+    assert app.is_processing is False
 
 
 for failure_kind in ("timeout", "http-error"):
-    run_rest_case("4o-mini", failure_kind)
+    run_rest_redaction_case(failure_kind)
 
 run_realtime_startup_rejection()
 for failure_kind in ("disconnected", "commit-error"):
