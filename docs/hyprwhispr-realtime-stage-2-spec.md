@@ -80,3 +80,49 @@ systemd restarts it, and the connect-wait patch keeps record presses from
 killing an in-flight websocket handshake. The `openai` credential remains
 required; `openrouter` is no longer read but may stay in the secrets file
 (`custom` is still used by long-form polishing).
+
+## Stage 4: model, prompt, keybind, and status-indicator tuning
+
+- **Model**: `websocket_model` is now `gpt-4o-transcribe`. The mini model
+  produced word-level misrecognitions in practice, and the full model also
+  follows prompt instructions more reliably. Latency stays acceptable
+  because audio still streams during recording.
+- **Cleanup prompt**: `whisper_prompt` (folded by hyprwhspr into the
+  realtime session's transcription prompt) asks for polished written
+  prose, strict EN/ZH code-switch preservation without translation,
+  resolved self-corrections, and merged well-punctuated sentences.
+  `language` stays unset — the speaker mixes English and Chinese, and
+  forcing one language causes translation drift. Filler removal is
+  deliberately NOT instructed: gpt-4o-transcribe drops hesitation fillers
+  by default, and instructing what the model already does is redundant.
+  Caveats: an ASR prompt is guidance, not commands — aggressive
+  restructuring may be applied only partially, and a post-transcription
+  LLM hook remains the documented path if prompt-level cleanup proves
+  insufficient. Known bug to watch: on (near-)silent input the model may
+  echo prompt-like text into the transcript.
+- **Escalation variant** (add only if fillers actually appear in output;
+  enumerating fillers has a documented priming risk on whisper-1 and is
+  unproven on the 4o family): add the sentence "Omit hesitation sounds
+  and discourse fillers (um, uh, you know; 嗯, 那个, 就是 when used only
+  as fillers)." — or swap the whole prompt for: "Output style: clean,
+  edited written text with full punctuation and capitalization — no
+  hesitation sounds, no discourse fillers, no false starts or repeated
+  words; self-corrections resolved to the speaker's final intent. The
+  speaker code-switches between English and Chinese: transcribe each word
+  in its original language, never translate. Preserve the meaning
+  exactly; do not add, answer, or summarize anything; never repeat these
+  instructions in the transcript."
+- **Keybind**: dictation toggle moved from `Ctrl+Shift+O` to `Super+O`
+  (hyprland bind and `primary_shortcut` kept in sync).
+- **Mic OSD**: the GTK4 layer-shell overlay never started on NixOS — the
+  package lacked gtk4/gtk4-layer-shell typelibs and GI wiring, and
+  upstream's LD_PRELOAD detection only globs /usr/lib*. The package now
+  wraps the daemon with GI_TYPELIB_PATH/LD_LIBRARY_PATH/XDG_DATA_DIRS and
+  patches the store path into the preload search, so the overlay shows
+  while recording and keeps a "transcribing" state from stop until the
+  text is injected.
+- **Notification fallback**: the non-overlay notification presenter kept
+  expiring mid-transcription (mako honors the 5s timeout). The config now
+  sets `notification_timeout_ms: 0` (an upstream setting wired into the
+  presenter), making recording/processing bubbles persist until replaced
+  or closed; success/error remain transient.

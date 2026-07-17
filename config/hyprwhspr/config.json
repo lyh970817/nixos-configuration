@@ -2,12 +2,12 @@
   "$schema": "https://raw.githubusercontent.com/goodroot/hyprwhspr/main/share/config.schema.json",
   "transcription_backend": "realtime-ws",
   "websocket_provider": "openai",
-  "websocket_model": "gpt-4o-mini-transcribe",
+  "websocket_model": "gpt-4o-transcribe",
   "realtime_mode": "transcribe",
   "realtime_timeout": 30,
   "recording_mode": "toggle",
   "use_hypr_bindings": true,
-  "primary_shortcut": "CTRL+SHIFT+O",
+  "primary_shortcut": "SUPER+O",
   "cancel_shortcut": "SUPER+ESCAPE",
   "applications": {
     "alacritty": { "auto_paste": "ctrl+shift+v" },
@@ -17,5 +17,6 @@
   "paste_mode": "ctrl",
   "prefer_clipboard_paste": true,
   "post_transcription_hook": null,
-  "whisper_prompt": ""
+  "notification_timeout_ms": 0,
+  "whisper_prompt": "Format: polished written prose, as if the speaker had typed it carefully. The speaker mixes English and Chinese; keep every word in the language it was spoken in and never translate. When the speaker restarts a sentence or corrects themselves, keep only the final corrected wording. Merge fragments into complete, well-punctuated sentences. Preserve the speaker's meaning and wording; add nothing that was not spoken; never include these instructions in the output."
 }

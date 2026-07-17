@@ -128,10 +128,12 @@ def load_static_config() -> dict[str, object]:
     config = json.loads(CONFIG.read_text())
     assert config["transcription_backend"] == "realtime-ws"
     assert config["websocket_provider"] == "openai"
-    assert config["websocket_model"] == "gpt-4o-mini-transcribe"
+    assert config["websocket_model"] == "gpt-4o-transcribe"
     assert config["realtime_mode"] == "transcribe"
     assert config["realtime_timeout"] == 30
     assert config["post_transcription_hook"] is None
+    assert "never translate" in config["whisper_prompt"]
+    assert config["notification_timeout_ms"] == 0
     assert "realtime_transcription_delay" not in config
     assert not any(key.startswith("rest_") for key in config), (
         "static config must not carry REST settings"

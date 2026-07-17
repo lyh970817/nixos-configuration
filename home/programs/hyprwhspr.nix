@@ -706,7 +706,7 @@ in
       (for example `openrouter`) may remain in the file; nothing reads
       them anymore.
 
-      Short dictation uses `Ctrl+Shift+O`. The daemon runs with
+      Short dictation uses `Super+O`. The daemon runs with
       `XDG_CONFIG_HOME` pointed at `$XDG_RUNTIME_DIR`, where a service
       pre-start step links `config.json` to the managed static config.
 
