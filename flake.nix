@@ -99,5 +99,33 @@
           }
         ];
       };
+
+      # Self-contained offline installer ISO (issue 07): a minimal
+      # installation environment that bakes the `system` output's own
+      # closure into its store, so `nixos-install` on the target fetches
+      # nothing. See docs/portable-nixos-usb-installer-spec.md ("Installer
+      # (custom self-contained offline ISO)").
+      nixosConfigurations.installer = nixpkgs.lib.nixosSystem {
+        inherit system;
+        specialArgs = {
+          inherit self;
+          targetToplevel = self.nixosConfigurations.system.config.system.build.toplevel;
+        };
+        modules = [
+          {
+            nixpkgs.overlays = [
+              nur.overlays.default
+              customOverlay
+            ];
+          }
+          (
+            { modulesPath, ... }:
+            {
+              imports = [ (modulesPath + "/installer/cd-dvd/installation-cd-minimal.nix") ];
+            }
+          )
+          ./installer/iso.nix
+        ];
+      };
     };
 }

@@ -95,3 +95,40 @@ Neither `bats` nor `shellcheck` is installed system-wide; run both through
 nix shell nixpkgs#shellcheck --command shellcheck installer/lib/decisions.sh installer/tests/*.bats
 nix shell nixpkgs#bats --command bats installer/tests/decisions.bats
 ```
+
+## Building the offline installer ISO
+
+`flake.nix`'s `nixosConfigurations.installer` output (`installer/iso.nix`) builds a
+minimal NixOS installation ISO that bakes the `system` output's own toplevel closure,
+plus both Intel and AMD microcode, into its own Nix store (see issue 07 and
+`docs/portable-nixos-usb-installer-spec.md`, "Installer (custom self-contained offline
+ISO)"). It also carries the whole git-tracked repo at `/etc/nixos-config` so the booted
+environment can run `install.sh` directly.
+
+Like the `system` output, `configuration.nix` reads `/etc/nixos/hardware-configuration.nix`
+and `/etc/nixos/local.nix` by absolute path under `--impure`, so evaluating or building the
+`installer` output needs a throwaway `local.nix` present at `/etc/nixos/` first (the real
+`/etc/nixos/hardware-configuration.nix` on a machine that has already installed NixOS once
+already exists there and is reused as a stand-in representative closure -- the point is only
+to make `--impure` evaluation succeed, not to describe the eventual target hardware):
+
+```sh
+printf '{ networking.hostName = "installer-build"; }\n' | sudo tee /etc/nixos/local.nix
+nix build --impure .#nixosConfigurations.installer.config.system.build.isoImage -o result-iso
+sudo rm /etc/nixos/local.nix
+```
+
+This produces `result-iso/iso/nixos-offline-*.iso`. The baked target closure is large
+(tens of GiB); building for real needs that much free space in `/nix` and takes a while.
+
+Boot it with no network to confirm the installer runs fully offline (`-nic none` means QEMU
+gives the guest no network device at all, so any accidental fetch attempt fails loudly
+instead of silently succeeding):
+
+```sh
+nix shell nixpkgs#qemu -c qemu-img create -f qcow2 scratch.qcow2 40G
+nix shell nixpkgs#qemu -c qemu-system-x86_64 -m 4G -enable-kvm \
+  -cdrom result-iso/iso/nixos-offline-*.iso -nic none -drive file=scratch.qcow2,if=virtio
+```
+
+Inside the booted VM: `cd /etc/nixos-config && sudo ./installer/install.sh`.
