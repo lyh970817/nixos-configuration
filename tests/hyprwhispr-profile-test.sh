@@ -119,6 +119,13 @@ record_log="$workdir/record.log"
 cat > "$record_adapter" <<'EOF'
 #!/usr/bin/env bash
 printf '%s|%s\n' "$XDG_CONFIG_HOME" "$*" > "$TEST_RECORD_LOG"
+if [[ "$*" == 'record toggle' ]]; then
+  (
+    sleep 0.2
+    mkdir -p "$XDG_CONFIG_HOME/hyprwhspr"
+    printf 'true\n' > "$XDG_CONFIG_HOME/hyprwhspr/recording_status"
+  ) &
+fi
 EOF
 chmod +x "$record_adapter"
 exec 8>"$workdir/state/hyprwhispr-profile.lock"
@@ -134,6 +141,7 @@ kill -0 "$record_pid" || fail 'record wrapper did not wait for the profile trans
 flock -u 8
 wait "$record_pid"
 assert_eq "$(<"$record_log")" "$workdir/runtime-home|record toggle"
+assert_eq "$(<"$workdir/runtime-home/hyprwhspr/recording_status")" true
 
 printf 'obsolete\n' > "$workdir/state/hyprwhispr-profile/mode"
 assert_eq "$("$selector" status)" 4o

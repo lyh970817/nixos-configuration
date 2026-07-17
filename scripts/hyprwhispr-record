@@ -3,8 +3,33 @@ set -euo pipefail
 
 state_home="${HYPRWHISPR_PROFILE_STATE_HOME:-${XDG_STATE_HOME:-$HOME/.local/state}}"
 runtime_home="${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}"
+runtime_dir="$runtime_home/hyprwhspr"
 record_command="${HYPRWHISPR_RECORD_COMMAND:-hyprwhspr}"
 
 mkdir -p "$state_home"
-exec flock -x "$state_home/hyprwhispr-profile.lock" \
-  env XDG_CONFIG_HOME="$runtime_home" "$record_command" record "$@"
+exec 9>"$state_home/hyprwhispr-profile.lock"
+flock -x 9
+
+was_recording=false
+if [[ -r "$runtime_dir/recording_status" ]] && [[ "$(<"$runtime_dir/recording_status")" == true ]]; then
+  was_recording=true
+elif [[ -r "$runtime_dir/visualizer_state" ]] && [[ "$(<"$runtime_dir/visualizer_state")" == recording ]]; then
+  was_recording=true
+fi
+
+env XDG_CONFIG_HOME="$runtime_home" "$record_command" record "$@"
+
+if [[ "${1:-}" == toggle && "$was_recording" == false ]]; then
+  for _ in $(seq 1 40); do
+    if [[ -r "$runtime_dir/recording_status" ]] && [[ "$(<"$runtime_dir/recording_status")" == true ]]; then
+      exit 0
+    fi
+    if [[ -r "$runtime_dir/visualizer_state" ]] && [[ "$(<"$runtime_dir/visualizer_state")" == recording ]]; then
+      exit 0
+    fi
+    sleep 0.05
+  done
+  printf '%s\n' 'hyprwhispr-record: recording start was not acknowledged' >&2
+  env XDG_CONFIG_HOME="$runtime_home" "$record_command" record cancel >/dev/null 2>&1 || true
+  exit 1
+fi
