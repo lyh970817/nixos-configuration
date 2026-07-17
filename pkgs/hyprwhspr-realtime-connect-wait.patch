@@ -1,0 +1,78 @@
+--- a/lib/src/whisper_manager.py
++++ b/lib/src/whisper_manager.py
+@@ -1639,11 +1639,38 @@
+         except Exception as e:
+             print(f'[REALTIME] Failed to clear partial transcript preview: {e}', flush=True)
+ 
++    def _wait_for_realtime_connect(self, timeout: float = 8.0) -> bool:
++        """Wait out an in-flight realtime connect instead of tearing it down."""
++        client = self._realtime_client
++        if not client:
++            return False
++        if client.connected:
++            return True
++        if not getattr(client, 'connecting', False):
++            return False
++        print('[REALTIME] Connection handshake in flight; waiting...', flush=True)
++        deadline = time.monotonic() + timeout
++        while time.monotonic() < deadline:
++            if client.connected:
++                print('[REALTIME] In-flight connection completed', flush=True)
++                return True
++            if not getattr(client, 'connecting', False):
++                break
++            time.sleep(0.1)
++        return client.connected
++
+     def _reconnect_realtime_client(self) -> bool:
+         """Reconnect realtime client using stored connect params."""
+         if not self._realtime_client:
+             return False
+ 
++        # A handshake may already be in flight (initial connect after daemon
++        # start, or the client's own auto-reconnect). Closing the client now
++        # would destroy that socket mid-handshake, so wait for it to settle
++        # and only rebuild the connection when it is truly dead.
++        if self._wait_for_realtime_connect():
++            return True
++
+         params = self._realtime_connect_params or {}
+         websocket_url = params.get('websocket_url')
+         api_key = params.get('api_key')
+--- a/lib/src/realtime_client.py
++++ b/lib/src/realtime_client.py
+@@ -234,7 +234,7 @@
+             print(f'[REALTIME] Connecting to {self.url}...', flush=True)
+             
+             # Create WebSocket connection
+-            self.ws = websocket.WebSocketApp(
++            ws_app = websocket.WebSocketApp(
+                 self.url,
+                 header=[f'{k}: {v}' for k, v in headers.items()],
+                 on_open=self._on_open,
+@@ -242,9 +242,10 @@
+                 on_error=self._on_error,
+                 on_close=self._on_close
+             )
++            self.ws = ws_app
+             
+             # Start WebSocket in a separate thread
+-            ws_thread = threading.Thread(target=self.ws.run_forever, daemon=True)
++            ws_thread = threading.Thread(target=ws_app.run_forever, daemon=True)
+             ws_thread.start()
+             
+             # Wait for connection (with timeout)
+@@ -263,9 +264,11 @@
+                 return True
+             else:
+                 print(f'[REALTIME] Connection timeout', flush=True)
+-                # Stop the ws thread that is still running in the background
++                # Stop the ws thread that is still running in the background.
++                # Close only this attempt's socket: a concurrent reconnect may
++                # already own self.ws.
+                 try:
+-                    self.ws.close()
++                    ws_app.close()
+                 except Exception:
+                     pass
+                 return False

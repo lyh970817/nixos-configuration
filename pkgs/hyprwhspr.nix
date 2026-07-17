@@ -83,6 +83,11 @@ stdenvNoCC.mkDerivation rec {
     sha256 = "0rawmq2lvlkz11pj0fk7xmar52ia2mjrzxnx3i4wpb5pg4h0a9n2";
   };
 
+  # A record press during the realtime websocket handshake used to tear the
+  # handshake down and fail the recording; wait for the in-flight connect
+  # instead, and never close a socket another connect attempt owns.
+  patches = [ ./hyprwhspr-realtime-connect-wait.patch ];
+
   nativeBuildInputs = [ makeWrapper ];
   nativeInstallCheckInputs = [ selectorForInstallCheck ];
 
