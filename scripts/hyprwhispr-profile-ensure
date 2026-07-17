@@ -10,8 +10,8 @@ mode_file="$state_home/hyprwhispr-profile/mode"
 active_config="$runtime_dir/config.json"
 expected_profile=""
 
-if printf '4o\n' | cmp -s - "$mode_file"; then
-  expected_profile="$profiles_dir/4o.json"
+if printf 'realtime\n' | cmp -s - "$mode_file"; then
+  expected_profile="$profiles_dir/realtime.json"
 elif printf '4o-mini\n' | cmp -s - "$mode_file"; then
   expected_profile="$profiles_dir/4o-mini.json"
 fi

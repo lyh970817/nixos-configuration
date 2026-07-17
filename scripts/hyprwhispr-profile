@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly default_mode=4o
+readonly default_mode=4o-mini
 readonly profiles_dir="${HYPRWHISPR_PROFILE_PROFILES_DIR:?HYPRWHISPR_PROFILE_PROFILES_DIR is required}"
 readonly state_home="${HYPRWHISPR_PROFILE_STATE_HOME:-${XDG_STATE_HOME:-$HOME/.local/state}}"
 readonly runtime_dir="${HYPRWHISPR_PROFILE_RUNTIME_DIR:-${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}/hyprwhspr}"
@@ -12,11 +12,11 @@ readonly normal_service_name="${HYPRWHISPR_PROFILE_SERVICE:-hyprwhspr.service}"
 readonly longform_service_name="${HYPRWHISPR_PROFILE_LONGFORM_SERVICE:-meeting-recorder.service}"
 
 usage() {
-  printf '%s\n' 'usage: hyprwhispr-profile {toggle|set 4o|set 4o-mini|status}' >&2
+  printf '%s\n' 'usage: hyprwhispr-profile {toggle|set realtime|set 4o-mini|status}' >&2
 }
 
 is_mode() {
-  [[ "$1" == 4o || "$1" == 4o-mini ]]
+  [[ "$1" == realtime || "$1" == 4o-mini ]]
 }
 
 profile_path() {
@@ -27,7 +27,7 @@ profile_path() {
 stored_mode() {
   local mode
   if [[ -r "$state_file" ]]; then
-    for mode in 4o 4o-mini; do
+    for mode in realtime 4o-mini; do
       if cmp -s "$state_file" <(printf '%s\n' "$mode"); then
         printf '%s\n' "$mode"
         return
@@ -231,7 +231,7 @@ change_profile() {
   local requested="$1"
   local previous longform_was_active=false restored=true
   is_mode "$requested" || {
-    printf '%s\n' "hyprwhispr-profile: unknown profile '$requested'; expected 4o or 4o-mini" >&2
+    printf '%s\n' "hyprwhispr-profile: unknown profile '$requested'; expected realtime or 4o-mini" >&2
     return 2
   }
   [[ -f "$(profile_path "$requested")" ]] || {
@@ -283,10 +283,10 @@ main() {
       ;;
     toggle)
       [[ $# == 1 ]] || { usage; return 2; }
-      if [[ "$(stored_mode)" == 4o ]]; then
+      if [[ "$(stored_mode)" == realtime ]]; then
         change_profile 4o-mini
       else
-        change_profile 4o
+        change_profile realtime
       fi
       ;;
     set)

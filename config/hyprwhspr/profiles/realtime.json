@@ -1,13 +1,10 @@
 {
   "$schema": "https://raw.githubusercontent.com/goodroot/hyprwhspr/main/share/config.schema.json",
-  "transcription_backend": "rest-api",
-  "rest_api_provider": "openrouter",
-  "rest_endpoint_url": "https://openrouter.ai/api/v1/audio/transcriptions",
-  "rest_body": {
-    "model": "openai/gpt-4o-transcribe"
-  },
-  "rest_timeout": 60,
-  "rest_audio_format": "wav",
+  "transcription_backend": "realtime-ws",
+  "websocket_provider": "openai",
+  "websocket_model": "gpt-4o-mini-transcribe",
+  "realtime_mode": "transcribe",
+  "realtime_timeout": 30,
   "recording_mode": "toggle",
   "use_hypr_bindings": true,
   "primary_shortcut": "CTRL+SHIFT+O",

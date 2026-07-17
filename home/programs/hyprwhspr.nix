@@ -691,7 +691,7 @@ in
   };
 
   xdg.configFile = {
-    "hyprwhspr/profiles/4o.json".source = ../../config/hyprwhspr/profiles/4o.json;
+    "hyprwhspr/profiles/realtime.json".source = ../../config/hyprwhspr/profiles/realtime.json;
     "hyprwhspr/profiles/4o-mini.json".source = ../../config/hyprwhspr/profiles/4o-mini.json;
 
     "hyprwhspr/README-nixos-rest.md".text = ''
@@ -701,7 +701,7 @@ in
 
       Managed files:
 
-      - `~/.config/hyprwhspr/profiles/4o.json`
+      - `~/.config/hyprwhspr/profiles/realtime.json`
       - `~/.config/hyprwhspr/profiles/4o-mini.json`
       - `~/.local/share/hyprwhspr/credentials` as an out-of-store symlink
 
@@ -717,17 +717,22 @@ in
       ```sh
       {
         "openrouter": "YOUR_OPENROUTER_API_KEY",
+        "openai": "YOUR_OPENAI_API_KEY",
         "custom": "YOUR_SILICONFLOW_API_KEY"
       }
       ```
 
-      Short dictation uses `Ctrl+Shift+O`. Its selected OpenRouter profile is
+      The `openai` key must be a direct OpenAI API key; the `realtime`
+      profile streams over OpenAI's websocket endpoint, which OpenRouter
+      does not provide.
+
+      Short dictation uses `Ctrl+Shift+O`. Its selected profile is
       stored symbolically under `~/.local/state/hyprwhispr-profile/`; the active
       runtime configuration is an atomic link under `$XDG_RUNTIME_DIR`. Use:
 
       ```sh
       hyprwhispr-profile status
-      hyprwhispr-profile set 4o
+      hyprwhispr-profile set realtime
       hyprwhispr-profile set 4o-mini
       hyprwhispr-profile toggle
       ```
@@ -753,7 +758,7 @@ in
       Description = "hyprwhspr speech-to-text";
       Documentation = "https://github.com/goodroot/hyprwhspr";
       ConditionPathExists = [
-        "%h/.config/hyprwhspr/profiles/4o.json"
+        "%h/.config/hyprwhspr/profiles/4o-mini.json"
         "%h/.local/share/hyprwhspr/credentials"
       ];
       PartOf = [ "graphical-session.target" ];
@@ -798,7 +803,7 @@ in
       Description = "hyprwhspr long-form recorder";
       Documentation = "https://github.com/goodroot/hyprwhspr";
       ConditionPathExists = [
-        "%h/.config/hyprwhspr/profiles/4o.json"
+        "%h/.config/hyprwhspr/profiles/4o-mini.json"
         "%h/.local/share/hyprwhspr/credentials"
       ];
       After = [
