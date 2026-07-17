@@ -11,6 +11,24 @@ let
       wireplumber
     ];
     text = ''
+      truncate_name() {
+        local value="$1"
+
+        awk -v max_length=48 '
+          length($0) <= max_length { print; next }
+          {
+            shortened = substr($0, 1, max_length - 3)
+            if (substr($0, max_length - 2, 1) !~ /[[:space:]]/) {
+              sub(/[[:space:]]+[^[:space:]]*$/, "", shortened)
+              if (shortened == "") {
+                shortened = substr($0, 1, max_length - 3)
+              }
+            }
+            print shortened "..."
+          }
+        ' <<< "$value"
+      }
+
       endpoint_value() {
         local selector="$1"
         local expected_class="$2"
@@ -43,6 +61,7 @@ let
           printf 'Unknown'
           return
         fi
+        name=$(truncate_name "$name")
 
         if ! volume=$(wpctl get-volume "$selector" 2>/dev/null); then
           printf 'Unknown'
