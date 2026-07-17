@@ -126,3 +126,35 @@ required; `openrouter` is no longer read but may stay in the secrets file
   sets `notification_timeout_ms: 0` (an upstream setting wired into the
   presenter), making recording/processing bubbles persist until replaced
   or closed; success/error remain transient.
+
+## Stage 5: notifications by preference, English-only prompt, commit-race fix
+
+- **Mic OSD reverted by preference**: the GTK4 layer-shell overlay from
+  stage 4 worked but the user prefers plain mako notifications, so the
+  GTK wiring was reverted and status indication is the persistent
+  notification presenter again (`notification_timeout_ms: 0` kept:
+  recording/transcribing bubbles persist until replaced or closed).
+  Note: `mic_osd_enabled` must stay unset/true — upstream gates the
+  ENTIRE status-indicator block (the notification fallback included)
+  behind it, so setting it false would remove all indication; with the
+  GTK libraries absent the daemon routes to notifications on its own
+  ("layer-shell not supported" fallback), and the install check guards
+  the key against being set to false.
+- **Prompt is now English-only with filler enumeration**: the EN/ZH
+  code-switch instruction primed Chinese output into English-only
+  dictation (real observed failure) and was removed; explicit filler
+  removal (um, uh, you know, like) was added back because the model's
+  default filler handling proved insufficient. If restructuring quality
+  remains insufficient, the documented next step is a post-transcription
+  LLM hook. If dictation goes permanently English-only, setting
+  `language: "en"` is a further accuracy win.
+- **Empty-commit race fixed**: every stop logged
+  `[REALTIME] Server error: Error committing input audio buffer: buffer
+  too small ... 0.00ms`. Root cause: `commit_and_get_text` snapshots the
+  VAD-committed flag before its queue-drain wait, while the server VAD's
+  auto-commit (the "first commit") typically lands during that wait, so
+  the client then sent a redundant manual commit against the flushed
+  buffer. The package patch (`hyprwhspr-realtime-fixes.patch`, renamed
+  from the connect-wait patch) re-checks the flag after the drain, and
+  downgrades the residual "buffer too small" server error to a benign
+  log line that no longer wakes the transcript waiter early.

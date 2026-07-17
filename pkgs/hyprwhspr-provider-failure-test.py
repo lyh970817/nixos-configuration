@@ -132,8 +132,12 @@ def load_static_config() -> dict[str, object]:
     assert config["realtime_mode"] == "transcribe"
     assert config["realtime_timeout"] == 30
     assert config["post_transcription_hook"] is None
-    assert "never translate" in config["whisper_prompt"]
+    assert "polished written prose" in config["whisper_prompt"]
     assert config["notification_timeout_ms"] == 0
+    # mic_osd_enabled=false would disable ALL status indication (main.py
+    # gates the NotificationPresenter fallback behind it too); it must stay
+    # unset/true so the persistent notification presenter is created.
+    assert config.get("mic_osd_enabled", True) is True
     assert "realtime_transcription_delay" not in config
     assert not any(key.startswith("rest_") for key in config), (
         "static config must not carry REST settings"
