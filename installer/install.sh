@@ -381,9 +381,22 @@ set_target_password() {
 populate_repo_clone() {
   local dest="$MOUNT_ROOT/home/$TARGET_USER/.nixos-config" uid gid
 
-  log "Cloning the baked config repo to $dest..."
-  git clone "$REPO_ROOT" "$dest" >&2
-  git -C "$dest" remote set-url origin "$GITHUB_REMOTE_URL"
+  log "Populating the config repo at $dest..."
+  if [ -d "$REPO_ROOT/.git" ]; then
+    # Normal case: REPO_ROOT is a real git checkout (e.g. the USB stick).
+    git clone "$REPO_ROOT" "$dest" >&2
+    git -C "$dest" remote set-url origin "$GITHUB_REMOTE_URL"
+  else
+    # On the ISO the repo is carried as a plain, read-only store copy via
+    # environment.etc."nixos-config".source (no .git), which `git clone`
+    # refuses. Copy the tree, make it user-writable, and initialize a fresh
+    # repo pointed at origin so later updates are a manual `git pull`.
+    mkdir -p "$dest"
+    cp -a "$REPO_ROOT/." "$dest/"
+    chmod -R u+w "$dest"
+    git -C "$dest" init -q
+    git -C "$dest" remote add origin "$GITHUB_REMOTE_URL"
+  fi
 
   read -r uid gid < <(target_user_ids)
   chown -R "$uid:$gid" "$dest"
