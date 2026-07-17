@@ -128,9 +128,9 @@ service() {
 
 daemon_ready() {
   local mode="$1"
-  local profile attempt
+  local profile
   profile="$(readlink -f "$(profile_path "$mode")")"
-  for attempt in $(seq 1 40); do
+  for _ in $(seq 1 40); do
     if systemctl --user is-active --quiet "$normal_service_name" \
       && [[ "$(readlink -f "$active_config")" == "$profile" ]] \
       && XDG_CONFIG_HOME="${runtime_dir%/hyprwhspr}" hyprwhspr --quiet status >/dev/null 2>&1 \
@@ -143,8 +143,7 @@ daemon_ready() {
 }
 
 longform_ready() {
-  local attempt
-  for attempt in $(seq 1 40); do
+  for _ in $(seq 1 40); do
     if systemctl --user is-active --quiet "$longform_service_name" \
       && curl --fail --silent --show-error --max-time 1 http://127.0.0.1:"${HYPRWHISPR_PROFILE_LONGFORM_PORT:-8765}"/status >/dev/null 2>&1; then
       return 0
