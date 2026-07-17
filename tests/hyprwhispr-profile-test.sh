@@ -4,6 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 selector="$repo_root/scripts/hyprwhispr-profile"
 profile_ensure="$repo_root/scripts/hyprwhispr-profile-ensure"
+record_wrapper="$repo_root/scripts/hyprwhispr-record"
 fixtures="$repo_root/config/hyprwhspr/profiles"
 workdir="$(mktemp -d)"
 trap 'rm -rf "$workdir"' EXIT
@@ -113,6 +114,27 @@ assert_eq "$(<"$ensure_log")" status
 assert_eq "$(readlink -f "$workdir/runtime/config.json")" "$fixtures/4o.json"
 rm "$ensure_log"
 
+record_adapter="$adapter_dir/record-command"
+record_log="$workdir/record.log"
+cat > "$record_adapter" <<'EOF'
+#!/usr/bin/env bash
+printf '%s|%s\n' "$XDG_CONFIG_HOME" "$*" > "$TEST_RECORD_LOG"
+EOF
+chmod +x "$record_adapter"
+exec 8>"$workdir/state/hyprwhispr-profile.lock"
+flock -x 8
+HYPRWHISPR_RECORD_COMMAND="$record_adapter" \
+  XDG_RUNTIME_DIR="$workdir/runtime-home" \
+  TEST_RECORD_LOG="$record_log" \
+  "$record_wrapper" toggle &
+record_pid=$!
+sleep 0.1
+kill -0 "$record_pid" || fail 'record wrapper did not wait for the profile transaction lock'
+[[ ! -e "$record_log" ]] || fail 'record wrapper crossed the profile transaction lock'
+flock -u 8
+wait "$record_pid"
+assert_eq "$(<"$record_log")" "$workdir/runtime-home|record toggle"
+
 printf 'obsolete\n' > "$workdir/state/hyprwhispr-profile/mode"
 assert_eq "$("$selector" status)" 4o
 printf '4o\n\n' > "$workdir/state/hyprwhispr-profile/mode"
@@ -183,6 +205,15 @@ unset TEST_ACTIVITY_COUNTER_FILE TEST_ACTIVITY_AFTER_FIRST
 
 export TEST_NORMAL_SERVICE_ACTIVE=true
 ln -sfn "$fixtures/4o.json" "$workdir/runtime/config.json"
+printf 'normal-recording\n' > "$workdir/activity"
+export TEST_ACTIVITY_FILE="$workdir/activity"
+before_service="$(<"$service_log")"
+if "$selector" status >"$workdir/busy-status.out" 2>&1; then fail 'busy status repaired a drifted profile'; else busy_status=$?; fi
+assert_eq "$busy_status" 3
+assert_eq "$(<"$workdir/state/hyprwhispr-profile/mode")" 4o-mini
+assert_eq "$(readlink -f "$workdir/runtime/config.json")" "$fixtures/4o.json"
+assert_eq "$(<"$service_log")" "$before_service"
+unset TEST_ACTIVITY_FILE
 before_service_lines="$(wc -l < "$service_log")"
 assert_eq "$("$selector" status)" 4o-mini
 assert_contains "$(tail -n "+$((before_service_lines + 1))" "$service_log")" 'restart hyprwhspr.service 4o-mini'

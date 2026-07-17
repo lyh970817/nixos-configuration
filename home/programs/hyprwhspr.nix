@@ -161,6 +161,7 @@ let
     text = ''
       #!${pkgs.python3}/bin/python3
       import argparse
+      import fcntl
       import json
       import os
       import subprocess
@@ -602,7 +603,15 @@ let
           status.set_defaults(func=cmd_status)
 
           args = parser.parse_args()
-          return args.func(args)
+          state_home = Path(
+              os.environ.get("HYPRWHISPR_PROFILE_STATE_HOME")
+              or os.environ.get("XDG_STATE_HOME")
+              or Path.home() / ".local/state"
+          )
+          state_home.mkdir(parents=True, exist_ok=True)
+          with (state_home / "hyprwhispr-profile.lock").open("w") as lock_file:
+              fcntl.flock(lock_file, fcntl.LOCK_EX)
+              return args.func(args)
 
 
       if __name__ == "__main__":
@@ -657,11 +666,22 @@ let
       ${builtins.readFile ../../scripts/hyprwhispr-profile-ensure}
     '';
   };
+
+  hyprwhisprRecord = pkgs.writeShellApplication {
+    name = "hyprwhispr-record";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.hyprwhspr
+      pkgs.util-linux
+    ];
+    text = builtins.readFile ../../scripts/hyprwhispr-record;
+  };
 in
 {
   home.packages = [
     pkgs.hyprwhspr
     hyprwhisprProfile
+    hyprwhisprRecord
     hyprwhsprLongform
   ];
 

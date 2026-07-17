@@ -211,6 +211,9 @@ status_profile() {
     printf '%s\n' "$mode"
     return 0
   fi
+  if refuse_if_busy "$mode"; then
+    return 3
+  fi
   mode="$(ensure_current_profile)" || return 1
   if service active "$normal_service_name" "$mode"; then
     if service active "$longform_service_name" "$mode"; then

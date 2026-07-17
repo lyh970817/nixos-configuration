@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+state_home="${HYPRWHISPR_PROFILE_STATE_HOME:-${XDG_STATE_HOME:-$HOME/.local/state}}"
+runtime_home="${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}"
+record_command="${HYPRWHISPR_RECORD_COMMAND:-hyprwhspr}"
+
+mkdir -p "$state_home"
+exec flock -x "$state_home/hyprwhispr-profile.lock" \
+  env XDG_CONFIG_HOME="$runtime_home" "$record_command" record "$@"

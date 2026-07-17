@@ -12,6 +12,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from unittest import mock
 
 
 APPDIR = Path(os.environ["HYPRWHSPR_APPDIR"])
@@ -129,9 +130,22 @@ def run_case(mode: str, failure: str):
         root = Path(temp)
         state_home = root / "state"
         runtime_dir = root / "runtime"
+        isolated_home = root / "home"
+        isolated_config = root / "config"
+        isolated_cache = root / "cache"
+        isolated_data = root / "data"
+        isolated_tmp = root / "tmp"
         mode_dir = state_home / "hyprwhispr-profile"
         mode_dir.mkdir(parents=True)
         runtime_dir.mkdir()
+        for directory in (
+            isolated_home,
+            isolated_config,
+            isolated_cache,
+            isolated_data,
+            isolated_tmp,
+        ):
+            directory.mkdir()
         (mode_dir / "mode").write_text(f"{mode}\n")
         activation = runtime_dir / "config.json"
         activation.symlink_to(profile_path)
@@ -142,6 +156,13 @@ def run_case(mode: str, failure: str):
                 "HYPRWHISPR_PROFILE_PROFILES_DIR": str(PROFILES),
                 "HYPRWHISPR_PROFILE_STATE_HOME": str(state_home),
                 "HYPRWHISPR_PROFILE_RUNTIME_DIR": str(runtime_dir),
+                "HOME": str(isolated_home),
+                "XDG_CONFIG_HOME": str(isolated_config),
+                "XDG_CACHE_HOME": str(isolated_cache),
+                "XDG_DATA_HOME": str(isolated_data),
+                "XDG_STATE_HOME": str(state_home),
+                "XDG_RUNTIME_DIR": str(runtime_dir),
+                "TMPDIR": str(isolated_tmp),
             }
         )
         assert status(env) == mode
@@ -166,7 +187,7 @@ def run_case(mode: str, failure: str):
         audio = np.full(1_600, 0.1, dtype=np.float32)
         output = io.StringIO()
         try:
-            with contextlib.redirect_stdout(output):
+            with mock.patch.dict(os.environ, env, clear=False), contextlib.redirect_stdout(output):
                 app._process_audio(audio)
         finally:
             requests.post = original_post
