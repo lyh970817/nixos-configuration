@@ -8,7 +8,8 @@ readonly runtime_dir="${HYPRWHISPR_PROFILE_RUNTIME_DIR:-${XDG_RUNTIME_DIR:?XDG_R
 readonly state_dir="$state_home/hyprwhispr-profile"
 readonly state_file="$state_dir/mode"
 readonly active_config="$runtime_dir/config.json"
-readonly service_name="${HYPRWHISPR_PROFILE_SERVICE:-hyprwhspr.service}"
+readonly normal_service_name="${HYPRWHISPR_PROFILE_SERVICE:-hyprwhspr.service}"
+readonly longform_service_name="${HYPRWHISPR_PROFILE_LONGFORM_SERVICE:-meeting-recorder.service}"
 
 usage() {
   printf '%s\n' 'usage: hyprwhispr-profile {toggle|set 4o|set 4o-mini|status}' >&2
@@ -24,15 +25,16 @@ profile_path() {
 }
 
 stored_mode() {
-  local mode=''
+  local mode
   if [[ -r "$state_file" ]]; then
-    IFS= read -r mode < "$state_file" || true
+    for mode in 4o 4o-mini; do
+      if cmp -s "$state_file" <(printf '%s\n' "$mode"); then
+        printf '%s\n' "$mode"
+        return
+      fi
+    done
   fi
-  if is_mode "$mode" && [[ -f "$(profile_path "$mode")" ]]; then
-    printf '%s\n' "$mode"
-  else
-    printf '%s\n' "$default_mode"
-  fi
+  printf '%s\n' "$default_mode"
 }
 
 write_mode() {
@@ -74,8 +76,15 @@ normal_activity() {
 }
 
 longform_activity() {
-  local response
-  response="$(curl --fail --silent --show-error --max-time 1 http://127.0.0.1:"${HYPRWHISPR_PROFILE_LONGFORM_PORT:-8765}"/status 2>/dev/null || true)"
+  local response status_rc
+  if ! systemctl --user is-active --quiet "$longform_service_name"; then
+    return
+  fi
+  response="$(curl --fail --silent --show-error --max-time 1 http://127.0.0.1:"${HYPRWHISPR_PROFILE_LONGFORM_PORT:-8765}"/status 2>/dev/null)" || status_rc=$?
+  if [[ -n "${status_rc:-}" ]]; then
+    printf '%s\n' longform-processing
+    return
+  fi
   if [[ "$response" =~ \"recording\"[[:space:]]*:[[:space:]]*true ]]; then
     printf '%s\n' longform-recording
   fi
@@ -102,13 +111,59 @@ busy_reason() {
 
 service() {
   local action="$1"
-  local mode="$2"
+  local service_name="$2"
+  local mode="$3"
   if [[ -n "${HYPRWHISPR_PROFILE_SERVICE_ADAPTER:-}" ]]; then
-    "$HYPRWHISPR_PROFILE_SERVICE_ADAPTER" "$action" "$mode"
+    "$HYPRWHISPR_PROFILE_SERVICE_ADAPTER" "$action" "$service_name" "$mode"
   elif [[ "$action" == restart ]]; then
     systemctl --user restart "$service_name"
-  else
+  elif [[ "$action" == active ]]; then
     systemctl --user is-active --quiet "$service_name"
+  elif [[ "$service_name" == "$normal_service_name" ]]; then
+    daemon_ready "$mode"
+  else
+    longform_ready
+  fi
+}
+
+daemon_ready() {
+  local mode="$1"
+  local profile attempt
+  profile="$(readlink -f "$(profile_path "$mode")")"
+  for attempt in $(seq 1 40); do
+    if systemctl --user is-active --quiet "$normal_service_name" \
+      && [[ "$(readlink -f "$active_config")" == "$profile" ]] \
+      && XDG_CONFIG_HOME="${runtime_dir%/hyprwhspr}" hyprwhspr --quiet status >/dev/null 2>&1 \
+      && [[ -p "$runtime_dir/recording_control" ]]; then
+      return 0
+    fi
+    sleep 0.25
+  done
+  return 1
+}
+
+longform_ready() {
+  local attempt
+  for attempt in $(seq 1 40); do
+    if systemctl --user is-active --quiet "$longform_service_name" \
+      && curl --fail --silent --show-error --max-time 1 http://127.0.0.1:"${HYPRWHISPR_PROFILE_LONGFORM_PORT:-8765}"/status >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.25
+  done
+  return 1
+}
+
+restart_services() {
+  local mode="$1"
+  local longform_was_active="$2"
+  service restart "$normal_service_name" "$mode" \
+    && service health "$normal_service_name" "$mode" \
+    || return 1
+  if [[ "$longform_was_active" == true ]]; then
+    service restart "$longform_service_name" "$mode" \
+      && service health "$longform_service_name" "$mode" \
+      || return 1
   fi
 }
 
@@ -132,7 +187,7 @@ ensure_current_profile() {
 
 change_profile() {
   local requested="$1"
-  local previous busy
+  local previous busy longform_was_active=false restored=true
   is_mode "$requested" || {
     printf '%s\n' "hyprwhispr-profile: unknown profile '$requested'; expected 4o or 4o-mini" >&2
     return 2
@@ -145,20 +200,32 @@ change_profile() {
     printf '%s\n' "hyprwhispr-profile: dictation is busy ($busy); profile unchanged" >&2
     return 3
   fi
-  previous="$(ensure_current_profile)"
+  if ! previous="$(ensure_current_profile)"; then
+    printf '%s\n' 'hyprwhispr-profile: unable to prepare the current profile' >&2
+    return 1
+  fi
+  if service active "$longform_service_name" "$previous"; then
+    longform_was_active=true
+  fi
   write_mode "$requested"
   activate_profile "$requested"
-  if service restart "$requested" && service health "$requested"; then
-    notify 'Hyprwhispr profile active' "$requested"
+  if restart_services "$requested" "$longform_was_active"; then
+    notify 'Hyprwhispr profile active' "$requested" || true
     printf '%s\n' "$requested"
     return 0
   fi
-  write_mode "$previous"
-  activate_profile "$previous"
-  service restart "$previous" || true
-  service health "$previous" || true
-  notify 'Hyprwhispr profile change failed' "Restored $previous"
-  printf '%s\n' "hyprwhispr-profile: restart failed; restored $previous" >&2
+  write_mode "$previous" || restored=false
+  activate_profile "$previous" || restored=false
+  if [[ "$restored" == true ]]; then
+    restart_services "$previous" "$longform_was_active" || restored=false
+  fi
+  if [[ "$restored" == true ]]; then
+    notify 'Hyprwhispr profile change failed' "Restored $previous" || true
+    printf '%s\n' "hyprwhispr-profile: restart failed; restored $previous" >&2
+  else
+    notify 'Hyprwhispr profile change failed' 'Recovery needs attention' || true
+    printf '%s\n' 'hyprwhispr-profile: restart failed; recovery needs attention' >&2
+  fi
   return 1
 }
 

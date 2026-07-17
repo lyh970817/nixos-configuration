@@ -633,6 +633,7 @@ let
       pkgs.coreutils
       pkgs.curl
       pkgs.gnugrep
+      pkgs.hyprwhspr
       pkgs.libnotify
       pkgs.systemd
       pkgs.util-linux

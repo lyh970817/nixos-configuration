@@ -30,8 +30,8 @@ cat > "$adapter_dir/activity" <<'EOF'
 EOF
 cat > "$adapter_dir/service" <<'EOF'
 #!/usr/bin/env bash
-printf '%s %s\n' "$1" "$2" >> "$TEST_SERVICE_LOG"
-printf '%s %s\n' "$1" "$2" >> "$TEST_EVENT_LOG"
+printf '%s %s %s\n' "$1" "$2" "$3" >> "$TEST_SERVICE_LOG"
+printf '%s %s %s\n' "$1" "$2" "$3" >> "$TEST_EVENT_LOG"
 if [[ "$1" == restart && -e "${TEST_FAIL_RESTART_ONCE:-}" ]]; then
   rm -f "$TEST_FAIL_RESTART_ONCE"
   exit 1
@@ -59,12 +59,14 @@ assert_eq "$(<"$workdir/state/hyprwhispr-profile/mode")" 4o
 assert_eq "$(readlink -f "$workdir/runtime/config.json")" "$fixtures/4o.json"
 printf 'obsolete\n' > "$workdir/state/hyprwhispr-profile/mode"
 assert_eq "$("$selector" status)" 4o
-printf '\n' > "$workdir/state/hyprwhispr-profile/mode"
+printf '4o\n\n' > "$workdir/state/hyprwhispr-profile/mode"
+assert_eq "$("$selector" status)" 4o
+printf '4o-mini\ntrailing-bytes' > "$workdir/state/hyprwhispr-profile/mode"
 assert_eq "$("$selector" status)" 4o
 assert_eq "$("$selector" set 4o-mini)" 4o-mini
 assert_eq "$("$selector" status)" 4o-mini
 assert_contains "$(<"$notify_log")" 'Hyprwhispr profile active|4o-mini'
-assert_contains "$(<"$event_log")" $'restart 4o-mini\nhealth 4o-mini\nnotify 4o-mini'
+assert_contains "$(<"$event_log")" $'restart hyprwhspr.service 4o-mini\nhealth hyprwhspr.service 4o-mini\nrestart meeting-recorder.service 4o-mini\nhealth meeting-recorder.service 4o-mini\nnotify 4o-mini'
 assert_eq "$("$selector" toggle)" 4o
 assert_eq "$("$selector" toggle)" 4o-mini
 assert_eq "$("$selector" status)" 4o-mini
@@ -78,15 +80,17 @@ assert_eq "$(<"$workdir/state/hyprwhispr-profile/mode")" "$before_state"
 assert_eq "$(readlink -f "$workdir/runtime/config.json")" "$before_link"
 assert_eq "$(<"$service_log")" "$before_service"
 
-for activity in normal-recording normal-processing longform-recording; do
+for activity in normal-recording normal-processing longform-recording longform-processing; do
   printf '%s\n' "$activity" > "$workdir/activity"
   export TEST_ACTIVITY_FILE="$workdir/activity"
-  before_service="$(<"$service_log")"
-  if "$selector" set 4o >"$workdir/busy.out" 2>&1; then fail "$activity allowed a change"; fi
-  assert_contains "$(<"$workdir/busy.out")" "$activity"
-  assert_eq "$(<"$workdir/state/hyprwhispr-profile/mode")" 4o-mini
-  assert_eq "$(readlink -f "$workdir/runtime/config.json")" "$fixtures/4o-mini.json"
-  assert_eq "$(<"$service_log")" "$before_service"
+  for requested in 4o-mini 4o; do
+    before_service="$(<"$service_log")"
+    if "$selector" set "$requested" >"$workdir/busy.out" 2>&1; then fail "$activity allowed a change"; fi
+    assert_contains "$(<"$workdir/busy.out")" "$activity"
+    assert_eq "$(<"$workdir/state/hyprwhispr-profile/mode")" 4o-mini
+    assert_eq "$(readlink -f "$workdir/runtime/config.json")" "$fixtures/4o-mini.json"
+    assert_eq "$(<"$service_log")" "$before_service"
+  done
 done
 unset TEST_ACTIVITY_FILE
 
@@ -96,7 +100,7 @@ if "$selector" set 4o >"$workdir/rollback.out" 2>&1; then fail 'failing restart 
 assert_contains "$(<"$workdir/rollback.out")" 'restored 4o-mini'
 assert_eq "$("$selector" status)" 4o-mini
 assert_eq "$(readlink -f "$workdir/runtime/config.json")" "$fixtures/4o-mini.json"
-assert_contains "$(<"$service_log")" $'restart 4o\nrestart 4o-mini\nhealth 4o-mini'
+assert_contains "$(<"$service_log")" $'restart hyprwhspr.service 4o\nrestart hyprwhspr.service 4o-mini\nhealth hyprwhspr.service 4o-mini\nrestart meeting-recorder.service 4o-mini\nhealth meeting-recorder.service 4o-mini'
 assert_contains "$(<"$notify_log")" 'Hyprwhispr profile change failed|Restored 4o-mini'
 
 assert_eq "$("$selector" set 4o)" 4o
@@ -106,6 +110,16 @@ if "$selector" set 4o-mini >"$workdir/rollback-other.out" 2>&1; then fail 'secon
 assert_contains "$(<"$workdir/rollback-other.out")" 'restored 4o'
 assert_eq "$("$selector" status)" 4o
 assert_eq "$(readlink -f "$workdir/runtime/config.json")" "$fixtures/4o.json"
+
+credential_sentinel='openrouter-credential-sentinel-do-not-print'
+export HYPRWHISPR_PROFILE_CREDENTIAL_SENTINEL="$credential_sentinel"
+{
+  "$selector" status
+  "$selector" set 4o-mini
+} >"$workdir/selector.out" 2>&1
+if rg -F "$credential_sentinel" "$workdir/state" "$workdir/runtime" "$service_log" "$notify_log" "$workdir/selector.out"; then
+  fail 'credential sentinel leaked from the selector'
+fi
 
 if rg -n -i '(api[_-]?key|secret|token)' "$workdir/state" "$workdir/runtime" "$service_log" "$notify_log"; then
   fail 'observable selector artifacts contain credential material'
