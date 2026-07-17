@@ -128,9 +128,12 @@ service() {
 
 daemon_ready() {
   local mode="$1"
-  local profile
+  local profile attempts=40
+  # Realtime websocket startup can take ~20s, including one daemon crash
+  # plus systemd restart; give it a wider readiness window than REST.
+  [[ "$mode" == realtime ]] && attempts=120
   profile="$(readlink -f "$(profile_path "$mode")")"
-  for _ in $(seq 1 40); do
+  for _ in $(seq 1 "$attempts"); do
     if systemctl --user is-active --quiet "$normal_service_name" \
       && [[ "$(readlink -f "$active_config")" == "$profile" ]] \
       && XDG_CONFIG_HOME="${runtime_dir%/hyprwhspr}" hyprwhspr status >/dev/null 2>&1 \
@@ -258,6 +261,13 @@ change_profile() {
     notify 'Hyprwhispr profile active' "$requested" || true
     printf '%s\n' "$requested"
     return 0
+  fi
+  if [[ "$requested" == realtime ]]; then
+    # Fail loudly and stay put: the user wants realtime failures visible,
+    # not masked by a silent revert. Recover manually with `set 4o-mini`.
+    notify 'Hyprwhispr profile change failed' 'Realtime backend failed to come up; staying on realtime. Run "hyprwhispr-profile set 4o-mini" to recover.' || true
+    printf '%s\n' 'hyprwhispr-profile: realtime backend failed to come up; staying on realtime (run "hyprwhispr-profile set 4o-mini" to recover)' >&2
+    return 1
   fi
   write_mode "$previous" || restored=false
   activate_profile "$previous" || restored=false

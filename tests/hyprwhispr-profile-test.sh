@@ -240,10 +240,26 @@ assert_contains "$(<"$notify_log")" 'Hyprwhispr profile change failed|Restored r
 assert_eq "$("$selector" set 4o-mini)" 4o-mini
 touch "$workdir/fail-restart"
 export TEST_FAIL_RESTART_ONCE="$workdir/fail-restart"
-if "$selector" set realtime >"$workdir/rollback-other.out" 2>&1; then fail 'second failing restart succeeded'; fi
-assert_contains "$(<"$workdir/rollback-other.out")" 'restored 4o-mini'
-assert_eq "$("$selector" status)" 4o-mini
-assert_eq "$(readlink -f "$workdir/runtime/config.json")" "$fixtures/4o-mini.json"
+before_service_lines="$(wc -l < "$service_log")"
+if "$selector" set realtime >"$workdir/realtime-fail.out" 2>&1; then
+  fail 'failing realtime restart succeeded'
+else
+  realtime_fail_status=$?
+fi
+assert_eq "$realtime_fail_status" 1
+realtime_fail_output="$(<"$workdir/realtime-fail.out")"
+assert_contains "$realtime_fail_output" 'realtime backend failed to come up'
+assert_contains "$realtime_fail_output" 'staying on realtime'
+assert_contains "$realtime_fail_output" 'set 4o-mini'
+assert_eq "$(<"$workdir/state/hyprwhispr-profile/mode")" realtime
+assert_eq "$(readlink -f "$workdir/runtime/config.json")" "$fixtures/realtime.json"
+realtime_fail_events="$(tail -n "+$((before_service_lines + 1))" "$service_log")"
+assert_eq "$realtime_fail_events" $'active meeting-recorder.service 4o-mini\nrestart hyprwhspr.service realtime'
+assert_not_contains "$realtime_fail_events" 'restart hyprwhspr.service 4o-mini'
+assert_contains "$(tail -n 1 "$notify_log")" 'Hyprwhispr profile change failed|Realtime backend failed to come up'
+assert_not_contains "$(tail -n 1 "$notify_log")" "$fixtures"
+assert_eq "$("$selector" status)" realtime
+assert_eq "$(readlink -f "$workdir/runtime/config.json")" "$fixtures/realtime.json"
 
 {
   "$selector" status
