@@ -184,9 +184,49 @@ ensure_current_profile() {
   printf '%s\n' "$mode"
 }
 
+profile_is_current() {
+  local mode="$1"
+  local expected
+  cmp -s "$state_file" <(printf '%s\n' "$mode") || return 1
+  [[ -L "$active_config" ]] || return 1
+  expected="$(readlink -f "$(profile_path "$mode")")"
+  [[ "$(readlink -f "$active_config")" == "$expected" ]]
+}
+
+refuse_if_busy() {
+  local mode="$1"
+  local busy
+  if busy="$(busy_reason)"; then
+    notify 'Hyprwhispr profile unchanged' "Current profile is $mode; dictation is busy ($busy)." || true
+    printf '%s\n' "hyprwhispr-profile: dictation is busy ($busy); profile unchanged" >&2
+    return 0
+  fi
+  return 1
+}
+
+status_profile() {
+  local mode longform_was_active=false
+  mode="$(stored_mode)"
+  if profile_is_current "$mode"; then
+    printf '%s\n' "$mode"
+    return 0
+  fi
+  mode="$(ensure_current_profile)" || return 1
+  if service active "$normal_service_name" "$mode"; then
+    if service active "$longform_service_name" "$mode"; then
+      longform_was_active=true
+    fi
+    if ! restart_services "$mode" "$longform_was_active"; then
+      printf '%s\n' 'hyprwhispr-profile: repaired profile activation but could not reload the running service' >&2
+      return 1
+    fi
+  fi
+  printf '%s\n' "$mode"
+}
+
 change_profile() {
   local requested="$1"
-  local previous busy longform_was_active=false restored=true
+  local previous longform_was_active=false restored=true
   is_mode "$requested" || {
     printf '%s\n' "hyprwhispr-profile: unknown profile '$requested'; expected 4o or 4o-mini" >&2
     return 2
@@ -196,9 +236,7 @@ change_profile() {
     return 1
   }
   previous="$(stored_mode)"
-  if busy="$(busy_reason)"; then
-    notify 'Hyprwhispr profile unchanged' "Current profile is $previous; dictation is busy ($busy)." || true
-    printf '%s\n' "hyprwhispr-profile: dictation is busy ($busy); profile unchanged" >&2
+  if refuse_if_busy "$previous"; then
     return 3
   fi
   if ! previous="$(ensure_current_profile)"; then
@@ -207,6 +245,9 @@ change_profile() {
   fi
   if service active "$longform_service_name" "$previous"; then
     longform_was_active=true
+  fi
+  if refuse_if_busy "$previous"; then
+    return 3
   fi
   write_mode "$requested"
   activate_profile "$requested"
@@ -235,7 +276,7 @@ main() {
   case "$command" in
     status)
       [[ $# == 1 ]] || { usage; return 2; }
-      ensure_current_profile
+      status_profile
       ;;
     toggle)
       [[ $# == 1 ]] || { usage; return 2; }

@@ -28,6 +28,16 @@ notify_log="$workdir/notify.log"
 event_log="$workdir/event.log"
 cat > "$adapter_dir/activity" <<'EOF'
 #!/usr/bin/env bash
+if [[ -n "${TEST_ACTIVITY_COUNTER_FILE:-}" ]]; then
+  count="$(<"$TEST_ACTIVITY_COUNTER_FILE")"
+  count=$((count + 1))
+  printf '%s\n' "$count" > "$TEST_ACTIVITY_COUNTER_FILE"
+  printf 'activity-check %s\n' "$count" >> "$TEST_EVENT_LOG"
+  if (( count >= ${TEST_ACTIVITY_BUSY_ON_CALL:-2} )); then
+    printf '%s\n' "${TEST_ACTIVITY_AFTER_FIRST:-normal-recording}"
+  fi
+  exit 0
+fi
 if [[ -r "${TEST_ACTIVITY_FILE:-}" ]]; then
   activity="$(<"$TEST_ACTIVITY_FILE")"
   printf 'activity %s\n' "$activity" >> "$TEST_EVENT_LOG"
@@ -38,6 +48,10 @@ cat > "$adapter_dir/service" <<'EOF'
 #!/usr/bin/env bash
 printf '%s %s %s\n' "$1" "$2" "$3" >> "$TEST_SERVICE_LOG"
 printf '%s %s %s\n' "$1" "$2" "$3" >> "$TEST_EVENT_LOG"
+if [[ "$1" == active && "$2" == hyprwhspr.service ]]; then
+  [[ "${TEST_NORMAL_SERVICE_ACTIVE:-false}" == true ]]
+  exit
+fi
 if [[ "$1" == restart && -e "${TEST_FAIL_RESTART_ONCE:-}" ]]; then
   rm -f "$TEST_FAIL_RESTART_ONCE"
   exit 1
@@ -151,6 +165,27 @@ for activity in normal-recording normal-processing longform-recording longform-p
   done
 done
 unset TEST_ACTIVITY_FILE
+
+printf '0\n' > "$workdir/activity-counter"
+export TEST_ACTIVITY_COUNTER_FILE="$workdir/activity-counter"
+export TEST_ACTIVITY_AFTER_FIRST=normal-recording
+before_service="$(<"$service_log")"
+before_notify="$(<"$notify_log")"
+if "$selector" set 4o >"$workdir/late-busy.out" 2>&1; then fail 'activity beginning during profile preparation allowed a change'; else late_busy_status=$?; fi
+assert_eq "$late_busy_status" 3
+assert_eq "$(<"$workdir/state/hyprwhispr-profile/mode")" 4o-mini
+assert_eq "$(readlink -f "$workdir/runtime/config.json")" "$fixtures/4o-mini.json"
+assert_eq "$(<"$service_log")" "$before_service"
+assert_eq "$(<"$notify_log")" "$before_notify"$'\n''Hyprwhispr profile unchanged|Current profile is 4o-mini; dictation is busy (normal-recording).'
+unset TEST_ACTIVITY_COUNTER_FILE TEST_ACTIVITY_AFTER_FIRST
+
+export TEST_NORMAL_SERVICE_ACTIVE=true
+ln -sfn "$fixtures/4o.json" "$workdir/runtime/config.json"
+before_service_lines="$(wc -l < "$service_log")"
+assert_eq "$("$selector" status)" 4o-mini
+assert_contains "$(tail -n "+$((before_service_lines + 1))" "$service_log")" 'restart hyprwhspr.service 4o-mini'
+assert_eq "$(readlink -f "$workdir/runtime/config.json")" "$fixtures/4o-mini.json"
+unset TEST_NORMAL_SERVICE_ACTIVE
 
 touch "$workdir/fail-restart"
 export TEST_FAIL_RESTART_ONCE="$workdir/fail-restart"
