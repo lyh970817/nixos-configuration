@@ -169,13 +169,15 @@ unset TEST_ACTIVITY_FILE
 printf '0\n' > "$workdir/activity-counter"
 export TEST_ACTIVITY_COUNTER_FILE="$workdir/activity-counter"
 export TEST_ACTIVITY_AFTER_FIRST=normal-recording
-before_service="$(<"$service_log")"
+before_service_lines="$(wc -l < "$service_log")"
 before_notify="$(<"$notify_log")"
 if "$selector" set 4o >"$workdir/late-busy.out" 2>&1; then fail 'activity beginning during profile preparation allowed a change'; else late_busy_status=$?; fi
 assert_eq "$late_busy_status" 3
 assert_eq "$(<"$workdir/state/hyprwhispr-profile/mode")" 4o-mini
 assert_eq "$(readlink -f "$workdir/runtime/config.json")" "$fixtures/4o-mini.json"
-assert_eq "$(<"$service_log")" "$before_service"
+late_busy_service_events="$(tail -n "+$((before_service_lines + 1))" "$service_log")"
+assert_eq "$late_busy_service_events" 'active meeting-recorder.service 4o-mini'
+assert_not_contains "$late_busy_service_events" restart
 assert_eq "$(<"$notify_log")" "$before_notify"$'\n''Hyprwhispr profile unchanged|Current profile is 4o-mini; dictation is busy (normal-recording).'
 unset TEST_ACTIVITY_COUNTER_FILE TEST_ACTIVITY_AFTER_FIRST
 
