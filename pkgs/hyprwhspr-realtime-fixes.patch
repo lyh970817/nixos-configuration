@@ -76,3 +76,42 @@
                  except Exception:
                      pass
                  return False
+@@ -426,12 +429,18 @@
+         elif event_type == 'error':
+             error = event.get('error', {})
+             error_message = error.get('message', 'Unknown error')
+-            print(f'[REALTIME] Server error: {error_message}', flush=True)
+-            with self.lock:
+-                self._partial_transcript = ""
+-            self._notify_partial_transcript("")
+-            self.response_complete = True
+-            self.response_event.set()  # Unblock waiting thread
++            if 'buffer too small' in error_message:
++                # Benign race: our stop-time commit crossed a server-VAD commit
++                # that already flushed the buffer; the transcript is unaffected.
++                # Do not wake the transcript waiter for it.
++                print('[REALTIME] Ignoring commit race on already-flushed buffer', flush=True)
++            else:
++                print(f'[REALTIME] Server error: {error_message}', flush=True)
++                with self.lock:
++                    self._partial_transcript = ""
++                self._notify_partial_transcript("")
++                self.response_complete = True
++                self.response_event.set()  # Unblock waiting thread
+     
+     def _send_session_update(self):
+         """Send session.update event based on mode"""
+@@ -718,6 +727,13 @@
+             # Small grace to allow any in-flight send to reach the server before commit.
+             time.sleep(0.05)
+ 
++            # Re-check: server VAD may have committed while we drained the
++            # queue; committing again would hit an empty buffer and error.
++            with self.lock:
++                if self._buffer_committed:
++                    buffer_was_committed = True
++                    self._buffer_committed = False
++
+             # Only send commit if buffer hasn't already been committed by VAD
+             # (do this outside lock to avoid holding lock during I/O)
+             if not buffer_was_committed:
