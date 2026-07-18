@@ -705,6 +705,7 @@ let
     ps.numpy
     ps.soxr
     ps.soundfile
+    ps.websockets
   ]);
 
   hyprwhisprRecord = pkgs.writeShellApplication {
@@ -800,6 +801,8 @@ in
     "hyprwhspr/profiles/qwen-ws.json".source = ../../config/hyprwhspr/profiles/qwen-ws.json;
     "hyprwhspr/profiles/qwen-omni.json".source = ../../config/hyprwhspr/profiles/qwen-omni.json;
     "hyprwhspr/profiles/qwen-realtime.json".source = ../../config/hyprwhspr/profiles/qwen-realtime.json;
+    "hyprwhspr/profiles/qwen-omni-realtime.json".source =
+      ../../config/hyprwhspr/profiles/qwen-omni-realtime.json;
     "hyprwhspr/profiles/sensevoice.json".source = ../../config/hyprwhspr/profiles/sensevoice.json;
 
     "hyprwhspr/README-nixos.md".text = ''

@@ -29,6 +29,7 @@ Every /transcribe/* request logs one grep-friendly ``TIMING ...`` line to
 stderr with per-stage millisecond durations.
 """
 
+import asyncio
 import base64
 import collections
 import io
@@ -48,6 +49,7 @@ import soundfile as sf
 import soxr
 import urllib3
 import websocket
+import websockets
 
 DEFAULT_CLEANUP_PROMPT = (
     "You clean up dictated speech transcripts. Remove filler words and false "
@@ -109,6 +111,12 @@ QWEN_HTTP_MODEL = _env("QWEN_HTTP_MODEL", "qwen3-asr-flash")
 QWEN_WS_MODEL = _env("QWEN_WS_MODEL", "qwen3-asr-flash-realtime")
 QWEN_CLEANUP_MODEL = _env("QWEN_CLEANUP_MODEL", "qwen3.6-flash")
 QWEN_OMNI_MODEL = _env("QWEN_OMNI_MODEL", "qwen3.5-omni-plus")
+# Streaming omni model + loopback translator port for the qwen-omni-realtime
+# profile (Feature 2). The translator runs in a daemon thread of this process.
+QWEN_OMNI_REALTIME_MODEL = _env(
+    "QWEN_OMNI_REALTIME_MODEL", "qwen3.5-omni-plus-realtime"
+)
+QWEN_TRANSLATOR_PORT = int(_env("QWEN_TRANSLATOR_PORT", "8771"))
 QWEN_ASR_LANGUAGE = _env("QWEN_ASR_LANGUAGE", "en")
 QWEN_CLEANUP_PROMPT = _env("QWEN_CLEANUP_PROMPT", DEFAULT_CLEANUP_PROMPT)
 QWEN_AGGRESSIVE_CLEANUP_PROMPT = _env(
@@ -140,6 +148,9 @@ CHAT_COMPLETIONS_PATH = "/compatible-mode/v1/chat/completions"
 MODELS_PATH = "/compatible-mode/v1/models"
 CHAT_COMPLETIONS_URL = f"https://{QWEN_ASR_HOST}{CHAT_COMPLETIONS_PATH}"
 REALTIME_WS_URL = f"wss://{QWEN_ASR_HOST}/api-ws/v1/realtime?model={QWEN_WS_MODEL}"
+QWEN_OMNI_REALTIME_WS_URL = (
+    f"wss://{QWEN_ASR_HOST}/api-ws/v1/realtime?model={QWEN_OMNI_REALTIME_MODEL}"
+)
 
 _ENV_REF_RE = re.compile(r"^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$")
 
@@ -744,6 +755,273 @@ def format_timing(route, timings):
 
 
 # --------------------------------------------------------------------------
+# omni-realtime WS translator (loopback) for the qwen-omni-realtime profile
+#
+# hyprwhspr's realtime-ws converse client connects here over loopback; this
+# translator relays to the DashScope omni-realtime upstream, adapting message
+# shapes both ways so hyprwhspr's converse dialect drives the omni model, which
+# transcribes AND cleans in a single streaming session. The cleanup instruction
+# is the SAME one the omni HTTP route uses (build_aggressive_cleanup_instruction)
+# so a future prompt change flows to both paths from one place.
+#
+# It runs in its own daemon thread with a private asyncio event loop, kept fully
+# separate from the sync ThreadingHTTPServer and its keep-alive connection pool.
+# --------------------------------------------------------------------------
+
+# Set once the translator's event loop is running so the sync /prewarm handler
+# (an HTTP worker thread) can schedule a warm upstream via run_coroutine_threadsafe.
+_TRANSLATOR_LOOP = None
+# One best-effort pre-established upstream, adopted by the next client. The lock
+# is created on the translator loop in translator_thread().
+_WARM_UPSTREAM = {"ws": None}
+_WARM_LOCK = None
+
+
+def _flat_session_update():
+    """The FLAT session.update the omni-realtime upstream requires; it rejects
+    hyprwhspr's nested realtime shape. turn_detection MUST be explicitly null so
+    server VAD does not fight hyprwhspr's manual commit + response.create flow."""
+    return {
+        "type": "session.update",
+        "session": {
+            "modalities": ["text"],
+            "instructions": build_aggressive_cleanup_instruction(""),
+            "input_audio_format": "pcm16",
+            "turn_detection": None,
+        },
+    }
+
+
+async def _open_upstream():
+    """Open a fresh upstream omni-realtime connection and send session.update."""
+    api_key = get_api_key()
+    ws = await websockets.connect(
+        QWEN_OMNI_REALTIME_WS_URL,
+        additional_headers={"Authorization": f"Bearer {api_key}"},
+        open_timeout=QWEN_WARM_TIMEOUT,
+        max_size=None,
+        ping_interval=20,
+        ping_timeout=20,
+    )
+    await ws.send(json.dumps(_flat_session_update()))
+    return ws
+
+
+async def _warm_upstream_slot():
+    """Best-effort: pre-establish one warm upstream for the next client."""
+    async with _WARM_LOCK:
+        if _WARM_UPSTREAM["ws"] is not None:
+            return
+    try:
+        ws = await _open_upstream()
+    except Exception as e:
+        log(f"translator prewarm: upstream connect failed (ignored): {e}")
+        return
+    async with _WARM_LOCK:
+        if _WARM_UPSTREAM["ws"] is None:
+            _WARM_UPSTREAM["ws"] = ws
+            log("translator prewarm: warm upstream ready")
+            return
+    await ws.close()
+
+
+async def _acquire_upstream():
+    """Adopt the warm upstream if present, else open a fresh one."""
+    async with _WARM_LOCK:
+        ws = _WARM_UPSTREAM["ws"]
+        _WARM_UPSTREAM["ws"] = None
+    if ws is not None:
+        log("translator: adopted prewarmed upstream")
+        return ws
+    return await _open_upstream()
+
+
+async def _translator_handler(client_ws):
+    """Bridge one hyprwhspr converse client to a persistent omni-realtime upstream."""
+    conn = {"ws": None}
+    reconnect_lock = asyncio.Lock()
+    # Per-utterance counters; reset on input_audio_buffer.clear (recording start).
+    state = {"frames": 0, "abytes": 0, "commit_t": None}
+    stop = asyncio.Event()
+
+    try:
+        conn["ws"] = await _acquire_upstream()
+    except Exception as e:
+        # Cannot serve: close the client so hyprwhspr fails the dictation within
+        # its realtime_timeout rather than hanging.
+        log(f"translator: upstream unavailable, closing client ({e})")
+        try:
+            await client_ws.close(code=1011)
+        except Exception:
+            pass
+        return
+    log("translator: upstream session established")
+
+    async def reconnect(old):
+        async with reconnect_lock:
+            if conn["ws"] is not old:
+                return  # another path already reconnected
+            try:
+                await old.close()
+            except Exception:
+                pass
+            conn["ws"] = await _open_upstream()
+            log("translator: upstream reconnected; session re-sent")
+
+    async def client_to_upstream():
+        try:
+            async for raw in client_ws:
+                try:
+                    msg = json.loads(raw)
+                except (TypeError, ValueError):
+                    continue
+                t = msg.get("type", "")
+                if t == "session.update":
+                    # Translator owns the upstream (flat) session config; drop
+                    # hyprwhspr's nested realtime session.update.
+                    continue
+                if t == "response.create":
+                    # Instructions are already set at session level; force text.
+                    msg = {
+                        "type": "response.create",
+                        "response": {"modalities": ["text"]},
+                    }
+                elif t == "input_audio_buffer.append":
+                    state["frames"] += 1
+                    audio = msg.get("audio") or ""
+                    state["abytes"] += (len(audio) * 3) // 4
+                elif t == "input_audio_buffer.commit":
+                    state["commit_t"] = time.perf_counter()
+                elif t == "input_audio_buffer.clear":
+                    state["frames"] = 0
+                    state["abytes"] = 0
+                    state["commit_t"] = None
+                payload = json.dumps(msg)
+                try:
+                    await conn["ws"].send(payload)
+                except websockets.exceptions.ConnectionClosed:
+                    await reconnect(conn["ws"])
+                    await conn["ws"].send(payload)
+        except websockets.exceptions.ConnectionClosed:
+            pass
+        finally:
+            stop.set()
+
+    async def upstream_to_client():
+        while not stop.is_set():
+            ws = conn["ws"]
+            try:
+                async for raw in ws:
+                    try:
+                        ev = json.loads(raw)
+                    except (TypeError, ValueError):
+                        continue
+                    t = ev.get("type", "")
+                    # hyprwhspr's converse reader must see only the cleaned text:
+                    # swallow raw ASR transcription events and any audio output.
+                    if t.startswith("response.audio"):
+                        continue
+                    if t.startswith("conversation.item.input_audio_transcription"):
+                        continue
+                    if t == "response.text.delta":
+                        ev = {
+                            "type": "response.output_text.delta",
+                            "delta": ev.get("delta", ""),
+                        }
+                    elif t == "response.text.done":
+                        ev = {
+                            "type": "response.output_text.done",
+                            "text": ev.get("text", ""),
+                        }
+                    elif t == "response.done":
+                        commit_t = state.get("commit_t")
+                        ms = (
+                            (time.perf_counter() - commit_t) * 1000
+                            if commit_t
+                            else -1.0
+                        )
+                        log(
+                            "translator: utterance done "
+                            f"frames={state['frames']} bytes={state['abytes']} "
+                            f"commit->final={ms:.0f}ms"
+                        )
+                        state["commit_t"] = None
+                    try:
+                        await client_ws.send(json.dumps(ev))
+                    except websockets.exceptions.ConnectionClosed:
+                        stop.set()
+                        return
+            except websockets.exceptions.ConnectionClosed:
+                pass
+            if stop.is_set():
+                break
+            # Upstream dropped mid-session (not a client stop): reconnect so the
+            # persistent session survives, then resume reading.
+            try:
+                await reconnect(ws)
+            except Exception as e:
+                log(f"translator: upstream reconnect failed, closing client ({e})")
+                stop.set()
+                try:
+                    await client_ws.close(code=1011)
+                except Exception:
+                    pass
+                break
+
+    reader = asyncio.create_task(upstream_to_client())
+    try:
+        # Completes when the hyprwhspr client disconnects (or an unrecoverable
+        # upstream failure closes it), ending the persistent session.
+        await client_to_upstream()
+    finally:
+        stop.set()
+        reader.cancel()
+        try:
+            await reader
+        except asyncio.CancelledError:
+            pass
+        try:
+            await conn["ws"].close()
+        except Exception:
+            pass
+        log("translator: upstream session closed")
+
+
+def _translator_prewarm():
+    """Schedule a best-effort warm upstream from the sync /prewarm handler."""
+    loop = _TRANSLATOR_LOOP
+    if loop is None:
+        return
+    try:
+        asyncio.run_coroutine_threadsafe(_warm_upstream_slot(), loop)
+    except Exception as e:
+        log(f"translator prewarm schedule failed (ignored): {e}")
+
+
+def translator_thread():
+    """Run the loopback translator server in a private asyncio event loop."""
+
+    async def _serve():
+        global _TRANSLATOR_LOOP, _WARM_LOCK
+        _WARM_LOCK = asyncio.Lock()
+        _TRANSLATOR_LOOP = asyncio.get_running_loop()
+        async with websockets.serve(
+            _translator_handler, BIND_HOST, QWEN_TRANSLATOR_PORT, max_size=None
+        ):
+            log(
+                f"omni-realtime translator listening on "
+                f"ws://{BIND_HOST}:{QWEN_TRANSLATOR_PORT} "
+                f"(upstream={QWEN_OMNI_REALTIME_WS_URL})"
+            )
+            await asyncio.Future()  # run forever
+
+    try:
+        asyncio.run(_serve())
+    except Exception as e:
+        log(f"translator thread crashed: {e}")
+
+
+# --------------------------------------------------------------------------
 # HTTP server
 # --------------------------------------------------------------------------
 
@@ -832,8 +1110,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         if self.path == "/prewarm":
-            # Fire-and-forget: warm the pool without blocking the caller.
+            # Fire-and-forget: warm the pool without blocking the caller, and
+            # (best-effort) pre-establish a warm omni-realtime upstream in the
+            # translator so a qwen-omni-realtime record-start finds it ready.
             threading.Thread(target=_background_warm, daemon=True).start()
+            _translator_prewarm()
             self.send_response(204)
             self.end_headers()
             return
@@ -899,6 +1180,9 @@ def _background_warm():
 def main():
     if QWEN_KEEPALIVE_SECONDS > 0:
         threading.Thread(target=keepalive_loop, daemon=True).start()
+
+    # Loopback omni-realtime translator for the qwen-omni-realtime profile.
+    threading.Thread(target=translator_thread, daemon=True).start()
 
     server = ThreadingHTTPServer((BIND_HOST, QWEN_ASR_PORT), Handler)
     log(
