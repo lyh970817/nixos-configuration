@@ -80,8 +80,11 @@ stdenvNoCC.mkDerivation rec {
   #   flag after the drain wait and treat the residual "buffer too small"
   #   server error as benign instead of waking the transcript waiter;
   # - cancelling a dictation destroyed the realtime client and nothing ever
-  #   recreated it, wedging the backend until daemon restart; rebuild the
-  #   client from the stored connect params on the next record press.
+  #   recreated it, wedging the backend until daemon restart; cancel now keeps
+  #   the websocket alive (server buffer cleared, in-flight events for the
+  #   cancelled utterance discarded until the next recording start), falling
+  #   back to the old destroy path on a dead connection, and the client is
+  #   rebuilt from the stored connect params on the next record press.
   patches = [ ./hyprwhspr-realtime-fixes.patch ];
 
   nativeBuildInputs = [ makeWrapper ];

@@ -110,9 +110,40 @@
  
          params = self._realtime_connect_params or {}
          websocket_url = params.get('websocket_url')
+@@ -1942,6 +2026,19 @@
+             self.ready = False
+             return False
+     
++    def cancel_realtime_utterance(self) -> None:
++        """Discard the in-flight utterance, keeping the websocket when possible."""
++        client = self._realtime_client
++        if client is not None and getattr(client, 'cancel_utterance', None):
++            try:
++                if client.connected and client.cancel_utterance():
++                    return
++            except Exception as e:
++                print(f'[REALTIME] Cancel keep-alive failed: {e}', flush=True)
++        # Fall back to destroying the client; it is recreated on the next
++        # record press from the stored connect params.
++        self._cleanup_realtime_client()
++
+     def _cleanup_realtime_client(self) -> None:
+         """Cleanup Realtime WebSocket client"""
+         if self._realtime_client:
 --- a/lib/src/realtime_client.py
 +++ b/lib/src/realtime_client.py
-@@ -234,7 +234,7 @@
+@@ -101,6 +101,10 @@
+         # Prevents double-commit error when VAD auto-commits on speech end
+         self._buffer_committed = False
+ 
++        # Drop transcript-cycle events after a cancelled utterance; cleared by
++        # clear_audio_buffer() at the next recording start.
++        self._discard_events = False
++
+     def _start_sender_thread(self):
+         """Start background sender thread (once)."""
+         thread_to_join = None
+@@ -234,7 +238,7 @@
              print(f'[REALTIME] Connecting to {self.url}...', flush=True)
              
              # Create WebSocket connection
@@ -121,7 +152,7 @@
                  self.url,
                  header=[f'{k}: {v}' for k, v in headers.items()],
                  on_open=self._on_open,
-@@ -242,9 +242,10 @@
+@@ -242,9 +246,10 @@
                  on_error=self._on_error,
                  on_close=self._on_close
              )
@@ -133,7 +164,7 @@
              ws_thread.start()
              
              # Wait for connection (with timeout)
-@@ -263,9 +264,11 @@
+@@ -263,9 +268,11 @@
                  return True
              else:
                  print(f'[REALTIME] Connection timeout', flush=True)
@@ -147,7 +178,28 @@
                  except Exception:
                      pass
                  return False
-@@ -426,12 +429,23 @@
+@@ -341,6 +348,20 @@
+     def _handle_event(self, event: dict):
+         """Handle a single event from the server"""
+         event_type = event.get('type', '')
++
++        # After a cancelled utterance, drop transcript-cycle events still in
++        # flight for the discarded audio so they cannot leak into the next
++        # utterance or its preview.
++        with self.lock:
++            discard = self._discard_events
++        if discard and event_type in (
++            'conversation.item.input_audio_transcription.completed',
++            'conversation.item.input_audio_transcription.delta',
++            'input_audio_buffer.committed',
++            'input_audio_buffer.speech_started',
++            'input_audio_buffer.speech_stopped',
++        ):
++            return
+         
+         # Log session events
+         if event_type in ('session.created', 'session.updated'):
+@@ -426,12 +447,23 @@
          elif event_type == 'error':
              error = event.get('error', {})
              error_message = error.get('message', 'Unknown error')
@@ -176,7 +228,52 @@
      
      def _send_session_update(self):
          """Send session.update event based on mode"""
-@@ -718,6 +732,13 @@
+@@ -566,6 +598,36 @@
+         # Convert to bytes (little-endian)
+         return audio_int16.tobytes()
+     
++    def cancel_utterance(self) -> bool:
++        """Discard the current utterance but keep the connection alive.
++
++        Flushes the server-side buffer and marks in-flight transcript events
++        for the cancelled audio to be dropped; the discard window ends when
++        clear_audio_buffer() runs at the next recording start.
++        """
++        if not self.connected or not self.ws:
++            return False
++        try:
++            with self.lock:
++                self._discard_events = True
++                self._audio_queue.clear()
++                self.audio_buffer_seconds = 0.0
++                self._buffer_committed = False
++                self._committed_segments = []
++                self._transcript_generation = 0
++                self._partial_transcript = ""
++                self.current_response_text = ""
++                self.response_complete = False
++                self._queue_cond.notify_all()
++            self.response_event.clear()
++            self._notify_partial_transcript("")
++            self.ws.send(json.dumps({'type': 'input_audio_buffer.clear'}))
++            print('[REALTIME] Cancelled utterance; connection kept alive', flush=True)
++            return True
++        except Exception as e:
++            print(f'[REALTIME] Cancel keep-alive failed: {e}', flush=True)
++            return False
++
+     def clear_audio_buffer(self):
+         """Clear the server-side audio buffer before starting a new recording."""
+         if not self.connected or not self.ws:
+@@ -577,6 +639,7 @@
+                 self._audio_queue.clear()
+                 self.audio_buffer_seconds = 0.0
+                 self._buffer_committed = False  # Reset commit tracking for new recording
++                self._discard_events = False  # Cancelled-utterance discard window ends here
+                 # Clear old transcription state to prevent returning stale results
+                 self.current_response_text = ""
+                 self.response_complete = False
+@@ -718,6 +781,13 @@
              # Small grace to allow any in-flight send to reach the server before commit.
              time.sleep(0.05)
  
@@ -190,3 +287,19 @@
              # Only send commit if buffer hasn't already been committed by VAD
              # (do this outside lock to avoid holding lock during I/O)
              if not buffer_was_committed:
+--- a/lib/main.py
++++ b/lib/main.py
+@@ -1457,10 +1457,11 @@
+             # Stop capture and discard the audio data
+             self.audio_capture.stop_recording()
+ 
+-            # Close WebSocket if using realtime-ws backend (no transcription needed)
++            # Discard the utterance but keep the websocket alive for the next
++            # recording; falls back to closing the client if the connection is dead.
+             backend = normalize_backend(self.config.get_setting('transcription_backend', 'pywhispercpp'))
+             if backend == 'realtime-ws' and self.whisper_manager._realtime_client:
+-                self.whisper_manager._cleanup_realtime_client()
++                self.whisper_manager.cancel_realtime_utterance()
+ 
+             self.audio_manager.play_error_sound()
+         except Exception as e:

@@ -162,8 +162,14 @@ required; `openrouter` is no longer read but may stay in the secrets file
   is genuine (recording too short or silent) and still unblocks the
   waiter immediately, so empty recordings fail fast with "no
   transcription" instead of hanging for the 30s realtime timeout.
-- **Cancel no longer wedges the backend**: cancelling a dictation
-  (Super+Escape) destroys the realtime client and upstream never
-  recreated it, failing every later recording until a daemon restart;
-  the package patch now rebuilds the client from the stored connect
-  parameters on the next record press.
+- **Cancel no longer wedges the backend**: upstream's cancel
+  (Super+Escape) destroyed the realtime client and never recreated it,
+  failing every later recording until a daemon restart. The package
+  patch now keeps the websocket alive across cancels: the server-side
+  buffer is flushed (`input_audio_buffer.clear`) and a discard flag
+  drops transcript/preview events still in flight for the cancelled
+  utterance until the next recording start, so the next Super+O starts
+  instantly on the same connection. If the connection is dead or the
+  clear cannot be sent, cancel falls back to destroying the client, and
+  the on-demand recreation from the stored connect parameters revives
+  it on the next record press.

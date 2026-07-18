@@ -392,6 +392,82 @@ def run_realtime_commit_error_cases():
     assert "Ignoring commit race on already-flushed buffer" in log
 
 
+def run_realtime_cancel_keepalive():
+    """Cancel keeps the websocket alive; stale events are discarded; dead connections fall back."""
+    rc_mod = importlib.import_module("realtime_client")
+    config = load_static_config()
+
+    client = rc_mod.RealtimeClient(mode="transcribe")
+    client.connected = True
+    client.ws = FakeWebSocket()
+    previews = []
+    client.set_partial_transcript_callback(previews.append)
+
+    manager = whisper_manager_module.WhisperManager(Config(config))
+    manager.ready = True
+    manager._realtime_client = client
+
+    def streaming_callback(_chunk):
+        pass
+
+    manager._realtime_streaming_callback = streaming_callback
+
+    with contextlib.redirect_stdout(io.StringIO()):
+        manager.cancel_realtime_utterance()
+    assert manager._realtime_client is client, "cancel destroyed a live client"
+    assert client.connected
+    assert any("input_audio_buffer.clear" in payload for payload in client.ws.sent)
+
+    # Late events for the cancelled utterance must be dropped entirely.
+    with contextlib.redirect_stdout(io.StringIO()):
+        client._handle_event({"type": "input_audio_buffer.committed"})
+        client._handle_event(
+            {"type": "conversation.item.input_audio_transcription.delta", "delta": "stale"}
+        )
+        client._handle_event(
+            {
+                "type": "conversation.item.input_audio_transcription.completed",
+                "transcript": "stale text",
+            }
+        )
+    assert client._committed_segments == []
+    assert client._transcript_generation == 0
+    assert client._buffer_committed is False
+    assert not client.response_event.is_set(), "stale event satisfied the next waiter"
+    assert "stale" not in "".join(previews)
+
+    # The next record press must reuse the same client without recreation.
+    with contextlib.redirect_stdout(io.StringIO()):
+        callback = manager.get_realtime_streaming_callback()
+    assert callback is streaming_callback, "next press rebuilt the streaming callback"
+    assert manager._realtime_client is client
+    assert client._discard_events is False, "discard window must end at recording start"
+
+    # And the next utterance's transcript flows normally again.
+    with contextlib.redirect_stdout(io.StringIO()):
+        client._handle_event(
+            {
+                "type": "conversation.item.input_audio_transcription.completed",
+                "transcript": "fresh success",
+            }
+        )
+    assert client._committed_segments == ["fresh success"]
+    assert client.response_event.is_set()
+
+    # Dead connection: cancel falls back to the destroy path; the recreate
+    # case (run_realtime_cancel_recovery) covers the revival half.
+    dead = rc_mod.RealtimeClient(mode="transcribe")
+    dead.connected = False
+    bare_manager = whisper_manager_module.WhisperManager(Config(config))
+    bare_manager.ready = True
+    bare_manager._realtime_client = dead
+    bare_manager._realtime_streaming_callback = streaming_callback
+    with contextlib.redirect_stdout(io.StringIO()):
+        bare_manager.cancel_realtime_utterance()
+    assert bare_manager._realtime_client is None
+    assert bare_manager._realtime_streaming_callback is None
+
+
 def run_realtime_cancel_recovery():
     """After a cancel cleans up the client, the next record press must recreate it."""
     config = load_static_config()
@@ -449,6 +525,7 @@ run_realtime_startup_rejection()
 for failure_kind in ("disconnected", "commit-error"):
     run_realtime_case(failure_kind)
 run_realtime_commit_error_cases()
+run_realtime_cancel_keepalive()
 run_realtime_cancel_recovery()
 
 print("hyprwhspr provider-failure tests passed")
