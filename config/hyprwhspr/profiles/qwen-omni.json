@@ -1,0 +1,22 @@
+{
+  "$schema": "https://raw.githubusercontent.com/goodroot/hyprwhspr/main/share/config.schema.json",
+  "transcription_backend": "rest-api",
+  "rest_api_provider": "dashscope",
+  "rest_endpoint_url": "http://127.0.0.1:8770/transcribe/omni",
+  "rest_timeout": 40,
+  "rest_body": {},
+  "recording_mode": "toggle",
+  "use_hypr_bindings": true,
+  "primary_shortcut": "SUPER+O",
+  "cancel_shortcut": "SUPER+ESCAPE",
+  "applications": {
+    "alacritty": { "auto_paste": "ctrl+shift+v" },
+    "alacritty-float": { "auto_paste": "ctrl+shift+v" },
+    "alacritty-main": { "auto_paste": "ctrl+shift+v" }
+  },
+  "paste_mode": "ctrl",
+  "prefer_clipboard_paste": true,
+  "post_transcription_hook": null,
+  "notification_timeout_ms": 0,
+  "whisper_prompt": "Context for transcription. Domain: NixOS and software development, terminal and Linux tooling. Likely technical terms and names: NixOS, Nix, Home Manager, flake, hyprwhspr, Hyprland, DashScope, Qwen, Yandex.Disk, systemd, websocket, tmux, Claude Code, Codex."
+}

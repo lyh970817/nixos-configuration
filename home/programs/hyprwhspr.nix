@@ -667,18 +667,38 @@ let
     hyprwhsprPostprocess
   ];
 
-  # The daemon runs with XDG_CONFIG_HOME=%t so its mutable runtime files
-  # (recording_status, control pipe) stay on tmpfs; link the static config
-  # into that directory before start.
-  hyprwhisprConfigLink = pkgs.writeShellApplication {
-    name = "hyprwhispr-config-link";
-    runtimeInputs = [ pkgs.coreutils ];
+  hyprwhisprProfile = pkgs.writeShellApplication {
+    name = "hyprwhispr-profile";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.curl
+      pkgs.diffutils
+      pkgs.gnugrep
+      pkgs.hyprwhspr
+      pkgs.libnotify
+      pkgs.systemd
+      pkgs.util-linux
+    ];
     text = ''
-      runtime_dir="''${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}/hyprwhspr"
-      mkdir -p "$runtime_dir"
-      ln -sfn ${lib.escapeShellArg "${homeDir}/.config/hyprwhspr/config.json"} "$runtime_dir/config.json"
+      export HYPRWHISPR_PROFILE_PROFILES_DIR=${lib.escapeShellArg "${config.xdg.configHome}/hyprwhspr/profiles"}
+      ${builtins.readFile ../../scripts/hyprwhispr-profile}
     '';
   };
+
+  hyprwhisprProfileEnsure = pkgs.writeShellApplication {
+    name = "hyprwhispr-profile-ensure";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.diffutils
+    ];
+    text = ''
+      export HYPRWHISPR_PROFILE_PROFILES_DIR=${lib.escapeShellArg "${config.xdg.configHome}/hyprwhspr/profiles"}
+      export HYPRWHISPR_PROFILE_SELECTOR=${lib.escapeShellArg "${hyprwhisprProfile}/bin/hyprwhispr-profile"}
+      ${builtins.readFile ../../scripts/hyprwhispr-profile-ensure}
+    '';
+  };
+
+  qwenAsrShimPython = pkgs.python3.withPackages (ps: [ ps.websocket-client ]);
 
   hyprwhisprRecord = pkgs.writeShellApplication {
     name = "hyprwhispr-record";
@@ -693,6 +713,8 @@ in
 {
   home.packages = [
     pkgs.hyprwhspr
+    hyprwhisprProfile
+    hyprwhisprProfileEnsure
     hyprwhisprRecord
     hyprwhsprLongform
     hyprwhsprPostprocess
@@ -714,7 +736,10 @@ in
   ];
 
   xdg.configFile = {
-    "hyprwhspr/config.json".source = ../../config/hyprwhspr/config.json;
+    "hyprwhspr/profiles/realtime.json".source = ../../config/hyprwhspr/profiles/realtime.json;
+    "hyprwhspr/profiles/qwen-http.json".source = ../../config/hyprwhspr/profiles/qwen-http.json;
+    "hyprwhspr/profiles/qwen-ws.json".source = ../../config/hyprwhspr/profiles/qwen-ws.json;
+    "hyprwhspr/profiles/qwen-omni.json".source = ../../config/hyprwhspr/profiles/qwen-omni.json;
 
     "hyprwhspr/README-nixos.md".text = ''
       # hyprwhspr setup
@@ -779,7 +804,7 @@ in
       Description = "hyprwhspr speech-to-text";
       Documentation = "https://github.com/goodroot/hyprwhspr";
       ConditionPathExists = [
-        "%h/.config/hyprwhspr/config.json"
+        "${config.xdg.configHome}/hyprwhspr/profiles/qwen-http.json"
         "%h/.local/share/hyprwhspr/credentials"
       ];
       PartOf = [ "graphical-session.target" ];
@@ -787,10 +812,12 @@ in
         "graphical-session.target"
         "pipewire.service"
         "wireplumber.service"
+        "qwen-asr-shim.service"
       ];
       Wants = [
         "pipewire.service"
         "wireplumber.service"
+        "qwen-asr-shim.service"
       ];
     };
 
@@ -798,7 +825,7 @@ in
       Type = "simple";
       ExecStartPre = [
         "${pkgs.bash}/bin/bash -lc 'for i in $(${pkgs.coreutils}/bin/seq 1 60); do ${pkgs.coreutils}/bin/ls \"$XDG_RUNTIME_DIR\"/wayland-* >/dev/null 2>&1 && exit 0; ${pkgs.coreutils}/bin/sleep 0.25; done; echo \"Wayland socket not found\"; exit 1'"
-        "${hyprwhisprConfigLink}/bin/hyprwhispr-config-link"
+        "${hyprwhisprProfileEnsure}/bin/hyprwhispr-profile-ensure"
       ];
       ExecStart = "${pkgs.hyprwhspr}/bin/hyprwhspr";
       ExecStopPost = "${pkgs.bash}/bin/bash -c '(${pkgs.procps}/bin/pkill -9 -f \"hyprwhspr-virtual-keyboard\" 2>/dev/null; ${pkgs.procps}/bin/pkill -9 -f \"hyprwhspr-ydotool.sock\" 2>/dev/null) || true'";
@@ -824,7 +851,7 @@ in
       Description = "hyprwhspr long-form recorder";
       Documentation = "https://github.com/goodroot/hyprwhspr";
       ConditionPathExists = [
-        "%h/.config/hyprwhspr/config.json"
+        "${config.xdg.configHome}/hyprwhspr/profiles/qwen-http.json"
         "%h/.local/share/hyprwhspr/credentials"
       ];
       After = [
@@ -839,7 +866,7 @@ in
 
     Service = {
       Type = "simple";
-      ExecStartPre = "${hyprwhisprConfigLink}/bin/hyprwhispr-config-link";
+      ExecStartPre = "${hyprwhisprProfileEnsure}/bin/hyprwhispr-profile-ensure";
       ExecStart = "${pkgs.hyprwhspr}/bin/meeting-recorder";
       Environment = [
         "HYPRWHSPR_ROOT=${pkgs.hyprwhspr}/lib/hyprwhspr"
@@ -853,6 +880,39 @@ in
       Restart = "no";
       StandardOutput = "journal";
       StandardError = "journal";
+    };
+  };
+
+  systemd.user.services."qwen-asr-shim" = {
+    Unit = {
+      Description = "Qwen ASR local HTTP shim for hyprwhspr REST backend";
+      Documentation = "https://github.com/goodroot/hyprwhspr";
+      PartOf = [ "graphical-session.target" ];
+      After = [ "graphical-session.target" ];
+    };
+
+    Service = {
+      Type = "simple";
+      ExecStart = "${qwenAsrShimPython}/bin/python3 ${../../scripts/qwen-asr-shim.py}";
+      Environment = [
+        "PATH=${
+          lib.makeBinPath [
+            pkgs.ffmpeg
+            pkgs.coreutils
+          ]
+        }"
+        "QWEN_ASR_PORT=8770"
+        "QWEN_ASR_CREDENTIALS=%h/.local/share/hyprwhspr/credentials"
+        "PYTHONUNBUFFERED=1"
+      ];
+      Restart = "on-failure";
+      RestartSec = "2s";
+      StandardOutput = "journal";
+      StandardError = "journal";
+    };
+
+    Install = {
+      WantedBy = [ "graphical-session.target" ];
     };
   };
 }
