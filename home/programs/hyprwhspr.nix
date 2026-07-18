@@ -665,6 +665,7 @@ let
     pkgs.wtype
     pkgs.ydotool
     hyprwhsprPostprocess
+    hyprwhsprCleanupShim
   ];
 
   hyprwhisprProfile = pkgs.writeShellApplication {
