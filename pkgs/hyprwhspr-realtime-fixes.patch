@@ -132,7 +132,7 @@
          if self._realtime_client:
 --- a/lib/src/realtime_client.py
 +++ b/lib/src/realtime_client.py
-@@ -101,6 +101,10 @@
+@@ -101,6 +101,17 @@
          # Prevents double-commit error when VAD auto-commits on speech end
          self._buffer_committed = False
  
@@ -140,10 +140,17 @@
 +        # clear_audio_buffer() at the next recording start.
 +        self._discard_events = False
 +
++        # Count of commits (VAD or manual) whose transcription.completed
++        # event has not arrived yet. Reaching zero means every commit made so
++        # far has already been transcribed, so commit_and_get_text() can stop
++        # waiting the moment it sees VAD already committed instead of
++        # blocking on a response_event that nothing will ever set again.
++        self._pending_transcript_commits = 0
++
      def _start_sender_thread(self):
          """Start background sender thread (once)."""
          thread_to_join = None
-@@ -234,7 +238,7 @@
+@@ -234,7 +245,7 @@
              print(f'[REALTIME] Connecting to {self.url}...', flush=True)
              
              # Create WebSocket connection
@@ -152,7 +159,7 @@
                  self.url,
                  header=[f'{k}: {v}' for k, v in headers.items()],
                  on_open=self._on_open,
-@@ -242,9 +246,10 @@
+@@ -242,9 +253,10 @@
                  on_error=self._on_error,
                  on_close=self._on_close
              )
@@ -164,7 +171,7 @@
              ws_thread.start()
              
              # Wait for connection (with timeout)
-@@ -263,9 +268,11 @@
+@@ -263,9 +275,11 @@
                  return True
              else:
                  print(f'[REALTIME] Connection timeout', flush=True)
@@ -178,7 +185,7 @@
                  except Exception:
                      pass
                  return False
-@@ -341,6 +348,20 @@
+@@ -341,6 +355,20 @@
      def _handle_event(self, event: dict):
          """Handle a single event from the server"""
          event_type = event.get('type', '')
@@ -199,7 +206,24 @@
          
          # Log session events
          if event_type in ('session.created', 'session.updated'):
-@@ -426,12 +447,23 @@
+@@ -389,6 +417,8 @@
+                 self._transcript_generation += 1
+                 self._last_transcript_audio_activity_id = self._audio_activity_id
+                 self._partial_transcript = ""
++                if self._pending_transcript_commits > 0:
++                    self._pending_transcript_commits -= 1
+                 # Keep legacy fields coherent
+                 self.current_response_text = transcript
+                 self.response_complete = True
+@@ -411,6 +441,7 @@
+             print(f'[REALTIME] Audio buffer committed', flush=True)
+             with self.lock:
+                 self._buffer_committed = True
++                self._pending_transcript_commits += 1
+         
+         elif event_type == 'input_audio_buffer.speech_started':
+             print(f'[REALTIME] Speech detected', flush=True)
+@@ -426,12 +457,23 @@
          elif event_type == 'error':
              error = event.get('error', {})
              error_message = error.get('message', 'Unknown error')
@@ -228,7 +252,7 @@
      
      def _send_session_update(self):
          """Send session.update event based on mode"""
-@@ -566,6 +598,36 @@
+@@ -566,6 +608,37 @@
          # Convert to bytes (little-endian)
          return audio_int16.tobytes()
      
@@ -249,6 +273,7 @@
 +                self._buffer_committed = False
 +                self._committed_segments = []
 +                self._transcript_generation = 0
++                self._pending_transcript_commits = 0
 +                self._partial_transcript = ""
 +                self.current_response_text = ""
 +                self.response_complete = False
@@ -265,7 +290,7 @@
      def clear_audio_buffer(self):
          """Clear the server-side audio buffer before starting a new recording."""
          if not self.connected or not self.ws:
-@@ -577,6 +639,7 @@
+@@ -577,11 +650,13 @@
                  self._audio_queue.clear()
                  self.audio_buffer_seconds = 0.0
                  self._buffer_committed = False  # Reset commit tracking for new recording
@@ -273,7 +298,13 @@
                  # Clear old transcription state to prevent returning stale results
                  self.current_response_text = ""
                  self.response_complete = False
-@@ -718,6 +781,13 @@
+                 self._transcript_generation = 0
+                 self._committed_segments = []
++                self._pending_transcript_commits = 0
+                 self._partial_transcript = ""
+                 self._audio_activity_id = 0
+                 self._last_transcript_audio_activity_id = 0
+@@ -718,6 +793,44 @@
              # Small grace to allow any in-flight send to reach the server before commit.
              time.sleep(0.05)
  
@@ -283,6 +314,37 @@
 +                if self._buffer_committed:
 +                    buffer_was_committed = True
 +                    self._buffer_committed = False
++
++            # If VAD already committed the buffer and every commit made so
++            # far already has its transcription.completed event processed
++            # (_pending_transcript_commits == 0), there is nothing left to
++            # wait for. The response_event.clear() above may have just
++            # discarded the "set" signal from that earlier completed event,
++            # and since no new speech was detected (or buffer_was_committed
++            # would be False), no further commit/transcription cycle will
++            # ever fire for this recording to set it again. Return the
++            # already-accumulated transcript immediately instead of blocking
++            # on "Waiting for transcription..." for the full timeout. A
++            # commit whose transcription result has not arrived yet
++            # (_pending_transcript_commits > 0) still falls through to the
++            # normal wait below.
++            if buffer_was_committed and self.mode == 'transcribe':
++                with self.lock:
++                    transcript_ready = self._pending_transcript_commits == 0
++                    if transcript_ready:
++                        result = _full_committed_text_locked()
++                        self._committed_segments = []
++                        self._transcript_generation = 0
++                        self.current_response_text = ""
++                        self.response_complete = False
++                        self.response_event.clear()
++                        self.audio_buffer_seconds = 0.0
++                if transcript_ready:
++                    print(
++                        f'[REALTIME] VAD commit already transcribed ({len(result)} chars); skipping wait',
++                        flush=True,
++                    )
++                    return result
 +
              # Only send commit if buffer hasn't already been committed by VAD
              # (do this outside lock to avoid holding lock during I/O)
