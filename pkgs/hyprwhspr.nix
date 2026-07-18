@@ -135,7 +135,8 @@ stdenvNoCC.mkDerivation rec {
     substituteInPlace "$appdir/lib/src/text_injector.py" \
       --replace-fail 'Env: HYPRWHSPR_MODEL, HYPRWHSPR_BACKEND. 5s timeout. Any error' \
         'Env: HYPRWHSPR_MODEL, HYPRWHSPR_BACKEND. 12s timeout. Any error' \
-      --replace-fail 'text=True, timeout=5.0, env=env,' 'text=True, timeout=12.0, env=env,'
+      --replace-fail 'text=True, timeout=5.0, env=env,' 'text=True, timeout=12.0, env=env,' \
+      --replace-fail 'time.sleep(0.15)' 'time.sleep(0.05)'
 
     # Keep remote failure diagnostics useful without logging request values,
     # endpoint URLs, response bodies, or exception strings.
