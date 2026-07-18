@@ -728,6 +728,43 @@ let
       exec curl -sf --max-time 11 --data-binary @- http://127.0.0.1:8770/cleanup
     '';
   };
+
+  # Best-effort dismissal of stale "hyprwhspr" notifications (e.g. an
+  # orphaned "transcribing" status bubble left behind when the daemon exits
+  # uncleanly or is restarted by a profile switch). Wired as an
+  # ExecStartPre on hyprwhspr.service below so it runs on every (re)start;
+  # it must never block or fail daemon start, and must never touch other
+  # apps' notifications.
+  #
+  # `makoctl list` on the installed mako (1.10.0) does not support JSON
+  # output; it prints plain text blocks of the form:
+  #   Notification <id>: <summary>
+  #     App name: <app-name>
+  #     Urgency: <urgency>
+  # so this greps that shape directly for app-name "hyprwhspr" instead of
+  # going through jq.
+  hyprwhsprDismissNotifications = pkgs.writeShellApplication {
+    name = "hyprwhspr-dismiss-notifications";
+    runtimeInputs = [
+      pkgs.mako
+      pkgs.gawk
+      pkgs.coreutils
+    ];
+    text = ''
+      {
+        timeout 2 makoctl list 2>/dev/null \
+          | awk '
+              /^Notification [0-9]+:/ { id = $2; sub(/:$/, "", id) }
+              /^  App name: hyprwhspr$/ { print id }
+            ' \
+          | while IFS= read -r id; do
+              timeout 2 makoctl dismiss -n "$id" 2>/dev/null || true
+            done
+      } || true
+
+      exit 0
+    '';
+  };
 in
 {
   home.packages = [
@@ -738,6 +775,7 @@ in
     hyprwhsprLongform
     hyprwhsprPostprocess
     hyprwhsprCleanupShim
+    hyprwhsprDismissNotifications
   ];
 
   home.file.".local/share/hyprwhspr/credentials" = {
@@ -848,6 +886,7 @@ in
       ExecStartPre = [
         "${pkgs.bash}/bin/bash -lc 'for i in $(${pkgs.coreutils}/bin/seq 1 60); do ${pkgs.coreutils}/bin/ls \"$XDG_RUNTIME_DIR\"/wayland-* >/dev/null 2>&1 && exit 0; ${pkgs.coreutils}/bin/sleep 0.25; done; echo \"Wayland socket not found\"; exit 1'"
         "${hyprwhisprProfileEnsure}/bin/hyprwhispr-profile-ensure"
+        "-${hyprwhsprDismissNotifications}/bin/hyprwhspr-dismiss-notifications"
       ];
       ExecStart = "${pkgs.hyprwhspr}/bin/hyprwhspr";
       ExecStopPost = "${pkgs.bash}/bin/bash -c '(${pkgs.procps}/bin/pkill -9 -f \"hyprwhspr-virtual-keyboard\" 2>/dev/null; ${pkgs.procps}/bin/pkill -9 -f \"hyprwhspr-ydotool.sock\" 2>/dev/null) || true'";
