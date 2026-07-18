@@ -55,7 +55,6 @@ let
       MODEL = ${builtins.toJSON postprocessModel}
       ENDPOINT = ${builtins.toJSON postprocessEndpoint}
       CREDENTIALS_PATH = Path(${builtins.toJSON credentialsRuntimePath})
-      TIMEOUT_SECONDS = 3.0
       ENV_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
       SHORT_ARCHIVE_DIR = Path(${builtins.toJSON shortArchiveDir})
@@ -110,6 +109,11 @@ let
 
 
       def postprocess(text: str, api_key: str) -> str:
+          # Cleanup generation scales ~1s per ~200 chars of transcript; cap at
+          # 10s so this stays below the 12s subprocess ceiling text_injector
+          # enforces on the whole hook (see pkgs/hyprwhspr.nix).
+          timeout_seconds = min(3.0 + len(text) / 200.0, 10.0)
+
           payload = {
               "model": MODEL,
               "messages": [
@@ -131,7 +135,7 @@ let
               method="POST",
           )
 
-          with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+          with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
               data = json.loads(response.read().decode("utf-8"))
 
           choices = data.get("choices") or []
