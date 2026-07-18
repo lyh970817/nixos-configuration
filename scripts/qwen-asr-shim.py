@@ -14,13 +14,23 @@ DashScope's Qwen models, using different underlying protocols:
                            cleanup pass over the raw transcript
   POST /transcribe/omni  - single chat/completions call against an omni
                            model that both transcribes and cleans up
+  POST /prewarm          - ensure the pooled DashScope connection is live
+                           (returns 204 immediately, warms in the background)
   GET  /health           - liveness check
 
 Intended to run as a small long-lived local service (e.g. under a systemd
 user unit, configured elsewhere) fronting hyprwhspr's REST backend.
+
+Latency notes: outbound DashScope calls go through a single keep-alive
+connection pool (kept warm by a background heartbeat and the /prewarm hook)
+so the common case skips the TCP+TLS handshake, and the common WAV input is
+decoded/resampled/trimmed in-process instead of via an ffmpeg subprocess.
+Every /transcribe/* request logs one grep-friendly ``TIMING ...`` line to
+stderr with per-stage millisecond durations.
 """
 
 import base64
+import io
 import json
 import os
 import re
@@ -29,10 +39,12 @@ import sys
 import tempfile
 import threading
 import time
-import urllib.error
-import urllib.request
+import wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+import numpy as np
+import soxr
+import urllib3
 import websocket
 
 DEFAULT_CLEANUP_PROMPT = (
@@ -47,6 +59,13 @@ DEFAULT_CLEANUP_PROMPT = (
 def _env(name, default):
     value = os.environ.get(name)
     return value if value not in (None, "") else default
+
+
+def _env_bool(name, default):
+    value = _env(name, None)
+    if value is None:
+        return default
+    return value.strip().lower() not in ("0", "false", "no", "off", "")
 
 
 QWEN_ASR_HOST = _env("QWEN_ASR_HOST", "ws-dhkjvhwrwai1r9c5.cn-beijing.maas.aliyuncs.com")
@@ -66,7 +85,23 @@ QWEN_CLEANUP_PROMPT = _env("QWEN_CLEANUP_PROMPT", DEFAULT_CLEANUP_PROMPT)
 QWEN_CHAT_TIMEOUT = float(_env("QWEN_CHAT_TIMEOUT", "25"))
 QWEN_WS_TIMEOUT = float(_env("QWEN_WS_TIMEOUT", "25"))
 
-CHAT_COMPLETIONS_URL = f"https://{QWEN_ASR_HOST}/compatible-mode/v1/chat/completions"
+# Connection pool / warmth tuning.
+QWEN_CONNECT_TIMEOUT = float(_env("QWEN_CONNECT_TIMEOUT", "5"))
+QWEN_POOL_MAXSIZE = int(_env("QWEN_POOL_MAXSIZE", "4"))
+QWEN_KEEPALIVE_SECONDS = float(_env("QWEN_KEEPALIVE_SECONDS", "50"))
+QWEN_WARM_TIMEOUT = float(_env("QWEN_WARM_TIMEOUT", "8"))
+
+# In-process audio prep tuning.
+TARGET_RATE = 16000
+QWEN_TRIM_SILENCE = _env_bool("QWEN_TRIM_SILENCE", True)
+_TRIM_FRAME_MS = 20
+_TRIM_MARGIN_MS = 200
+_TRIM_REL = 0.03  # voiced when frame RMS exceeds 3% of the loudest frame ...
+_TRIM_FLOOR = 80.0  # ... but never below this absolute int16 RMS floor.
+
+CHAT_COMPLETIONS_PATH = "/compatible-mode/v1/chat/completions"
+MODELS_PATH = "/compatible-mode/v1/models"
+CHAT_COMPLETIONS_URL = f"https://{QWEN_ASR_HOST}{CHAT_COMPLETIONS_PATH}"
 REALTIME_WS_URL = f"wss://{QWEN_ASR_HOST}/api-ws/v1/realtime?model={QWEN_WS_MODEL}"
 
 _ENV_REF_RE = re.compile(r"^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$")
@@ -139,7 +174,8 @@ def parse_multipart(body, boundary):
 
 
 # --------------------------------------------------------------------------
-# ffmpeg helpers
+# In-process audio preparation (decode -> mono -> 16k -> trim), with an
+# ffmpeg subprocess as the fallback for anything the fast path can't parse.
 # --------------------------------------------------------------------------
 
 def _run_ffmpeg(args):
@@ -152,32 +188,16 @@ def _run_ffmpeg(args):
         raise RuntimeError(f"ffmpeg failed (exit {e.returncode}): {stderr}") from None
 
 
-def to_wav_16k_mono(input_bytes):
-    """Resample arbitrary input audio bytes to a 16kHz mono WAV file's bytes."""
-    in_path = tempfile.mktemp(suffix=".in")
-    out_path = tempfile.mktemp(suffix=".wav")
-    try:
-        with open(in_path, "wb") as f:
-            f.write(input_bytes)
-        _run_ffmpeg(["ffmpeg", "-y", "-i", in_path, "-ar", "16000", "-ac", "1", "-f", "wav", out_path])
-        with open(out_path, "rb") as f:
-            return f.read()
-    finally:
-        for p in (in_path, out_path):
-            try:
-                os.remove(p)
-            except OSError:
-                pass
-
-
-def to_pcm_16k_mono(input_bytes):
-    """Resample arbitrary input audio bytes to raw 16kHz mono s16le PCM (no WAV header)."""
+def _decode_via_ffmpeg(input_bytes):
+    """Fallback decoder: resample arbitrary input to 16k mono s16le via ffmpeg."""
     in_path = tempfile.mktemp(suffix=".in")
     try:
         with open(in_path, "wb") as f:
             f.write(input_bytes)
-        result = _run_ffmpeg(["ffmpeg", "-y", "-i", in_path, "-ar", "16000", "-ac", "1", "-f", "s16le", "-"])
-        return result.stdout
+        result = _run_ffmpeg(
+            ["ffmpeg", "-y", "-i", in_path, "-ar", str(TARGET_RATE), "-ac", "1", "-f", "s16le", "-"]
+        )
+        return np.frombuffer(result.stdout, dtype="<i2").copy()
     finally:
         try:
             os.remove(in_path)
@@ -185,39 +205,224 @@ def to_pcm_16k_mono(input_bytes):
             pass
 
 
+def _decode_wav_fast(input_bytes):
+    """Parse a PCM WAV in-process to a 16k mono int16 array.
+
+    Raises on anything the stdlib ``wave`` reader can't handle (e.g. non-WAV
+    containers or IEEE-float WAVs), so callers fall back to ffmpeg.
+    """
+    with wave.open(io.BytesIO(input_bytes), "rb") as w:
+        n_channels = w.getnchannels()
+        sampwidth = w.getsampwidth()
+        framerate = w.getframerate()
+        raw = w.readframes(w.getnframes())
+
+    if sampwidth == 2:
+        data = np.frombuffer(raw, dtype="<i2").astype(np.float32) / 32768.0
+    elif sampwidth == 1:
+        # WAV 8-bit PCM is unsigned, centred on 128.
+        data = (np.frombuffer(raw, dtype=np.uint8).astype(np.float32) - 128.0) / 128.0
+    elif sampwidth == 4:
+        data = np.frombuffer(raw, dtype="<i4").astype(np.float32) / 2147483648.0
+    elif sampwidth == 3:
+        b = np.frombuffer(raw, dtype=np.uint8).reshape(-1, 3).astype(np.int32)
+        ints = b[:, 0] | (b[:, 1] << 8) | (b[:, 2] << 16)
+        ints = np.where(ints & 0x800000, ints - 0x1000000, ints)
+        data = ints.astype(np.float32) / 8388608.0
+    else:
+        raise ValueError(f"unsupported WAV sample width {sampwidth}")
+
+    if n_channels > 1:
+        data = data.reshape(-1, n_channels).mean(axis=1)
+    if framerate != TARGET_RATE:
+        data = soxr.resample(data, framerate, TARGET_RATE)
+    return np.clip(data * 32768.0, -32768, 32767).astype("<i2")
+
+
+def _trim_silence(samples):
+    """Energy-trim leading/trailing silence, keeping ~200ms of margin each side.
+
+    Returns (trimmed_samples, trimmed_seconds).
+    """
+    frame = int(TARGET_RATE * _TRIM_FRAME_MS / 1000)
+    n_frames = len(samples) // frame
+    if n_frames == 0:
+        return samples, 0.0
+
+    frames = samples[: n_frames * frame].astype(np.float32).reshape(n_frames, frame)
+    rms = np.sqrt(np.mean(frames * frames, axis=1))
+    peak = float(rms.max())
+    if peak <= 0.0:
+        return samples, 0.0
+
+    threshold = max(peak * _TRIM_REL, _TRIM_FLOOR)
+    voiced = np.nonzero(rms > threshold)[0]
+    if len(voiced) == 0:
+        return samples, 0.0
+
+    margin = int(_TRIM_MARGIN_MS / _TRIM_FRAME_MS)
+    start = max(0, int(voiced[0]) - margin) * frame
+    end = min(n_frames, int(voiced[-1]) + 1 + margin) * frame
+    trimmed = samples[start:end]
+    trimmed_s = (len(samples) - len(trimmed)) / TARGET_RATE
+    return trimmed, trimmed_s
+
+
+class PreparedAudio:
+    """16k mono int16 PCM, ready to send as raw bytes or wrap in a WAV header."""
+
+    def __init__(self, samples):
+        self.samples = samples
+
+    @property
+    def pcm_bytes(self):
+        return self.samples.tobytes()
+
+    @property
+    def seconds(self):
+        return len(self.samples) / TARGET_RATE
+
+    def wav_bytes(self):
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(TARGET_RATE)
+            w.writeframes(self.pcm_bytes)
+        return buf.getvalue()
+
+
+def prepare_audio(audio_bytes, timings):
+    """Decode/resample/trim ``audio_bytes`` to a PreparedAudio, recording stage
+    timings (``prep`` ms, ``decode`` method, ``trim_s``, ``audio_s``) into the
+    ``timings`` dict for the request's TIMING line."""
+    t0 = time.perf_counter()
+    try:
+        samples = _decode_wav_fast(audio_bytes)
+        method = "fast"
+    except Exception:
+        samples = _decode_via_ffmpeg(audio_bytes)
+        method = "ffmpeg"
+
+    if QWEN_TRIM_SILENCE:
+        samples, trimmed_s = _trim_silence(samples)
+    else:
+        trimmed_s = 0.0
+
+    timings["decode"] = method
+    timings["trim_s"] = trimmed_s
+    timings["audio_s"] = len(samples) / TARGET_RATE
+    timings["prep"] = (time.perf_counter() - t0) * 1000
+    return PreparedAudio(samples)
+
+
 # --------------------------------------------------------------------------
-# DashScope chat/completions (HTTP)
+# DashScope chat/completions over a keep-alive connection pool
 # --------------------------------------------------------------------------
 
+# A single pool to the DashScope host; reused across requests so the common
+# case skips the TCP+TLS handshake. num_connections increments only when the
+# pool has to open a fresh socket, which we sample to report connection reuse.
+_POOL = urllib3.HTTPSConnectionPool(
+    QWEN_ASR_HOST,
+    port=443,
+    maxsize=QWEN_POOL_MAXSIZE,
+    block=False,
+    retries=False,
+)
+
+# Connection-level failures worth one silent retry (a pooled socket the peer
+# closed while idle); read timeouts are deliberately excluded so a slow call
+# is not silently doubled.
+_RETRYABLE = (
+    urllib3.exceptions.ProtocolError,
+    urllib3.exceptions.NewConnectionError,
+    urllib3.exceptions.ClosedPoolError,
+    ConnectionError,
+)
+
+
+def _pool_request(method, path, api_key, body=None, timeout=QWEN_CHAT_TIMEOUT):
+    """Send a request over the shared pool, retrying once on a stale socket.
+
+    Returns (urllib3 response, reused) where ``reused`` is 1 when no new
+    connection was opened for this call (best-effort under concurrency).
+    """
+    headers = {"Authorization": f"Bearer {api_key}"}
+    if body is not None:
+        headers["Content-Type"] = "application/json"
+    urllib3_timeout = urllib3.Timeout(connect=QWEN_CONNECT_TIMEOUT, read=timeout)
+
+    last_exc = None
+    for _ in range(2):
+        before = _POOL.num_connections
+        try:
+            resp = _POOL.urlopen(
+                method,
+                path,
+                body=body,
+                headers=headers,
+                timeout=urllib3_timeout,
+                retries=False,
+                redirect=False,
+                preload_content=True,
+            )
+        except _RETRYABLE as e:
+            last_exc = e
+            continue
+        reused = 1 if _POOL.num_connections == before else 0
+        return resp, reused
+
+    raise RuntimeError(f"DashScope connection failed after retry: {last_exc}")
+
+
 def chat_completion(model, messages, api_key, extra=None, timeout=QWEN_CHAT_TIMEOUT):
+    """Call chat/completions over the pool; returns (content, reused)."""
     body = {"model": model, "messages": messages, "stream": False}
     if extra:
         body.update(extra)
     data = json.dumps(body).encode("utf-8")
-    req = urllib.request.Request(
-        CHAT_COMPLETIONS_URL,
-        data=data,
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
+
+    resp, reused = _pool_request(
+        "POST", CHAT_COMPLETIONS_PATH, api_key, body=data, timeout=timeout
     )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            payload = json.loads(resp.read())
-    except urllib.error.HTTPError as e:
-        detail = e.read().decode("utf-8", errors="replace")[:300]
-        raise RuntimeError(f"chat/completions HTTP {e.code}: {detail}") from None
-    except urllib.error.URLError as e:
-        raise RuntimeError(f"chat/completions request failed: {e.reason}") from None
+    if resp.status != 200:
+        detail = resp.data.decode("utf-8", errors="replace")[:300]
+        raise RuntimeError(f"chat/completions HTTP {resp.status}: {detail}")
 
     try:
-        return payload["choices"][0]["message"]["content"]
+        payload = json.loads(resp.data)
+    except (TypeError, ValueError):
+        raise RuntimeError("chat/completions returned invalid JSON") from None
+    try:
+        return payload["choices"][0]["message"]["content"], reused
     except (KeyError, IndexError, TypeError):
         raise RuntimeError(
             f"unexpected chat/completions response shape: {json.dumps(payload)[:300]}"
         ) from None
+
+
+def warm_pool():
+    """Ensure the pool holds a live connection by pinging the models endpoint.
+
+    Returns ``reused``; raises on failure so callers can log it.
+    """
+    api_key = get_api_key()
+    resp, reused = _pool_request("GET", MODELS_PATH, api_key, timeout=QWEN_WARM_TIMEOUT)
+    resp.drain_conn()
+    if resp.status >= 400:
+        raise RuntimeError(f"models ping HTTP {resp.status}")
+    return reused
+
+
+def keepalive_loop():
+    """Background heartbeat that keeps the pool warm; never crashes the service."""
+    while True:
+        time.sleep(QWEN_KEEPALIVE_SECONDS)
+        try:
+            warm_pool()
+        except Exception as e:
+            log(f"keepalive warm failed (ignored): {e}")
 
 
 def build_cleanup_instruction(prompt):
@@ -251,16 +456,17 @@ def transcribe_via_websocket(pcm, api_key, timeout=QWEN_WS_TIMEOUT):
         }))
 
         def stream():
+            # Brief settle so session.update is applied before audio arrives.
             time.sleep(0.3)
+            # The recording is already complete, so replay it back-to-back;
+            # chunking only bounds per-frame size, it is not real-time paced.
             chunk_size = 3200  # 100ms of 16k mono s16le
             for i in range(0, len(pcm), chunk_size):
                 ws.send(json.dumps({
                     "type": "input_audio_buffer.append",
                     "audio": base64.b64encode(pcm[i:i + chunk_size]).decode(),
                 }))
-                time.sleep(0.02)
             ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
-            time.sleep(0.2)
             ws.send(json.dumps({"type": "session.finish"}))
 
         threading.Thread(target=stream, daemon=True).start()
@@ -317,9 +523,9 @@ def transcribe_via_websocket(pcm, api_key, timeout=QWEN_WS_TIMEOUT):
 # Route handlers
 # --------------------------------------------------------------------------
 
-def handle_transcribe_http(audio_bytes, prompt, api_key):
-    wav_bytes = to_wav_16k_mono(audio_bytes)
-    b64 = base64.b64encode(wav_bytes).decode()
+def handle_transcribe_http(audio_bytes, prompt, api_key, timings):
+    audio = prepare_audio(audio_bytes, timings)
+    b64 = base64.b64encode(audio.wav_bytes()).decode()
 
     messages = []
     if prompt:
@@ -331,28 +537,40 @@ def handle_transcribe_http(audio_bytes, prompt, api_key):
             "input_audio": {"data": f"data:audio/wav;base64,{b64}", "format": "wav"},
         }],
     })
-    return chat_completion(QWEN_HTTP_MODEL, messages, api_key)
+
+    t0 = time.perf_counter()
+    text, reused = chat_completion(QWEN_HTTP_MODEL, messages, api_key)
+    timings["api"] = (time.perf_counter() - t0) * 1000
+    timings["reused_conn"] = reused
+    return text
 
 
-def handle_transcribe_ws(audio_bytes, prompt, api_key):
-    pcm = to_pcm_16k_mono(audio_bytes)
-    raw_transcript = transcribe_via_websocket(pcm, api_key)
+def handle_transcribe_ws(audio_bytes, prompt, api_key, timings):
+    audio = prepare_audio(audio_bytes, timings)
+
+    t0 = time.perf_counter()
+    raw_transcript = transcribe_via_websocket(audio.pcm_bytes, api_key)
+    timings["ws"] = (time.perf_counter() - t0) * 1000
 
     messages = [
         {"role": "system", "content": build_cleanup_instruction(prompt)},
         {"role": "user", "content": raw_transcript},
     ]
-    return chat_completion(
+    t1 = time.perf_counter()
+    text, reused = chat_completion(
         QWEN_CLEANUP_MODEL,
         messages,
         api_key,
         extra={"temperature": 0, "enable_thinking": False},
     )
+    timings["cleanup"] = (time.perf_counter() - t1) * 1000
+    timings["reused_conn"] = reused
+    return text
 
 
-def handle_transcribe_omni(audio_bytes, prompt, api_key):
-    wav_bytes = to_wav_16k_mono(audio_bytes)
-    b64 = base64.b64encode(wav_bytes).decode()
+def handle_transcribe_omni(audio_bytes, prompt, api_key, timings):
+    audio = prepare_audio(audio_bytes, timings)
+    b64 = base64.b64encode(audio.wav_bytes()).decode()
 
     messages = [
         {"role": "system", "content": build_cleanup_instruction(prompt)},
@@ -364,7 +582,13 @@ def handle_transcribe_omni(audio_bytes, prompt, api_key):
             }],
         },
     ]
-    return chat_completion(QWEN_OMNI_MODEL, messages, api_key, extra={"modalities": ["text"]})
+    t0 = time.perf_counter()
+    text, reused = chat_completion(
+        QWEN_OMNI_MODEL, messages, api_key, extra={"modalities": ["text"]}
+    )
+    timings["api"] = (time.perf_counter() - t0) * 1000
+    timings["reused_conn"] = reused
+    return text
 
 
 ROUTE_HANDLERS = {
@@ -372,6 +596,24 @@ ROUTE_HANDLERS = {
     "/transcribe/ws": (f"{QWEN_WS_MODEL}+{QWEN_CLEANUP_MODEL}", handle_transcribe_ws),
     "/transcribe/omni": (QWEN_OMNI_MODEL, handle_transcribe_omni),
 }
+
+
+def format_timing(route, timings):
+    """Build the grep-friendly per-request TIMING line from a timings dict."""
+    name = route.rsplit("/", 1)[-1]
+    fields = [f"route={name}"]
+    for key in ("prep", "api", "ws", "cleanup", "total"):
+        if key in timings:
+            fields.append(f"{key}={timings[key]:.0f}")
+    if "audio_s" in timings:
+        fields.append(f"audio_s={timings['audio_s']:.2f}")
+    if "trim_s" in timings:
+        fields.append(f"trim_s={timings['trim_s']:.2f}")
+    if "decode" in timings:
+        fields.append(f"decode={timings['decode']}")
+    if "reused_conn" in timings:
+        fields.append(f"reused_conn={timings['reused_conn']}")
+    return "TIMING " + " ".join(fields)
 
 
 # --------------------------------------------------------------------------
@@ -400,9 +642,17 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(404, {"error": f"unknown route {self.path}"})
 
     def do_POST(self):
-        start = time.time()
+        if self.path == "/prewarm":
+            # Fire-and-forget: warm the pool without blocking the caller.
+            threading.Thread(target=_background_warm, daemon=True).start()
+            self.send_response(204)
+            self.end_headers()
+            return
+
+        start = time.perf_counter()
         route = self.path
         model_used = None
+        timings = {}
         try:
             if route not in ROUTE_HANDLERS:
                 self._send_json(404, {"error": f"unknown route {route}"})
@@ -424,19 +674,19 @@ class Handler(BaseHTTPRequestHandler):
             prompt = prompt.strip()
 
             api_key = get_api_key()
-            text = handler(audio_bytes, prompt, api_key)
+            text = handler(audio_bytes, prompt, api_key, timings)
 
             if not text or not text.strip():
-                elapsed_ms = (time.time() - start) * 1000
+                elapsed_ms = (time.perf_counter() - start) * 1000
                 log(f"POST {route} 500 {elapsed_ms:.0f}ms model={model_used} error=empty transcription")
                 self._send_json(500, {"error": f"empty transcription from {model_used}"})
                 return
 
             self._send_json(200, {"text": text})
-            elapsed_ms = (time.time() - start) * 1000
-            log(f"POST {route} 200 {elapsed_ms:.0f}ms model={model_used} out_len={len(text)}")
+            timings["total"] = (time.perf_counter() - start) * 1000
+            log(format_timing(route, timings))
         except Exception as e:
-            elapsed_ms = (time.time() - start) * 1000
+            elapsed_ms = (time.perf_counter() - start) * 1000
             message = str(e)
             log(f"POST {route} 500 {elapsed_ms:.0f}ms model={model_used} error={message[:200]}")
             try:
@@ -445,11 +695,23 @@ class Handler(BaseHTTPRequestHandler):
                 pass
 
 
+def _background_warm():
+    try:
+        reused = warm_pool()
+        log(f"prewarm ok (reused_conn={reused})")
+    except Exception as e:
+        log(f"prewarm failed (ignored): {e}")
+
+
 def main():
+    if QWEN_KEEPALIVE_SECONDS > 0:
+        threading.Thread(target=keepalive_loop, daemon=True).start()
+
     server = ThreadingHTTPServer((BIND_HOST, QWEN_ASR_PORT), Handler)
     log(
         f"listening on {BIND_HOST}:{QWEN_ASR_PORT} "
-        f"(chat_url={CHAT_COMPLETIONS_URL} ws_url={REALTIME_WS_URL})"
+        f"(chat_url={CHAT_COMPLETIONS_URL} ws_url={REALTIME_WS_URL} "
+        f"keepalive={QWEN_KEEPALIVE_SECONDS}s trim_silence={int(QWEN_TRIM_SILENCE)})"
     )
     try:
         server.serve_forever()

@@ -698,7 +698,12 @@ let
     '';
   };
 
-  qwenAsrShimPython = pkgs.python3.withPackages (ps: [ ps.websocket-client ]);
+  qwenAsrShimPython = pkgs.python3.withPackages (ps: [
+    ps.websocket-client
+    ps.urllib3
+    ps.numpy
+    ps.soxr
+  ]);
 
   hyprwhisprRecord = pkgs.writeShellApplication {
     name = "hyprwhispr-record";
