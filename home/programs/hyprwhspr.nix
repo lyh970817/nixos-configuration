@@ -23,6 +23,9 @@ let
   longformMinRewriteChars = 40;
   recorderTranscriptDir = "${longformArchiveDir}/recorder";
 
+  shortArchiveDir = "${homeDir}/.local/share/hyprwhspr/short";
+  shortArchiveRetentionDays = "30d";
+
   terminalPasteKeys = {
     alacritty = "ctrl+shift+v";
     alacritty-float = "ctrl+shift+v";
@@ -45,6 +48,7 @@ let
       import re
       import sys
       import urllib.request
+      from datetime import datetime, timezone
       from pathlib import Path
 
 
@@ -53,6 +57,10 @@ let
       CREDENTIALS_PATH = Path(${builtins.toJSON credentialsRuntimePath})
       TIMEOUT_SECONDS = 10.0
       ENV_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+
+      SHORT_ARCHIVE_DIR = Path(${builtins.toJSON shortArchiveDir})
+      SHORT_RAW_DIR = SHORT_ARCHIVE_DIR / "raw"
+      SHORT_CLEANED_DIR = SHORT_ARCHIVE_DIR / "cleaned"
 
       SYSTEM_PROMPT = (
           "You clean up raw dictation transcripts. Remove hesitation sounds and "
@@ -67,6 +75,28 @@ let
 
       def expand_env(value: str) -> str:
           return ENV_PATTERN.sub(lambda m: os.environ.get(m.group(1), m.group(0)), value)
+
+
+      def archive_timestamp() -> str:
+          # main.py's realtime-ws audio archiving sets this so the wav file and
+          # this hook's raw/cleaned text share one timestamp; fall back to a
+          # fresh UTC stamp when it is absent (e.g. hook run outside hyprwhspr).
+          env_ts = os.environ.get("HYPRWHSPR_DICTATION_TS", "").strip()
+          if env_ts:
+              return env_ts
+          return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+      def archive_text(directory: Path, timestamp: str, text: str) -> None:
+          # Archiving is diagnostic-only; it must never take down the hook or
+          # eat a dictation, so every failure here is swallowed (and logged).
+          try:
+              os.makedirs(directory, exist_ok=True)
+              (directory / (timestamp + ".txt")).write_text(
+                  text.rstrip() + "\n", encoding="utf-8"
+              )
+          except Exception as exc:
+              print("hyprwhspr-postprocess: archive failed: " + str(exc), file=sys.stderr)
 
 
       def load_api_key() -> str:
@@ -121,19 +151,26 @@ let
           if not original:
               return 0
 
+          timestamp = archive_timestamp()
+          archive_text(SHORT_RAW_DIR, timestamp, original)
+
           api_key = load_api_key()
           if not api_key:
+              archive_text(SHORT_CLEANED_DIR, timestamp, original)
               print(original)
               print("hyprwhspr-postprocess: missing openai credential", file=sys.stderr)
               return 0
 
+          cleaned = original
           try:
-              print(postprocess(original, api_key))
+              cleaned = postprocess(original, api_key)
           except Exception as exc:
               # Any failure (network error, non-200, malformed response, ...)
               # must fall back to the raw transcript rather than eat it.
-              print(original)
               print("hyprwhspr-postprocess: " + str(exc), file=sys.stderr)
+
+          archive_text(SHORT_CLEANED_DIR, timestamp, cleaned)
+          print(cleaned)
 
           return 0
 
@@ -661,6 +698,16 @@ in
     force = true;
   };
 
+  # Short-dictation raw/cleaned transcripts and mic audio are archived by
+  # hyprwhsprPostprocess and the realtime-ws audio patch (pkgs/hyprwhspr.nix)
+  # under short/{raw,cleaned,audio}; age them out after 30 days the same way
+  # other user-managed state directories are declared in this config.
+  systemd.user.tmpfiles.rules = [
+    "d ${shortArchiveDir}/raw 0700 - - ${shortArchiveRetentionDays}"
+    "d ${shortArchiveDir}/cleaned 0700 - - ${shortArchiveRetentionDays}"
+    "d ${shortArchiveDir}/audio 0700 - - ${shortArchiveRetentionDays}"
+  ];
+
   xdg.configFile = {
     "hyprwhspr/config.json".source = ../../config/hyprwhspr/config.json;
 
@@ -701,6 +748,10 @@ in
       Short dictation uses `Super+O`. The daemon runs with
       `XDG_CONFIG_HOME` pointed at `$XDG_RUNTIME_DIR`, where a service
       pre-start step links `config.json` to the managed static config.
+      Each short dictation archives its mic audio, raw transcript, and
+      cleaned transcript under
+      `~/.local/share/hyprwhspr/short/{audio,raw,cleaned}/`, aged out after
+      30 days by a user tmpfiles rule.
 
       Long-form prose dictation uses
       `Ctrl+Shift+L`, archives raw/polished text under

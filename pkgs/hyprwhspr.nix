@@ -85,6 +85,12 @@ stdenvNoCC.mkDerivation rec {
   #   cancelled utterance discarded until the next recording start), falling
   #   back to the old destroy path on a dead connection, and the client is
   #   rebuilt from the stored connect params on the next record press.
+  # - realtime-ws never wrote the captured mic audio to disk (it only streams
+  #   to the provider); short dictation archives it as
+  #   ~/.local/share/hyprwhspr/short/audio/<UTC timestamp>.wav from the same
+  #   local buffer AudioCapture already keeps for silence detection, and sets
+  #   HYPRWHSPR_DICTATION_TS so post_transcription_hook can archive matching
+  #   raw/cleaned text under the same timestamp (see home/programs/hyprwhspr.nix).
   patches = [ ./hyprwhspr-realtime-fixes.patch ];
 
   nativeBuildInputs = [ makeWrapper ];

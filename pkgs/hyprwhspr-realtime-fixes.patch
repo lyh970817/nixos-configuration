@@ -303,3 +303,48 @@
  
              self.audio_manager.play_error_sound()
          except Exception as e:
+@@ -1549,6 +1550,26 @@
+             except Exception:
+                 pass  # Best effort cleanup
+ 
++    def _archive_short_dictation_audio(self, audio_data) -> None:
++        """Best-effort archive of the short-dictation mic capture as a WAV file.
++
++        realtime-ws streams audio to the provider over the websocket and never
++        writes it to disk on its own; AudioCapture keeps this same local buffer
++        anyway (for silence detection), so save it before it is discarded.
++        Sets HYPRWHSPR_DICTATION_TS so a post_transcription_hook can archive its
++        raw/cleaned text under the same timestamp. Never raises: a failure here
++        must not break dictation.
++        """
++        try:
++            data_home = Path(os.environ.get('XDG_DATA_HOME') or (Path.home() / '.local' / 'share'))
++            audio_dir = data_home / 'hyprwhspr' / 'short' / 'audio'
++            audio_dir.mkdir(parents=True, exist_ok=True)
++            timestamp = time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())
++            os.environ['HYPRWHSPR_DICTATION_TS'] = timestamp
++            self.audio_capture.save_audio_to_wav(audio_data, str(audio_dir / (timestamp + '.wav')))
++        except Exception as e:
++            print(f"[ARCHIVE] Failed to save short dictation audio: {e}", flush=True)
++
+     def _process_audio(self, audio_data):
+         """Process captured audio through Whisper"""
+         if self.is_processing:
+@@ -1558,6 +1579,17 @@
+         try:
+             self.is_processing = True
+ 
++            # Archive the raw mic capture for short dictation before it is
++            # discarded; realtime-ws already streamed it to the provider, so
++            # this is the only remaining copy. Read the backend off
++            # whisper_manager.config (not self.config): callers that build a
++            # hyprwhsprApp without the top-level config wiring (as the
++            # provider-failure test does) still set up whisper_manager fully.
++            backend = normalize_backend(
++                self.whisper_manager.config.get_setting('transcription_backend', 'pywhispercpp'))
++            if backend == 'realtime-ws':
++                self._archive_short_dictation_audio(audio_data)
++
+             # Transcribe audio with language override if set
+             transcription = self.whisper_manager.transcribe_audio(
+                 audio_data,
