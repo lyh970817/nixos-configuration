@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/goodroot/hyprwhspr/main/share/config.schema.json",
   "transcription_backend": "realtime-ws",
   "websocket_provider": "openai",
-  "websocket_model": "gpt-4o-transcribe",
+  "websocket_model": "gpt-4o-mini-transcribe",
   "realtime_mode": "transcribe",
   "realtime_timeout": 30,
   "recording_mode": "toggle",
