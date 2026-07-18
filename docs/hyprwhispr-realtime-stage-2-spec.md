@@ -157,7 +157,11 @@ required; `openrouter` is no longer read but may stay in the secrets file
   buffer. The package patch (`hyprwhspr-realtime-fixes.patch`, renamed
   from the connect-wait patch) re-checks the flag after the drain, and
   downgrades the residual "buffer too small" server error to a benign
-  log line that no longer wakes the transcript waiter early.
+  log line that no longer wakes the transcript waiter early. The
+  downgrade is conditional on a prior VAD commit: without one the error
+  is genuine (recording too short or silent) and still unblocks the
+  waiter immediately, so empty recordings fail fast with "no
+  transcription" instead of hanging for the 30s realtime timeout.
 - **Cancel no longer wedges the backend**: cancelling a dictation
   (Super+Escape) destroys the realtime client and upstream never
   recreated it, failing every later recording until a daemon restart;

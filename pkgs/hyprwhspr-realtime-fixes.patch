@@ -147,20 +147,24 @@
                  except Exception:
                      pass
                  return False
-@@ -426,12 +429,18 @@
+@@ -426,12 +429,23 @@
          elif event_type == 'error':
              error = event.get('error', {})
              error_message = error.get('message', 'Unknown error')
 -            print(f'[REALTIME] Server error: {error_message}', flush=True)
--            with self.lock:
+             with self.lock:
 -                self._partial_transcript = ""
 -            self._notify_partial_transcript("")
 -            self.response_complete = True
 -            self.response_event.set()  # Unblock waiting thread
-+            if 'buffer too small' in error_message:
++                vad_committed = self._buffer_committed
++            if 'buffer too small' in error_message and vad_committed:
 +                # Benign race: our stop-time commit crossed a server-VAD commit
-+                # that already flushed the buffer; the transcript is unaffected.
-+                # Do not wake the transcript waiter for it.
++                # that already flushed the buffer (the committed event arrives
++                # before this error); the transcript is unaffected, so do not
++                # wake the transcript waiter. Without a prior VAD commit the
++                # error is genuine (recording too short/silent) and must fall
++                # through so the waiter fails fast instead of hitting timeout.
 +                print('[REALTIME] Ignoring commit race on already-flushed buffer', flush=True)
 +            else:
 +                print(f'[REALTIME] Server error: {error_message}', flush=True)
@@ -172,7 +176,7 @@
      
      def _send_session_update(self):
          """Send session.update event based on mode"""
-@@ -718,6 +727,13 @@
+@@ -718,6 +732,13 @@
              # Small grace to allow any in-flight send to reach the server before commit.
              time.sleep(0.05)
  

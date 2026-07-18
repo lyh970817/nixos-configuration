@@ -314,6 +314,84 @@ def run_realtime_case(failure: str):
     assert app.is_processing is False
 
 
+class FakeWebSocket:
+    def __init__(self):
+        self.sent = []
+
+    def send(self, payload):
+        self.sent.append(payload)
+
+
+def run_realtime_commit_error_cases():
+    """Genuine buffer-too-small must fail fast; the VAD race must keep the transcript."""
+    import threading
+    import time as time_module
+
+    rc_mod = importlib.import_module("realtime_client")
+    buffer_too_small = {
+        "type": "error",
+        "error": {
+            "message": (
+                "Error committing input audio buffer: buffer too small. "
+                "Expected at least 100.00ms of audio, but buffer only has 0.00ms of audio."
+            )
+        },
+    }
+    output = io.StringIO()
+
+    with contextlib.redirect_stdout(output):
+        # Too-short recording: no VAD commit ever happened, so the error is
+        # genuine and must unblock the waiter promptly, not after the 30s timeout.
+        client = rc_mod.RealtimeClient(mode="transcribe")
+        client.connected = True
+        client.ws = FakeWebSocket()
+        results = {}
+        worker = threading.Thread(
+            target=lambda: results.__setitem__("short", client.commit_and_get_text(timeout=30)),
+            daemon=True,
+        )
+        started = time_module.monotonic()
+        worker.start()
+        time_module.sleep(0.5)
+        client._handle_event(buffer_too_small)
+        worker.join(timeout=8)
+        elapsed = time_module.monotonic() - started
+        assert not worker.is_alive(), "genuine buffer-too-small left the waiter hanging"
+        assert results["short"] == ""
+        assert elapsed < 8, f"fail-fast took {elapsed:.1f}s"
+        assert any("input_audio_buffer.commit" in payload for payload in client.ws.sent)
+
+        # VAD race: committed event precedes the error, so the error is benign;
+        # the waiter must NOT wake early and the transcript must still arrive.
+        client = rc_mod.RealtimeClient(mode="transcribe")
+        client.connected = True
+        client.ws = FakeWebSocket()
+        worker = threading.Thread(
+            target=lambda: results.__setitem__("race", client.commit_and_get_text(timeout=30)),
+            daemon=True,
+        )
+        worker.start()
+        time_module.sleep(0.5)
+        client._handle_event({"type": "input_audio_buffer.committed"})
+        client._handle_event(buffer_too_small)
+        # Longer than the waiter's settle window: an early (wrong) wake would
+        # return an empty transcript before the real one arrives.
+        time_module.sleep(1.0)
+        client._handle_event(
+            {
+                "type": "conversation.item.input_audio_transcription.completed",
+                "transcript": "fresh success",
+            }
+        )
+        worker.join(timeout=8)
+        assert not worker.is_alive(), "race case left the waiter hanging"
+        assert results["race"] == "fresh success"
+
+    log = output.getvalue()
+    assert "Server error" in log
+    assert "Ignoring commit race on already-flushed buffer" in log
+
+
 def run_realtime_cancel_recovery():
     """After a cancel cleans up the client, the next record press must recreate it."""
     config = load_static_config()
@@ -370,6 +448,7 @@ for failure_kind in ("timeout", "http-error"):
 run_realtime_startup_rejection()
 for failure_kind in ("disconnected", "commit-error"):
     run_realtime_case(failure_kind)
+run_realtime_commit_error_cases()
 run_realtime_cancel_recovery()
 
 print("hyprwhspr provider-failure tests passed")
