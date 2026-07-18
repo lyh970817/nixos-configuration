@@ -117,6 +117,7 @@ let
                   {"role": "user", "content": text},
               ],
               "temperature": 0,
+              "prediction": {"type": "content", "content": text},
           }
 
           request = urllib.request.Request(
