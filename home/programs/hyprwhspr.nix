@@ -746,6 +746,7 @@ in
     "hyprwhspr/profiles/qwen-http.json".source = ../../config/hyprwhspr/profiles/qwen-http.json;
     "hyprwhspr/profiles/qwen-ws.json".source = ../../config/hyprwhspr/profiles/qwen-ws.json;
     "hyprwhspr/profiles/qwen-omni.json".source = ../../config/hyprwhspr/profiles/qwen-omni.json;
+    "hyprwhspr/profiles/sensevoice.json".source = ../../config/hyprwhspr/profiles/sensevoice.json;
 
     "hyprwhspr/README-nixos.md".text = ''
       # hyprwhspr setup

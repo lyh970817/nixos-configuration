@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly modes=(qwen-http qwen-ws qwen-omni realtime)
+readonly modes=(qwen-http qwen-ws qwen-omni sensevoice realtime)
 readonly default_mode=qwen-http
 readonly profiles_dir="${HYPRWHISPR_PROFILE_PROFILES_DIR:?HYPRWHISPR_PROFILE_PROFILES_DIR is required}"
 readonly state_home="${HYPRWHISPR_PROFILE_STATE_HOME:-${XDG_STATE_HOME:-$HOME/.local/state}}"
@@ -13,7 +13,7 @@ readonly normal_service_name="${HYPRWHISPR_PROFILE_SERVICE:-hyprwhspr.service}"
 readonly longform_service_name="${HYPRWHISPR_PROFILE_LONGFORM_SERVICE:-meeting-recorder.service}"
 
 usage() {
-  printf '%s\n' 'usage: hyprwhispr-profile {toggle|set qwen-http|set qwen-ws|set qwen-omni|set realtime|status}' >&2
+  printf '%s\n' 'usage: hyprwhispr-profile {toggle|set qwen-http|set qwen-ws|set qwen-omni|set sensevoice|set realtime|status}' >&2
 }
 
 is_mode() {
