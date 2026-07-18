@@ -14,8 +14,8 @@ let
   chatEndpoint = "https://api.siliconflow.cn/v1/chat/completions";
   chatModel = "deepseek-ai/DeepSeek-V4-Flash";
 
-  postprocessEndpoint = "https://api.openai.com/v1/chat/completions";
-  postprocessModel = "gpt-4.1-nano";
+  postprocessEndpoint = "https://api.siliconflow.cn/v1/chat/completions";
+  postprocessModel = "Qwen/Qwen2.5-7B-Instruct";
 
   recorderPort = 8765;
   recorderChunkSecs = 120;
@@ -105,7 +105,7 @@ let
           except Exception:
               return ""
 
-          value = credentials.get("openai", "")
+          value = credentials.get("custom", "")
           return expand_env(value) if isinstance(value, str) else ""
 
 
@@ -117,7 +117,6 @@ let
                   {"role": "user", "content": text},
               ],
               "temperature": 0,
-              "prediction": {"type": "content", "content": text},
           }
 
           request = urllib.request.Request(
@@ -159,7 +158,7 @@ let
           if not api_key:
               archive_text(SHORT_CLEANED_DIR, timestamp, original)
               print(original)
-              print("hyprwhspr-postprocess: missing openai credential", file=sys.stderr)
+              print("hyprwhspr-postprocess: missing SiliconFlow custom credential", file=sys.stderr)
               return 0
 
           cleaned = original
@@ -740,11 +739,11 @@ in
       ```
 
       The `openai` key must be a direct OpenAI API key; dictation streams
-      over OpenAI's realtime websocket endpoint and the same key drives the
+      over OpenAI's realtime websocket endpoint. The `custom` key is the
+      SiliconFlow key used for long-form polishing and drives the
       `post_transcription_hook` cleanup pass (`hyprwhspr-postprocess`, model
-      gpt-4.1-nano). The `custom` key is the SiliconFlow key used for
-      long-form polishing. Other legacy keys (for example `openrouter`) may
-      remain in the file; nothing reads them anymore.
+      Qwen/Qwen2.5-7B-Instruct). Other legacy keys (for example `openrouter`)
+      may remain in the file; nothing reads them anymore.
 
       Short dictation uses `Super+O`. The daemon runs with
       `XDG_CONFIG_HOME` pointed at `$XDG_RUNTIME_DIR`, where a service
