@@ -84,6 +84,11 @@ QWEN_ASR_LANGUAGE = _env("QWEN_ASR_LANGUAGE", "en")
 QWEN_CLEANUP_PROMPT = _env("QWEN_CLEANUP_PROMPT", DEFAULT_CLEANUP_PROMPT)
 QWEN_CHAT_TIMEOUT = float(_env("QWEN_CHAT_TIMEOUT", "25"))
 QWEN_WS_TIMEOUT = float(_env("QWEN_WS_TIMEOUT", "25"))
+# Settle window after the last audio append and before input_audio_buffer.commit.
+# The recording is replayed unpaced, so without a brief pause the commit races
+# ahead of DashScope ingesting the just-sent frames and the server rejects it as
+# an empty/invalid buffer ("Error committing input audio buffer").
+QWEN_WS_COMMIT_SETTLE = float(_env("QWEN_WS_COMMIT_SETTLE", "0.5"))
 
 # Connection pool / warmth tuning.
 QWEN_CONNECT_TIMEOUT = float(_env("QWEN_CONNECT_TIMEOUT", "5"))
@@ -466,6 +471,11 @@ def transcribe_via_websocket(pcm, api_key, timeout=QWEN_WS_TIMEOUT):
                     "type": "input_audio_buffer.append",
                     "audio": base64.b64encode(pcm[i:i + chunk_size]).decode(),
                 }))
+            # Single pre-commit settle so the server finishes ingesting the
+            # frames we just appended before we commit; otherwise the commit
+            # races ahead and DashScope rejects the buffer as empty/invalid.
+            if QWEN_WS_COMMIT_SETTLE > 0:
+                time.sleep(QWEN_WS_COMMIT_SETTLE)
             ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
             ws.send(json.dumps({"type": "session.finish"}))
 
