@@ -4,7 +4,7 @@
   "websocket_provider": "openai",
   "websocket_model": "gpt-4o-mini-transcribe",
   "realtime_mode": "transcribe",
-  "realtime_timeout": 30,
+  "realtime_timeout": 8,
   "recording_mode": "toggle",
   "use_hypr_bindings": true,
   "primary_shortcut": "SUPER+O",

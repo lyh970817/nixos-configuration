@@ -92,7 +92,7 @@ class FakeRealtimeClient:
 
     def commit_and_get_text(self, timeout=None):
         self.commits += 1
-        assert timeout == 30, f"realtime_timeout not honored: {timeout}"
+        assert timeout == 8, f"realtime_timeout not honored: {timeout}"
         if self.error is not None:
             raise self.error
         return self.result or ""
@@ -170,7 +170,7 @@ def load_static_config() -> dict[str, object]:
     assert config["websocket_provider"] == "openai"
     assert config["websocket_model"] == "gpt-4o-mini-transcribe"
     assert config["realtime_mode"] == "transcribe"
-    assert config["realtime_timeout"] == 30
+    assert config["realtime_timeout"] == 8
     assert config["post_transcription_hook"] == "hyprwhspr-postprocess"
     assert config["whisper_prompt"] == ""
     assert config["notification_timeout_ms"] == 0
