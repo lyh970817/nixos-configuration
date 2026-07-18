@@ -5,6 +5,13 @@ runtime_home="${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}"
 runtime_dir="$runtime_home/hyprwhspr"
 record_command="${HYPRWHISPR_RECORD_COMMAND:-hyprwhspr}"
 
+# Warm the ASR shim's upstream DashScope connection as early as possible.
+# Fully detached (backgrounded, disowned, output discarded) and fired before
+# the lock below so it adds zero latency to the toggle path and never holds
+# the record lock. Port matches the qwen-asr-shim systemd unit's QWEN_ASR_PORT.
+curl -s -m 1 -X POST http://127.0.0.1:8770/prewarm >/dev/null 2>&1 &
+disown
+
 # Serialize concurrent record presses so a rapid double-press cannot
 # toggle the recorder twice.
 mkdir -p "$runtime_dir"

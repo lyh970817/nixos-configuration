@@ -709,6 +709,7 @@ let
     name = "hyprwhispr-record";
     runtimeInputs = [
       pkgs.coreutils
+      pkgs.curl
       pkgs.hyprwhspr
       pkgs.util-linux
     ];
