@@ -637,7 +637,10 @@ def handle_transcribe_omni(audio_bytes, prompt, api_key, timings):
     ]
     t0 = time.perf_counter()
     text, reused = chat_completion(
-        QWEN_OMNI_MODEL, messages, api_key, extra={"modalities": ["text"]}
+        QWEN_OMNI_MODEL,
+        messages,
+        api_key,
+        extra={"modalities": ["text"], "temperature": 0, "enable_thinking": False},
     )
     timings["api"] = (time.perf_counter() - t0) * 1000
     timings["reused_conn"] = reused
