@@ -158,3 +158,8 @@ required; `openrouter` is no longer read but may stay in the secrets file
   from the connect-wait patch) re-checks the flag after the drain, and
   downgrades the residual "buffer too small" server error to a benign
   log line that no longer wakes the transcript waiter early.
+- **Cancel no longer wedges the backend**: cancelling a dictation
+  (Super+Escape) destroys the realtime client and upstream never
+  recreated it, failing every later recording until a daemon restart;
+  the package patch now rebuilds the client from the stored connect
+  parameters on the next record press.

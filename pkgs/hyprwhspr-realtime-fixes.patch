@@ -1,6 +1,21 @@
 --- a/lib/src/whisper_manager.py
 +++ b/lib/src/whisper_manager.py
-@@ -1639,11 +1639,38 @@
+@@ -1578,10 +1578,11 @@
+         backend = self.config.get_setting('transcription_backend', 'pywhispercpp')
+         backend = normalize_backend(backend)
+         
+-        if backend == 'realtime-ws' and self._realtime_client:
+-            # If the server closed the socket while idle, reconnect on-demand here
++        if backend == 'realtime-ws':
++            # If the client was cleaned up (cancelled dictation) or the server
++            # closed the socket while idle, recreate/reconnect on-demand here
+             # (before we start capturing audio) to avoid dropping the first chunks.
+-            if not self._realtime_client.connected:
++            if not self._realtime_client or not self._realtime_client.connected:
+                 if not self._reconnect_realtime_client():
+                     return None
+ 
+@@ -1639,10 +1640,93 @@
          except Exception as e:
              print(f'[REALTIME] Failed to clear partial transcript preview: {e}', flush=True)
  
@@ -24,21 +39,77 @@
 +            time.sleep(0.1)
 +        return client.connected
 +
++    def _recreate_realtime_client(self) -> bool:
++        """Rebuild the realtime client after an intentional cleanup (cancel)."""
++        params = self._realtime_connect_params or {}
++        websocket_url = params.get('websocket_url')
++        api_key = params.get('api_key')
++        model_id = params.get('model_id')
++        instructions = params.get('instructions')
++
++        if not (websocket_url and api_key and model_id):
++            print('[REALTIME] No stored connection parameters; cannot recreate client', flush=True)
++            return False
++
++        provider_id = self.config.get_setting('websocket_provider')
++        if provider_id in ('google', 'elevenlabs'):
++            print('[REALTIME] Cannot recreate this provider client on-demand; restart the service', flush=True)
++            return False
++
++        try:
++            from .realtime_client import RealtimeClient
++        except ImportError:
++            from realtime_client import RealtimeClient
++
++        realtime_mode = self.config.get_setting('realtime_mode', 'transcribe')
++        client = RealtimeClient(mode=realtime_mode)
++        client.language = self.config.get_setting('language', None)
++        client.set_transcription_delay(
++            self.config.get_setting('realtime_transcription_delay', 'low'))
++        if self._is_realtime_whisper_preview_enabled(provider_id, model_id, realtime_mode):
++            client.set_partial_transcript_callback(self._realtime_partial_callback)
++        else:
++            client.set_partial_transcript_callback(None)
++        client.set_max_buffer_seconds(
++            self.config.get_setting('realtime_buffer_max_seconds', 5))
++
++        if not client.connect(websocket_url, api_key, model_id, instructions):
++            print('[REALTIME] Failed to recreate realtime client', flush=True)
++            try:
++                client.close()
++            except Exception:
++                pass
++            return False
++
++        self._realtime_client = client
++
++        def _send_direct(audio_chunk: np.ndarray):
++            """Send audio to realtime client; client handles resampling/queueing."""
++            try:
++                self._realtime_client.append_audio(audio_chunk)
++            except Exception as e:
++                print(f'[REALTIME] Streaming error: {e}', flush=True)
++
++        _send_direct.set_input_sample_rate = client.set_input_sample_rate
++        self._realtime_streaming_callback = _send_direct
++        print('[REALTIME] Recreated realtime client after cleanup', flush=True)
++        return True
++
      def _reconnect_realtime_client(self) -> bool:
          """Reconnect realtime client using stored connect params."""
          if not self._realtime_client:
-             return False
- 
+-            return False
++            return self._recreate_realtime_client()
++
 +        # A handshake may already be in flight (initial connect after daemon
 +        # start, or the client's own auto-reconnect). Closing the client now
 +        # would destroy that socket mid-handshake, so wait for it to settle
 +        # and only rebuild the connection when it is truly dead.
 +        if self._wait_for_realtime_connect():
 +            return True
-+
+ 
          params = self._realtime_connect_params or {}
          websocket_url = params.get('websocket_url')
-         api_key = params.get('api_key')
 --- a/lib/src/realtime_client.py
 +++ b/lib/src/realtime_client.py
 @@ -234,7 +234,7 @@

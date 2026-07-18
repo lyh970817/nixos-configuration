@@ -97,6 +97,46 @@ class FakeRealtimeClient:
             raise self.error
         return self.result or ""
 
+    def close(self):
+        self.connected = False
+
+
+class FakeRecreatedClient:
+    """Stands in for RealtimeClient during on-demand recreation after cancel."""
+
+    def __init__(self, mode="transcribe"):
+        self.mode = mode
+        self.language = None
+        self.connected = False
+        self.connect_args = None
+        self.cleared = 0
+
+    def set_transcription_delay(self, _delay):
+        pass
+
+    def set_partial_transcript_callback(self, _callback):
+        pass
+
+    def set_max_buffer_seconds(self, _seconds):
+        pass
+
+    def connect(self, url, api_key, model, instructions):
+        self.connect_args = (url, api_key, model, instructions)
+        self.connected = True
+        return True
+
+    def close(self):
+        self.connected = False
+
+    def set_input_sample_rate(self, _rate):
+        pass
+
+    def append_audio(self, _chunk):
+        pass
+
+    def clear_audio_buffer(self):
+        self.cleared += 1
+
 
 def make_app(profile: dict[str, object]):
     manager = whisper_manager_module.WhisperManager(Config(profile))
@@ -274,11 +314,62 @@ def run_realtime_case(failure: str):
     assert app.is_processing is False
 
 
+def run_realtime_cancel_recovery():
+    """After a cancel cleans up the client, the next record press must recreate it."""
+    config = load_static_config()
+    manager = whisper_manager_module.WhisperManager(Config(config))
+    manager.ready = True
+    manager._realtime_client = FakeRealtimeClient()
+    manager._realtime_streaming_callback = lambda _chunk: None
+    manager._realtime_connect_params = {
+        "websocket_url": "wss://api.openai.com/v1/realtime",
+        "api_key": "credential-secret",
+        "model_id": config["websocket_model"],
+        "instructions": None,
+    }
+
+    with contextlib.redirect_stdout(io.StringIO()):
+        manager._cleanup_realtime_client()
+    assert manager._realtime_client is None
+    assert manager._realtime_streaming_callback is None
+
+    realtime_client_module = importlib.import_module("realtime_client")
+    original_class = realtime_client_module.RealtimeClient
+    realtime_client_module.RealtimeClient = FakeRecreatedClient
+    output = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(output):
+            callback = manager.get_realtime_streaming_callback()
+    finally:
+        realtime_client_module.RealtimeClient = original_class
+
+    log = output.getvalue()
+    assert callable(callback), "cancel wedged the realtime backend: no streaming callback"
+    client = manager._realtime_client
+    assert isinstance(client, FakeRecreatedClient)
+    assert client.connect_args == (
+        "wss://api.openai.com/v1/realtime",
+        "credential-secret",
+        config["websocket_model"],
+        None,
+    )
+    assert client.cleared == 1, "server buffer not cleared before the new recording"
+    assert "Recreated realtime client after cleanup" in log
+    assert_redacted(log, ["credential-secret", "wav-audio-secret", "exception-secret"])
+
+    # Without stored connect params the record press must fail cleanly, not crash.
+    bare_manager = whisper_manager_module.WhisperManager(Config(config))
+    bare_manager.ready = True
+    with contextlib.redirect_stdout(io.StringIO()):
+        assert bare_manager.get_realtime_streaming_callback() is None
+
+
 for failure_kind in ("timeout", "http-error"):
     run_rest_redaction_case(failure_kind)
 
 run_realtime_startup_rejection()
 for failure_kind in ("disconnected", "commit-error"):
     run_realtime_case(failure_kind)
+run_realtime_cancel_recovery()
 
 print("hyprwhspr provider-failure tests passed")

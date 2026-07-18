@@ -78,7 +78,10 @@ stdenvNoCC.mkDerivation rec {
   # - the stop-time buffer commit raced the server-VAD auto-commit, sending a
   #   redundant commit against an already-flushed buffer; re-check the commit
   #   flag after the drain wait and treat the residual "buffer too small"
-  #   server error as benign instead of waking the transcript waiter.
+  #   server error as benign instead of waking the transcript waiter;
+  # - cancelling a dictation destroyed the realtime client and nothing ever
+  #   recreated it, wedging the backend until daemon restart; rebuild the
+  #   client from the stored connect params on the next record press.
   patches = [ ./hyprwhspr-realtime-fixes.patch ];
 
   nativeBuildInputs = [ makeWrapper ];
