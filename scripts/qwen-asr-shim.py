@@ -30,6 +30,7 @@ stderr with per-stage millisecond durations.
 """
 
 import base64
+import collections
 import io
 import json
 import os
@@ -411,8 +412,21 @@ def _pool_request(method, path, api_key, body=None, timeout=QWEN_CHAT_TIMEOUT):
     raise RuntimeError(f"DashScope connection failed after retry: {last_exc}")
 
 
+# Token usage for one chat/completions call. reasoning_tokens defaults to 0
+# when DashScope doesn't report a completion_tokens_details.reasoning_tokens
+# field; reasoning_seen additionally flags reasoning_content / <think> tags
+# in the message body, since a model can think without the token count being
+# broken out, which would otherwise make reasoning_tokens=0 misleading.
+ChatUsage = collections.namedtuple(
+    "ChatUsage",
+    ["prompt_tokens", "completion_tokens", "reasoning_tokens", "reasoning_seen"],
+)
+
+_THINK_TAG_RE = re.compile(r"<think>", re.IGNORECASE)
+
+
 def chat_completion(model, messages, api_key, extra=None, timeout=QWEN_CHAT_TIMEOUT):
-    """Call chat/completions over the pool; returns (content, reused)."""
+    """Call chat/completions over the pool; returns (content, reused, usage)."""
     body = {"model": model, "messages": messages, "stream": False}
     if extra:
         body.update(extra)
@@ -430,11 +444,25 @@ def chat_completion(model, messages, api_key, extra=None, timeout=QWEN_CHAT_TIME
     except (TypeError, ValueError):
         raise RuntimeError("chat/completions returned invalid JSON") from None
     try:
-        return payload["choices"][0]["message"]["content"], reused
+        message = payload["choices"][0]["message"]
+        content = message["content"]
     except (KeyError, IndexError, TypeError):
         raise RuntimeError(
             f"unexpected chat/completions response shape: {json.dumps(payload)[:300]}"
         ) from None
+
+    usage_raw = payload.get("usage") or {}
+    completion_details = usage_raw.get("completion_tokens_details") or {}
+    reasoning_seen = bool(message.get("reasoning_content")) or bool(
+        _THINK_TAG_RE.search(content or "")
+    )
+    usage = ChatUsage(
+        prompt_tokens=usage_raw.get("prompt_tokens", 0) or 0,
+        completion_tokens=usage_raw.get("completion_tokens", 0) or 0,
+        reasoning_tokens=completion_details.get("reasoning_tokens", 0) or 0,
+        reasoning_seen=reasoning_seen,
+    )
+    return content, reused, usage
 
 
 def warm_pool():
@@ -576,6 +604,16 @@ def transcribe_via_websocket(pcm, api_key, timeout=QWEN_WS_TIMEOUT):
 # Route handlers
 # --------------------------------------------------------------------------
 
+def _record_usage(timings, usage, output_text):
+    """Fold a ChatUsage plus the returned text into the request's timings dict
+    so format_timing() can emit grep-friendly token/char TIMING fields."""
+    timings["in_tok"] = usage.prompt_tokens
+    timings["out_tok"] = usage.completion_tokens
+    timings["think_tok"] = usage.reasoning_tokens
+    timings["think_seen"] = int(usage.reasoning_seen)
+    timings["out_chars"] = len(output_text or "")
+
+
 def handle_transcribe_http(audio_bytes, prompt, api_key, timings):
     audio = prepare_audio(audio_bytes, timings)
     b64 = base64.b64encode(audio.wav_bytes()).decode()
@@ -592,9 +630,10 @@ def handle_transcribe_http(audio_bytes, prompt, api_key, timings):
     })
 
     t0 = time.perf_counter()
-    text, reused = chat_completion(QWEN_HTTP_MODEL, messages, api_key)
+    text, reused, usage = chat_completion(QWEN_HTTP_MODEL, messages, api_key)
     timings["api"] = (time.perf_counter() - t0) * 1000
     timings["reused_conn"] = reused
+    _record_usage(timings, usage, text)
     return text
 
 
@@ -610,7 +649,7 @@ def handle_transcribe_ws(audio_bytes, prompt, api_key, timings):
         {"role": "user", "content": raw_transcript},
     ]
     t1 = time.perf_counter()
-    text, reused = chat_completion(
+    text, reused, usage = chat_completion(
         QWEN_CLEANUP_MODEL,
         messages,
         api_key,
@@ -618,6 +657,7 @@ def handle_transcribe_ws(audio_bytes, prompt, api_key, timings):
     )
     timings["cleanup"] = (time.perf_counter() - t1) * 1000
     timings["reused_conn"] = reused
+    _record_usage(timings, usage, text)
     return text
 
 
@@ -636,7 +676,7 @@ def handle_transcribe_omni(audio_bytes, prompt, api_key, timings):
         },
     ]
     t0 = time.perf_counter()
-    text, reused = chat_completion(
+    text, reused, usage = chat_completion(
         QWEN_OMNI_MODEL,
         messages,
         api_key,
@@ -644,6 +684,7 @@ def handle_transcribe_omni(audio_bytes, prompt, api_key, timings):
     )
     timings["api"] = (time.perf_counter() - t0) * 1000
     timings["reused_conn"] = reused
+    _record_usage(timings, usage, text)
     return text
 
 
@@ -669,6 +710,16 @@ def format_timing(route, timings):
         fields.append(f"decode={timings['decode']}")
     if "reused_conn" in timings:
         fields.append(f"reused_conn={timings['reused_conn']}")
+    if "in_tok" in timings:
+        fields.append(f"in_tok={timings['in_tok']}")
+    if "out_tok" in timings:
+        fields.append(f"out_tok={timings['out_tok']}")
+    if "think_tok" in timings:
+        fields.append(f"think_tok={timings['think_tok']}")
+    if "think_seen" in timings:
+        fields.append(f"think_seen={timings['think_seen']}")
+    if "out_chars" in timings:
+        fields.append(f"out_chars={timings['out_chars']}")
     return "TIMING " + " ".join(fields)
 
 
@@ -726,7 +777,7 @@ class Handler(BaseHTTPRequestHandler):
             ]
             timeout = min(3.0 + len(text) / 200.0, 10.0)
             t0 = time.perf_counter()
-            cleaned, reused = chat_completion(
+            cleaned, reused, usage = chat_completion(
                 QWEN_CLEANUP_MODEL,
                 messages,
                 api_key,
@@ -740,6 +791,7 @@ class Handler(BaseHTTPRequestHandler):
             if not cleaned:
                 raise RuntimeError(f"empty cleanup from {QWEN_CLEANUP_MODEL}")
 
+            _record_usage(timings, usage, cleaned)
             self._send_text(200, cleaned)
             timings["total"] = (time.perf_counter() - start) * 1000
             log(format_timing("/cleanup", timings))
