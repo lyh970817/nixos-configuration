@@ -635,6 +635,67 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_text(self, status, text):
+        body = text.encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _handle_cleanup(self):
+        """Clean up a raw transcript via chat/completions over the warm pool.
+
+        Reads the raw transcript as the request body (text/plain), runs the
+        same cleanup instruction used by handle_transcribe_ws, and returns the
+        cleaned text. On any failure returns HTTP 500 so the caller's
+        ``curl -sf`` exits non-zero and hyprwhspr falls back to the raw text.
+        """
+        start = time.perf_counter()
+        timings = {}
+        try:
+            content_length = int(self.headers.get("Content-Length", "0") or "0")
+            raw = self.rfile.read(content_length) if content_length else b""
+            text = raw.decode("utf-8", errors="replace").strip()
+
+            if not text:
+                # Nothing to clean; return it unchanged.
+                self._send_text(200, text)
+                return
+
+            api_key = get_api_key()
+            messages = [
+                {"role": "system", "content": build_cleanup_instruction("")},
+                {"role": "user", "content": text},
+            ]
+            timeout = min(3.0 + len(text) / 200.0, 10.0)
+            t0 = time.perf_counter()
+            cleaned, reused = chat_completion(
+                QWEN_CLEANUP_MODEL,
+                messages,
+                api_key,
+                extra={"temperature": 0, "enable_thinking": False},
+                timeout=timeout,
+            )
+            timings["cleanup"] = (time.perf_counter() - t0) * 1000
+            timings["reused_conn"] = reused
+
+            cleaned = (cleaned or "").strip()
+            if not cleaned:
+                raise RuntimeError(f"empty cleanup from {QWEN_CLEANUP_MODEL}")
+
+            self._send_text(200, cleaned)
+            timings["total"] = (time.perf_counter() - start) * 1000
+            log(format_timing("/cleanup", timings))
+        except Exception as e:
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            message = str(e)
+            log(f"POST /cleanup 500 {elapsed_ms:.0f}ms model={QWEN_CLEANUP_MODEL} error={message[:200]}")
+            try:
+                self._send_json(500, {"error": message})
+            except Exception:
+                pass
+
     def do_GET(self):
         if self.path == "/health":
             self._send_json(200, {"status": "ok"})
@@ -647,6 +708,10 @@ class Handler(BaseHTTPRequestHandler):
             threading.Thread(target=_background_warm, daemon=True).start()
             self.send_response(204)
             self.end_headers()
+            return
+
+        if self.path == "/cleanup":
+            self._handle_cleanup()
             return
 
         start = time.perf_counter()

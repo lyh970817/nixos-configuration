@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly modes=(qwen-http qwen-ws qwen-omni sensevoice realtime)
+readonly modes=(qwen-http qwen-ws qwen-omni qwen-realtime sensevoice realtime)
 
 profiles_dir="${HYPRWHISPR_PROFILE_PROFILES_DIR:-$HOME/.config/hyprwhspr/profiles}"
 state_home="${HYPRWHISPR_PROFILE_STATE_HOME:-${XDG_STATE_HOME:-$HOME/.local/state}}"

@@ -715,6 +715,18 @@ let
     ];
     text = builtins.readFile ../../scripts/hyprwhispr-record;
   };
+
+  # post_transcription_hook for the qwen-realtime profile: pipe the raw
+  # realtime transcript to the local shim's /cleanup endpoint and emit the
+  # cleaned text. `curl -sf` exits non-zero on any HTTP 5xx/failure, so
+  # hyprwhspr falls back to the raw transcript instead of losing a dictation.
+  hyprwhsprCleanupShim = pkgs.writeShellApplication {
+    name = "hyprwhspr-cleanup-shim";
+    runtimeInputs = [ pkgs.curl ];
+    text = ''
+      exec curl -sf --max-time 11 --data-binary @- http://127.0.0.1:8770/cleanup
+    '';
+  };
 in
 {
   home.packages = [
@@ -724,6 +736,7 @@ in
     hyprwhisprRecord
     hyprwhsprLongform
     hyprwhsprPostprocess
+    hyprwhsprCleanupShim
   ];
 
   home.file.".local/share/hyprwhspr/credentials" = {
@@ -746,6 +759,7 @@ in
     "hyprwhspr/profiles/qwen-http.json".source = ../../config/hyprwhspr/profiles/qwen-http.json;
     "hyprwhspr/profiles/qwen-ws.json".source = ../../config/hyprwhspr/profiles/qwen-ws.json;
     "hyprwhspr/profiles/qwen-omni.json".source = ../../config/hyprwhspr/profiles/qwen-omni.json;
+    "hyprwhspr/profiles/qwen-realtime.json".source = ../../config/hyprwhspr/profiles/qwen-realtime.json;
     "hyprwhspr/profiles/sensevoice.json".source = ../../config/hyprwhspr/profiles/sensevoice.json;
 
     "hyprwhspr/README-nixos.md".text = ''
