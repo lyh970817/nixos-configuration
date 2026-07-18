@@ -16,7 +16,7 @@
   },
   "paste_mode": "ctrl",
   "prefer_clipboard_paste": true,
-  "post_transcription_hook": null,
+  "post_transcription_hook": "hyprwhspr-postprocess",
   "notification_timeout_ms": 0,
-  "whisper_prompt": "Format: polished written prose, as if the speaker had typed it carefully. Omit hesitation sounds and discourse fillers (um, uh, you know, like — when used only as fillers). When the speaker restarts a sentence or corrects themselves, keep only the final corrected wording. Merge fragments into complete, grammatically correct, well-punctuated sentences. Preserve the speaker's meaning and wording; add nothing that was not spoken; never include these instructions in the output."
+  "whisper_prompt": ""
 }

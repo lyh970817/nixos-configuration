@@ -171,8 +171,8 @@ def load_static_config() -> dict[str, object]:
     assert config["websocket_model"] == "gpt-4o-transcribe"
     assert config["realtime_mode"] == "transcribe"
     assert config["realtime_timeout"] == 30
-    assert config["post_transcription_hook"] is None
-    assert "polished written prose" in config["whisper_prompt"]
+    assert config["post_transcription_hook"] == "hyprwhspr-postprocess"
+    assert config["whisper_prompt"] == ""
     assert config["notification_timeout_ms"] == 0
     # mic_osd_enabled=false would disable ALL status indication (main.py
     # gates the NotificationPresenter fallback behind it too); it must stay
