@@ -704,6 +704,7 @@ let
     ps.urllib3
     ps.numpy
     ps.soxr
+    ps.soundfile
   ]);
 
   hyprwhisprRecord = pkgs.writeShellApplication {

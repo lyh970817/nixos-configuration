@@ -44,6 +44,7 @@ import wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import numpy as np
+import soundfile as sf
 import soxr
 import urllib3
 import websocket
@@ -661,9 +662,26 @@ def handle_transcribe_ws(audio_bytes, prompt, api_key, timings):
     return text
 
 
+def _encode_opus(samples):
+    """Encode 16k mono int16 samples to Ogg/Opus bytes in-process.
+
+    soundfile/libsndfile writes the compressed Ogg/Opus container directly from
+    the numpy array, so the omni upload skips the ~8-11x larger base64 WAV. Opus
+    natively supports the 16k rate used here. int16 input is accepted by
+    sf.write, which converts to the codec's internal representation.
+    """
+    buf = io.BytesIO()
+    sf.write(buf, samples, TARGET_RATE, format="OGG", subtype="OPUS")
+    return buf.getvalue()
+
+
 def handle_transcribe_omni(audio_bytes, prompt, api_key, timings):
     audio = prepare_audio(audio_bytes, timings)
-    b64 = base64.b64encode(audio.wav_bytes()).decode()
+
+    t_enc = time.perf_counter()
+    opus_bytes = _encode_opus(audio.samples)
+    timings["enc_ms"] = (time.perf_counter() - t_enc) * 1000
+    b64 = base64.b64encode(opus_bytes).decode()
 
     messages = [
         {"role": "system", "content": build_aggressive_cleanup_instruction(prompt)},
@@ -671,7 +689,7 @@ def handle_transcribe_omni(audio_bytes, prompt, api_key, timings):
             "role": "user",
             "content": [{
                 "type": "input_audio",
-                "input_audio": {"data": f"data:audio/wav;base64,{b64}", "format": "wav"},
+                "input_audio": {"data": f"data:audio/ogg;base64,{b64}", "format": "opus"},
             }],
         },
     ]
@@ -702,6 +720,8 @@ def format_timing(route, timings):
     for key in ("prep", "api", "ws", "cleanup", "total"):
         if key in timings:
             fields.append(f"{key}={timings[key]:.0f}")
+    if "enc_ms" in timings:
+        fields.append(f"enc_ms={timings['enc_ms']:.0f}")
     if "audio_s" in timings:
         fields.append(f"audio_s={timings['audio_s']:.2f}")
     if "trim_s" in timings:
