@@ -15,7 +15,7 @@ let
   chatModel = "deepseek-ai/DeepSeek-V4-Flash";
 
   postprocessEndpoint = "https://api.siliconflow.cn/v1/chat/completions";
-  postprocessModel = "Qwen/Qwen2.5-7B-Instruct";
+  postprocessModel = "Qwen/Qwen3.5-35B-A3B";
 
   recorderPort = 8765;
   recorderChunkSecs = 120;
@@ -117,6 +117,7 @@ let
                   {"role": "user", "content": text},
               ],
               "temperature": 0,
+              "enable_thinking": False,
           }
 
           request = urllib.request.Request(
