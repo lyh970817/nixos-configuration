@@ -55,7 +55,7 @@ let
       MODEL = ${builtins.toJSON postprocessModel}
       ENDPOINT = ${builtins.toJSON postprocessEndpoint}
       CREDENTIALS_PATH = Path(${builtins.toJSON credentialsRuntimePath})
-      TIMEOUT_SECONDS = 10.0
+      TIMEOUT_SECONDS = 3.0
       ENV_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
       SHORT_ARCHIVE_DIR = Path(${builtins.toJSON shortArchiveDir})
