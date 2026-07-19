@@ -6,8 +6,8 @@ This repository is a NixOS flake for the `andongni` host. Entry points are `flak
 
 ## Build, Test, and Development Commands
 
-- `rebuild`: apply the configuration to the local host. The alias invokes `sudo nixos-rebuild switch --flake /etc/nixos#andongni --impure`, so it works from any directory through the stable `/etc/nixos` checkout symlink.
-- `sudo nixos-rebuild switch --flake .#andongni --impure`: apply the configuration directly when already in this checkout.
+- `rebuild`: apply the configuration to the local host. The alias invokes `sudo nixos-rebuild switch --flake /etc/nixos#system --impure`, so it works from any directory through the stable `/etc/nixos` checkout symlink.
+- `sudo nixos-rebuild switch --flake .#system --impure`: apply the configuration directly when already in this checkout.
 - `find . -name '*.nix' -print0 | xargs -0 nixfmt`: format Nix files.
 
 ## Rebuild Policy

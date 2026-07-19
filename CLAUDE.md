@@ -6,12 +6,12 @@ This repository is a NixOS flake for the `andongni` host. Entry points are `flak
 
 ## Build, Test, and Development Commands
 
-- `sudo nixos-rebuild switch --flake .#andongni --impure`: apply the configuration to the local host.
+- `sudo nixos-rebuild switch --flake .#system --impure`: apply the configuration to the local host.
 - `find . -name '*.nix' -print0 | xargs -0 nixfmt`: format Nix files.
 
 ## Rebuild Policy
 
-For configuration changes, do not run standalone verification commands before rebuilding. Stage and commit the scoped change first so the configured pre-commit hooks run verification, then apply the committed configuration with `sudo nixos-rebuild switch --flake .#andongni --impure`.
+For configuration changes, do not run standalone verification commands before rebuilding. Stage and commit the scoped change first so the configured pre-commit hooks run verification, then apply the committed configuration with `sudo nixos-rebuild switch --flake .#system --impure`.
 
 ## Coding Style & Naming Conventions
 
@@ -25,7 +25,7 @@ Use two-space indentation in Nix files. Keep modules focused on one concern and 
 
 Recent history uses short imperative subjects such as `Add 115 Browser launcher` and `Fix tmux copy-mode paging keys`. Follow that style: start with a verb, keep the subject specific, and avoid unrelated changes in one commit. Pull requests should summarize changes, list validation commands, call out host-specific effects, and include screenshots only for UI changes.
 
-Commit configuration changes before rebuilding. Treat the pre-commit hooks as the verification gate before `sudo nixos-rebuild switch --flake .#andongni --impure`; if the rebuild fails, make a follow-up fix commit and rebuild again.
+Commit configuration changes before rebuilding. Treat the pre-commit hooks as the verification gate before `sudo nixos-rebuild switch --flake .#system --impure`; if the rebuild fails, make a follow-up fix commit and rebuild again.
 
 ## Security & Configuration Tips
 

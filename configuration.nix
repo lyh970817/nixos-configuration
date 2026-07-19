@@ -9,8 +9,10 @@
 
 {
   imports = [
-    # Hardware configuration
-    ./hardware-configuration.nix
+    # Generated machine facts, read out-of-tree under --impure so the tracked
+    # config carries no machine name or source-host hardware facts.
+    /etc/nixos/hardware-configuration.nix
+    /etc/nixos/local.nix
 
     # System modules
     ./modules/system/nix.nix

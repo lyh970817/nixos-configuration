@@ -7,8 +7,9 @@
 
 let
   homeDir = config.home.homeDirectory;
-  configRoot = "${homeDir}/Yandex.Disk/System/nixos-configuration";
-  credentialsRepoPath = "${configRoot}/secrets/hyprwhspr-credentials.json";
+  # User-owned credential source, outside any synced directory. Copied to the
+  # runtime path at activation; absent source must not fail activation.
+  credentialsSourcePath = "${config.xdg.configHome}/hyprwhspr/credentials.json";
   credentialsRuntimePath = "${homeDir}/.local/share/hyprwhspr/credentials";
 
   chatEndpoint = "https://api.siliconflow.cn/v1/chat/completions";
@@ -780,10 +781,15 @@ in
     hyprwhsprDismissNotifications
   ];
 
-  home.file.".local/share/hyprwhspr/credentials" = {
-    source = config.lib.file.mkOutOfStoreSymlink credentialsRepoPath;
-    force = true;
-  };
+  # Copy the user-owned credential into hyprwhspr's runtime path at activation.
+  # A missing source is tolerated so activation never fails without the secret.
+  home.activation.hyprwhsprCredentials = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    if [ -e ${lib.escapeShellArg credentialsSourcePath} ]; then
+      run ${pkgs.coreutils}/bin/install -D -m600 $VERBOSE_ARG -- \
+        ${lib.escapeShellArg credentialsSourcePath} \
+        ${lib.escapeShellArg credentialsRuntimePath}
+    fi
+  '';
 
   # Short-dictation raw/cleaned transcripts and mic audio are archived by
   # hyprwhsprPostprocess and the realtime-ws audio patch (pkgs/hyprwhspr.nix)
@@ -814,13 +820,14 @@ in
 
       - `~/.config/hyprwhspr/config.json`: the static realtime websocket
         configuration (streamed transcription via OpenAI)
-      - `~/.local/share/hyprwhspr/credentials` as an out-of-store symlink
+      - `~/.local/share/hyprwhspr/credentials`, copied at Home Manager
+        activation from the user-owned source credential
 
-      The actual credential file is ignored by Git and lives in the Nix
-      configuration checkout:
+      The source credential is user-owned, kept outside any synced directory,
+      and copied into place on activation from:
 
       ```sh
-      ~/Yandex.Disk/System/nixos-configuration/secrets/hyprwhspr-credentials.json
+      ~/.config/hyprwhspr/credentials.json
       ```
 
       It should contain:
