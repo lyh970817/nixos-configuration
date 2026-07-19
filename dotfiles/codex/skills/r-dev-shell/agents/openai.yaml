@@ -1,0 +1,4 @@
+interface:
+  display_name: "R Dev Shell"
+  short_description: "Set up R package development shells"
+  default_prompt: "Use $r-dev-shell to set up this R package development environment."

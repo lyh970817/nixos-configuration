@@ -1,0 +1,4 @@
+interface:
+  display_name: "Commit Guidelines"
+  short_description: "Apply user-facing commit discipline"
+  default_prompt: "Use $commit-guidelines when preparing commits for my changes."

@@ -7,3 +7,6 @@ secrets/
 # Generated per-machine facts, never tracked
 hardware-configuration.nix
 local.nix
+
+# Regenerated fcitx5 keyboard-layout cache (lives inside the linked config dir)
+dotfiles/fcitx5/conf/cached_layouts

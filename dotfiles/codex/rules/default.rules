@@ -1,0 +1,26 @@
+prefix_rule(pattern=["sudo", "-n", "true"], decision="allow")
+prefix_rule(pattern=["/run/current-system/sw/bin/zsh", "-lc", "NXF_SINGULARITY_RUN_COMMAND='sudo -n singularity' nf-test test tests/modules tests/workflows --profile test,singularity"], decision="allow")
+prefix_rule(pattern=["/run/current-system/sw/bin/zsh", "-lc", "PATH=\"$PWD/bin:$PATH\" nf-test test tests/modules tests/workflows --profile test,singularity"], decision="allow")
+prefix_rule(pattern=["sudo", "-n", "/etc/profiles/per-user/andongni/bin/singularity", "exec", "/home/andongni/Yandex.Disk/Projects/Research/nf-gwas-new_bmad/nf-gwas.sif", "ls", "-la", "/home/andongni/Yandex.Disk/Projects/Research/nf-gwas-new_bmad/.nf-test/tests/3d9343ef67fec8023376f7e5071c7ae6/work/32/585b6f3e041e5f793048ca84d68650"], decision="allow")
+prefix_rule(pattern=["sudo", "-n", "/etc/profiles/per-user/andongni/bin/singularity", "exec", "/home/andongni/Yandex.Disk/Projects/Research/nf-gwas-new_bmad/nf-gwas.sif", "ls", "-la", "/home/andongni/Yandex.Disk/Projects/Research/nf-gwas-new_bmad/tests/input/pipeline/chr01.fam"], decision="allow")
+prefix_rule(pattern=["sudo", "-n", "/etc/profiles/per-user/andongni/bin/singularity", "exec", "-B", "/home/andongni/Yandex.Disk/Projects/Research/nf-gwas-new_bmad", "/home/andongni/Yandex.Disk/Projects/Research/nf-gwas-new_bmad/nf-gwas.sif", "regenie", "--version"], decision="allow")
+prefix_rule(pattern=["sudo", "-n", "/etc/profiles/per-user/andongni/bin/singularity", "exec", "-B", "/home/andongni/Yandex.Disk/Projects/Research/nf-gwas-new_bmad", "/home/andongni/Yandex.Disk/Projects/Research/nf-gwas-new_bmad/nf-gwas.sif", "regenie", "--help"], decision="allow")
+prefix_rule(pattern=["sudo", "-n", "/etc/profiles/per-user/andongni/bin/singularity", "exec", "-B", "/home/andongni/Yandex.Disk/Projects/Research/nf-gwas-new_bmad", "/home/andongni/Yandex.Disk/Projects/Research/nf-gwas-new_bmad/nf-gwas.sif", "regenie", "--helpFull"], decision="allow")
+prefix_rule(pattern=["/run/current-system/sw/bin/zsh", "-lc", "PATH=\"$PWD/bin:$PATH\" nf-test test tests/modules/local/regenie/regenie_step1_run_chunk.nf.test --profile test,singularity"], decision="allow")
+prefix_rule(pattern=["sudo", "-n", "/etc/profiles/per-user/andongni/bin/singularity", "exec", "/home/andongni/Yandex.Disk/Projects/Research/nf-gwas-new_bmad/nf-gwas.sif", "ls", "-la", "/opt/regenie"], decision="allow")
+prefix_rule(pattern=["sudo", "-n", "/etc/profiles/per-user/andongni/bin/singularity", "exec", "/home/andongni/Yandex.Disk/Projects/Research/nf-gwas-new_bmad/nf-gwas.sif", "strings", "/opt/regenie/regenie"], decision="allow")
+prefix_rule(pattern=["git", "worktree"], decision="allow")
+prefix_rule(pattern=["nf-test", "test"], decision="allow")
+prefix_rule(pattern=["nf-core", "modules", "lint"], decision="allow")
+prefix_rule(pattern=["nf-core", "modules", "test"], decision="allow")
+prefix_rule(pattern=["git", "add", "modules/nf-core/regenie/splitl0", "modules/nf-core/regenie/runl0", "modules/nf-core/regenie/runl1"], decision="allow")
+prefix_rule(pattern=["git", "push"], decision="allow")
+prefix_rule(pattern=["gh", "pr", "create"], decision="allow")
+prefix_rule(pattern=["node", "/home/andongni/.codex/skills/.system/openai-docs/scripts/fetch-codex-manual.mjs"], decision="allow")
+prefix_rule(pattern=["git", "add", "AGENTS.md"], decision="allow")
+prefix_rule(
+    pattern=["git", "add"],
+    decision="allow",
+    justification="Allow Codex to stage files for commits",
+)
+prefix_rule(pattern=["git", "commit"], decision="allow")

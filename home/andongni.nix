@@ -29,6 +29,7 @@
     ./programs/hyprwhspr.nix
     ./programs/launchers.nix
     ./programs/dotfiles.nix
+    ./programs/mutable-configs.nix
     ./directories.nix
     ./desktop/btop-workspace.nix
     ./desktop/theming.nix
