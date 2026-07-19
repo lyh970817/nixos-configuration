@@ -22,40 +22,68 @@ temporary configs. It must not run an uncommitted Home Manager activation or
 NixOS rebuild. Commit and rebuild the selected result, then visually inspect the
 installed result through `screen-verify`.
 
-## Mihomo Configuration Acceptance
+## Mihomo Configuration: Safe Apply / Auto-Revert
 
-`mihomo-config.yaml` is intentionally ignored because it may contain sensitive
-local configuration. There is no tracked configuration-identity file: never
-create or commit `mihomo-config.sha256`. Runtime state at
-`/var/lib/mihomo-config/accepted-config.sha256` records the SHA-256 of the exact
-active store-backed configuration that the user last accepted.
+The mihomo config lives at `secrets/mihomo-config.yaml`. It is out-of-store and
+git-ignored (it may hold sensitive local data), wired to the service by absolute
+path via `LoadCredential`. Because the unit text is content-independent, editing
+the file does **nothing** until the service restarts: `rebuild` does not restart
+mihomo — the config only goes live on a mihomo restart.
 
-The ordinary local deployment command is always:
+Your own model connection is reached **through mihomo**. If an edit breaks
+connectivity you go silent and cannot act. So applying a config change is guarded
+by a dead-man's switch, keyed on your confirmation, not on any connectivity probe.
+
+When you (or the user) edit `secrets/mihomo-config.yaml`, apply it with:
 
 ```sh
-rebuild
+sudo mihomo-guard try        # optional: sudo mihomo-guard try 120  (custom timeout)
 ```
 
-A rebuild is not blocked when the Mihomo configuration changes. During
-activation it compares the candidate's exact immutable configuration with the
-accepted SHA. If they differ, the rebuild output asks the user to wait for the
-rebuild command to finish, test the connection and routing, and, only if they
-work, run:
+This records nothing new yet: it arms a detached 90-second auto-revert timer,
+then restarts mihomo so the edit goes live. Note this briefly interrupts **all**
+traffic (TUN restart).
+
+- If the edit is good and you can still reach your model, confirm it:
+
+  ```sh
+  sudo mihomo-guard keep
+  ```
+
+  This disarms the timer and records the current live config as the new baseline
+  (`/var/lib/mihomo-config/last-good.yaml`).
+
+- If the edit is bad but you are **still connected**, undo it now:
+
+  ```sh
+  sudo mihomo-guard revert
+  ```
+
+- If the edit **breaks your connection**, do nothing (you cannot). After 90
+  seconds the timer fires autonomously, restores the last-good config, restarts
+  mihomo, and your connection comes back. Do not attempt a manual revert while
+  disconnected — the system handles it.
+
+Whenever a change is reverted or auto-reverted, the rejected config is preserved
+at `/var/lib/mihomo-config/rejected.yaml` (overwriting any previous one). After
+your connection returns you can inspect that file to see what you tried and retry
+from there.
+
+A reboot during the pending window is treated as a failed change: a boot-time
+oneshot restores last-good before mihomo starts (also preserving the rejected
+edit to `rejected.yaml`).
+
+**Bootstrap (do this once now):** with your connection working, run
 
 ```sh
-sudo mihomo-config accept
+sudo mihomo-guard keep
 ```
 
-The acceptance command resolves the exact active deployed configuration from
-the active `mihomo.service` unit. It refuses to write state unless the active
-system closure is also the persistent system profile and `mihomo.service` is
-active. It then atomically records the active configuration SHA in root-owned
-runtime state. It does not rebuild or reactivate the system.
-
-Inspect the current acceptance status with:
+to record the current working config as the baseline. `mihomo-guard try` refuses
+to run until a baseline exists. Inspect state any time with:
 
 ```sh
-mihomo-config status
+mihomo-guard status
 ```
 
 ## Coding Style & Naming Conventions

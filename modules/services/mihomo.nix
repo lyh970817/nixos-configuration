@@ -11,158 +11,206 @@ let
   # world-readable store and lets evaluation succeed without the file present.
   # It lives in the config repo's git-ignored secrets/ dir (portable.configDir).
   mihomoConfig = "${config.portable.configDir}/secrets/mihomo-config.yaml";
-  acceptedStateDir = "/var/lib/mihomo-config";
-  acceptedShaFile = "${acceptedStateDir}/accepted-config.sha256";
 
-  mihomoConfigCli = pkgs.writeShellApplication {
-    name = "mihomo-config";
+  # Root-owned runtime state for the safe-apply / auto-revert mechanism.
+  acceptedStateDir = "/var/lib/mihomo-config";
+  lastGoodFile = "${acceptedStateDir}/last-good.yaml";
+  pendingMarker = "${acceptedStateDir}/pending";
+  # A rejected edit is preserved here before any revert overwrites the live
+  # config, so an agent can inspect what it tried. May hold secrets: 0600 root.
+  rejectedFile = "${acceptedStateDir}/rejected.yaml";
+
+  # Timer payload: fired by the dead-man's-switch if a change is not confirmed
+  # in time. Its own PATH must be complete because it runs under a minimal
+  # transient-unit environment.
+  revertHelper = pkgs.writeShellApplication {
+    name = "mihomo-revert-helper";
     runtimeInputs = [
       pkgs.coreutils
-      pkgs.gnused
       pkgs.systemd
     ];
     text = ''
-      readonly UNIT_FILE="/run/current-system/etc/systemd/system/mihomo.service"
-      readonly SYSTEM_PROFILE="/nix/var/nix/profiles/system"
-      readonly STATE_DIR="${acceptedStateDir}"
-      readonly ACCEPTED_SHA_FILE="${acceptedShaFile}"
+      if [ -f ${lib.escapeShellArg mihomoConfig} ]; then
+        cp -f -- ${lib.escapeShellArg mihomoConfig} ${lib.escapeShellArg rejectedFile}
+        chmod 0600 ${lib.escapeShellArg rejectedFile}
+      fi
+      cp -f -- ${lib.escapeShellArg lastGoodFile} ${lib.escapeShellArg mihomoConfig}
+      systemctl restart mihomo.service
+      rm -f -- ${lib.escapeShellArg pendingMarker}
+    '';
+  };
+
+  # Boot backstop: if we reboot while a change is still pending, the change was
+  # never confirmed, so boot clean on the last-good config. Runs before mihomo
+  # starts, so no restart is needed.
+  bootCheck = pkgs.writeShellApplication {
+    name = "mihomo-config-boot-check";
+    runtimeInputs = [ pkgs.coreutils ];
+    text = ''
+      [[ -e ${lib.escapeShellArg pendingMarker} ]] || exit 0
+      if [[ -e ${lib.escapeShellArg lastGoodFile} ]]; then
+        if [ -f ${lib.escapeShellArg mihomoConfig} ]; then
+          cp -f -- ${lib.escapeShellArg mihomoConfig} ${lib.escapeShellArg rejectedFile}
+          chmod 0600 ${lib.escapeShellArg rejectedFile}
+        fi
+        cp -f -- ${lib.escapeShellArg lastGoodFile} ${lib.escapeShellArg mihomoConfig}
+      fi
+      rm -f -- ${lib.escapeShellArg pendingMarker}
+    '';
+  };
+
+  mihomoGuard = pkgs.writeShellApplication {
+    name = "mihomo-guard";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.systemd
+    ];
+    text = ''
+      readonly STATE_DIR=${lib.escapeShellArg acceptedStateDir}
+      readonly LAST_GOOD=${lib.escapeShellArg lastGoodFile}
+      readonly PENDING=${lib.escapeShellArg pendingMarker}
+      readonly LIVE_CONFIG=${lib.escapeShellArg mihomoConfig}
+      readonly REJECTED=${lib.escapeShellArg rejectedFile}
 
       die() {
-        printf 'mihomo-config: %s\n' "$*" >&2
+        printf 'mihomo-guard: %s\n' "$*" >&2
         exit 1
       }
 
-      active_config_path() {
-        local candidate
-        local canonical_unit
-        local -a config_paths=()
-
-        canonical_unit=$(realpath -e -- "$UNIT_FILE") ||
-          die "active Mihomo service unit is unavailable: $UNIT_FILE"
-        [[ "$canonical_unit" == /nix/store/* ]] ||
-          die "active Mihomo service unit is outside /nix/store"
-        [[ -f "$canonical_unit" && ! -L "$canonical_unit" ]] ||
-          die "active Mihomo service unit does not resolve to a regular store file"
-
-        # The config is read by absolute path from portable.configDir/secrets
-        # (out of the store, kept out of git), so accept any absolute path here
-        # rather than assuming /nix/store.
-        while IFS= read -r candidate; do
-          config_paths+=("$candidate")
-        done < <(sed -n 's|^LoadCredential=config\.yaml:\(/[^[:space:]]\+\)$|\1|p' "$canonical_unit")
-
-        (( ''${#config_paths[@]} == 1 )) ||
-          die "expected exactly one config.yaml LoadCredential in the active Mihomo service unit"
-
-        candidate="''${config_paths[0]}"
-        [[ "$candidate" == /* ]] ||
-          die "active Mihomo configuration path is not absolute"
-        [[ -e "$candidate" ]] ||
-          die "active Mihomo configuration file does not exist: $candidate"
-        [[ -f "$candidate" ]] ||
-          die "active Mihomo configuration is not a regular file"
-
-        printf '%s\n' "$candidate"
+      require_root() {
+        (( EUID == 0 )) || die "must be run as root: use sudo"
       }
 
       config_sha() {
-        sha256sum -- "$1" | sed 's/[[:space:]].*$//'
+        sha256sum -- "$1" | cut -d ' ' -f 1
       }
 
-      read_accepted_sha() {
-        local accepted
+      disarm() {
+        systemctl stop mihomo-revert.timer 2>/dev/null || true
+        systemctl stop mihomo-revert.service 2>/dev/null || true
+        systemctl reset-failed mihomo-revert.timer mihomo-revert.service 2>/dev/null || true
+      }
 
-        [[ -e "$ACCEPTED_SHA_FILE" ]] || return 1
-        [[ -f "$ACCEPTED_SHA_FILE" && ! -L "$ACCEPTED_SHA_FILE" ]] ||
-          die "accepted configuration state is not a regular file"
-        accepted=$(sed -n '1p' "$ACCEPTED_SHA_FILE")
-        [[ "$accepted" =~ ^[0-9a-f]{64}$ ]] ||
-          die "accepted configuration state is invalid"
-        [[ $(sed -n '2p' "$ACCEPTED_SHA_FILE") == "" ]] ||
-          die "accepted configuration state is invalid"
-        printf '%s\n' "$accepted"
+      try() {
+        local timeout="''${1:-90}"
+
+        require_root
+        [[ "$timeout" =~ ^[0-9]+$ && "$timeout" -gt 0 ]] ||
+          die "timeout must be a positive integer number of seconds"
+        [[ -e "$LAST_GOOD" ]] ||
+          die "no baseline yet — run 'sudo mihomo-guard keep' once while your connection works"
+        [[ ! -e "$PENDING" ]] ||
+          die "a change is already pending; run 'mihomo-guard keep' or 'mihomo-guard revert' first"
+
+        disarm
+
+        install -d -m 0755 -o root -g root "$STATE_DIR"
+        : >"$PENDING"
+
+        # Arm the dead-man's switch BEFORE restarting mihomo, so a broken
+        # config that severs connectivity still auto-reverts.
+        systemd-run --unit=mihomo-revert --on-active="''${timeout}s" \
+          --timer-property=AccuracySec=1s --collect \
+          ${revertHelper}/bin/mihomo-revert-helper
+
+        systemctl restart mihomo.service
+
+        printf 'Armed auto-revert for %s seconds (TUN restart briefly blips all traffic).\n' "$timeout"
+        printf 'Verify connectivity, then run:\n'
+        printf '  sudo mihomo-guard keep     # confirm and make this the new baseline\n'
+        printf '  sudo mihomo-guard revert   # undo now and restore last-good\n'
+        printf 'If neither runs in time, the last-good config is restored automatically.\n'
+      }
+
+      keep() {
+        require_root
+        disarm
+
+        [[ -e "$LIVE_CONFIG" ]] || die "live config not found: $LIVE_CONFIG"
+        [[ ! -L "$STATE_DIR" ]] || die "state directory must not be a symlink"
+        install -d -m 0755 -o root -g root "$STATE_DIR"
+
+        local temporary
+        temporary=$(mktemp "$STATE_DIR/.last-good.yaml.XXXXXX")
+        trap 'rm -f -- "$temporary"' EXIT
+        cp -f -- "$LIVE_CONFIG" "$temporary"
+        chown root:root "$temporary"
+        chmod 0600 "$temporary"
+        mv -fT -- "$temporary" "$LAST_GOOD"
+        trap - EXIT
+
+        rm -f -- "$PENDING"
+        printf 'Baseline updated: current live config recorded as last-good.\n'
+      }
+
+      revert() {
+        require_root
+        [[ -e "$LAST_GOOD" ]] || die "no baseline to revert to: $LAST_GOOD"
+        disarm
+
+        # Preserve the rejected edit so an agent can inspect what it tried.
+        if [ -f "$LIVE_CONFIG" ]; then
+          cp -f -- "$LIVE_CONFIG" "$REJECTED"
+          chmod 0600 "$REJECTED"
+        fi
+
+        # cp -f preserves the live config's own ownership/mode (0600
+        # andongni:users); do not chown it.
+        cp -f -- "$LAST_GOOD" "$LIVE_CONFIG"
+        systemctl restart mihomo.service
+
+        rm -f -- "$PENDING"
+        printf 'Reverted to last-good config (rejected edit saved to %s) and restarted mihomo.\n' "$REJECTED"
       }
 
       status() {
-        local active_path
-        local active_sha
-        local accepted_sha
-
-        active_path=$(active_config_path)
-        active_sha=$(config_sha "$active_path")
-
-        printf 'Active Mihomo config: %s\n' "$active_path"
-        printf 'Active SHA-256:      %s\n' "$active_sha"
-        if accepted_sha=$(read_accepted_sha); then
-          printf 'Accepted SHA-256:    %s\n' "$accepted_sha"
-          if [[ "$active_sha" == "$accepted_sha" ]]; then
-            printf 'Status:              accepted\n'
+        if [[ -e "$LAST_GOOD" ]]; then
+          printf 'last-good.yaml: present\n'
+          if [[ -e "$LIVE_CONFIG" ]]; then
+            if [[ "$(config_sha "$LIVE_CONFIG")" == "$(config_sha "$LAST_GOOD")" ]]; then
+              printf 'live config:    matches last-good\n'
+            else
+              printf 'live config:    differs from last-good\n'
+            fi
           else
-            printf 'Status:              not accepted\n'
+            printf 'live config:    missing (%s)\n' "$LIVE_CONFIG"
           fi
         else
-          printf 'Accepted SHA-256:    none\n'
-          printf 'Status:              not accepted\n'
+          printf 'last-good.yaml: absent (run: sudo mihomo-guard keep)\n'
+        fi
+
+        if [[ -e "$PENDING" ]]; then
+          printf 'pending change: yes\n'
+        else
+          printf 'pending change: no\n'
+        fi
+
+        if systemctl is-active --quiet mihomo-revert.timer; then
+          printf 'revert timer:   active\n'
+        else
+          printf 'revert timer:   inactive\n'
         fi
       }
 
-      accept() {
-        local active_before
-        local active_after
-        local profile_before
-        local profile_after
-        local active_path
-        local active_sha
-        local temporary
-
-        (( EUID == 0 )) || die "accept must be run with sudo"
-
-        active_before=$(readlink -f /run/current-system) ||
-          die "cannot resolve the active system closure"
-        profile_before=$(readlink -f "$SYSTEM_PROFILE") ||
-          die "cannot resolve the persistent system profile"
-        [[ "$active_before" == /nix/store/* && "$active_before" == "$profile_before" ]] ||
-          die "active system does not match the persistent system profile"
-        systemctl is-active --quiet mihomo.service ||
-          die "mihomo.service is not active"
-
-        active_path=$(active_config_path)
-        active_sha=$(config_sha "$active_path")
-
-        active_after=$(readlink -f /run/current-system) ||
-          die "cannot recheck the active system closure"
-        profile_after=$(readlink -f "$SYSTEM_PROFILE") ||
-          die "cannot recheck the persistent system profile"
-        [[ "$active_after" == "$active_before" && "$profile_after" == "$profile_before" ]] ||
-          die "system generation changed while accepting the Mihomo configuration"
-        systemctl is-active --quiet mihomo.service ||
-          die "mihomo.service stopped while accepting its configuration"
-
-        [[ ! -L "$STATE_DIR" ]] || die "state directory must not be a symlink"
-        install -d -m 0755 -o root -g root "$STATE_DIR"
-        temporary=$(mktemp "$STATE_DIR/.accepted-config.sha256.XXXXXX")
-        trap 'rm -f -- "$temporary"' EXIT
-        printf '%s\n' "$active_sha" >"$temporary"
-        chown root:root "$temporary"
-        chmod 0644 "$temporary"
-        mv -fT -- "$temporary" "$ACCEPTED_SHA_FILE"
-        trap - EXIT
-
-        printf 'Accepted the active Mihomo configuration.\n'
-        printf 'SHA-256: %s\n' "$active_sha"
-      }
-
       case "''${1:-}" in
+        try)
+          shift
+          try "$@"
+          ;;
+        keep)
+          [[ $# -eq 1 ]] || die "usage: sudo mihomo-guard keep"
+          keep
+          ;;
+        revert)
+          [[ $# -eq 1 ]] || die "usage: sudo mihomo-guard revert"
+          revert
+          ;;
         status)
-          [[ $# -eq 1 ]] || die "usage: mihomo-config status"
+          [[ $# -eq 1 ]] || die "usage: mihomo-guard status"
           status
           ;;
-        accept)
-          [[ $# -eq 1 ]] || die "usage: sudo mihomo-config accept"
-          accept
-          ;;
         *)
-          die "usage: mihomo-config {status|accept}"
+          die "usage: mihomo-guard {try [timeout]|keep|revert|status}"
           ;;
       esac
     '';
@@ -177,33 +225,26 @@ in
     configFile = mihomoConfig;
   };
 
-  environment.systemPackages = [ mihomoConfigCli ];
+  environment.systemPackages = [ mihomoGuard ];
 
-  system.activationScripts.mihomoConfigAcceptance = lib.stringAfter [ "etc" ] ''
-        candidate_sha="$(${pkgs.coreutils}/bin/sha256sum -- ${lib.escapeShellArg mihomoConfig} | ${pkgs.coreutils}/bin/cut -d ' ' -f 1)"
-        accepted_sha=""
-        if [ -e ${lib.escapeShellArg acceptedShaFile} ] || [ -L ${lib.escapeShellArg acceptedShaFile} ]; then
-          if [ -f ${lib.escapeShellArg acceptedShaFile} ] \
-            && [ ! -L ${lib.escapeShellArg acceptedShaFile} ] \
-            && [ "$(${pkgs.coreutils}/bin/wc -c < ${lib.escapeShellArg acceptedShaFile})" -eq 65 ] \
-            && ${pkgs.gnugrep}/bin/grep -Eq '^[0-9a-f]{64}$' ${lib.escapeShellArg acceptedShaFile}; then
-            accepted_sha="$(${pkgs.coreutils}/bin/head -n 1 -- ${lib.escapeShellArg acceptedShaFile})"
-          else
-            echo "Warning: Mihomo accepted configuration state is malformed or a symlink; treating it as unaccepted." >&2
-          fi
-        fi
+  # Ensure the root-owned state dir exists for the guard/boot-check tools.
+  systemd.tmpfiles.rules = [
+    "d ${acceptedStateDir} 0755 root root -"
+  ];
 
-        if [ "$candidate_sha" != "$accepted_sha" ]; then
-          ${pkgs.coreutils}/bin/cat <<'EOF'
-
-    Mihomo configuration has changed and has not been accepted yet.
-    Wait until the rebuild command finishes. Then test your connection and
-    routing. If everything works, run:
-
-      sudo mihomo-config accept
-
-    Until it is accepted, this reminder will appear during each rebuild.
-    EOF
-        fi
-  '';
+  # Reboot-during-pending backstop: restore last-good before mihomo starts.
+  systemd.services.mihomo-config-boot-check = {
+    description = "Restore last-good mihomo config if a change was left pending across reboot";
+    before = [ "mihomo.service" ];
+    after = [ "local-fs.target" ];
+    wantedBy = [ "multi-user.target" ];
+    # The live config may sit under a non-local mount (e.g. the Yandex.Disk
+    # home path); wait for it before reading/writing there.
+    unitConfig.RequiresMountsFor = builtins.dirOf mihomoConfig;
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = "${bootCheck}/bin/mihomo-config-boot-check";
+    };
+  };
 }
