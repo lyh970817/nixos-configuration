@@ -7,3 +7,21 @@ secrets/
 # Generated per-machine facts, never tracked
 hardware-configuration.nix
 local.nix
+
+# Regenerated fcitx5 keyboard-layout cache (lives inside the linked config dir)
+dotfiles/fcitx5/conf/cached_layouts
+
+# Runtime-generated artifacts inside the out-of-store-linked config dirs
+# (mutable-configs.nix). Upstream skill/plugin *source* is tracked; caches,
+# installed deps, and nested clones that tools create at runtime are not.
+dotfiles/**/__pycache__/
+dotfiles/**/*.pyc
+dotfiles/**/node_modules/
+dotfiles/**/.venv/
+dotfiles/**/venv/
+dotfiles/**/.pytest_cache/
+dotfiles/**/.mypy_cache/
+dotfiles/**/.ruff_cache/
+dotfiles/**/*.egg-info/
+dotfiles/**/.git/
+dotfiles/**/.DS_Store

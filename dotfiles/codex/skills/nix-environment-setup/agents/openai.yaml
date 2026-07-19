@@ -1,0 +1,3 @@
+interface:
+  display_name: "Nix Env Setup"
+  short_description: "Set up shell.nix and direnv for missing tools"
