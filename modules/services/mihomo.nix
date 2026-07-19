@@ -34,7 +34,6 @@ let
 
       active_config_path() {
         local candidate
-        local canonical
         local canonical_unit
         local -a config_paths=()
 
@@ -45,22 +44,23 @@ let
         [[ -f "$canonical_unit" && ! -L "$canonical_unit" ]] ||
           die "active Mihomo service unit does not resolve to a regular store file"
 
+        # The config is read by absolute path from portable.configDir/secrets
+        # (out of the store, kept out of git), so accept any absolute path here
+        # rather than assuming /nix/store.
         while IFS= read -r candidate; do
           config_paths+=("$candidate")
-        done < <(sed -n 's|^LoadCredential=config\.yaml:\(/nix/store/[^[:space:]]\+\)$|\1|p' "$canonical_unit")
+        done < <(sed -n 's|^LoadCredential=config\.yaml:\(/[^[:space:]]\+\)$|\1|p' "$canonical_unit")
 
         (( ''${#config_paths[@]} == 1 )) ||
           die "expected exactly one config.yaml LoadCredential in the active Mihomo service unit"
 
         candidate="''${config_paths[0]}"
-        [[ "$candidate" == /nix/store/* ]] ||
-          die "active Mihomo configuration is outside /nix/store"
-        [[ -f "$candidate" && ! -L "$candidate" ]] ||
-          die "active Mihomo configuration is not a regular store file"
-        canonical=$(realpath -e -- "$candidate") ||
-          die "cannot resolve the active Mihomo configuration"
-        [[ "$canonical" == "$candidate" ]] ||
-          die "active Mihomo configuration must be a canonical store path"
+        [[ "$candidate" == /* ]] ||
+          die "active Mihomo configuration path is not absolute"
+        [[ -e "$candidate" ]] ||
+          die "active Mihomo configuration file does not exist: $candidate"
+        [[ -f "$candidate" ]] ||
+          die "active Mihomo configuration is not a regular file"
 
         printf '%s\n' "$candidate"
       }

@@ -2,7 +2,11 @@ mihomo-config.yaml
 mihomo-configbk.yaml
 .worktrees/
 .pre-commit-config.yaml
-secrets/
+# Ignore real secret files under secrets/, but keep *.example.* templates tracked
+# (they carry no real secrets and document the expected files).
+secrets/*
+!secrets/*.example.yaml
+!secrets/*.example.json
 
 # Generated per-machine facts, never tracked
 hardware-configuration.nix
