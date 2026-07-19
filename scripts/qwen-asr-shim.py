@@ -125,6 +125,15 @@ QWEN_OMNI_REALTIME_MODEL = _env(
     "QWEN_OMNI_REALTIME_MODEL", "qwen3.5-omni-plus-realtime"
 )
 QWEN_TRANSLATOR_PORT = int(_env("QWEN_TRANSLATOR_PORT", "8771"))
+# Second realtime-omni-family model + its own loopback translator port, for
+# the qwen-audio3 profile. Confirmed to speak the identical realtime protocol
+# as qwen3.5-omni-plus-realtime (session.created -> session.update ->
+# input_audio_buffer.append/commit -> response.create -> response.text.delta/
+# done), just a different model in the WS URL -- see RealtimeTranslator below.
+QWEN_AUDIO3_REALTIME_MODEL = _env(
+    "QWEN_AUDIO3_REALTIME_MODEL", "qwen-audio-3.0-realtime-plus"
+)
+QWEN_AUDIO3_TRANSLATOR_PORT = int(_env("QWEN_AUDIO3_TRANSLATOR_PORT", "8772"))
 QWEN_ASR_LANGUAGE = _env("QWEN_ASR_LANGUAGE", "en")
 QWEN_CLEANUP_PROMPT = _env("QWEN_CLEANUP_PROMPT", DEFAULT_CLEANUP_PROMPT)
 QWEN_AGGRESSIVE_CLEANUP_PROMPT = _env(
@@ -158,6 +167,9 @@ CHAT_COMPLETIONS_URL = f"https://{QWEN_ASR_HOST}{CHAT_COMPLETIONS_PATH}"
 REALTIME_WS_URL = f"wss://{QWEN_ASR_HOST}/api-ws/v1/realtime?model={QWEN_WS_MODEL}"
 QWEN_OMNI_REALTIME_WS_URL = (
     f"wss://{QWEN_ASR_HOST}/api-ws/v1/realtime?model={QWEN_OMNI_REALTIME_MODEL}"
+)
+QWEN_AUDIO3_REALTIME_WS_URL = (
+    f"wss://{QWEN_ASR_HOST}/api-ws/v1/realtime?model={QWEN_AUDIO3_REALTIME_MODEL}"
 )
 
 _ENV_REF_RE = re.compile(r"^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$")
@@ -803,32 +815,42 @@ def format_timing(route, timings):
 
 
 # --------------------------------------------------------------------------
-# omni-realtime WS translator (loopback) for the qwen-omni-realtime profile
+# Realtime WS translators (loopback), one per realtime-ws profile
 #
-# hyprwhspr's realtime-ws converse client connects here over loopback; this
-# translator relays to the DashScope omni-realtime upstream, adapting message
-# shapes both ways so hyprwhspr's converse dialect drives the omni model, which
-# transcribes AND cleans in a single streaming session. The cleanup instruction
-# is the SAME one the omni HTTP route uses (build_aggressive_cleanup_instruction)
-# so a future prompt change flows to both paths from one place.
+# hyprwhspr's realtime-ws converse client connects here over loopback; each
+# translator instance relays to one DashScope realtime-omni-family upstream
+# model, adapting message shapes both ways so hyprwhspr's converse dialect
+# drives that model, which transcribes AND cleans in a single streaming
+# session. The cleanup instruction is the SAME one the omni HTTP route uses
+# (build_aggressive_cleanup_instruction) so a future prompt change flows to
+# every realtime-ws profile from one place.
 #
-# It runs in its own daemon thread with a private asyncio event loop, kept fully
-# separate from the sync ThreadingHTTPServer and its keep-alive connection pool.
+# Two instances run today: "omni" (qwen3.5-omni-plus-realtime, port 8771 --
+# the original qwen-omni-realtime profile, unchanged behavior/port) and
+# "audio3" (qwen-audio-3.0-realtime-plus, port 8772 -- confirmed to speak the
+# identical realtime protocol, just a different model in the WS URL). Both
+# share ONE daemon thread and ONE private asyncio event loop (kept fully
+# separate from the sync ThreadingHTTPServer and its keep-alive connection
+# pool) running two websockets.serve() listeners side by side, rather than
+# one thread per model -- simpler lifecycle, and the two upstream sessions
+# are independent regardless of which loop schedules their I/O.
+#
+# Design choice: /prewarm warms BOTH instances' upstream slots, not just
+# whichever profile is currently active in hyprwhspr's config. The shim has
+# no visibility into which profile is selected (that choice lives entirely
+# client-side in hyprwhspr), and a second idle warm socket is cheap, so
+# warming both means switching profiles via Ctrl+Shift+P never pays a
+# cold-connect penalty on the first dictation after a switch.
 # --------------------------------------------------------------------------
-
-# Set once the translator's event loop is running so the sync /prewarm handler
-# (an HTTP worker thread) can schedule a warm upstream via run_coroutine_threadsafe.
-_TRANSLATOR_LOOP = None
-# One best-effort pre-established upstream, adopted by the next client. The lock
-# is created on the translator loop in translator_thread().
-_WARM_UPSTREAM = {"ws": None}
-_WARM_LOCK = None
 
 
 def _flat_session_update():
-    """The FLAT session.update the omni-realtime upstream requires; it rejects
-    hyprwhspr's nested realtime shape. turn_detection MUST be explicitly null so
-    server VAD does not fight hyprwhspr's manual commit + response.create flow."""
+    """The FLAT session.update every realtime-omni-family upstream requires;
+    it rejects hyprwhspr's nested realtime shape. turn_detection MUST be
+    explicitly null so server VAD does not fight hyprwhspr's manual commit +
+    response.create flow. Identical for every model in this family (confirmed
+    for qwen-audio-3.0-realtime-plus too) -- only the upstream WS URL differs
+    per translator instance, so this helper takes no model-specific params."""
     return {
         "type": "session.update",
         "session": {
@@ -840,249 +862,288 @@ def _flat_session_update():
     }
 
 
-async def _open_upstream():
-    """Open a fresh upstream omni-realtime connection and send session.update."""
-    api_key = get_api_key()
-    ws = await websockets.connect(
-        QWEN_OMNI_REALTIME_WS_URL,
-        additional_headers={"Authorization": f"Bearer {api_key}"},
-        open_timeout=QWEN_WARM_TIMEOUT,
-        max_size=None,
-        ping_interval=20,
-        ping_timeout=20,
-    )
-    await ws.send(json.dumps(_flat_session_update()))
-    return ws
+class RealtimeTranslator:
+    """One loopback WS server bridging hyprwhspr's converse client to one
+    persistent DashScope realtime-omni-family upstream connection. Each
+    instance owns its own warm-upstream slot/lock so profiles never share or
+    contend over each other's pre-established connections."""
 
+    def __init__(self, name, ws_url, port):
+        self.name = name
+        self.ws_url = ws_url
+        self.port = port
+        # Best-effort pre-established upstream, adopted by the next client.
+        self.warm_ws = None
+        # Created on the shared translator loop once it's running (see
+        # translator_thread._serve), same as the old module-level _WARM_LOCK.
+        self.lock = None
 
-async def _warm_upstream_slot():
-    """Best-effort: pre-establish one warm upstream for the next client."""
-    async with _WARM_LOCK:
-        if _WARM_UPSTREAM["ws"] is not None:
-            return
-    try:
-        ws = await _open_upstream()
-    except Exception as e:
-        log(f"translator prewarm: upstream connect failed (ignored): {e}")
-        return
-    async with _WARM_LOCK:
-        if _WARM_UPSTREAM["ws"] is None:
-            _WARM_UPSTREAM["ws"] = ws
-            log("translator prewarm: warm upstream ready")
-            return
-    await ws.close()
-
-
-async def _acquire_upstream():
-    """Adopt the warm upstream if present, else open a fresh one."""
-    async with _WARM_LOCK:
-        ws = _WARM_UPSTREAM["ws"]
-        _WARM_UPSTREAM["ws"] = None
-    if ws is not None:
-        log("translator: adopted prewarmed upstream")
+    async def open_upstream(self):
+        """Open a fresh upstream connection and send session.update."""
+        api_key = get_api_key()
+        ws = await websockets.connect(
+            self.ws_url,
+            additional_headers={"Authorization": f"Bearer {api_key}"},
+            open_timeout=QWEN_WARM_TIMEOUT,
+            max_size=None,
+            ping_interval=20,
+            ping_timeout=20,
+        )
+        await ws.send(json.dumps(_flat_session_update()))
         return ws
-    return await _open_upstream()
 
-
-async def _translator_handler(client_ws):
-    """Bridge one hyprwhspr converse client to a persistent omni-realtime upstream."""
-    conn = {"ws": None}
-    reconnect_lock = asyncio.Lock()
-    # Per-utterance counters; reset on input_audio_buffer.clear (recording start).
-    # raw_asr holds the upstream's raw transcription for the current utterance so
-    # the output guard can fall back to it if the cleaned text looks like a reply.
-    state = {"frames": 0, "abytes": 0, "commit_t": None, "raw_asr": ""}
-    stop = asyncio.Event()
-
-    try:
-        conn["ws"] = await _acquire_upstream()
-    except Exception as e:
-        # Cannot serve: close the client so hyprwhspr fails the dictation within
-        # its realtime_timeout rather than hanging.
-        log(f"translator: upstream unavailable, closing client ({e})")
+    async def warm_upstream_slot(self):
+        """Best-effort: pre-establish one warm upstream for the next client."""
+        async with self.lock:
+            if self.warm_ws is not None:
+                return
         try:
-            await client_ws.close(code=1011)
-        except Exception:
-            pass
-        return
-    log("translator: upstream session established")
+            ws = await self.open_upstream()
+        except Exception as e:
+            log(f"translator[{self.name}] prewarm: upstream connect failed (ignored): {e}")
+            return
+        async with self.lock:
+            if self.warm_ws is None:
+                self.warm_ws = ws
+                log(f"translator[{self.name}] prewarm: warm upstream ready")
+                return
+        await ws.close()
 
-    async def reconnect(old):
-        async with reconnect_lock:
-            if conn["ws"] is not old:
-                return  # another path already reconnected
+    async def acquire_upstream(self):
+        """Adopt the warm upstream if present, else open a fresh one."""
+        async with self.lock:
+            ws = self.warm_ws
+            self.warm_ws = None
+        if ws is not None:
+            log(f"translator[{self.name}]: adopted prewarmed upstream")
+            return ws
+        return await self.open_upstream()
+
+    async def handle_client(self, client_ws):
+        """Bridge one hyprwhspr converse client to a persistent upstream."""
+        conn = {"ws": None}
+        reconnect_lock = asyncio.Lock()
+        # Per-utterance counters; reset on input_audio_buffer.clear (recording
+        # start). raw_asr holds the upstream's raw transcription for the
+        # current utterance so the output guard can fall back to it if the
+        # cleaned text looks like a reply.
+        state = {"frames": 0, "abytes": 0, "commit_t": None, "raw_asr": ""}
+        stop = asyncio.Event()
+
+        try:
+            conn["ws"] = await self.acquire_upstream()
+        except Exception as e:
+            # Cannot serve: close the client so hyprwhspr fails the dictation
+            # within its realtime_timeout rather than hanging.
+            log(f"translator[{self.name}]: upstream unavailable, closing client ({e})")
             try:
-                await old.close()
+                await client_ws.close(code=1011)
             except Exception:
                 pass
-            conn["ws"] = await _open_upstream()
-            log("translator: upstream reconnected; session re-sent")
+            return
+        log(f"translator[{self.name}]: upstream session established")
 
-    async def client_to_upstream():
-        try:
-            async for raw in client_ws:
+        async def reconnect(old):
+            async with reconnect_lock:
+                if conn["ws"] is not old:
+                    return  # another path already reconnected
                 try:
-                    msg = json.loads(raw)
-                except (TypeError, ValueError):
-                    continue
-                t = msg.get("type", "")
-                if t == "session.update":
-                    # Translator owns the upstream (flat) session config; drop
-                    # hyprwhspr's nested realtime session.update.
-                    continue
-                if t == "response.create":
-                    # Instructions are already set at session level; force text.
-                    msg = {
-                        "type": "response.create",
-                        "response": {"modalities": ["text"]},
-                    }
-                elif t == "input_audio_buffer.append":
-                    state["frames"] += 1
-                    audio = msg.get("audio") or ""
-                    state["abytes"] += (len(audio) * 3) // 4
-                elif t == "input_audio_buffer.commit":
-                    state["commit_t"] = time.perf_counter()
-                elif t == "input_audio_buffer.clear":
-                    state["frames"] = 0
-                    state["abytes"] = 0
-                    state["commit_t"] = None
-                    state["raw_asr"] = ""
-                payload = json.dumps(msg)
-                try:
-                    await conn["ws"].send(payload)
-                except websockets.exceptions.ConnectionClosed:
-                    await reconnect(conn["ws"])
-                    await conn["ws"].send(payload)
-        except websockets.exceptions.ConnectionClosed:
-            pass
-        finally:
-            stop.set()
-
-    async def upstream_to_client():
-        while not stop.is_set():
-            ws = conn["ws"]
-            try:
-                async for raw in ws:
-                    try:
-                        ev = json.loads(raw)
-                    except (TypeError, ValueError):
-                        continue
-                    t = ev.get("type", "")
-                    # hyprwhspr's converse reader must see only the cleaned text:
-                    # swallow raw ASR transcription events and any audio output.
-                    if t.startswith("response.audio"):
-                        continue
-                    if t.startswith("conversation.item.input_audio_transcription"):
-                        # Capture the raw ASR (for the output-guard fallback) but
-                        # do not forward it: the converse client sees cleaned text
-                        # only.
-                        if t.endswith(".completed"):
-                            state["raw_asr"] = (
-                                ev.get("transcript") or ev.get("text") or ""
-                            )
-                        continue
-                    if t == "response.text.delta":
-                        ev = {
-                            "type": "response.output_text.delta",
-                            "delta": ev.get("delta", ""),
-                        }
-                    elif t == "response.text.done":
-                        # An empty done is valid (filler-only -> paste nothing).
-                        # Otherwise, if the cleaned text looks like a reply rather
-                        # than a cleanup, fall back to the raw ASR.
-                        cleaned = ev.get("text", "")
-                        reason = cleanup_suspect(state.get("raw_asr"), cleaned)
-                        if reason:
-                            log(
-                                f"translator guard: {reason}; "
-                                "falling back to raw transcript"
-                            )
-                            cleaned = state.get("raw_asr") or ""
-                        ev = {
-                            "type": "response.output_text.done",
-                            "text": cleaned,
-                        }
-                    elif t == "response.done":
-                        commit_t = state.get("commit_t")
-                        ms = (
-                            (time.perf_counter() - commit_t) * 1000
-                            if commit_t
-                            else -1.0
-                        )
-                        log(
-                            "translator: utterance done "
-                            f"frames={state['frames']} bytes={state['abytes']} "
-                            f"commit->final={ms:.0f}ms"
-                        )
-                        state["commit_t"] = None
-                    try:
-                        await client_ws.send(json.dumps(ev))
-                    except websockets.exceptions.ConnectionClosed:
-                        stop.set()
-                        return
-            except websockets.exceptions.ConnectionClosed:
-                pass
-            if stop.is_set():
-                break
-            # Upstream dropped mid-session (not a client stop): reconnect so the
-            # persistent session survives, then resume reading.
-            try:
-                await reconnect(ws)
-            except Exception as e:
-                log(f"translator: upstream reconnect failed, closing client ({e})")
-                stop.set()
-                try:
-                    await client_ws.close(code=1011)
+                    await old.close()
                 except Exception:
                     pass
-                break
+                conn["ws"] = await self.open_upstream()
+                log(f"translator[{self.name}]: upstream reconnected; session re-sent")
 
-    reader = asyncio.create_task(upstream_to_client())
-    try:
-        # Completes when the hyprwhspr client disconnects (or an unrecoverable
-        # upstream failure closes it), ending the persistent session.
-        await client_to_upstream()
-    finally:
-        stop.set()
-        reader.cancel()
+        async def client_to_upstream():
+            try:
+                async for raw in client_ws:
+                    try:
+                        msg = json.loads(raw)
+                    except (TypeError, ValueError):
+                        continue
+                    t = msg.get("type", "")
+                    if t == "session.update":
+                        # Translator owns the upstream (flat) session config;
+                        # drop hyprwhspr's nested realtime session.update.
+                        continue
+                    if t == "response.create":
+                        # Instructions are already set at session level;
+                        # force text.
+                        msg = {
+                            "type": "response.create",
+                            "response": {"modalities": ["text"]},
+                        }
+                    elif t == "input_audio_buffer.append":
+                        state["frames"] += 1
+                        audio = msg.get("audio") or ""
+                        state["abytes"] += (len(audio) * 3) // 4
+                    elif t == "input_audio_buffer.commit":
+                        state["commit_t"] = time.perf_counter()
+                    elif t == "input_audio_buffer.clear":
+                        state["frames"] = 0
+                        state["abytes"] = 0
+                        state["commit_t"] = None
+                        state["raw_asr"] = ""
+                    payload = json.dumps(msg)
+                    try:
+                        await conn["ws"].send(payload)
+                    except websockets.exceptions.ConnectionClosed:
+                        await reconnect(conn["ws"])
+                        await conn["ws"].send(payload)
+            except websockets.exceptions.ConnectionClosed:
+                pass
+            finally:
+                stop.set()
+
+        async def upstream_to_client():
+            while not stop.is_set():
+                ws = conn["ws"]
+                try:
+                    async for raw in ws:
+                        try:
+                            ev = json.loads(raw)
+                        except (TypeError, ValueError):
+                            continue
+                        t = ev.get("type", "")
+                        # hyprwhspr's converse reader must see only the cleaned
+                        # text: swallow raw ASR transcription events and any
+                        # audio output.
+                        if t.startswith("response.audio"):
+                            continue
+                        if t.startswith("conversation.item.input_audio_transcription"):
+                            # Capture the raw ASR (for the output-guard
+                            # fallback) but do not forward it: the converse
+                            # client sees cleaned text only.
+                            if t.endswith(".completed"):
+                                state["raw_asr"] = (
+                                    ev.get("transcript") or ev.get("text") or ""
+                                )
+                            continue
+                        if t == "response.text.delta":
+                            ev = {
+                                "type": "response.output_text.delta",
+                                "delta": ev.get("delta", ""),
+                            }
+                        elif t == "response.text.done":
+                            # An empty done is valid (filler-only -> paste
+                            # nothing). Otherwise, if the cleaned text looks
+                            # like a reply rather than a cleanup, fall back to
+                            # the raw ASR.
+                            cleaned = ev.get("text", "")
+                            reason = cleanup_suspect(state.get("raw_asr"), cleaned)
+                            if reason:
+                                log(
+                                    f"translator[{self.name}] guard: {reason}; "
+                                    "falling back to raw transcript"
+                                )
+                                cleaned = state.get("raw_asr") or ""
+                            ev = {
+                                "type": "response.output_text.done",
+                                "text": cleaned,
+                            }
+                        elif t == "response.done":
+                            commit_t = state.get("commit_t")
+                            ms = (
+                                (time.perf_counter() - commit_t) * 1000
+                                if commit_t
+                                else -1.0
+                            )
+                            log(
+                                f"translator[{self.name}]: utterance done "
+                                f"frames={state['frames']} bytes={state['abytes']} "
+                                f"commit->final={ms:.0f}ms"
+                            )
+                            state["commit_t"] = None
+                        try:
+                            await client_ws.send(json.dumps(ev))
+                        except websockets.exceptions.ConnectionClosed:
+                            stop.set()
+                            return
+                except websockets.exceptions.ConnectionClosed:
+                    pass
+                if stop.is_set():
+                    break
+                # Upstream dropped mid-session (not a client stop): reconnect
+                # so the persistent session survives, then resume reading.
+                try:
+                    await reconnect(ws)
+                except Exception as e:
+                    log(f"translator[{self.name}]: upstream reconnect failed, closing client ({e})")
+                    stop.set()
+                    try:
+                        await client_ws.close(code=1011)
+                    except Exception:
+                        pass
+                    break
+
+        reader = asyncio.create_task(upstream_to_client())
         try:
-            await reader
-        except asyncio.CancelledError:
-            pass
-        try:
-            await conn["ws"].close()
-        except Exception:
-            pass
-        log("translator: upstream session closed")
+            # Completes when the hyprwhspr client disconnects (or an
+            # unrecoverable upstream failure closes it), ending the
+            # persistent session.
+            await client_to_upstream()
+        finally:
+            stop.set()
+            reader.cancel()
+            try:
+                await reader
+            except asyncio.CancelledError:
+                pass
+            try:
+                await conn["ws"].close()
+            except Exception:
+                pass
+            log(f"translator[{self.name}]: upstream session closed")
+
+
+# One instance per realtime-ws profile. Order only affects prewarm/startup
+# log ordering; every instance is always warmed/started together.
+_TRANSLATORS = [
+    RealtimeTranslator("omni", QWEN_OMNI_REALTIME_WS_URL, QWEN_TRANSLATOR_PORT),
+    RealtimeTranslator("audio3", QWEN_AUDIO3_REALTIME_WS_URL, QWEN_AUDIO3_TRANSLATOR_PORT),
+]
+
+# Set once the shared translator loop is running so the sync /prewarm handler
+# (an HTTP worker thread) can schedule warm upstreams via run_coroutine_threadsafe.
+_TRANSLATOR_LOOP = None
 
 
 def _translator_prewarm():
-    """Schedule a best-effort warm upstream from the sync /prewarm handler."""
+    """Schedule a best-effort warm upstream for every translator instance
+    from the sync /prewarm handler (see module comment: both models are kept
+    warm regardless of which profile is currently active)."""
     loop = _TRANSLATOR_LOOP
     if loop is None:
         return
-    try:
-        asyncio.run_coroutine_threadsafe(_warm_upstream_slot(), loop)
-    except Exception as e:
-        log(f"translator prewarm schedule failed (ignored): {e}")
+    for inst in _TRANSLATORS:
+        try:
+            asyncio.run_coroutine_threadsafe(inst.warm_upstream_slot(), loop)
+        except Exception as e:
+            log(f"translator[{inst.name}] prewarm schedule failed (ignored): {e}")
 
 
 def translator_thread():
-    """Run the loopback translator server in a private asyncio event loop."""
+    """Run every realtime-ws translator instance in one shared private
+    asyncio event loop (one thread, one loop, one websockets.serve() per
+    instance)."""
 
     async def _serve():
-        global _TRANSLATOR_LOOP, _WARM_LOCK
-        _WARM_LOCK = asyncio.Lock()
+        global _TRANSLATOR_LOOP
         _TRANSLATOR_LOOP = asyncio.get_running_loop()
-        async with websockets.serve(
-            _translator_handler, BIND_HOST, QWEN_TRANSLATOR_PORT, max_size=None
-        ):
+        for inst in _TRANSLATORS:
+            inst.lock = asyncio.Lock()
+        # Kept alive by this local binding for the coroutine's lifetime (i.e.
+        # until the process exits), same as the servers each listen forever.
+        servers = [
+            await websockets.serve(inst.handle_client, BIND_HOST, inst.port, max_size=None)
+            for inst in _TRANSLATORS
+        ]
+        for inst in _TRANSLATORS:
             log(
-                f"omni-realtime translator listening on "
-                f"ws://{BIND_HOST}:{QWEN_TRANSLATOR_PORT} "
-                f"(upstream={QWEN_OMNI_REALTIME_WS_URL})"
+                f"realtime translator[{inst.name}] listening on "
+                f"ws://{BIND_HOST}:{inst.port} (upstream={inst.ws_url})"
             )
-            await asyncio.Future()  # run forever
+        await asyncio.Future()  # run forever
 
     try:
         asyncio.run(_serve())

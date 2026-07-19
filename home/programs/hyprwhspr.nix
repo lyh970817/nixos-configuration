@@ -811,6 +811,7 @@ in
     "hyprwhspr/profiles/qwen-realtime.json".source = ../../config/hyprwhspr/profiles/qwen-realtime.json;
     "hyprwhspr/profiles/qwen-omni-realtime.json".source =
       ../../config/hyprwhspr/profiles/qwen-omni-realtime.json;
+    "hyprwhspr/profiles/qwen-audio3.json".source = ../../config/hyprwhspr/profiles/qwen-audio3.json;
     "hyprwhspr/profiles/sensevoice.json".source = ../../config/hyprwhspr/profiles/sensevoice.json;
 
     "hyprwhspr/README-nixos.md".text = ''
