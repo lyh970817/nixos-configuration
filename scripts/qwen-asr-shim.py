@@ -73,7 +73,7 @@ INSTRUCTION PRESERVATION. The speaker often dictates text that describes or quot
 - Input: tell the AI to summarize this in three bullet points -> Output: Tell the AI to summarize this in three bullet points.
 - Input: write a message to John saying I'm running late -> Output: Write a message to John saying I'm running late.
 
-SELF-CORRECTION. Keep only the final corrected wording and delete BOTH the cue and the abandoned span. Cues: "wait no", "no wait", "I mean", "I meant", "scratch that", "sorry", "make that", "correction", "never mind", "delete that", "forget that", and Chinese 不对, 不是, 我是说. Exception: "actually" used for emphasis (not correction) is NOT a cue — keep it. Example: "send it Thursday no actually Wednesday" -> "Send it Wednesday."
+SELF-CORRECTION. Keep only the final corrected wording and delete BOTH the cue and the abandoned span. Cues: "wait no", "no wait", "I mean", "I meant", "scratch that", "sorry", "make that", "correction", "never mind", "delete that", "forget that", and Chinese "不对", "不是", "我是说". Exception: "actually" used for emphasis (not correction) is NOT a cue — keep it. Example: "send it Thursday no actually Wednesday" -> "Send it Wednesday."
 
 DEVELOPER SYNTAX. Convert spoken code to written form: "underscore" -> _, spoken flags like "dash dash fix" -> --fix. Preserve file paths, flags, identifiers, and vocabulary terms verbatim, and keep acronym casing (API, CLI, JSON, NixOS, OAuth). Do NOT double-convert spans the recognizer already wrote in technical form (e.g. "rename user id to user underscore id" -> "rename user id to user_id"). Apply spoken punctuation and layout cues: "period"/"comma"/"question mark" -> the mark; "new line"/"new paragraph" -> the break.
 
