@@ -5,11 +5,11 @@ description: Use when the user asks for system maintenance, NixOS or Home Manage
 
 # System Maintenance
 
-Use `/home/andongni/Yandex.Disk/System/nixos-configuration` as the source of truth for this machine's NixOS and Home Manager configuration. If the configuration must be rebuilt, rebuild from that repo with `sudo nixos-rebuild switch --flake .#andongni --impure`.
+Use `/home/andongni/.nixos-config` as the source of truth for this machine's NixOS and Home Manager configuration. If the configuration must be rebuilt, rebuild from that repo with `sudo nixos-rebuild switch --flake .#andongni --impure`.
 
 ## Workflow
 
-1. For machine-level maintenance, start in `/home/andongni/Yandex.Disk/System/nixos-configuration` and read local guidance such as `AGENTS.md` before editing.
+1. For machine-level maintenance, start in `/home/andongni/.nixos-config` and read local guidance such as `AGENTS.md` before editing.
 2. For Codex, Claude, or other AI-agent configuration, identify the active profile, config directory, and launcher path before editing mutable state or NixOS/Home Manager files.
 3. Keep edits scoped to the requested maintenance task and to the existing configuration structure.
 4. For NixOS/Home Manager changes, commit the scoped change before rebuilding so the configured pre-commit hooks are the verification gate.
@@ -32,14 +32,14 @@ Claude mutable state lives under `CLAUDE_CONFIG_DIR`.
 
 - Default Claude config dir: `/home/andongni/.config/claude`.
 - Claude mattpocock config dir: `/home/andongni/.config/claude-mattpocock`, selected by the `claude-matt` launcher.
-- Claude launcher and default environment: `/home/andongni/Yandex.Disk/System/nixos-configuration/home/programs/claude.nix`.
-- Claude Code package derivation: `/home/andongni/Yandex.Disk/System/nixos-configuration/pkgs/claude-code.nix`.
+- Claude launcher and default environment: `/home/andongni/.nixos-config/home/programs/claude.nix`.
+- Claude Code package derivation: `/home/andongni/.nixos-config/pkgs/claude-code.nix`.
 - Claude settings: `$CLAUDE_CONFIG_DIR/settings.json`.
 - Claude guidance: `$CLAUDE_CONFIG_DIR/CLAUDE.md`.
 - Claude commands, agents, plugins, and skills: `$CLAUDE_CONFIG_DIR/commands`, `$CLAUDE_CONFIG_DIR/agents`, `$CLAUDE_CONFIG_DIR/plugins`, and `$CLAUDE_CONFIG_DIR/skills`.
 - Matt Pocock skills in the `claude-mattpocock` profile are independent copies managed with the upstream-recommended `npx skills@latest add mattpocock/skills` flow. For exact synchronization and removal of deprecated skills, invoke `$sync-mattpocock-skills` from that profile; never link those skills to `/home/andongni/.agents/skills` or `/home/andongni/.codex/skills`.
-- `claude-matt` sets `CLAUDE_CONFIG_DIR="$HOME/.config/claude-mattpocock"` in `/home/andongni/Yandex.Disk/System/nixos-configuration/home/programs/shell.nix`.
-- Theme automation mutates `/home/andongni/.config/claude/settings.json` from `/home/andongni/Yandex.Disk/System/nixos-configuration/home/desktop/theming.nix`.
+- `claude-matt` sets `CLAUDE_CONFIG_DIR="$HOME/.config/claude-mattpocock"` in `/home/andongni/.nixos-config/home/programs/shell.nix`.
+- Theme automation mutates `/home/andongni/.config/claude/settings.json` from `/home/andongni/.nixos-config/home/desktop/theming.nix`.
 - Claude plugins are managed through Claude's `/plugin` commands; installed plugin state is in `$CLAUDE_CONFIG_DIR/plugins/installed_plugins.json` and known marketplaces are in `$CLAUDE_CONFIG_DIR/plugins/known_marketplaces.json`.
 
 Claude does not have Codex-style profiles, but each `CLAUDE_CONFIG_DIR` acts like a separate profile folder. Keep this Claude-format `system-maintenance` skill present in every Claude config dir's `skills` folder, using symlinks where appropriate:
@@ -51,4 +51,4 @@ Portable upstream Agent Skills may use identical `SKILL.md` content for Codex an
 
 ## Rebuild Discipline
 
-For configuration changes in `/home/andongni/Yandex.Disk/System/nixos-configuration`, follow the repo policy: commit the scoped change first, then apply the committed configuration with `sudo nixos-rebuild switch --flake .#andongni --impure`. If the rebuild fails, make a follow-up fix commit and rebuild again.
+For configuration changes in `/home/andongni/.nixos-config`, follow the repo policy: commit the scoped change first, then apply the committed configuration with `sudo nixos-rebuild switch --flake .#andongni --impure`. If the rebuild fails, make a follow-up fix commit and rebuild again.

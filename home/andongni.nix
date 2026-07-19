@@ -4,7 +4,7 @@
   # Configuration Management Strategy:
   # - Simple configs: Managed by home-manager (git, tmux, htop, starship, etc.)
   # - Theme-aware: Home-manager + darkman hooks (alacritty, rofi, mako, fzf)
-  # - Complex/Active: Symlinked from ~/Yandex.Disk/System/nixos-configuration/dotfiles (nvim, yazi, hypr)
+  # - Complex/Active: Symlinked from ~/.nixos-config/dotfiles (nvim, yazi, hypr)
   # - Sensitive: Manual (ssh)
 
   imports = [

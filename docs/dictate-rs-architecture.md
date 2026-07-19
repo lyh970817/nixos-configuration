@@ -114,7 +114,7 @@ state: recording
 profile: clean
 elapsed: 4.2s
 speech: active
-context: ~/Yandex.Disk/System/nixos-configuration
+context: ~/.nixos-config
 source: hyprland+tmux
 delivery: clipboard_paste
 learning: enabled

@@ -1,6 +1,6 @@
 ---
 name: nix-environment-setup
-description: Use for non-system project work on NixOS only when a missing development tool/env var should be fixed with a project-local shell.nix, .envrc, and direnv setup. Do not use for /home/andongni/Yandex.Disk/System/nixos-configuration, NixOS/Home Manager/system configuration repos, or merely because a repo contains Nix files or flake.nix.
+description: Use for non-system project work on NixOS only when a missing development tool/env var should be fixed with a project-local shell.nix, .envrc, and direnv setup. Do not use for /home/andongni/.nixos-config, NixOS/Home Manager/system configuration repos, or merely because a repo contains Nix files or flake.nix.
 ---
 
 # Nix Environment Setup

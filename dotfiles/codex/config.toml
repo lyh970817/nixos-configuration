@@ -82,7 +82,7 @@ trust_level = "trusted"
 [projects."/home/andongni/Local/dissertation"]
 trust_level = "trusted"
 
-[projects."/home/andongni/Yandex.Disk/System/nixos-configuration"]
+[projects."/home/andongni/.nixos-config"]
 trust_level = "trusted"
 
 [projects."/home/andongni/Local/dissertation/dissertation2"]
