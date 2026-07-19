@@ -52,7 +52,7 @@
         hooks.nix-gc = {
           enable = true;
           name = "nix garbage collect";
-          entry = "sh -c 'sudo -n nix-collect-garbage --delete-older-than 3d >/dev/null 2>&1 || true'";
+          entry = "sh -c 'sudo -n nix-collect-garbage --delete-older-than 3d'";
           language = "system";
           pass_filenames = false;
           always_run = true;
