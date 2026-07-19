@@ -144,7 +144,7 @@
 
       # System rebuild alias. /etc/nixos is the stable symlink to this checkout,
       # so this works from any directory.
-      alias rebuild='sudo nixos-rebuild switch --flake /etc/nixos#andongni --impure'
+      alias rebuild='sudo nixos-rebuild switch --flake /etc/nixos#system --impure'
 
       # Codex with unrestricted filesystem access.
       alias cdy='codex --yolo'
