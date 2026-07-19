@@ -14,7 +14,7 @@ This repository is a NixOS flake for the `andongni` host. Entry points are `flak
 
 For configuration changes, do not run standalone verification commands before rebuilding. Stage and commit the scoped change first so the configured pre-commit hooks run verification, then apply the committed configuration with `rebuild`.
 
-For visual changes, apply the `visual-verification` skill automatically. Treat
+For visual changes, perform visual verification automatically. Treat
 the mode active at task start as the entire change scope; change or inspect the
 other mode only when the user explicitly requests it. Before committing, a
 visual preview may use reliably reversible runtime overrides or isolated
