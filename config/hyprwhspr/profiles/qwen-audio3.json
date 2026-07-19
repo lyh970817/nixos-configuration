@@ -1,0 +1,23 @@
+{
+  "$schema": "https://raw.githubusercontent.com/goodroot/hyprwhspr/main/share/config.schema.json",
+  "transcription_backend": "realtime-ws",
+  "websocket_provider": "custom",
+  "websocket_url": "ws://127.0.0.1:8772",
+  "websocket_model": "qwen-audio-3.0-realtime-plus",
+  "realtime_mode": "converse",
+  "realtime_timeout": 8,
+  "recording_mode": "toggle",
+  "use_hypr_bindings": true,
+  "primary_shortcut": "SUPER+O",
+  "cancel_shortcut": "SUPER+ESCAPE",
+  "applications": {
+    "alacritty": { "auto_paste": "ctrl+shift+v" },
+    "alacritty-float": { "auto_paste": "ctrl+shift+v" },
+    "alacritty-main": { "auto_paste": "ctrl+shift+v" }
+  },
+  "paste_mode": "ctrl",
+  "prefer_clipboard_paste": true,
+  "post_transcription_hook": null,
+  "notification_timeout_ms": 0,
+  "whisper_prompt": ""
+}

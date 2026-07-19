@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly modes=(qwen-http qwen-ws qwen-omni qwen-realtime qwen-omni-realtime sensevoice realtime)
+readonly modes=(qwen-http qwen-ws qwen-omni qwen-realtime qwen-omni-realtime qwen-audio3 gemini-longform sensevoice realtime)
 readonly default_mode=qwen-omni-realtime
 readonly profiles_dir="${HYPRWHISPR_PROFILE_PROFILES_DIR:?HYPRWHISPR_PROFILE_PROFILES_DIR is required}"
 readonly state_home="${HYPRWHISPR_PROFILE_STATE_HOME:-${XDG_STATE_HOME:-$HOME/.local/state}}"
@@ -13,7 +13,7 @@ readonly normal_service_name="${HYPRWHISPR_PROFILE_SERVICE:-hyprwhspr.service}"
 readonly longform_service_name="${HYPRWHISPR_PROFILE_LONGFORM_SERVICE:-meeting-recorder.service}"
 
 usage() {
-  printf '%s\n' 'usage: hyprwhispr-profile {toggle|set qwen-http|set qwen-ws|set qwen-omni|set qwen-realtime|set qwen-omni-realtime|set sensevoice|set realtime|status}' >&2
+  printf '%s\n' 'usage: hyprwhispr-profile {toggle|set qwen-http|set qwen-ws|set qwen-omni|set qwen-realtime|set qwen-omni-realtime|set qwen-audio3|set gemini-longform|set sensevoice|set realtime|status}' >&2
 }
 
 is_mode() {
@@ -149,7 +149,7 @@ daemon_ready() {
   # Realtime websocket startup can take ~20s, including one daemon crash
   # plus systemd restart; give it a wider readiness window than the
   # rest-api-backed qwen-* profiles, which come up quickly.
-  [[ "$mode" == realtime || "$mode" == qwen-realtime || "$mode" == qwen-omni-realtime ]] && attempts=120
+  [[ "$mode" == realtime || "$mode" == qwen-realtime || "$mode" == qwen-omni-realtime || "$mode" == qwen-audio3 ]] && attempts=120
   profile="$(readlink -f "$(profile_path "$mode")")"
   for _ in $(seq 1 "$attempts"); do
     if systemctl --user is-active --quiet "$normal_service_name" \
