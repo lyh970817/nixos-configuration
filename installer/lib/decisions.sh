@@ -124,6 +124,63 @@ confirm_erase() {
   return "$DECISIONS_EXIT_FAIL"
 }
 
+# validate_role <value>
+#
+# Validates an operator-typed portable.role value. Only the two enum members
+# the flake's local.nix schema accepts are valid.
+#
+# Exit codes:
+#   DECISIONS_EXIT_OK   - value is exactly "home" or "remote".
+#   DECISIONS_EXIT_FAIL - anything else (wrong case, empty, extra text).
+validate_role() {
+  local value="$1"
+
+  if [[ "$value" == "home" || "$value" == "remote" ]]; then
+    return "$DECISIONS_EXIT_OK"
+  fi
+
+  return "$DECISIONS_EXIT_FAIL"
+}
+
+# validate_hostname <value>
+#
+# Validates an operator-typed networking.hostName value against an
+# RFC1123-ish single-label hostname: lowercase letters, digits, and hyphens
+# only, 1-63 characters, and must not start or end with a hyphen.
+#
+# Exit codes:
+#   DECISIONS_EXIT_OK   - value is a valid hostname label.
+#   DECISIONS_EXIT_FAIL - empty, too long, or contains disallowed
+#                         characters/placement.
+validate_hostname() {
+  local value="$1"
+
+  if [[ "$value" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]]; then
+    return "$DECISIONS_EXIT_OK"
+  fi
+
+  return "$DECISIONS_EXIT_FAIL"
+}
+
+# default_peer_host <role>
+#
+# Prints the sensible default portable.peerHost for the given role. The
+# remote machine's peer is always named "home" (a stable MagicDNS alias);
+# the home machine's peer is the remote's chosen hostname, which is not
+# known here and must be prompted for separately, so this prints nothing
+# for role "home". Always exits DECISIONS_EXIT_OK; an unrecognized role
+# also prints nothing (callers are expected to have already validated the
+# role with validate_role).
+default_peer_host() {
+  local role="$1"
+
+  if [[ "$role" == "remote" ]]; then
+    printf '%s\n' "home"
+  fi
+
+  return "$DECISIONS_EXIT_OK"
+}
+
 # Guard: only runs when this file is executed directly (e.g. `./decisions.sh
 # resolve_target_device sda < table.tsv`), never when sourced by the
 # installer script or by the test suite. This is what makes it safe to

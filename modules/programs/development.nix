@@ -10,7 +10,9 @@
   programs.direnv.enable = true;
   programs.direnv.nix-direnv.enable = true;
 
-  programs.nix-ld.enable = true;
+  # nix-ld only matters for running foreign dynamically-linked dev binaries;
+  # the remote does its development over `mosh home`, so gate it to home.
+  programs.nix-ld.enable = lib.mkIf (config.portable.role == "home") true;
 
   programs.ssh.startAgent = lib.mkForce false;
 
@@ -27,11 +29,17 @@
   services.tumbler.enable = true;
   services.gvfs.enable = true;
 
-  environment.systemPackages = with pkgs; [
-    playwright-driver.browsers
-  ];
+  # Playwright browsers are a browser-automation testing dependency (home dev
+  # only). Note the same PLAYWRIGHT_* env vars are also set unconditionally in
+  # modules/desktop/hyprland.nix; matching values merge cleanly.
+  environment.systemPackages = lib.mkIf (config.portable.role == "home") (
+    with pkgs;
+    [
+      playwright-driver.browsers
+    ]
+  );
 
-  environment.sessionVariables = {
+  environment.sessionVariables = lib.mkIf (config.portable.role == "home") {
     PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers}";
     PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = "true";
   };

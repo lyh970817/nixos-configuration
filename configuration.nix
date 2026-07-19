@@ -56,8 +56,8 @@
 
   services.envfs.enable = true;
 
-  # Docker
-  virtualisation.docker.enable = true;
+  # Docker (dev-only; home role only)
+  virtualisation.docker.enable = lib.mkIf (config.portable.role == "home") true;
 
   fonts.packages = with pkgs; [
     wqy_microhei
