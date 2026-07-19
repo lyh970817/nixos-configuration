@@ -1,4 +1,9 @@
-{ pkgs, ... }:
+{
+  pkgs,
+  lib,
+  osConfig,
+  ...
+}:
 
 let
   codexCli = pkgs.writeShellApplication {
@@ -15,8 +20,12 @@ let
   };
 in
 {
-  programs.codexDesktopLinux = {
-    enable = true;
-    cliPackage = codexCli;
+  # Coding CLI / desktop integration: home role only. The remote laptop uses
+  # Codex on the home box over `mosh home`.
+  config = lib.mkIf (osConfig.portable.role == "home") {
+    programs.codexDesktopLinux = {
+      enable = true;
+      cliPackage = codexCli;
+    };
   };
 }

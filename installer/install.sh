@@ -32,10 +32,10 @@ source "$SCRIPT_DIR/lib/decisions.sh"
 # Config block
 # ---------------------------------------------------------------------------
 
-# Hostname written into the generated local.nix. This is the only supported
-# target today (the Dynabook X30WK); a future multi-machine installer would
-# make this a prompt or CLI argument.
-readonly TARGET_HOSTNAME="dynabook-x30wk"
+# Role, hostname, and peer are prompted for interactively (see
+# select_role_and_host below) and written into local.nix as portable.role,
+# networking.hostName, and portable.peerHost. TARGET_ROLE, TARGET_HOSTNAME,
+# and TARGET_PEER_HOST are set as globals once the prompt completes.
 
 # The account the installed system is built for (see users/andongni.nix).
 readonly TARGET_USER="andongni"
@@ -183,6 +183,55 @@ confirm_target() {
 }
 
 # ---------------------------------------------------------------------------
+# Role / hostname / peer selection (glue around decisions.sh)
+# ---------------------------------------------------------------------------
+
+# select_role_and_host
+#
+# Prompts for the three machine-identity facts the flake's local.nix needs:
+# portable.role, networking.hostName, and portable.peerHost. Loops each
+# prompt until decisions.sh accepts the value -- no silent defaults, no
+# guessing. Sets TARGET_ROLE, TARGET_HOSTNAME, and TARGET_PEER_HOST globals
+# on success.
+select_role_and_host() {
+  local role hostname hostname_default peer_host peer_default
+
+  while true; do
+    read -r -p "Machine role (home or remote): " role
+    if validate_role "$role"; then
+      break
+    fi
+    log "'$role' is not a valid role; type exactly 'home' or 'remote'"
+  done
+
+  hostname_default="$(default_hostname "$role")"
+  while true; do
+    if [[ -n "$hostname_default" ]]; then
+      read -r -p "Hostname for this machine (e.g. dynabook-x30wk) [$hostname_default]: " hostname
+      hostname="${hostname:-$hostname_default}"
+    else
+      read -r -p "Hostname for this machine (e.g. dynabook-x30wk): " hostname
+    fi
+    if validate_hostname "$hostname"; then
+      break
+    fi
+    log "'$hostname' is not a valid hostname (lowercase letters/digits/hyphens, 1-63 chars, no leading/trailing hyphen)"
+  done
+
+  peer_default="$(default_peer_host "$role")"
+  if [[ "$role" == "remote" ]]; then
+    read -r -p "Peer host (this machine's Tailscale/MagicDNS name for the home machine) [$peer_default]: " peer_host
+    peer_host="${peer_host:-$peer_default}"
+  else
+    read -r -p "Peer host (the remote machine's hostname, if already known; leave empty if not): " peer_host
+  fi
+
+  TARGET_ROLE="$role"
+  TARGET_HOSTNAME="$hostname"
+  TARGET_PEER_HOST="$peer_host"
+}
+
+# ---------------------------------------------------------------------------
 # Partitioning / formatting / mounting
 # ---------------------------------------------------------------------------
 
@@ -248,6 +297,8 @@ generate_facts() {
 {
   networking.hostName = "$TARGET_HOSTNAME";
   portable.configDir = "$CONFIG_DIR";
+  portable.role = "$TARGET_ROLE";
+  portable.peerHost = "$TARGET_PEER_HOST";
 }
 EOF
 }
@@ -452,6 +503,12 @@ main() {
   trap 'rm -rf "$STATE_DIR"; cleanup' EXIT
 
   local ram_kib swap_gib device
+
+  # TARGET_ROLE, TARGET_HOSTNAME, and TARGET_PEER_HOST are set as globals by
+  # select_role_and_host (same pattern as ESP_PART/SWAP_PART/ROOT_PART below,
+  # set by partition_disk) so generate_facts and the final log line can read
+  # them without threading them through every intermediate call.
+  select_role_and_host
 
   device="$(select_target)"
   confirm_target "$device"

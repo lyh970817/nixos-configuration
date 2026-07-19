@@ -40,6 +40,11 @@ in
   # Enable networking
   networking.networkmanager.enable = true;
   services.tailscale.enable = true;
+  # Declarative best-effort hook for Tailscale SSH: this only takes effect
+  # when a `tailscale up` invocation uses an auth key (e.g. non-interactive
+  # provisioning). The primary way SSH gets enabled is the manual first-boot
+  # `tailscale up --ssh` the user runs on the home machine.
+  services.tailscale.extraUpFlags = lib.mkIf (config.portable.role == "home") [ "--ssh" ];
   networking.networkmanager.settings = {
     connectivity = {
       enabled = true;
@@ -100,7 +105,12 @@ in
   # nixpkgs it installs a setcap udhcpc wrapper affected by CVE-2026-25740, and
   # its wrapper cannot take a runtime interface. See
   # docs/captive-browser-cve-2026-25740.md. The tool is driven directly instead.
-  environment.systemPackages = [ pkgs.captive-browser ];
+  # mosh is needed on both roles: the remote laptop dials `mosh home`, and the
+  # home machine needs the mosh-server binary to answer.
+  environment.systemPackages = [
+    pkgs.captive-browser
+    pkgs.mosh
+  ];
 
   systemd.user.services."captive-browser-auto@" = {
     description = "Open captive portal browser on %i";
@@ -117,6 +127,11 @@ in
     53
   ];
   networking.firewall.allowedUDPPorts = [ 53 ];
-  networking.firewall.trustedInterfaces = [ "utun" ];
+  # "utun" is the mihomo TUN device; "tailscale0" is added so mosh's UDP and
+  # Tailscale SSH flow freely over the tailnet without opening ports publicly.
+  networking.firewall.trustedInterfaces = [
+    "utun"
+    "tailscale0"
+  ];
   networking.firewall.checkReversePath = false;
 }

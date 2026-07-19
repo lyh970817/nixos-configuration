@@ -162,3 +162,120 @@ setup() {
   run confirm_erase "/dev/sdc" "/dev/sdc" "ERASE please"
   [ "$status" -eq "$DECISIONS_EXIT_FAIL" ]
 }
+
+# --- validate_role ----------------------------------------------------------
+
+@test "validate_role accepts home" {
+  run validate_role "home"
+  [ "$status" -eq "$DECISIONS_EXIT_OK" ]
+}
+
+@test "validate_role accepts remote" {
+  run validate_role "remote"
+  [ "$status" -eq "$DECISIONS_EXIT_OK" ]
+}
+
+@test "validate_role rejects an unknown role" {
+  run validate_role "server"
+  [ "$status" -eq "$DECISIONS_EXIT_FAIL" ]
+}
+
+@test "validate_role rejects wrong-case input" {
+  run validate_role "Home"
+  [ "$status" -eq "$DECISIONS_EXIT_FAIL" ]
+}
+
+@test "validate_role rejects empty input" {
+  run validate_role ""
+  [ "$status" -eq "$DECISIONS_EXIT_FAIL" ]
+}
+
+@test "validate_role rejects extra text around a valid role" {
+  run validate_role "remote "
+  [ "$status" -eq "$DECISIONS_EXIT_FAIL" ]
+}
+
+# --- validate_hostname -------------------------------------------------------
+
+@test "validate_hostname accepts a simple lowercase hostname" {
+  run validate_hostname "dynabook-x30wk"
+  [ "$status" -eq "$DECISIONS_EXIT_OK" ]
+}
+
+@test "validate_hostname accepts a single character hostname" {
+  run validate_hostname "a"
+  [ "$status" -eq "$DECISIONS_EXIT_OK" ]
+}
+
+@test "validate_hostname accepts digits and internal hyphens" {
+  run validate_hostname "host-2-remote"
+  [ "$status" -eq "$DECISIONS_EXIT_OK" ]
+}
+
+@test "validate_hostname rejects an empty hostname" {
+  run validate_hostname ""
+  [ "$status" -eq "$DECISIONS_EXIT_FAIL" ]
+}
+
+@test "validate_hostname rejects a leading hyphen" {
+  run validate_hostname "-dynabook"
+  [ "$status" -eq "$DECISIONS_EXIT_FAIL" ]
+}
+
+@test "validate_hostname rejects a trailing hyphen" {
+  run validate_hostname "dynabook-"
+  [ "$status" -eq "$DECISIONS_EXIT_FAIL" ]
+}
+
+@test "validate_hostname rejects uppercase letters" {
+  run validate_hostname "Dynabook"
+  [ "$status" -eq "$DECISIONS_EXIT_FAIL" ]
+}
+
+@test "validate_hostname rejects underscores" {
+  run validate_hostname "dyna_book"
+  [ "$status" -eq "$DECISIONS_EXIT_FAIL" ]
+}
+
+@test "validate_hostname rejects a dotted FQDN (single label only)" {
+  run validate_hostname "dynabook.local"
+  [ "$status" -eq "$DECISIONS_EXIT_FAIL" ]
+}
+
+@test "validate_hostname rejects a hostname over 63 characters" {
+  run validate_hostname "$(printf 'a%.0s' {1..64})"
+  [ "$status" -eq "$DECISIONS_EXIT_FAIL" ]
+}
+
+@test "validate_hostname accepts a hostname exactly 63 characters" {
+  run validate_hostname "$(printf 'a%.0s' {1..63})"
+  [ "$status" -eq "$DECISIONS_EXIT_OK" ]
+}
+
+# --- default_peer_host -------------------------------------------------------
+
+@test "default_peer_host prints home for role remote" {
+  run default_peer_host "remote"
+  [ "$status" -eq "$DECISIONS_EXIT_OK" ]
+  [ "$output" == "home" ]
+}
+
+@test "default_peer_host prints nothing for role home" {
+  run default_peer_host "home"
+  [ "$status" -eq "$DECISIONS_EXIT_OK" ]
+  [ "$output" == "" ]
+}
+
+# --- default_hostname ---------------------------------------------------
+
+@test "default_hostname prints dynabook-x30wk for role remote" {
+  run default_hostname "remote"
+  [ "$status" -eq "$DECISIONS_EXIT_OK" ]
+  [ "$output" == "dynabook-x30wk" ]
+}
+
+@test "default_hostname prints nothing for role home" {
+  run default_hostname "home"
+  [ "$status" -eq "$DECISIONS_EXIT_OK" ]
+  [ "$output" == "" ]
+}

@@ -17,7 +17,14 @@ not part of this directory and is not covered by tests.
 - `install.sh` -- the destructive installer itself. Sources `lib/decisions.sh`
   for target selection, swap sizing, and the erase confirmation, then does
   the actual partition/format/mount/`nixos-install` work those functions
-  deliberately stay free of. Not part of the automated test seam above; it
+  deliberately stay free of. It also prompts interactively for the machine's
+  `portable.role` (`home` or `remote`), `networking.hostName`, and
+  `portable.peerHost` -- validated with `validate_role`/`validate_hostname`,
+  with `default_hostname` offering `dynabook-x30wk` as the default hostname
+  for `remote` installs (no default for `home`) and `default_peer_host`
+  offering a default peer for `remote` installs --
+  and writes all three into the generated `local.nix` alongside
+  `portable.configDir`. Not part of the automated test seam above; it
   takes `MOUNT_ROOT`, `INSTALL_DEVICE_TABLE_FILE`, `SECRETS_SOURCE_DIR`,
   `FLAKE_REF`, and `GITHUB_REMOTE_URL` environment overrides so it can be
   driven against a loopback disk for manual verification (see the top-of-file
@@ -85,6 +92,28 @@ All exit codes are exposed as named constants (`DECISIONS_EXIT_OK=0`,
   `resolved-device` and `typed-word` is exactly the literal string `ERASE`.
   Any other input (wrong path, lowercase `erase`, extra text, empty)
   exits `DECISIONS_EXIT_FAIL`.
+
+- **`validate_role <value>`** -> exits `DECISIONS_EXIT_OK` if `value` is
+  exactly `home` or `remote` (the two `portable.role` enum members),
+  `DECISIONS_EXIT_FAIL` otherwise.
+
+- **`validate_hostname <value>`** -> exits `DECISIONS_EXIT_OK` if `value` is
+  a valid RFC1123-ish single-label hostname (lowercase letters, digits, and
+  hyphens only; 1-63 characters; must not start or end with a hyphen),
+  `DECISIONS_EXIT_FAIL` otherwise.
+
+- **`default_hostname <role>`** -> prints the sensible default
+  `networking.hostName` for `role` and always exits `DECISIONS_EXIT_OK`.
+  Prints `dynabook-x30wk` for role `remote` (this physical laptop's
+  hostname is known in advance); prints nothing for role `home` (the home
+  machine's hostname varies and the operator must type one).
+
+- **`default_peer_host <role>`** -> prints the sensible default
+  `portable.peerHost` for `role` and always exits `DECISIONS_EXIT_OK`.
+  Prints `home` for role `remote` (the remote machine's peer is always the
+  home machine's stable MagicDNS alias); prints nothing for role `home`
+  (the home machine's peer is the remote's chosen hostname, which this
+  function has no way to know -- the installer prompts for it separately).
 
 ## Running the tests
 

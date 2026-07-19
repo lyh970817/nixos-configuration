@@ -16,4 +16,31 @@
       Nix store. Home-Manager modules read the same value via osConfig.
     '';
   };
+
+  # home = full workstation you SSH into; remote = portable laptop that
+  # connects to home over Tailscale.
+  options.portable.role = lib.mkOption {
+    type = lib.types.enum [
+      "home"
+      "remote"
+    ];
+    default = "home";
+    description = ''
+      Which side of the two-machine setup this host is. Determines
+      home-vs-remote-only behavior elsewhere in the configuration.
+    '';
+  };
+
+  # Tailscale/MagicDNS name of the *other* machine (home sets this to the
+  # remote's name, remote sets it to "home"). Used for silent cross-machine
+  # theme sync and for the remote's `mosh home` terminal. Empty string means
+  # "no peer / disable cross-machine features".
+  options.portable.peerHost = lib.mkOption {
+    type = lib.types.str;
+    default = "";
+    description = ''
+      Tailscale/MagicDNS hostname of the peer machine in the home/remote
+      pair. Left empty to disable cross-machine features.
+    '';
+  };
 }

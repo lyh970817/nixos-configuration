@@ -1,4 +1,9 @@
-{ config, pkgs, ... }:
+{
+  config,
+  pkgs,
+  osConfig,
+  ...
+}:
 
 let
   lightWallpaper = "$HOME/.local/share/wallpapers/Taiji_mandala.png";
@@ -119,12 +124,48 @@ let
 
     hyprctl setcursor Adwaita 24
   '';
+
+  # Peer machine to notify on theme edges, baked from the host config. Empty
+  # string ("" default) disables cross-machine sync entirely.
+  peerHost = osConfig.portable.peerHost;
+
+  # theme-push: fire-and-forget notification of a mode change to the peer over
+  # Tailscale SSH (keyless). Fully detached and silent so it never blocks the
+  # caller and never prints. No-op when no peer is configured. It runs
+  # switch-<mode> on the peer, and switch-* never pushes, so this cannot loop.
+  themePush = pkgs.writeShellScriptBin "theme-push" ''
+    PEER="${peerHost}"
+    [ -n "$PEER" ] || exit 0
+    case "$1" in
+    light | dark) ;;
+    *) exit 0 ;;
+    esac
+    timeout 3 ssh -o ConnectTimeout=2 "$PEER" "switch-$1" >/dev/null 2>&1 &
+  '';
+
+  # theme-toggle: flip the currently applied mode, apply it locally, then push
+  # to the peer. Bound to a key by another workstream. The current mode is
+  # derived from the hypr current-theme symlink target, defaulting to dark when
+  # unknown. The receiving peer runs switch-* (which never pushes), so this
+  # cannot loop.
+  themeToggle = pkgs.writeShellScriptBin "theme-toggle" ''
+    target="$(readlink "${hyprCurrentTheme}" 2>/dev/null || true)"
+    case "$target" in
+    *light.conf) new="dark" ;;
+    *dark.conf) new="light" ;;
+    *) new="light" ;;
+    esac
+    switch-"$new"
+    theme-push "$new"
+  '';
 in
 {
   # Theme switching scripts
   home.packages = with pkgs; [
     (pkgs.writeShellScriptBin "switch-dark" "${darkModeHook}")
     (pkgs.writeShellScriptBin "switch-light" "${lightModeHook}")
+    themePush
+    themeToggle
   ];
 
   # Monitor presence in hypr/scripts/monitor-switch.sh is the sole automatic

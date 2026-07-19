@@ -1,4 +1,9 @@
-{ pkgs, ... }:
+{
+  pkgs,
+  lib,
+  osConfig,
+  ...
+}:
 
 let
   claudeHostLauncher = pkgs.writeShellApplication {
@@ -39,12 +44,16 @@ let
 
 in
 {
-  home.packages = [
-    claudeHostLauncher
-  ];
+  # Coding CLI: home role only. The remote laptop drives Claude Code on the home
+  # box over `mosh home`, so the local launcher is omitted there.
+  config = lib.mkIf (osConfig.portable.role == "home") {
+    home.packages = [
+      claudeHostLauncher
+    ];
 
-  home.sessionVariables.CLAUDE_CONFIG_DIR = "$HOME/.config/claude";
+    home.sessionVariables.CLAUDE_CONFIG_DIR = "$HOME/.config/claude";
 
-  # Claude settings, commands, agents, and themes are intentionally mutable under
-  # ~/.config/claude via CLAUDE_CONFIG_DIR.
+    # Claude settings, commands, agents, and themes are intentionally mutable under
+    # ~/.config/claude via CLAUDE_CONFIG_DIR.
+  };
 }
