@@ -252,8 +252,11 @@ partition_disk() {
   suffix="$(partition_suffix "$device")"
 
   log "Partitioning $device (GPT: ESP 512M, swap ${swap_gib}G, ext4 root rest)..."
-  nix shell nixpkgs#gptfdisk --command sgdisk --zap-all "$device" >&2
-  nix shell nixpkgs#gptfdisk --command sgdisk \
+  # sgdisk comes from the installer's own PATH (gptfdisk is in the ISO's
+  # systemPackages) rather than `nix shell nixpkgs#gptfdisk`, which would
+  # resolve the nixpkgs flake over the network and fail on the offline ISO.
+  sgdisk --zap-all "$device" >&2
+  sgdisk \
     -n1:0:+512M -t1:ef00 -c1:ESP \
     -n2:0:+"${swap_gib}"G -t2:8200 -c2:swap \
     -n3:0:0 -t3:8300 -c3:nixos \

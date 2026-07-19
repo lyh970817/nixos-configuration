@@ -24,7 +24,7 @@
   };
 
   outputs =
-    {
+    inputs@{
       self,
       nixpkgs,
       home-manager,
@@ -110,6 +110,9 @@
         specialArgs = {
           inherit self;
           targetToplevel = self.nixosConfigurations.system.config.system.build.toplevel;
+          # All flake inputs (minus self) so iso.nix can bake their source
+          # trees into the ISO for fully offline `nixos-install` evaluation.
+          flakeInputs = builtins.removeAttrs inputs [ "self" ];
         };
         modules = [
           {
