@@ -2,8 +2,9 @@
 
 let
   screenVerify = pkgs.callPackage ../../pkgs/screen-verify { };
-  repository = "${config.home.homeDirectory}/Yandex.Disk/System/nixos-configuration";
-  visualVerificationSkill = config.lib.file.mkOutOfStoreSymlink "${repository}/skills/visual-verification";
+  # Repo-relative: the skill lives in this same config tree (skills/), so
+  # reference it by relative path instead of a hardcoded checkout location.
+  visualVerificationSkill = ../../skills/visual-verification;
 in
 {
   home.packages = [ screenVerify ];
