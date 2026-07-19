@@ -2,14 +2,16 @@
   config,
   lib,
   pkgs,
+  osConfig,
   ...
 }:
 
 let
   homeDir = config.home.homeDirectory;
-  # User-owned credential source, outside any synced directory. Copied to the
+  # Dictation credential source in the config repo's git-ignored secrets/ dir
+  # (portable.configDir, shared with the system via osConfig). Copied to the
   # runtime path at activation; absent source must not fail activation.
-  credentialsSourcePath = "${config.xdg.configHome}/hyprwhspr/credentials.json";
+  credentialsSourcePath = "${osConfig.portable.configDir}/secrets/hyprwhspr-credentials.json";
   credentialsRuntimePath = "${homeDir}/.local/share/hyprwhspr/credentials";
 
   chatEndpoint = "https://api.siliconflow.cn/v1/chat/completions";
@@ -821,13 +823,14 @@ in
       - `~/.config/hyprwhspr/config.json`: the static realtime websocket
         configuration (streamed transcription via OpenAI)
       - `~/.local/share/hyprwhspr/credentials`, copied at Home Manager
-        activation from the user-owned source credential
+        activation from the source credential in the config repo
 
-      The source credential is user-owned, kept outside any synced directory,
-      and copied into place on activation from:
+      The source credential lives in the config repo's git-ignored `secrets/`
+      directory (`portable.configDir`) and is copied into place on activation
+      from:
 
       ```sh
-      ~/.config/hyprwhspr/credentials.json
+      <configDir>/secrets/hyprwhspr-credentials.json
       ```
 
       It should contain:

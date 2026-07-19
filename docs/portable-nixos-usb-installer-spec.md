@@ -131,11 +131,15 @@ pushed to GitHub.
   partition, hardware generation records its UUID, and NixOS auto-derives resume. No
   machine-specific resume config enters the tracked tree. The existing hibernate launcher
   entry stays as generic UI.
-- **Secrets** move to canonical, non-Yandex locations split by trust boundary:
-  - The proxy (root) config file is read by absolute path from a root-owned system secrets
-    directory under `/etc/nixos/secrets/`.
-  - The dictation (user) credential source is read from a user-owned config directory and
-    copied to its existing runtime path at home-manager activation as today.
+- **Secrets** move into the config repo's git-ignored `secrets/` directory, anchored by a
+  single per-machine `portable.configDir` option (set at install time in the out-of-tree
+  `local.nix`; defaults to `~/.nixos-config`). Both are read by absolute-path string, so they
+  stay out of git and the Nix store:
+  - The proxy config is read by the root mihomo service from
+    `${portable.configDir}/secrets/mihomo-config.yaml`.
+  - The dictation credential source is read (via `osConfig.portable.configDir`) from
+    `${portable.configDir}/secrets/hyprwhspr-credentials.json` and copied to its existing
+    runtime path at home-manager activation.
   - Both modules stop hardcoding the Yandex.Disk repo path.
 - **Captive-browser interface discovery (Shape B):** drop the static interface option. The
   NetworkManager dispatcher validates the interface it is handed (must be a physical

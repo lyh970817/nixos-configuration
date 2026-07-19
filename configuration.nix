@@ -19,6 +19,7 @@
     ./modules/system/boot.nix
     ./modules/system/networking.nix
     ./modules/system/locale.nix
+    ./modules/system/portable.nix
 
     # Desktop environment
     ./modules/desktop/hyprland.nix
