@@ -1,0 +1,20 @@
+--- a/lib/mic_osd/notification_presenter.py
++++ b/lib/mic_osd/notification_presenter.py
+@@ -27,7 +27,7 @@
+     """Show recording status as a desktop notification (no focus stealing)."""
+ 
+     _STATE_TEXT = {
+-        'recording': '🎤 Recording…',
++        'recording': '● Recording…',
+         'paused': '⏸ Paused',
+         'processing': 'Transcribing…',
+         'success': '✓ Inserted',
+@@ -57,7 +57,7 @@
+         # transient: bypass the server's persistence so status bubbles never
+         # accumulate in the notification center (mirrors the ephemeral overlay).
+         nid = send_notification_with_id(
+-            self._APP_NAME, body, urgency='normal', timeout_ms=timeout_ms,
++            body, '', urgency='normal', timeout_ms=timeout_ms,
+             app_name=self._APP_NAME, replaces_id=self._nid, transient=True)
+         if nid is not None:
+             self._nid = nid
