@@ -10,10 +10,10 @@ import unittest
 from pathlib import Path
 
 
-SCRIPT = Path(__file__).parents[1] / "codex_screen.py"
+SCRIPT = Path(__file__).parents[1] / "screen_verify.py"
 
 
-class CodexScreenCliTests(unittest.TestCase):
+class ScreenVerifyCliTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
@@ -106,7 +106,7 @@ PY
         ]
         self.assertEqual(capture_commands, ["grim", "notify-send"])
 
-        audit = (self.state / "codex-screen/audit.jsonl").read_text()
+        audit = (self.state / "screen-verify/audit.jsonl").read_text()
         self.assertIn('"event":"capture"', audit)
         self.assertNotIn(str(capture), audit)
         self.assertIn('"monitor":"DP-1"', audit)
@@ -175,18 +175,18 @@ PY
 
     def test_abandoned_sessions_are_purged_on_begin(self) -> None:
         old_session = self.begin()
-        old_path = self.runtime / "codex-screen" / old_session
+        old_path = self.runtime / "screen-verify" / old_session
         old_time = time.time() - 25 * 60 * 60
         os.utime(old_path, (old_time, old_time))
 
         self.begin()
 
         self.assertFalse(old_path.exists())
-        audit = (self.state / "codex-screen/audit.jsonl").read_text()
+        audit = (self.state / "screen-verify/audit.jsonl").read_text()
         self.assertIn('"event":"purge"', audit)
 
     def test_audit_rotation_drops_entries_older_than_90_days(self) -> None:
-        audit_dir = self.state / "codex-screen"
+        audit_dir = self.state / "screen-verify"
         audit_dir.mkdir(parents=True)
         audit_path = audit_dir / "audit.jsonl"
         audit_path.write_text(
@@ -198,7 +198,7 @@ PY
         self.assertNotIn('"session":"old"', audit_path.read_text())
 
     def test_audit_is_strictly_capped_after_each_event(self) -> None:
-        audit_dir = self.state / "codex-screen"
+        audit_dir = self.state / "screen-verify"
         audit_dir.mkdir(parents=True)
         audit_path = audit_dir / "audit.jsonl"
         audit_path.write_text(
@@ -242,7 +242,7 @@ if [ "$1" = clients ]; then pid=$(cat {pid_file} 2>/dev/null || printf 0); print
         )
         try:
             self.assertEqual(result["window"]["address"], "0xabc")
-            audit = (self.state / "codex-screen/audit.jsonl").read_text()
+            audit = (self.state / "screen-verify/audit.jsonl").read_text()
             self.assertNotIn("Secret App", audit)
             self.assertNotIn("Secret Document", audit)
             self.assertNotIn(str(helper), audit)
@@ -388,7 +388,7 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
 
     def test_every_command_purges_abandoned_sessions(self) -> None:
         old_session = self.begin()
-        old_path = self.runtime / "codex-screen" / old_session
+        old_path = self.runtime / "screen-verify" / old_session
         old_time = time.time() - 25 * 60 * 60
         os.utime(old_path, (old_time, old_time))
 

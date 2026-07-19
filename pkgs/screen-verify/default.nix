@@ -15,7 +15,7 @@
 }:
 
 stdenvNoCC.mkDerivation {
-  pname = "codex-screen";
+  pname = "screen-verify";
   version = "0.1.0";
 
   src = ./.;
@@ -30,10 +30,10 @@ stdenvNoCC.mkDerivation {
 
   installPhase = ''
     runHook preInstall
-    install -Dm755 codex_screen.py $out/libexec/codex-screen/codex_screen.py
-    cp -r codex_screen_lib $out/libexec/codex-screen/codex_screen_lib
-    makeWrapper ${python3}/bin/python $out/bin/codex-screen \
-      --add-flags "$out/libexec/codex-screen/codex_screen.py" \
+    install -Dm755 screen_verify.py $out/libexec/screen-verify/screen_verify.py
+    cp -r screen_verify_lib $out/libexec/screen-verify/screen_verify_lib
+    makeWrapper ${python3}/bin/python $out/bin/screen-verify \
+      --add-flags "$out/libexec/screen-verify/screen_verify.py" \
       --prefix PATH : ${
         lib.makeBinPath [
           coreutils
@@ -51,9 +51,9 @@ stdenvNoCC.mkDerivation {
   '';
 
   meta = {
-    description = "Audited visual verification helper for Codex on Hyprland";
+    description = "Audited visual verification helper for Hyprland";
     license = lib.licenses.mit;
     platforms = lib.platforms.linux;
-    mainProgram = "codex-screen";
+    mainProgram = "screen-verify";
   };
 }

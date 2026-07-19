@@ -43,12 +43,12 @@ def runtime_root() -> Path:
     base = os.environ.get("XDG_RUNTIME_DIR")
     if not base:
         base = f"/run/user/{os.getuid()}"
-    return Path(base) / "codex-screen"
+    return Path(base) / "screen-verify"
 
 
 def state_root() -> Path:
     base = os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state"))
-    return Path(base) / "codex-screen"
+    return Path(base) / "screen-verify"
 
 
 def private_dir(path: Path) -> None:

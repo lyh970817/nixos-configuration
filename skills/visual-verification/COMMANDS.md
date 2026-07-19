@@ -1,14 +1,14 @@
-# `codex-screen` command reference
+# `screen-verify` command reference
 
 Every command prints one JSON object to standard output.
 
 ## Session lifecycle
 
 ```sh
-codex-screen begin
-codex-screen status --session ID
-codex-screen ensure-mode --session ID
-codex-screen end --session ID
+screen-verify begin
+screen-verify status --session ID
+screen-verify ensure-mode --session ID
+screen-verify end --session ID
 ```
 
 `begin` locks the task to the active light or dark mode. `end` terminates owned
@@ -18,30 +18,30 @@ runtime directory, and reconciles a mode displaced for verification.
 ## Capture targets
 
 ```sh
-codex-screen capture --session ID
-codex-screen capture --session ID --target window
-codex-screen capture --session ID --target monitor --monitor DP-1
-codex-screen capture --session ID --target all
-codex-screen capture --session ID --target region
-codex-screen capture --session ID --target region --geometry '10,20 800x600'
+screen-verify capture --session ID
+screen-verify capture --session ID --target window
+screen-verify capture --session ID --target monitor --monitor DP-1
+screen-verify capture --session ID --target all
+screen-verify capture --session ID --target region
+screen-verify capture --session ID --target region --geometry '10,20 800x600'
 ```
 
 The default is the focused monitor. Interactive region capture uses `slurp`.
 Each successful capture sends a notification after `grim` completes. Captures
-live under `$XDG_RUNTIME_DIR/codex-screen/ID` until `end`; abandoned sessions are
+live under `$XDG_RUNTIME_DIR/screen-verify/ID` until `end`; abandoned sessions are
 purged after 24 hours on the next invocation.
 
 ## Test applications
 
 ```sh
-codex-screen launch --session ID -- executable arg1 arg2
-codex-screen launch --session ID --keep-open -- executable arg1
-codex-screen adapter --session ID desktop
-codex-screen adapter --session ID alacritty
-codex-screen adapter --session ID neovim
-codex-screen adapter --session ID btop
-codex-screen adapter --session ID rofi
-codex-screen adapter --session ID notification
+screen-verify launch --session ID -- executable arg1 arg2
+screen-verify launch --session ID --keep-open -- executable arg1
+screen-verify adapter --session ID desktop
+screen-verify adapter --session ID alacritty
+screen-verify adapter --session ID neovim
+screen-verify adapter --session ID btop
+screen-verify adapter --session ID rofi
+screen-verify adapter --session ID notification
 ```
 
 The desktop adapter reasserts the session mode before inspecting the aggregate
@@ -54,10 +54,10 @@ reused PID or pre-existing window.
 ## Reversible previews
 
 ```sh
-codex-screen preview symlink --session ID --target ~/.config/alacritty/current.toml --source /path/to/preview.toml
-codex-screen preview gsettings --session ID --schema org.gnome.desktop.interface --key gtk-theme --value "'PreviewTheme'"
-codex-screen preview hypr-keyword --session ID --keyword general:gaps_in --value 20
-codex-screen preview mako-mode --session ID --mode dark
+screen-verify preview symlink --session ID --target ~/.config/alacritty/current.toml --source /path/to/preview.toml
+screen-verify preview gsettings --session ID --schema org.gnome.desktop.interface --key gtk-theme --value "'PreviewTheme'"
+screen-verify preview hypr-keyword --session ID --keyword general:gaps_in --value 20
+screen-verify preview mako-mode --session ID --mode dark
 ```
 
 These operations snapshot state into the private session before applying the
@@ -69,7 +69,7 @@ other surfaces that can preview without mutating shared runtime state.
 
 ## Audit data
 
-Metadata is stored at `$XDG_STATE_HOME/codex-screen/audit.jsonl`, mode `0600`.
+Metadata is stored at `$XDG_STATE_HOME/screen-verify/audit.jsonl`, mode `0600`.
 Entries expire after 90 days and the file is capped at 1 MiB. It records time,
 opaque session ID, event, outcome, capture target, and monitor connector where
 applicable. It excludes pixels, text, application identity, window titles,

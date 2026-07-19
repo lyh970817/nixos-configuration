@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audited, notifying screen capture sessions for cooperative Codex use."""
+"""Audited, notifying screen capture sessions for cooperative agent use."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from codex_screen_lib.desktop import (
+from screen_verify_lib.desktop import (
     ADAPTER_COMMANDS,
     ADAPTER_NAMES,
     active_window_geometry,
@@ -26,14 +26,14 @@ from codex_screen_lib.desktop import (
     notify,
     run_json,
 )
-from codex_screen_lib.preview import (
+from screen_verify_lib.preview import (
     command_preview_gsettings,
     command_preview_hypr_keyword,
     command_preview_mako_mode,
     command_preview_symlink,
     restore_previews,
 )
-from codex_screen_lib.state import (
+from screen_verify_lib.state import (
     ScreenError,
     atomic_json,
     audit,
@@ -281,7 +281,7 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def parser() -> argparse.ArgumentParser:
-    root = argparse.ArgumentParser(prog="codex-screen")
+    root = argparse.ArgumentParser(prog="screen-verify")
     commands = root.add_subparsers(dest="subcommand", required=True)
 
     begin = commands.add_parser("begin", help="start an ephemeral verification session")
@@ -373,7 +373,7 @@ def main() -> int:
         print(json.dumps(result, separators=(",", ":")))
         return 0
     except (ScreenError, subprocess.CalledProcessError) as error:
-        print(f"codex-screen: {error}", file=sys.stderr)
+        print(f"screen-verify: {error}", file=sys.stderr)
         return 1
 
 

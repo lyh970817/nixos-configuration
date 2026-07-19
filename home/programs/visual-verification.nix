@@ -1,12 +1,12 @@
 { config, pkgs, ... }:
 
 let
-  codexScreen = pkgs.callPackage ../../pkgs/codex-screen { };
+  screenVerify = pkgs.callPackage ../../pkgs/screen-verify { };
   repository = "${config.home.homeDirectory}/Yandex.Disk/System/nixos-configuration";
   visualVerificationSkill = config.lib.file.mkOutOfStoreSymlink "${repository}/skills/visual-verification";
 in
 {
-  home.packages = [ codexScreen ];
+  home.packages = [ screenVerify ];
 
   # Codex global skill.
   home.file.".codex/skills/visual-verification".source = visualVerificationSkill;

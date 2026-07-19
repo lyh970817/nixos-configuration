@@ -9,10 +9,10 @@ Treat visual verification as part of done for every visual change.
 
 ## 1. Lock the task mode
 
-Run `codex-screen begin`, retain its JSON `session` value, and announce visual
+Run `screen-verify begin`, retain its JSON `session` value, and announce visual
 verification before the first capture. The returned light or dark mode is the
 only mode this task may change or assess. If the live mode changes, run
-`codex-screen ensure-mode --session ID` before previewing or capturing.
+`screen-verify ensure-mode --session ID` before previewing or capturing.
 
 Completion criterion: every planned edit is scoped to the session's starting
 mode, unless the user explicitly requested both modes.
@@ -21,11 +21,11 @@ mode, unless the user explicitly requested both modes.
 
 Use a runtime override, application reload, or isolated temporary config only
 when its inverse is reliable. Apply symlinked themes, GTK settings, Hyprland
-keywords, and Mako modes through `codex-screen preview`; the session snapshots
+keywords, and Mako modes through `screen-verify preview`; the session snapshots
 and restores them. Use the normal commit-and-rebuild path when a supported safe
 preview does not exist.
 
-Launch test surfaces through `codex-screen adapter` or `codex-screen launch` so
+Launch test surfaces through `screen-verify adapter` or `screen-verify launch` so
 the session owns them. Read [COMMANDS.md](COMMANDS.md) when choosing targets,
 adapters, or cleanup flags.
 
@@ -34,7 +34,7 @@ and windows remain outside session ownership.
 
 ## 3. Capture and inspect
 
-Use `codex-screen capture --session ID`; focused-monitor capture is the default.
+Use `screen-verify capture --session ID`; focused-monitor capture is the default.
 Inspect the returned image path with the local image viewer. Iterate on
 objective defects: theme loading, fallback colors, contrast, legibility,
 clipping, geometry, and current-mode consistency. Put subjective aesthetic
@@ -55,7 +55,7 @@ inspected and objective defects are resolved.
 
 ## 5. Clean up
 
-Use `codex-screen end --session ID` on success, error, cancellation, or timeout.
+Use `screen-verify end --session ID` on success, error, cancellation, or timeout.
 It closes only owned test processes, removes ephemeral captures, and restores a
 mode displaced for verification. Use `--keep-open` only when the user wants a
 launched test instance preserved.
@@ -66,6 +66,6 @@ has been restored.
 ## Safety boundary
 
 This is a cooperative policy for a same-user agent, not a hostile-process
-sandbox. Route captures through `codex-screen`; its notification and audit
+sandbox. Route captures through `screen-verify`; its notification and audit
 metadata make capture visible. Keep commands, arguments, application identity,
 window titles, captured text, and image paths out of persistent audit data.

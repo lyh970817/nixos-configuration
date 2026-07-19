@@ -54,7 +54,7 @@ def command_preview_symlink(args: argparse.Namespace) -> dict[str, Any]:
         {"kind": "symlink", "target": str(target), "original": original},
     )
     target.parent.mkdir(parents=True, exist_ok=True)
-    temporary = target.with_name(f".{target.name}.codex-screen")
+    temporary = target.with_name(f".{target.name}.screen-verify")
     temporary.unlink(missing_ok=True)
     temporary.symlink_to(source)
     temporary.replace(target)
@@ -127,7 +127,7 @@ def restore_preview(preview: dict[str, Any]) -> None:
     if kind == "symlink":
         target = home_path(preview["target"])
         original = preview["original"]
-        temporary = target.with_name(f".{target.name}.codex-screen-restore")
+        temporary = target.with_name(f".{target.name}.screen-verify-restore")
         temporary.unlink(missing_ok=True)
         if original["state"] == "symlink":
             temporary.symlink_to(original["value"])

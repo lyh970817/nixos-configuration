@@ -20,7 +20,7 @@ other mode only when the user explicitly requests it. Before committing, a
 visual preview may use reliably reversible runtime overrides or isolated
 temporary configs. It must not run an uncommitted Home Manager activation or
 NixOS rebuild. Commit and rebuild the selected result, then visually inspect the
-installed result through `codex-screen`.
+installed result through `screen-verify`.
 
 ## Mihomo Configuration Acceptance
 

@@ -12,9 +12,9 @@ from .state import ScreenError
 
 
 ADAPTER_COMMANDS = {
-    "alacritty": ["alacritty", "--class", "Codex-visual-alacritty"],
-    "neovim": ["alacritty", "--class", "Codex-visual-neovim", "-e", "nvim"],
-    "btop": ["alacritty", "--class", "Codex-visual-btop", "-e", "btop"],
+    "alacritty": ["alacritty", "--class", "screen-verify-alacritty"],
+    "neovim": ["alacritty", "--class", "screen-verify-neovim", "-e", "nvim"],
+    "btop": ["alacritty", "--class", "screen-verify-btop", "-e", "btop"],
     "rofi": ["rofi", "-show", "drun"],
 }
 ADAPTER_NAMES = ("desktop", *ADAPTER_COMMANDS, "notification")
@@ -31,7 +31,7 @@ def run_json(command: list[str]) -> Any:
 def notify(summary: str, body: str) -> None:
     try:
         subprocess.run(
-            ["notify-send", "--app-name=Codex screen", summary, body],
+            ["notify-send", "--app-name=screen-verify", summary, body],
             check=False,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
