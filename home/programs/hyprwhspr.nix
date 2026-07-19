@@ -812,6 +812,8 @@ in
     "hyprwhspr/profiles/qwen-omni-realtime.json".source =
       ../../config/hyprwhspr/profiles/qwen-omni-realtime.json;
     "hyprwhspr/profiles/qwen-audio3.json".source = ../../config/hyprwhspr/profiles/qwen-audio3.json;
+    "hyprwhspr/profiles/gemini-longform.json".source =
+      ../../config/hyprwhspr/profiles/gemini-longform.json;
     "hyprwhspr/profiles/sensevoice.json".source = ../../config/hyprwhspr/profiles/sensevoice.json;
 
     "hyprwhspr/README-nixos.md".text = ''
@@ -849,6 +851,15 @@ in
       `post_transcription_hook` cleanup pass (`hyprwhspr-postprocess`, model
       Qwen/Qwen2.5-7B-Instruct). Other legacy keys (for example `openrouter`)
       may remain in the file; nothing reads them anymore.
+
+      The `qwen-*` profiles read a `dashscope` key from this same file, via
+      `qwen-asr-shim.service`. The `gemini-longform` profile additionally
+      needs a `gemini` key (or a `GEMINI_API_KEY` environment variable) for
+      that service's `/transcribe/gemini` route; without one, that route
+      logs the failure and falls back to the `qwen-omni` cleanup path
+      automatically, so dictation still works, just not via Gemini. Google's
+      free tier is roughly 20 requests/day; expect 429s past that until
+      billing is enabled on the Gemini API key.
 
       Short dictation uses `Super+O`. The daemon runs with
       `XDG_CONFIG_HOME` pointed at `$XDG_RUNTIME_DIR`, where a service

@@ -174,6 +174,23 @@ QWEN_AUDIO3_REALTIME_WS_URL = (
 
 _ENV_REF_RE = re.compile(r"^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$")
 
+# Gemini streamGenerateContent route (gemini-longform profile). Independent
+# of the DashScope host/credentials above: separate host, separate API key
+# (query param, not a bearer header), separate SSE line-ending quirk.
+GEMINI_HOST = _env("GEMINI_HOST", "generativelanguage.googleapis.com")
+GEMINI_REST_MODEL = _env("GEMINI_REST_MODEL", "gemini-3.5-flash")
+GEMINI_REST_PATH_TMPL = "/v1beta/models/{model}:streamGenerateContent"
+GEMINI_CONNECT_TIMEOUT = float(_env("GEMINI_CONNECT_TIMEOUT", "5"))
+GEMINI_CHAT_TIMEOUT = float(_env("GEMINI_CHAT_TIMEOUT", "15"))
+GEMINI_ENV_VAR = "GEMINI_API_KEY"
+# Cap on how long we'll honor Google's own suggested rate-limit backoff
+# before retrying once. An interactive dictation request has a bounded
+# rest_timeout budget (see profile JSON); if Google asks for a longer wait
+# than this, skip the retry and fall back to the omni path immediately
+# rather than blocking the user for tens of seconds.
+GEMINI_RETRY_MAX_WAIT = float(_env("GEMINI_RETRY_MAX_WAIT", "5"))
+_GEMINI_RETRY_AFTER_RE = re.compile(r"retry in ([\d.]+)s")
+
 
 def log(msg):
     print(f"[qwen-asr-shim] {msg}", file=sys.stderr, flush=True)
@@ -188,6 +205,38 @@ def get_api_key():
     with open(QWEN_ASR_CREDENTIALS, "r", encoding="utf-8") as f:
         creds = json.load(f)
     value = creds["dashscope"]
+    match = _ENV_REF_RE.match(value)
+    if match:
+        var_name = match.group(1)
+        try:
+            value = os.environ[var_name]
+        except KeyError:
+            raise RuntimeError(
+                f"credentials file references ${{{var_name}}} but that "
+                f"environment variable is not set"
+            ) from None
+    return value
+
+
+def get_gemini_api_key():
+    """Read the Gemini API key: GEMINI_API_KEY env var first, else the
+    "gemini" field of the same credentials JSON used for DashScope (add it
+    there by editing the JSON, never by appending a raw line). Lazy on
+    purpose: no Gemini key is required unless a /transcribe/gemini request
+    actually happens, so a missing key only breaks that route (which falls
+    back to omni), not the whole service.
+    """
+    env_val = os.environ.get(GEMINI_ENV_VAR)
+    if env_val:
+        return env_val
+    with open(QWEN_ASR_CREDENTIALS, "r", encoding="utf-8") as f:
+        creds = json.load(f)
+    value = creds.get("gemini")
+    if not value:
+        raise RuntimeError(
+            f'no Gemini API key: set {GEMINI_ENV_VAR} or add a "gemini" '
+            f"entry to {QWEN_ASR_CREDENTIALS}"
+        )
     match = _ENV_REF_RE.match(value)
     if match:
         var_name = match.group(1)
@@ -733,6 +782,19 @@ def _encode_opus(samples):
     return buf.getvalue()
 
 
+def _encode_flac(samples):
+    """Encode 16k mono int16 samples to FLAC bytes in-process, for the Gemini
+    inline_data upload (smaller than raw/WAV PCM16, and losslessly so unlike
+    Opus -- matches the encoding used in the bakeoff that validated this
+    route). soundfile/libsndfile supports FLAC natively, so this needs no
+    ffmpeg subprocess despite ffmpeg being on the service's PATH for the
+    decode-side fallback in prepare_audio.
+    """
+    buf = io.BytesIO()
+    sf.write(buf, samples, TARGET_RATE, format="FLAC")
+    return buf.getvalue()
+
+
 def handle_transcribe_omni(audio_bytes, prompt, api_key, timings):
     audio = prepare_audio(audio_bytes, timings)
 
@@ -771,16 +833,164 @@ def handle_transcribe_omni(audio_bytes, prompt, api_key, timings):
     return text
 
 
+# --------------------------------------------------------------------------
+# Gemini streamGenerateContent (SSE) for the gemini-longform profile.
+#
+# Independent connection pool/host from the DashScope pool above: the API
+# key goes in the URL as a query param (not a bearer header), and Google's
+# SSE stream is CRLF-delimited ("\r\n\r\n" between events) rather than the
+# bare "\n\n" a naive parser would expect -- ported from a benchmark harness
+# that hit this exact silent-failure bug (HTTP 200, zero text, zero
+# usageMetadata, no exception) before the CRLF normalization below was added.
+# --------------------------------------------------------------------------
+
+_GEMINI_POOL = urllib3.HTTPSConnectionPool(
+    GEMINI_HOST, port=443, maxsize=2, block=False, retries=False
+)
+
+
+def _gemini_stream_generate_once(audio_b64, system_instruction, api_key, timeout):
+    """One streamGenerateContent SSE call; returns the concatenated text or
+    raises RuntimeError (HTTP-status or transport failure) or ValueError
+    (malformed SSE payload)."""
+    body = json.dumps({
+        "system_instruction": {"parts": [{"text": system_instruction}]},
+        "contents": [{
+            "role": "user",
+            "parts": [{"inline_data": {"mime_type": "audio/flac", "data": audio_b64}}],
+        }],
+        "generationConfig": {"temperature": 0, "thinkingConfig": {"thinkingBudget": 0}},
+    }).encode("utf-8")
+
+    path = (
+        f"{GEMINI_REST_PATH_TMPL.format(model=GEMINI_REST_MODEL)}"
+        f"?alt=sse&key={api_key}"
+    )
+    resp = _GEMINI_POOL.urlopen(
+        "POST",
+        path,
+        body=body,
+        headers={"Content-Type": "application/json"},
+        timeout=urllib3.Timeout(connect=GEMINI_CONNECT_TIMEOUT, read=timeout),
+        preload_content=False,
+        retries=False,
+        redirect=False,
+    )
+    if resp.status != 200:
+        detail = resp.read().decode("utf-8", errors="replace")[:300]
+        resp.release_conn()
+        raise RuntimeError(f"streamGenerateContent HTTP {resp.status}: {detail}")
+
+    buf = b""
+    text_parts = []
+
+    def handle_event(event):
+        for line in event.split(b"\n"):
+            line = line.strip(b"\r")
+            if not line.startswith(b"data:"):
+                continue
+            payload = line[len(b"data:"):].strip()
+            if not payload:
+                continue
+            ev = json.loads(payload)
+            for c in ev.get("candidates") or []:
+                for p in (c.get("content") or {}).get("parts") or []:
+                    part_text = p.get("text")
+                    if part_text:
+                        text_parts.append(part_text)
+
+    try:
+        for chunk in resp.stream(4096):
+            # Normalize CRLF to bare "\n\n" before splitting -- see module
+            # comment above for what silently broke without this.
+            buf += chunk.replace(b"\r\n", b"\n")
+            while b"\n\n" in buf:
+                event, buf = buf.split(b"\n\n", 1)
+                handle_event(event)
+        if buf.strip():
+            # Defensive: a final event without its trailing blank line.
+            handle_event(buf)
+    finally:
+        resp.release_conn()
+
+    return "".join(text_parts)
+
+
+def gemini_stream_generate(audio_bytes, system_instruction, api_key, timeout):
+    """One streamGenerateContent call with a single bounded retry on a
+    Google-reported rate limit (RESOURCE_EXHAUSTED error text containing
+    "retry in Ns"), capped at GEMINI_RETRY_MAX_WAIT so an interactive
+    dictation request never blocks on Google's full backoff window. Any
+    other failure, or a rate limit with too long a suggested wait, propagates
+    immediately so the caller can fall back to the omni path without delay.
+    """
+    audio_b64 = base64.b64encode(audio_bytes).decode()
+    try:
+        return _gemini_stream_generate_once(audio_b64, system_instruction, api_key, timeout)
+    except Exception as e:
+        m = _GEMINI_RETRY_AFTER_RE.search(str(e))
+        if m and float(m.group(1)) <= GEMINI_RETRY_MAX_WAIT:
+            wait_s = float(m.group(1)) + 0.5
+            log(f"gemini rate-limited; retrying once after {wait_s:.1f}s")
+            time.sleep(wait_s)
+            return _gemini_stream_generate_once(audio_b64, system_instruction, api_key, timeout)
+        raise
+
+
+def handle_transcribe_gemini(audio_bytes, prompt, api_key, timings):
+    """Gemini streamGenerateContent cleanup route (gemini-longform profile).
+
+    ``api_key`` here is the DashScope key (as passed to every ROUTE_HANDLERS
+    entry); the Gemini key is looked up separately via get_gemini_api_key()
+    so it stays lazy and this route's failure mode is self-contained. On ANY
+    Gemini-side failure -- missing/invalid key, quota (429), network error,
+    malformed SSE, empty output -- this falls back to handle_transcribe_omni
+    so the dictation is never lost. timings["path"] records which backend
+    actually served the request ("gemini" or "omni-fallback") for the TIMING
+    log line.
+    """
+    audio = prepare_audio(audio_bytes, timings)
+    t_enc = time.perf_counter()
+    flac_bytes = _encode_flac(audio.samples)
+    timings["enc_ms"] = (time.perf_counter() - t_enc) * 1000
+
+    try:
+        gemini_api_key = get_gemini_api_key()
+        t0 = time.perf_counter()
+        text = gemini_stream_generate(
+            flac_bytes,
+            build_aggressive_cleanup_instruction(prompt),
+            gemini_api_key,
+            timeout=GEMINI_CHAT_TIMEOUT,
+        )
+        timings["api"] = (time.perf_counter() - t0) * 1000
+        if not text or not text.strip():
+            raise RuntimeError("empty output from Gemini")
+        timings["path"] = "gemini"
+        reason = cleanup_suspect(None, text)
+        if reason:
+            log(f"gemini cleanup guard: {reason} (log-only, no raw fallback)")
+        return text
+    except Exception as e:
+        timings["path"] = "omni-fallback"
+        timings["gemini_error"] = str(e)[:200]
+        log(f"gemini route failed, falling back to omni: {e}")
+        return handle_transcribe_omni(audio_bytes, prompt, api_key, timings)
+
+
 # Routes whose handler may legitimately return an empty transcript (the omni
-# aggressive-cleanup prompt emits empty for filler-only audio). For these an
-# empty result is a valid 200 {"text": ""} (hyprwhspr pastes nothing) rather
-# than a 500. Raw-ASR routes keep treating empty as a failure.
-ALLOW_EMPTY_ROUTES = {"/transcribe/omni"}
+# aggressive-cleanup prompt emits empty for filler-only audio; the gemini
+# route ultimately falls back to that same prompt/model on any failure). For
+# these an empty result is a valid 200 {"text": ""} (hyprwhspr pastes
+# nothing) rather than a 500. Raw-ASR routes keep treating empty as a
+# failure.
+ALLOW_EMPTY_ROUTES = {"/transcribe/omni", "/transcribe/gemini"}
 
 ROUTE_HANDLERS = {
     "/transcribe/http": (QWEN_HTTP_MODEL, handle_transcribe_http),
     "/transcribe/ws": (f"{QWEN_WS_MODEL}+{QWEN_CLEANUP_MODEL}", handle_transcribe_ws),
     "/transcribe/omni": (QWEN_OMNI_MODEL, handle_transcribe_omni),
+    "/transcribe/gemini": (GEMINI_REST_MODEL, handle_transcribe_gemini),
 }
 
 
@@ -811,6 +1021,10 @@ def format_timing(route, timings):
         fields.append(f"think_seen={timings['think_seen']}")
     if "out_chars" in timings:
         fields.append(f"out_chars={timings['out_chars']}")
+    if "path" in timings:
+        fields.append(f"path={timings['path']}")
+    if "gemini_error" in timings:
+        fields.append(f"gemini_error={timings['gemini_error']!r}")
     return "TIMING " + " ".join(fields)
 
 
