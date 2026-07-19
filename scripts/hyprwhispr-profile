@@ -2,7 +2,7 @@
 set -euo pipefail
 
 readonly modes=(qwen-http qwen-ws qwen-omni qwen-realtime qwen-omni-realtime sensevoice realtime)
-readonly default_mode=qwen-http
+readonly default_mode=qwen-omni-realtime
 readonly profiles_dir="${HYPRWHISPR_PROFILE_PROFILES_DIR:?HYPRWHISPR_PROFILE_PROFILES_DIR is required}"
 readonly state_home="${HYPRWHISPR_PROFILE_STATE_HOME:-${XDG_STATE_HOME:-$HOME/.local/state}}"
 readonly runtime_dir="${HYPRWHISPR_PROFILE_RUNTIME_DIR:-${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}/hyprwhspr}"
