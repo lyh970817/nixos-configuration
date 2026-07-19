@@ -91,7 +91,15 @@ stdenvNoCC.mkDerivation rec {
   #   local buffer AudioCapture already keeps for silence detection, and sets
   #   HYPRWHSPR_DICTATION_TS so post_transcription_hook can archive matching
   #   raw/cleaned text under the same timestamp (see home/programs/hyprwhspr.nix).
-  patches = [ ./hyprwhspr-realtime-fixes.patch ];
+  #
+  # Status-notification text: show only the state (e.g. "● Recording…",
+  # "Transcribing…") as the notification summary instead of a "hyprwhspr" title
+  # with the state in the body, and swap the microphone emoji for the monochrome
+  # record glyph that matches the other status symbols (⏸ ✓ ✗).
+  patches = [
+    ./hyprwhspr-realtime-fixes.patch
+    ./hyprwhspr-notification-text.patch
+  ];
 
   nativeBuildInputs = [ makeWrapper ];
 
