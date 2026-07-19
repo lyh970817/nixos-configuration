@@ -181,6 +181,25 @@ default_peer_host() {
   return "$DECISIONS_EXIT_OK"
 }
 
+# default_hostname <role>
+#
+# Prints the sensible default networking.hostName for the given role. The
+# remote machine is always this same physical laptop, so its hostname is
+# known in advance and is printed here; the home machine's hostname varies
+# and is not known here, so this prints nothing for role "home" and the
+# operator must type one. Always exits DECISIONS_EXIT_OK; an unrecognized
+# role also prints nothing (callers are expected to have already validated
+# the role with validate_role).
+default_hostname() {
+  local role="$1"
+
+  if [[ "$role" == "remote" ]]; then
+    printf '%s\n' "dynabook-x30wk"
+  fi
+
+  return "$DECISIONS_EXIT_OK"
+}
+
 # Guard: only runs when this file is executed directly (e.g. `./decisions.sh
 # resolve_target_device sda < table.tsv`), never when sourced by the
 # installer script or by the test suite. This is what makes it safe to

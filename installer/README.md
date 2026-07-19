@@ -20,7 +20,9 @@ not part of this directory and is not covered by tests.
   deliberately stay free of. It also prompts interactively for the machine's
   `portable.role` (`home` or `remote`), `networking.hostName`, and
   `portable.peerHost` -- validated with `validate_role`/`validate_hostname`,
-  with `default_peer_host` offering a default peer for `remote` installs --
+  with `default_hostname` offering `dynabook-x30wk` as the default hostname
+  for `remote` installs (no default for `home`) and `default_peer_host`
+  offering a default peer for `remote` installs --
   and writes all three into the generated `local.nix` alongside
   `portable.configDir`. Not part of the automated test seam above; it
   takes `MOUNT_ROOT`, `INSTALL_DEVICE_TABLE_FILE`, `SECRETS_SOURCE_DIR`,
@@ -99,6 +101,12 @@ All exit codes are exposed as named constants (`DECISIONS_EXIT_OK=0`,
   a valid RFC1123-ish single-label hostname (lowercase letters, digits, and
   hyphens only; 1-63 characters; must not start or end with a hyphen),
   `DECISIONS_EXIT_FAIL` otherwise.
+
+- **`default_hostname <role>`** -> prints the sensible default
+  `networking.hostName` for `role` and always exits `DECISIONS_EXIT_OK`.
+  Prints `dynabook-x30wk` for role `remote` (this physical laptop's
+  hostname is known in advance); prints nothing for role `home` (the home
+  machine's hostname varies and the operator must type one).
 
 - **`default_peer_host <role>`** -> prints the sensible default
   `portable.peerHost` for `role` and always exits `DECISIONS_EXIT_OK`.

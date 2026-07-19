@@ -194,7 +194,7 @@ confirm_target() {
 # guessing. Sets TARGET_ROLE, TARGET_HOSTNAME, and TARGET_PEER_HOST globals
 # on success.
 select_role_and_host() {
-  local role hostname peer_host peer_default
+  local role hostname hostname_default peer_host peer_default
 
   while true; do
     read -r -p "Machine role (home or remote): " role
@@ -204,8 +204,14 @@ select_role_and_host() {
     log "'$role' is not a valid role; type exactly 'home' or 'remote'"
   done
 
+  hostname_default="$(default_hostname "$role")"
   while true; do
-    read -r -p "Hostname for this machine (e.g. dynabook-x30wk): " hostname
+    if [[ -n "$hostname_default" ]]; then
+      read -r -p "Hostname for this machine (e.g. dynabook-x30wk) [$hostname_default]: " hostname
+      hostname="${hostname:-$hostname_default}"
+    else
+      read -r -p "Hostname for this machine (e.g. dynabook-x30wk): " hostname
+    fi
     if validate_hostname "$hostname"; then
       break
     fi

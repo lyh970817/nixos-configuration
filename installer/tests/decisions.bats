@@ -265,3 +265,17 @@ setup() {
   [ "$status" -eq "$DECISIONS_EXIT_OK" ]
   [ "$output" == "" ]
 }
+
+# --- default_hostname ---------------------------------------------------
+
+@test "default_hostname prints dynabook-x30wk for role remote" {
+  run default_hostname "remote"
+  [ "$status" -eq "$DECISIONS_EXIT_OK" ]
+  [ "$output" == "dynabook-x30wk" ]
+}
+
+@test "default_hostname prints nothing for role home" {
+  run default_hostname "home"
+  [ "$status" -eq "$DECISIONS_EXIT_OK" ]
+  [ "$output" == "" ]
+}
