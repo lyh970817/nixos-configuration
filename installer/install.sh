@@ -40,6 +40,11 @@ readonly TARGET_HOSTNAME="dynabook-x30wk"
 # The account the installed system is built for (see users/andongni.nix).
 readonly TARGET_USER="andongni"
 
+# Canonical location of the config repo on the installed system. Both the repo
+# clone and the git-ignored secrets/ dir (proxy + dictation) live here, and it
+# is written into local.nix as portable.configDir. Defaults to the user's home.
+readonly CONFIG_DIR="${CONFIG_DIR:-/home/$TARGET_USER/.nixos-config}"
+
 # Remote the installed clone's `origin` is pointed at. Adjust this if the
 # maintainer's GitHub remote differs.
 readonly GITHUB_REMOTE_URL="${GITHUB_REMOTE_URL:-https://github.com/lyh970817/nixos-configuration.git}"
@@ -240,7 +245,10 @@ generate_facts() {
   nixos-generate-config --root "$MOUNT_ROOT" >&2
 
   cat > "$MOUNT_ROOT/etc/nixos/local.nix" <<EOF
-{ networking.hostName = "$TARGET_HOSTNAME"; }
+{
+  networking.hostName = "$TARGET_HOSTNAME";
+  portable.configDir = "$CONFIG_DIR";
+}
 EOF
 }
 
@@ -327,7 +335,7 @@ target_user_ids() {
 seed_secrets() {
   local proxy_src="$SECRETS_SOURCE_DIR/mihomo-config.yaml"
   local dictation_src="$SECRETS_SOURCE_DIR/credentials.json"
-  local uid gid
+  local uid gid secrets_dir="$MOUNT_ROOT$CONFIG_DIR/secrets"
 
   if [[ ! -f "$proxy_src" ]]; then
     die "proxy secret not found at $proxy_src (set SECRETS_SOURCE_DIR)"
@@ -336,16 +344,15 @@ seed_secrets() {
     die "dictation credential not found at $dictation_src (set SECRETS_SOURCE_DIR)"
   fi
 
-  log "Seeding proxy secret to $MOUNT_ROOT/etc/nixos/secrets/mihomo-config.yaml..."
-  install -d -m 0700 -o root -g root "$MOUNT_ROOT/etc/nixos/secrets"
-  install -m 0600 -o root -g root "$proxy_src" "$MOUNT_ROOT/etc/nixos/secrets/mihomo-config.yaml"
-
+  # Both secrets live in the config repo's git-ignored secrets/ dir
+  # (portable.configDir/secrets). The proxy secret is read there by the root
+  # mihomo service; the dictation credential by the user's Home Manager. Both
+  # are owned by the target user (the sole admin) at mode 0600.
   read -r uid gid < <(target_user_ids)
-  log "Seeding dictation credential to $MOUNT_ROOT/home/$TARGET_USER/.config/hyprwhspr/credentials.json..."
-  install -d -m 0700 -o "$uid" -g "$gid" "$MOUNT_ROOT/home/$TARGET_USER/.config"
-  install -d -m 0700 -o "$uid" -g "$gid" "$MOUNT_ROOT/home/$TARGET_USER/.config/hyprwhspr"
-  install -m 0600 -o "$uid" -g "$gid" "$dictation_src" \
-    "$MOUNT_ROOT/home/$TARGET_USER/.config/hyprwhspr/credentials.json"
+  log "Seeding proxy + dictation secrets to $secrets_dir..."
+  install -d -m 0700 -o "$uid" -g "$gid" "$secrets_dir"
+  install -m 0600 -o "$uid" -g "$gid" "$proxy_src" "$secrets_dir/mihomo-config.yaml"
+  install -m 0600 -o "$uid" -g "$gid" "$dictation_src" "$secrets_dir/hyprwhspr-credentials.json"
 
   # USB copies are intentionally retained (install(1) copies, never moves).
 }
@@ -379,7 +386,7 @@ set_target_password() {
 # ---------------------------------------------------------------------------
 
 populate_repo_clone() {
-  local dest="$MOUNT_ROOT/home/$TARGET_USER/.nixos-config" uid gid
+  local dest="$MOUNT_ROOT$CONFIG_DIR" uid gid
 
   log "Populating the config repo at $dest..."
   if [ -d "$REPO_ROOT/.git" ]; then
@@ -462,10 +469,12 @@ main() {
   run_nixos_install
 
   create_target_user
+  # Clone the repo first so the git-ignored secrets/ dir it will hold exists
+  # (and git clone sees an empty dest), then seed secrets into it.
+  populate_repo_clone
   seed_secrets
 
   set_target_password
-  populate_repo_clone
   write_first_boot_notice
 
   log "Install complete. Reboot into $TARGET_HOSTNAME, then run: tailscale up"

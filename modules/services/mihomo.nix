@@ -6,10 +6,11 @@
 }:
 
 let
-  # Root-owned system secret, read by absolute path at activation/runtime as root.
-  # A plain string (not builtins.path/readFile) keeps the secret out of the
+  # Proxy secret, read by absolute path at activation/runtime as root. A plain
+  # string (not builtins.path/readFile) keeps the secret out of the
   # world-readable store and lets evaluation succeed without the file present.
-  mihomoConfig = "/etc/nixos/secrets/mihomo-config.yaml";
+  # It lives in the config repo's git-ignored secrets/ dir (portable.configDir).
+  mihomoConfig = "${config.portable.configDir}/secrets/mihomo-config.yaml";
   acceptedStateDir = "/var/lib/mihomo-config";
   acceptedShaFile = "${acceptedStateDir}/accepted-config.sha256";
 
