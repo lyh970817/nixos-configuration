@@ -82,21 +82,21 @@ in
   # yq-go + curl drive the Wi-Fi/proxy bootstrap (net-up.sh): mihomo replays
   # the baked config to give the installer full proxied internet, so anything
   # not baked (e.g. the target's own initrd) is fetched through the user's
-  # tunnel instead of failing. networkmanager provides nmtui for Wi-Fi.
+  # tunnel instead of failing.
+  #
+  # Deliberately NO networking config here. The stock installation-device
+  # profile already enables NetworkManager + its nmtui, which worked in the
+  # pre-proxy ISO. An earlier revision added networkmanager.enable +
+  # `wireless.enable = mkForce false` + the networkmanager package on top of
+  # that, which broke nmtui (it listed only `lo`). Leaving the stock setup
+  # untouched restores it; net-up.sh just uses the stock nmtui/nmcli.
   environment.systemPackages = [
     pkgs.git
     pkgs.gptfdisk
     pkgs.mihomo
     pkgs.yq-go
     pkgs.curl
-    pkgs.networkmanager
   ];
-
-  # Wi-Fi bring-up in the installer (the target is Wi-Fi only). NetworkManager
-  # gives nmtui, an interactive SSID+password picker; force off the base ISO's
-  # standalone wpa_supplicant so the two don't fight over the interface.
-  networking.networkmanager.enable = true;
-  networking.wireless.enable = lib.mkForce false;
 
   # Bake the two live bootstrap secrets onto the ISO so the installer needs no
   # manual secret staging. Read impurely from the maintainer's local

@@ -34,6 +34,20 @@ log() { printf '>> [net-up] %s\n' "$*" >&2; }
 # Basic, GFW-safe reachability check (Baidu is always reachable in-country).
 have_internet() { curl -sf -m 5 -o /dev/null https://www.baidu.com; }
 
+# NetworkManager can take a few seconds after boot to detect the Wi-Fi card.
+# The auto-launch opens this early, so wait for a wifi device to appear before
+# nmtui -- otherwise nmtui lists only `lo` and looks broken.
+wait_wifi_device() {
+  local _
+  for _ in $(seq 1 20); do
+    if nmcli -t -f TYPE device 2>/dev/null | grep -q '^wifi$'; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
 # Does the proxy actually egress to a normally-blocked host?
 proxy_works() { curl -x "$PROXY" -sf -m 8 -o /dev/null https://github.com; }
 
@@ -45,6 +59,10 @@ systemctl start NetworkManager 2>/dev/null || true
 if have_internet; then
   log "network already reachable; skipping Wi-Fi setup"
 else
+  if ! wait_wifi_device; then
+    log "Warning: NetworkManager reports no Wi-Fi device yet; opening nmtui anyway."
+  fi
+  nmcli device wifi rescan 2>/dev/null || true
   while true; do
     log "This machine needs Wi-Fi to reach your proxy. Launching nmtui..."
     log "Pick 'Activate a connection', choose your SSID, enter the password, then Back/Quit."
