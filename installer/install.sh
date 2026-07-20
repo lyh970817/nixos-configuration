@@ -277,6 +277,17 @@ format_partitions() {
   mkfs.fat -F32 -n ESP "$ESP_PART" >&2
   mkswap -L nixos-swap "$SWAP_PART" >&2
   mkfs.ext4 -F -L nixos "$ROOT_PART" >&2
+
+  # Force udev to re-read the freshly written filesystem UUIDs before
+  # generate_facts runs. sgdisk --zap-all only clears the partition table, so
+  # on a REINSTALL a prior filesystem superblock survives in the partition
+  # body and udev's database (plus the /dev/disk/by-uuid symlinks) still holds
+  # the OLD UUID until the partitions are re-scanned. nixos-generate-config
+  # reads ID_FS_UUID from that udev database, so without this the installed
+  # initrd binds a stale UUID that mkfs already overwrote and hangs at boot
+  # "waiting for device /dev/disk/by-uuid/... to appear".
+  udevadm trigger --action=change "$ESP_PART" "$SWAP_PART" "$ROOT_PART" 2>/dev/null || true
+  udevadm settle --timeout=15 || true
 }
 
 mount_target() {
