@@ -416,18 +416,21 @@ seed_secrets() {
 # ---------------------------------------------------------------------------
 
 run_nixos_install() {
-  log "Running nixos-install --flake $FLAKE_REF --impure, fully offline..."
-  # nixos-install has no --offline flag of its own; forcing an empty
-  # substituters list is what makes the build refuse the network and rely
-  # entirely on the local store (the closure baked into the ISO, per issue
-  # 07).
+  log "Running nixos-install --flake $FLAKE_REF --impure..."
+  # The baked ISO closure covers almost everything, so this builds/fetches
+  # very little. We deliberately do NOT force an empty substituters list: the
+  # few target-specific paths that aren't baked (e.g. this machine's own
+  # initrd, built from its generated hardware facts) are fetched from
+  # cache.nixos.org through the mihomo proxy net-up.sh brought up (the
+  # nix-daemon drop-in it installed routes those downloads). If net-up.sh
+  # couldn't establish the proxy, the local store still satisfies the common
+  # case; only a genuinely missing path would then fail.
   nixos-install \
     --root "$MOUNT_ROOT" \
     --flake "$FLAKE_REF" \
     --impure \
     --no-root-passwd \
-    --no-channel-copy \
-    --option substituters ""
+    --no-channel-copy
 }
 
 set_target_password() {
