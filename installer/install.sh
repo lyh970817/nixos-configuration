@@ -532,6 +532,28 @@ populate_repo_clone() {
   chown -R "$uid:$gid" "$dest"
 }
 
+# link_target_etc_nixos
+#
+# Match the home box's layout so the shared `rebuild` alias (which targets
+# /etc/nixos#system) works on the installed machine. On home, /etc/nixos is a
+# symlink to the config repo (portable.configDir) and the generated per-machine
+# facts live INSIDE the repo (gitignored there). The installer otherwise leaves
+# the facts in the target's plain /etc/nixos dir, which has no flake.nix, so
+# `nixos-rebuild --flake /etc/nixos#system` fails with "does not contain a
+# flake.nix". Move the facts into the repo and replace /etc/nixos with a symlink
+# to it; configuration.nix's absolute import of
+# /etc/nixos/hardware-configuration.nix then resolves through the symlink.
+link_target_etc_nixos() {
+  local dest="$MOUNT_ROOT$CONFIG_DIR" uid gid
+  log "Pointing /etc/nixos at $CONFIG_DIR (matching the home layout) so 'rebuild' works..."
+  install -m 0644 "$MOUNT_ROOT/etc/nixos/hardware-configuration.nix" "$dest/hardware-configuration.nix"
+  install -m 0644 "$MOUNT_ROOT/etc/nixos/local.nix" "$dest/local.nix"
+  read -r uid gid < <(target_user_ids)
+  chown "$uid:$gid" "$dest/hardware-configuration.nix" "$dest/local.nix"
+  rm -rf "$MOUNT_ROOT/etc/nixos"
+  ln -sfn "$CONFIG_DIR" "$MOUNT_ROOT/etc/nixos"
+}
+
 # ---------------------------------------------------------------------------
 # First boot
 # ---------------------------------------------------------------------------
@@ -602,6 +624,9 @@ main() {
   # (and git clone sees an empty dest), then seed secrets into it.
   populate_repo_clone
   seed_secrets
+  # Facts live in the repo and /etc/nixos becomes a symlink to it (home layout),
+  # so the `rebuild` alias works on the installed machine.
+  link_target_etc_nixos
 
   set_target_password
   write_first_boot_notice
