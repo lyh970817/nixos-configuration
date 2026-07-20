@@ -293,6 +293,17 @@ format_partitions() {
   # uevent) so the by-uuid symlinks findStableDevPath reads are current.
   udevadm trigger --action=change "$ESP_PART" "$SWAP_PART" "$ROOT_PART" 2>/dev/null || true
   udevadm settle --timeout=15 || true
+
+  # Ground-truth UUIDs, read straight from the freshly written superblocks with
+  # blkid --probe (no udev, no cache) while the partitions are still unmounted.
+  # generate_facts re-pins the recorded config to these -- udev's by-uuid
+  # symlinks can still resolve to a PREVIOUS install's UUID even after wipefs +
+  # trigger (observed in the field: the initrd hung on UUIDs absent from the
+  # disk), and nixos-generate-config trusts those symlinks. blkid on the raw
+  # superblock cannot lie. `-p` falls back to the cache form if unsupported.
+  ROOT_FS_UUID="$(blkid -p -s UUID -o value "$ROOT_PART" 2>/dev/null || blkid -s UUID -o value "$ROOT_PART" 2>/dev/null || true)"
+  ESP_FS_UUID="$(blkid -p -s UUID -o value "$ESP_PART" 2>/dev/null || blkid -s UUID -o value "$ESP_PART" 2>/dev/null || true)"
+  SWAP_FS_UUID="$(blkid -p -s UUID -o value "$SWAP_PART" 2>/dev/null || blkid -s UUID -o value "$SWAP_PART" 2>/dev/null || true)"
 }
 
 mount_target() {
@@ -308,9 +319,42 @@ mount_target() {
 # Facts generation
 # ---------------------------------------------------------------------------
 
+# repin_fs_uuids
+#
+# Overwrite the UUIDs nixos-generate-config recorded in
+# hardware-configuration.nix with the ground-truth values captured from blkid at
+# format time. generate-config resolves fileSystems/swap devices through
+# /dev/disk/by-uuid symlinks, which on a REINSTALL can still point at a prior
+# filesystem's UUID (a stale udev entry that survives wipefs) -- so it records a
+# UUID that isn't on the disk and the initrd hangs at boot "waiting for device
+# /dev/disk/by-uuid/... to appear". blkid --probe reads the live superblock
+# directly, so re-pinning to it is authoritative. Keyed by mount (/, /boot,
+# swapDevices) so the substitution is order-independent, and run BEFORE
+# sync_installer_facts so the corrected file is what gets evaluated/built.
+repin_fs_uuids() {
+  local hw="$MOUNT_ROOT/etc/nixos/hardware-configuration.nix"
+  [[ -f "$hw" ]] || return 0
+  log "Re-pinning recorded UUIDs to live blkid values (root=$ROOT_FS_UUID esp=$ESP_FS_UUID swap=$SWAP_FS_UUID)..."
+  awk \
+    -v u_root="$ROOT_FS_UUID" \
+    -v u_esp="$ESP_FS_UUID" \
+    -v u_swap="$SWAP_FS_UUID" '
+    /fileSystems\."\/"[[:space:]]*=/     { ctx = "root" }
+    /fileSystems\."\/boot"[[:space:]]*=/ { ctx = "boot" }
+    /swapDevices[[:space:]]*=/           { ctx = "swap" }
+    /device = "\/dev\/disk\/by-uuid\// {
+      if (ctx == "root" && u_root != "") sub(/by-uuid\/[^"]+/, "by-uuid/" u_root)
+      else if (ctx == "boot" && u_esp != "") sub(/by-uuid\/[^"]+/, "by-uuid/" u_esp)
+      else if (ctx == "swap" && u_swap != "") sub(/by-uuid\/[^"]+/, "by-uuid/" u_swap)
+    }
+    { print }
+  ' "$hw" > "$hw.tmp" && mv "$hw.tmp" "$hw"
+}
+
 generate_facts() {
   log "Generating hardware facts for the mounted target..."
   nixos-generate-config --root "$MOUNT_ROOT" >&2
+  repin_fs_uuids
 
   cat > "$MOUNT_ROOT/etc/nixos/local.nix" <<EOF
 {
