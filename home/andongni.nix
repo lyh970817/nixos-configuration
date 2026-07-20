@@ -20,6 +20,7 @@
     ./programs/mako.nix
     ./programs/rofi.nix
     ./programs/fzf.nix
+    ./programs/newt.nix
     ./programs/r.nix
     ./programs/fastfetch.nix
     ./programs/claude.nix
