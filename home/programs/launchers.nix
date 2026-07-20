@@ -141,6 +141,114 @@ in
         MimeType=x-scheme-handler/claude-cli;
       '';
     };
+
+    # Package apps where the hand-made entry only adds a custom GenericName --
+    # which the rofi launcher DOES display ("Name (GenericName)"), so it's a
+    # visible difference, not cosmetic. Captured as force overrides so remote
+    # matches home. Locale translation lines from the package entries are
+    # dropped: the system locale is en_GB, so only the default fields render.
+    "applications/bitwarden.desktop" = {
+      force = true;
+      text = ''
+        [Desktop Entry]
+        Type=Application
+        Name=Bitwarden
+        GenericName=Password Manager
+        Comment=Secure and free password manager for all of your devices
+        Exec=bitwarden %U
+        Icon=bitwarden
+        MimeType=x-scheme-handler/bitwarden
+        Categories=Utility;
+      '';
+    };
+
+    "applications/blueman-manager.desktop" = {
+      force = true;
+      text = ''
+        [Desktop Entry]
+        Type=Application
+        Name=Bluetooth Manager
+        GenericName=System
+        Comment=Blueman Bluetooth Manager
+        Exec=blueman-manager
+        Icon=blueman
+        Terminal=false
+        StartupNotify=true
+        Categories=GTK;GNOME;Settings;HardwareSettings;
+      '';
+    };
+
+    "applications/LocalSend.desktop" = {
+      force = true;
+      text = ''
+        [Desktop Entry]
+        Type=Application
+        Name=LocalSend
+        GenericName=Local File Transfer
+        Exec=localsend_app %U
+        Icon=localsend
+        Keywords=Sharing;LAN;Files
+        StartupNotify=true
+        StartupWMClass=localsend_app
+        Categories=GTK;FileTransfer;Utility;
+      '';
+    };
+
+    "applications/sioyek.desktop" = {
+      force = true;
+      text = ''
+        [Desktop Entry]
+        Type=Application
+        Name=Sioyek
+        GenericName=PDF Viewr
+        Comment=PDF viewer for reading research papers and technical books
+        Keywords=pdf;viewer;reader;research;
+        TryExec=sioyek
+        Exec=sioyek %f
+        StartupNotify=true
+        Terminal=false
+        Icon=sioyek-icon-linux
+        Categories=Development;Viewer;
+        MimeType=application/pdf;
+      '';
+    };
+
+    "applications/yazi.desktop" = {
+      force = true;
+      text = ''
+        [Desktop Entry]
+        Type=Application
+        Name=Yazi
+        GenericName=File Manager
+        Comment=Blazing fast terminal file manager written in Rust, based on async I/O
+        Terminal=true
+        TryExec=yazi
+        Exec=yazi %u
+        Icon=yazi
+        MimeType=inode/directory
+        Categories=Utility;Core;System;FileTools;FileManager;ConsoleOnly;
+        Keywords=File;Manager;Explorer;Browser;Launcher
+      '';
+    };
+
+    "applications/Zoom.desktop" = {
+      force = true;
+      text = ''
+        [Desktop Entry]
+        Type=Application
+        Name=Zoom Workplace
+        GenericName=Video Conference
+        Comment=Zoom Video Conference
+        Exec=zoom %U
+        Icon=Zoom
+        Terminal=false
+        Encoding=UTF-8
+        Categories=Network;Application;
+        StartupWMClass=zoom
+        MimeType=x-scheme-handler/zoommtg;x-scheme-handler/zoomus;x-scheme-handler/tel;x-scheme-handler/callto;x-scheme-handler/zoomphonecall;x-scheme-handler/zoomphonesms;x-scheme-handler/zoomcontactcentercall;application/x-zoom
+        X-KDE-Protocols=zoommtg;zoomus;tel;callto;zoomphonecall;zoomphonesms;zoomcontactcentercall;
+      '';
+    };
   };
 
   xdg.desktopEntries = {
