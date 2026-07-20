@@ -274,18 +274,23 @@ partition_disk() {
 
 format_partitions() {
   log "Formatting $ESP_PART (FAT32 ESP), $SWAP_PART (swap), $ROOT_PART (ext4 root)..."
+  # Wipe stale filesystem signatures from the partition bodies before mkfs.
+  # sgdisk --zap-all clears only the partition TABLE, so on a REINSTALL a prior
+  # ext4/vfat superblock survives inside the partition and udev keeps a
+  # /dev/disk/by-uuid symlink for that OLD uuid. nixos-generate-config resolves
+  # the root device with findStableDevPath, which globs /dev/disk/by-uuid/* and
+  # returns the first symlink whose device major:minor matches -- it does NOT
+  # read the live superblock -- so a lingering stale symlink makes it record the
+  # OLD uuid and the installed initrd then hangs at boot "waiting for device
+  # /dev/disk/by-uuid/... to appear" (a uuid mkfs already overwrote). Wiping the
+  # signatures first means only the freshly-written uuid can ever be found.
+  wipefs -a "$ESP_PART" "$SWAP_PART" "$ROOT_PART" >&2
   mkfs.fat -F32 -n ESP "$ESP_PART" >&2
   mkswap -L nixos-swap "$SWAP_PART" >&2
   mkfs.ext4 -F -L nixos "$ROOT_PART" >&2
 
-  # Force udev to re-read the freshly written filesystem UUIDs before
-  # generate_facts runs. sgdisk --zap-all only clears the partition table, so
-  # on a REINSTALL a prior filesystem superblock survives in the partition
-  # body and udev's database (plus the /dev/disk/by-uuid symlinks) still holds
-  # the OLD UUID until the partitions are re-scanned. nixos-generate-config
-  # reads ID_FS_UUID from that udev database, so without this the installed
-  # initrd binds a stale UUID that mkfs already overwrote and hangs at boot
-  # "waiting for device /dev/disk/by-uuid/... to appear".
+  # Publish the new uuids to udev (mkfs writes the superblock but emits no
+  # uevent) so the by-uuid symlinks findStableDevPath reads are current.
   udevadm trigger --action=change "$ESP_PART" "$SWAP_PART" "$ROOT_PART" 2>/dev/null || true
   udevadm settle --timeout=15 || true
 }
@@ -445,8 +450,14 @@ run_nixos_install() {
 }
 
 set_target_password() {
+  # passwd re-prompts a couple times itself, but if it ultimately exits non-zero
+  # (mismatch / too short) the script's `set -e` would abort at this final step,
+  # tearing down an already-installed system with no login set. Loop until it
+  # succeeds instead of aborting.
   log "Set a new login password for $TARGET_USER."
-  nixos-enter --root "$MOUNT_ROOT" -c "passwd $TARGET_USER"
+  until nixos-enter --root "$MOUNT_ROOT" -c "passwd $TARGET_USER"; do
+    log "Password not set (mismatch or too short) -- try again."
+  done
 }
 
 # ---------------------------------------------------------------------------
