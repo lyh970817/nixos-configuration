@@ -29,6 +29,26 @@
       Name=uuctl
       Hidden=true
     '';
+
+    # Network manager launcher: opens nmtui in a terminal. force = true so it
+    # replaces any hand-made ~/.local/share/applications/nmtui.desktop instead
+    # of showing as a second entry, and it lands on fresh installs too.
+    "applications/nmtui.desktop" = {
+      force = true;
+      text = ''
+        [Desktop Entry]
+        Version=1.0
+        Type=Application
+        Name=Network Manager
+        GenericName=Network Configuration
+        Comment=Text-based network configuration tool
+        Exec=alacritty --title nmtui -e zsh -i -c nmtui
+        Icon=network-wired
+        Terminal=false
+        Categories=System;Network;Settings;
+        Keywords=network;wifi;ethernet;connection;nmtui;
+      '';
+    };
   };
 
   xdg.desktopEntries = {

@@ -108,8 +108,6 @@ let
     ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface icon-theme 'HighContrast'
     ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface cursor-theme 'Adwaita'
 
-    echo "--color=info:#404040,prompt:#404040,pointer:#000000,marker:#000000" > $HOME/.config/fzf-theme
-
     # Alacritty: Update symlink (alacritty auto-reloads on import changes)
     ln -sf $HOME/.config/alacritty/themes/light.toml $HOME/.config/alacritty/current.toml
 
