@@ -1,7 +1,47 @@
 { pkgs, ... }:
-
+let
+  # Package-provided .desktop entries the user hides from the rofi launcher to
+  # declutter it. On the home machine these were hand-made override files in
+  # ~/.local/share/applications that add NoDisplay=true; capture them here so
+  # the same apps are hidden on every machine (fresh installs included), not
+  # just wherever the hand-made file happened to exist. Each is a minimal
+  # NoDisplay stub at the same basename, force = true so it wins over the
+  # package's own entry (~/.local/share outranks the profile) -> single hidden
+  # entry, no duplicate.
+  hideFromLauncher = name: {
+    name = "applications/${name}.desktop";
+    value = {
+      force = true;
+      text = ''
+        [Desktop Entry]
+        Type=Application
+        Name=${name}
+        NoDisplay=true
+      '';
+    };
+  };
+  hiddenLauncherEntries = [
+    "calibre-ebook-edit"
+    "calibre-ebook-viewer"
+    "calibre-lrfviewer"
+    "cups"
+    "darkman"
+    "fcitx5-configtool"
+    "htop"
+    "kbd-layout-viewer5"
+    "nixos-manual"
+    "nvim"
+    "org.fcitx.Fcitx5"
+    "org.fcitx.fcitx5-migrator"
+    "org.gnome.FileRoller"
+    "rofi"
+    "rofi-theme-selector"
+    "thunar-bulk-rename"
+    "thunar-settings"
+  ];
+in
 {
-  xdg.dataFile = {
+  xdg.dataFile = builtins.listToAttrs (map hideFromLauncher hiddenLauncherEntries) // {
     "applications/firefox.desktop" = {
       force = true;
       text = ''
@@ -47,6 +87,58 @@
         Terminal=false
         Categories=System;Network;Settings;
         Keywords=network;wifi;ethernet;connection;nmtui;
+      '';
+    };
+
+    # Visible customizations of a package's own entry (renamed / simplified),
+    # kept via a same-basename force override so they replace the package's
+    # version rather than showing alongside it.
+    "applications/teams-for-linux.desktop" = {
+      force = true;
+      text = ''
+        [Desktop Entry]
+        Type=Application
+        Version=1.5
+        Name=Microsoft Teams
+        GenericName=Collaboration Client
+        Comment=Unofficial Microsoft Teams client for Linux
+        Exec=teams-for-linux
+        Icon=teams-for-linux
+        Categories=Network;InstantMessaging;Chat;
+      '';
+    };
+
+    "applications/calibre-gui.desktop" = {
+      force = true;
+      text = ''
+        [Desktop Entry]
+        Version=1.0
+        Type=Application
+        Name=Calibre
+        GenericName=E-Book Library Management
+        Comment=E-book library management: Convert, view, share, catalogue all your e-books
+        TryExec=calibre
+        Exec=calibre --detach %U
+        Icon=calibre-gui
+        Categories=Office;
+        X-GNOME-UsesNotifications=true
+        Keywords=epub;ebook;manager;
+        MimeType=application/epub+zip;application/ereader;application/oebps-package+xml;application/pdf;application/vnd.ms-word.document.macroenabled.12;application/vnd.oasis.opendocument.text;application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/x-cb7;application/x-cbc;application/x-cbr;application/x-cbz;application/x-mobi8-ebook;application/x-mobipocket-ebook;application/x-mobipocket-subscription;application/x-sony-bbeb;application/xhtml+xml;image/vnd.djvu;text/fb2+xml;text/html;text/plain;text/rtf;text/x-markdown;x-scheme-handler/calibre;
+      '';
+    };
+
+    # Unique hand-made entry with no package equivalent: a claude-cli:// URI
+    # handler, hidden from the launcher. Inert on machines without Claude Code.
+    "applications/claude-code-url-handler.desktop" = {
+      force = true;
+      text = ''
+        [Desktop Entry]
+        Type=Application
+        Name=Claude Code URL Handler
+        Comment=Handle claude-cli:// deep links for Claude Code
+        Exec="/home/andongni/.local/bin/claude" --handle-uri %u
+        NoDisplay=true
+        MimeType=x-scheme-handler/claude-cli;
       '';
     };
   };
