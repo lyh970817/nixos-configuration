@@ -44,7 +44,7 @@ Claude mutable state lives under `CLAUDE_CONFIG_DIR`.
 - Claude guidance: `$CLAUDE_CONFIG_DIR/CLAUDE.md`.
 - Claude commands, agents, plugins, and skills: `$CLAUDE_CONFIG_DIR/commands`, `$CLAUDE_CONFIG_DIR/agents`, `$CLAUDE_CONFIG_DIR/plugins`, and `$CLAUDE_CONFIG_DIR/skills`.
 - Separate Claude profile example: `claude-matt` sets `CLAUDE_CONFIG_DIR="$HOME/.config/claude-mattpocock"` in `/home/andongni/.nixos-config/home/programs/shell.nix`.
-- Theme automation mutates `/home/andongni/.config/claude/settings.json` from `/home/andongni/.nixos-config/home/desktop/theming.nix`.
+- `dotfiles/claude/settings.json` is the tracked non-secret baseline. Home Manager materializes independent mutable settings files for the default and Matt profiles, and theme automation updates both from `/home/andongni/.nixos-config/home/desktop/theming.nix`.
 - Claude plugins are managed through Claude's `/plugin` commands; installed plugin state is in `$CLAUDE_CONFIG_DIR/plugins/installed_plugins.json` and known marketplaces are in `$CLAUDE_CONFIG_DIR/plugins/known_marketplaces.json`.
 - Claude does not have Codex-style profiles, but each `CLAUDE_CONFIG_DIR` acts like a separate profile folder. Keep the Claude-format `system-maintenance` skill present in every Claude config dir's `skills` folder, using symlinks where appropriate, for example `/home/andongni/.config/claude/skills/system-maintenance` and `/home/andongni/.config/claude-mattpocock/skills/system-maintenance`.
 

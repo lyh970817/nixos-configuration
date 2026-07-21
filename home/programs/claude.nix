@@ -52,7 +52,8 @@ in
 
     home.sessionVariables.CLAUDE_CONFIG_DIR = "$HOME/.config/claude";
 
-    # Claude settings, commands, agents, and themes are intentionally mutable under
-    # ~/.config/claude via CLAUDE_CONFIG_DIR.
+    # Commands, agents, and runtime profile state stay mutable under
+    # CLAUDE_CONFIG_DIR. settings.json is materialized from the tracked
+    # non-secret baseline, then the theme hooks keep each profile's theme live.
   };
 }

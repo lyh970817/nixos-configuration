@@ -21,10 +21,15 @@ let
   # land in the repo. Single-file links (AGENTS.md, CLAUDE.md, statusline.sh)
   # can be replaced by a real file if the owning app rewrites
   # them via a temp-file+rename; if that happens, re-run `nixos-rebuild switch`
-  # to restore the link. ~/.config/claude/settings.json is intentionally NOT
-  # linked because the darkman theme switcher rewrites it via mktemp+mv on every
-  # theme change, which would clobber the symlink.
+  # to restore the link. Claude settings are materialized below instead: the
+  # theme hook atomically replaces each profile's runtime JSON on every switch.
   link = subpath: config.lib.file.mkOutOfStoreSymlink "${osConfig.portable.configDir}/${subpath}";
+
+  claudeSettings = ../../dotfiles/claude/settings.json;
+  claudeConfigDirs = [
+    ".config/claude"
+    ".config/claude-mattpocock"
+  ];
 
   # Codex resolves profile-relative skill paths from the profile file's runtime
   # location. Materialize these tracked files at ~/.codex instead of linking
@@ -41,6 +46,37 @@ let
   };
 in
 {
+  # Keep a tracked, non-secret Claude baseline while leaving each profile's
+  # runtime file mutable. Existing profile-specific settings win over the
+  # baseline; only the theme is synchronized to the active desktop mode. The
+  # files must be ordinary files because the theme hooks replace them atomically.
+  home.activation.claudeSettings = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    claude_theme="dark-ansi"
+    case "$(readlink "$HOME/.local/state/hypr/current-theme.conf" 2>/dev/null || true)" in
+      *light.conf) claude_theme="light-ansi" ;;
+    esac
+
+    ${lib.concatMapStringsSep "\n" (configDir: ''
+      claude_settings_dir="$HOME/${configDir}"
+      claude_settings="$claude_settings_dir/settings.json"
+      run ${pkgs.coreutils}/bin/install -d -m 0700 "$claude_settings_dir"
+      claude_settings_tmp="$(${pkgs.coreutils}/bin/mktemp "$claude_settings.XXXXXX")"
+
+      if [ -f "$claude_settings" ] && ${pkgs.jq}/bin/jq --arg theme "$claude_theme" \
+        -s '.[0] * .[1] | .theme = $theme' \
+        ${lib.escapeShellArg (toString claudeSettings)} "$claude_settings" > "$claude_settings_tmp"; then
+        :
+      else
+        ${pkgs.jq}/bin/jq --arg theme "$claude_theme" \
+          '.theme = $theme' \
+          ${lib.escapeShellArg (toString claudeSettings)} > "$claude_settings_tmp"
+      fi
+
+      run ${pkgs.coreutils}/bin/chmod 0600 "$claude_settings_tmp"
+      run ${pkgs.coreutils}/bin/mv -f "$claude_settings_tmp" "$claude_settings"
+    '') claudeConfigDirs}
+  '';
+
   home.activation.codexProfiles = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     ${lib.concatStringsSep "\n" (
       lib.mapAttrsToList (name: source: ''
