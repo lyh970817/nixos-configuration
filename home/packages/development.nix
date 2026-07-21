@@ -11,7 +11,6 @@
   # portable laptop develops over `mosh home`, so it omits this heavy toolchain.
   config = lib.mkIf (osConfig.portable.role == "home") {
     home.packages = with pkgs; [
-      gcc
       gnumake
       jdk17
       cargo
@@ -42,8 +41,6 @@
       nf-test
       apptainer
       graphviz
-      nixfmt
-      nil
       harper
       marksman
       lua-language-server

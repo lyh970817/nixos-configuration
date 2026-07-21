@@ -23,5 +23,10 @@
     duf
     ncdu
     lazygit
+    # Editor essentials on every role: gcc for nvim-treesitter parser
+    # compilation; nil + nixfmt for editing this Nix config on the remote too.
+    gcc
+    nil
+    nixfmt
   ];
 }
