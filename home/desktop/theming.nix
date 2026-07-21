@@ -167,24 +167,9 @@ in
   ];
 
   # Monitor presence in hypr/scripts/monitor-switch.sh is the sole automatic
-  # theme trigger; it calls switch-light/switch-dark directly. Darkman's
-  # time-, location-, and GeoClue-based transitions are intentionally unused,
-  # so this setup does not manage coordinates or an automatic schedule.
-  # These Darkman declarations are legacy integration; do not treat this unit
-  # as the source of automatic switching.
-  systemd.user.services.darkman = {
-    Unit = {
-      Description = "Darkman Service";
-      PartOf = [ "graphical-session.target" ];
-    };
-    Service = {
-      ExecStart = "${pkgs.darkman}/bin/darkman run";
-      Restart = "always";
-    };
-    Install = {
-      WantedBy = [ "graphical-session.target" ];
-    };
-  };
+  # theme trigger; it calls switch-light/switch-dark directly. The Darkman
+  # daemon is intentionally not started because this configuration manages no
+  # Darkman schedule, location, or other Darkman configuration.
 
   # Legacy Darkman hook locations expose the same theme actions, but the
   # monitor-switch script is what selects and invokes a mode automatically.
