@@ -43,6 +43,9 @@
         "115browser" = final.callPackage ./pkgs/115browser.nix { };
         claude-code = final.callPackage ./pkgs/claude-code.nix { };
         codex = final.callPackage ./pkgs/codex.nix { };
+        codex-desktop-isolated = final.callPackage ./pkgs/codex-desktop-isolated.nix {
+          codexDesktopPackage = codex-desktop-linux.packages.${system}.codex-desktop;
+        };
         kreuzberg-cli = final.callPackage ./pkgs/kreuzberg-cli.nix { };
         digg-pp-cli = final.callPackage ./pkgs/digg-pp-cli.nix { };
         hyprwhspr = final.callPackage ./pkgs/hyprwhspr.nix { };

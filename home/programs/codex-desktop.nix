@@ -4,10 +4,13 @@
 }:
 
 {
-  # Codex Desktop owns the bundled node_repl MCP and provides the matching
-  # Codex CLI wrapper, so both stay available on every portable role.
+  # The terminal CLI and Desktop run independently: Desktop owns bundled
+  # node_repl while its launcher keeps GUI state out of ~/.codex.
+  home.packages = [ pkgs.codex ];
+
   programs.codexDesktopLinux = {
     enable = true;
-    cliPackage = pkgs.codex;
+    package = pkgs.codex-desktop-isolated;
+    cliPackage = null;
   };
 }
