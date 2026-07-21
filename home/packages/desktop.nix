@@ -5,6 +5,8 @@
   home.packages = with pkgs; [
     waybar
     swaybg
+    brightnessctl
+    playerctl
     brave
     chromium
     libnotify
