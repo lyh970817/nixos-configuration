@@ -2,7 +2,9 @@
 
 ## Project Structure & Module Organization
 
-This repository is a NixOS flake for the `andongni` host. Entry points are `flake.nix`, `configuration.nix`, and `hardware-configuration.nix`. System modules live under `modules/`: `system/`, `desktop/`, `hardware/`, `services/`, and `programs/`. Home Manager starts at `home/andongni.nix`; user modules are in `home/programs/`, packages in `home/packages/`, and desktop settings in `home/desktop/`. Custom derivations are in `pkgs/`; user accounts are under `users/`. Managed dotfiles and assets are in `dotfiles/` and `assets/`. Notes belong in `docs/`.
+This repository is one generic NixOS flake configuration serving two machines: the `linglong` home desktop and a remote portable laptop, selected via a `portable.role` split (`"home"` / `"remote"`). Entry points are `flake.nix`, `configuration.nix`, and `hardware-configuration.nix`. System modules live under `modules/`: `system/`, `desktop/`, `hardware/`, `services/`, and `programs/`. Home Manager starts at `home/andongni.nix`; user modules are in `home/programs/`, packages in `home/packages/`, and desktop settings in `home/desktop/`. Custom derivations are in `pkgs/`; user accounts are under `users/`. Managed dotfiles and assets are in `dotfiles/` and `assets/`. Notes belong in `docs/`.
+
+The flake exposes a single `.#system` output for both machines; per-machine facts (hardware, hostname, and `portable.role`/`peerHost`/`configDir`) come from gitignored `/etc/nixos/hardware-configuration.nix` and `/etc/nixos/local.nix`, imported by absolute path (hence `--impure`). Modules gated on `osConfig.portable.role == "home"` give the remote laptop a lighter package/feature set.
 
 ## Build, Test, and Development Commands
 
