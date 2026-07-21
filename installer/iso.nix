@@ -43,6 +43,12 @@ let
     );
   inputSources = lib.unique (collectInputSources flakeInputs);
 
+  # Optional convenience payload: unlike the proxy and dictation secrets, a
+  # missing coding-agent login/profile directory must not prevent ISO
+  # evaluation. install.sh already treats the corresponding ISO path as
+  # best-effort when it is absent.
+  codingCliPayload = /home/andongni/.nixos-config/secrets/coding-cli;
+
   # Resolve the canonical checkout's actual master ref without importing its
   # complete Git metadata. Git stores a branch either as a loose ref or in
   # packed-refs; accept both representations and nothing else.
@@ -214,15 +220,18 @@ in
   environment.etc."nixos-secrets/mihomo-cache".source =
     /home/andongni/.nixos-config/secrets/mihomo-cache;
 
-  # Bake this machine's coding-agent logins (Claude Code + Codex credentials,
-  # plus the maintainer's Codex profile files) so a fresh install has a
-  # working coding agent without a manual `claude login` / `codex login`.
+  # When available, bake this machine's coding-agent logins (Claude Code +
+  # Codex credentials, plus the maintainer's Codex profile files) so a fresh
+  # install has a working coding agent without a manual `claude login` /
+  # `codex login`.
   # Whole-dir source (same idiom as mihomo-cache above), so dotfiles like
   # claude/.credentials.json are carried along -- it's a plain store copy of
   # the directory, not a glob. Purely a convenience: install.sh seeds these
   # best-effort and never aborts the install if one is missing. Same
   # cleartext-on-the-USB caveat as the other secrets above.
-  environment.etc."nixos-secrets/coding-cli".source = /home/andongni/.nixos-config/secrets/coding-cli;
+  environment.etc."nixos-secrets/coding-cli" = lib.mkIf (builtins.pathExists codingCliPayload) {
+    source = codingCliPayload;
+  };
 
   # Auto-launch the installer on the console so booting the USB drops straight
   # into the install flow with no manual command typing. Root autologin on

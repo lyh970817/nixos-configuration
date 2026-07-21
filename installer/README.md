@@ -146,6 +146,17 @@ the exact flake commit in `self.rev`. Dirty, non-Git, detached, and non-`master`
 fail evaluation instead of manufacturing a `master` branch from an arbitrary revision. A
 revision missing from the imported object database fails the bundle build.
 
+The ISO may also carry an optional coding-CLI convenience payload from the build
+machine's `/home/andongni/.nixos-config/secrets/coding-cli` directory. When that
+directory exists, it is exposed in the booted installer as
+`/etc/nixos-secrets/coding-cli`; when it does not exist, the ISO omits the path
+and still evaluates normally. `install.sh` copies any available Claude Code
+credentials, Codex auth files, and Codex `*.config.toml` profile files into the
+target user's home on a best-effort basis. It deliberately does not seed the
+base `~/.codex/config.toml`, because that file may contain machine- and
+home-specific paths. Missing payloads or individual files only require the user
+to log in or recreate the affected profile later; they do not abort installation.
+
 The derivation imports only `.git/objects`, then constructs a new builder-owned bare repository
 whose sole ref is the already-verified `master`. Repository config, credential files, hooks,
 refs (including the stash ref), reflogs, the index, and worktree metadata are not imported. The
