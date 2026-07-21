@@ -322,10 +322,7 @@ in
       icon = "system-suspend-hibernate";
       terminal = false;
       type = "Application";
-      categories = [
-        "System"
-        "Power"
-      ];
+      categories = [ "System" ];
       settings = {
         Keywords = "suspend;sleep;disk;";
       };
