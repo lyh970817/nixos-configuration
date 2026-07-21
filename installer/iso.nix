@@ -42,6 +42,98 @@ let
       ) inputs
     );
   inputSources = lib.unique (collectInputSources flakeInputs);
+
+  # Resolve the canonical checkout's actual master ref without importing its
+  # complete Git metadata. Git stores a branch either as a loose ref or in
+  # packed-refs; accept both representations and nothing else.
+  canonicalGitDir = /home/andongni/.nixos-config/.git;
+  masterLooseRef = /home/andongni/.nixos-config/.git/refs/heads/master;
+  packedRefs = /home/andongni/.nixos-config/.git/packed-refs;
+  parseLooseRevision = contents:
+    let
+      match = builtins.match "([0-9a-f]+)[[:space:]]*" contents;
+      revision = if match == null then null else builtins.elemAt match 0;
+    in
+    if revision != null && builtins.stringLength revision == 40 then revision else null;
+  parsePackedMaster = line:
+    let
+      match = builtins.match "([0-9a-f]+)[[:space:]]+refs/heads/master" line;
+      revision = if match == null then null else builtins.elemAt match 0;
+    in
+    if revision != null && builtins.stringLength revision == 40 then revision else null;
+  packedMasterRevisions =
+    if builtins.pathExists packedRefs then
+      lib.filter (revision: revision != null) (
+        map parsePackedMaster (lib.splitString "\n" (builtins.readFile packedRefs))
+      )
+    else
+      [ ];
+  canonicalMasterRevision =
+    if builtins.pathExists masterLooseRef then
+      let
+        revision = parseLooseRevision (builtins.readFile masterLooseRef);
+      in
+      if revision != null then
+        revision
+      else
+        throw "installer ISO: canonical checkout has an invalid loose refs/heads/master"
+    else if builtins.length packedMasterRevisions == 1 then
+      builtins.head packedMasterRevisions
+    else if builtins.length packedMasterRevisions > 1 then
+      throw "installer ISO: canonical checkout has duplicate refs/heads/master entries in packed-refs"
+    else
+      throw "installer ISO: canonical checkout has no refs/heads/master";
+
+  # Nix's flake source deliberately omits .git, so copying `self` alone cannot
+  # produce a tracked checkout on the installed machine. Require a clean Git
+  # revision and require it to be the canonical checkout's observed master tip.
+  # A detached/non-master flake revision is rejected rather than being assigned
+  # a newly-manufactured master branch in the bundle.
+  repoRevision =
+    if
+      !(self ? rev)
+      || self ? dirtyRev
+      || !(builtins.isString self.rev)
+      || builtins.stringLength self.rev != 40
+      || builtins.match "[0-9a-f]+" self.rev == null
+    then
+      throw "installer ISO requires a clean Git flake checkout with an exact revision; commit all tracked changes before building"
+    else if self.rev != canonicalMasterRevision then
+      throw "installer ISO: clean flake revision ${self.rev} is not canonical checkout master ${canonicalMasterRevision}; build from master"
+    else
+      self.rev;
+
+  # Import only the object database as an impure build input (the ISO already
+  # reads local secrets impurely below). Repository config, credential files,
+  # hooks, refs, reflogs, the index, and worktree metadata never enter this
+  # input. The whole object DB is nevertheless copied to an intermediate Nix
+  # store path, so it may contain unreachable/dangling objects; historically
+  # committed secrets are also Git objects. The final bundle includes only
+  # history reachable from the verified master ref.
+  #
+  # The builder reconstructs its own bare repository and recreates the already
+  # verified master ref, so neither host refs nor Git's safe.directory check
+  # influence bundle creation.
+  repoGitObjects = builtins.seq repoRevision (builtins.path {
+    path = canonicalGitDir + "/objects";
+    name = "nixos-config-git-objects";
+  });
+  repoBundle = pkgs.runCommand "nixos-config-master.bundle" { nativeBuildInputs = [ pkgs.git ]; } ''
+    export HOME="$TMPDIR"
+    repo_dir="$TMPDIR/repository.git"
+    git init --bare "$repo_dir" >/dev/null
+    cp -R ${repoGitObjects}/. "$repo_dir/objects/"
+
+    revision=${repoRevision}
+    if ! git --git-dir="$repo_dir" cat-file -e "$revision^{commit}"; then
+      echo "installer ISO: clean flake revision $revision is missing from the imported Git object database" >&2
+      exit 1
+    fi
+
+    git --git-dir="$repo_dir" update-ref refs/heads/master "$revision"
+    git --git-dir="$repo_dir" symbolic-ref HEAD refs/heads/master
+    git --git-dir="$repo_dir" bundle create "$out" refs/heads/master
+  '';
 in
 {
   # Short: isoImage.volumeID is "nixos-$EDITION-$RELEASE-$ARCH" and ISO9660
@@ -77,6 +169,9 @@ in
   # stays reachable at /etc/nixos-config for a manual `./installer/install.sh`
   # rerun if the auto-run is aborted.
   environment.etc."nixos-config".source = self;
+  # A cloneable, offline history source for install.sh. It is separate from
+  # /etc/nixos-config so the flake source remains a normal immutable store tree.
+  environment.etc."nixos-config.bundle".source = repoBundle;
   # git for the repo clone; gptfdisk so install.sh's sgdisk partitioning runs
   # from the baked store instead of `nix shell nixpkgs#gptfdisk`. mihomo +
   # yq-go + curl drive the Wi-Fi/proxy bootstrap (net-up.sh): mihomo replays

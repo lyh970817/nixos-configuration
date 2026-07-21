@@ -45,9 +45,17 @@ readonly TARGET_USER="andongni"
 # is written into local.nix as portable.configDir. Defaults to the user's home.
 readonly CONFIG_DIR="${CONFIG_DIR:-/home/$TARGET_USER/.nixos-config}"
 
-# Remote the installed clone's `origin` is pointed at. Adjust this if the
-# maintainer's GitHub remote differs.
-readonly GITHUB_REMOTE_URL="${GITHUB_REMOTE_URL:-https://github.com/lyh970817/nixos-configuration.git}"
+# Remote the installed clone's `origin` is pointed at. Authentication remains
+# private to the installed user: the ISO carries repository history, never SSH
+# keys or Git credentials.
+readonly GITHUB_REMOTE_URL="${GITHUB_REMOTE_URL:-git@github.com:lyh970817/nixos-configuration.git}"
+
+# iso.nix generates this bundle from the build checkout's committed master
+# history and carries it separately from the flake source tree (whose .git is
+# intentionally stripped by Nix). Keeping this overrideable also makes it
+# possible to exercise the clone step against a temporary bundle.
+readonly REPO_BUNDLE_PATH="${REPO_BUNDLE_PATH:-/etc/nixos-config.bundle}"
+readonly REPO_BRANCH="${REPO_BRANCH:-master}"
 
 # Directory on the USB stick holding the bootstrap secrets to seed
 # (mihomo-config.yaml, credentials.json). Defaults to a `secrets/` directory
@@ -575,20 +583,22 @@ populate_repo_clone() {
   local dest="$MOUNT_ROOT$CONFIG_DIR" uid gid
 
   log "Populating the config repo at $dest..."
-  if [ -d "$REPO_ROOT/.git" ]; then
-    # Normal case: REPO_ROOT is a real git checkout (e.g. the USB stick).
-    git clone "$REPO_ROOT" "$dest" >&2
+  if [[ -f "$REPO_BUNDLE_PATH" ]]; then
+    # The ISO's /etc/nixos-config is a plain Nix source tree with no .git.
+    # Clone the separately-baked bundle to restore the real commit graph,
+    # tracked files, checked-out branch, and branch.<name>.merge setting.
+    # Repointing origin afterwards preserves that upstream relationship while
+    # ensuring later fetch/pull/push operations use the canonical private SSH
+    # remote rather than the read-only bundle on the installer medium.
+    git clone --branch "$REPO_BRANCH" "$REPO_BUNDLE_PATH" "$dest" >&2
+    git -C "$dest" remote set-url origin "$GITHUB_REMOTE_URL"
+  elif [[ -e "$REPO_ROOT/.git" ]]; then
+    # Manual-install case: REPO_ROOT is a real git checkout (e.g. a copied
+    # checkout on a USB stick), so cloning it already preserves real history.
+    git clone --branch "$REPO_BRANCH" "$REPO_ROOT" "$dest" >&2
     git -C "$dest" remote set-url origin "$GITHUB_REMOTE_URL"
   else
-    # On the ISO the repo is carried as a plain, read-only store copy via
-    # environment.etc."nixos-config".source (no .git), which `git clone`
-    # refuses. Copy the tree, make it user-writable, and initialize a fresh
-    # repo pointed at origin so later updates are a manual `git pull`.
-    mkdir -p "$dest"
-    cp -a "$REPO_ROOT/." "$dest/"
-    chmod -R u+w "$dest"
-    git -C "$dest" init -q
-    git -C "$dest" remote add origin "$GITHUB_REMOTE_URL"
+    die "no Git checkout at $REPO_ROOT and no repository bundle at $REPO_BUNDLE_PATH"
   fi
 
   read -r uid gid < <(target_user_ids)

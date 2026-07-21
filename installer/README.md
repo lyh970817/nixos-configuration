@@ -131,8 +131,30 @@ nix shell nixpkgs#bats --command bats installer/tests/decisions.bats
 minimal NixOS installation ISO that bakes the `system` output's own toplevel closure,
 plus both Intel and AMD microcode, into its own Nix store (see issue 07 and
 `docs/portable-nixos-usb-installer-spec.md`, "Installer (custom self-contained offline
-ISO)"). It also carries the whole git-tracked repo at `/etc/nixos-config` so the booted
-environment can run `install.sh` directly.
+ISO)"). It carries the flake source tree at `/etc/nixos-config` so the booted environment
+can run `install.sh` directly. Because Nix strips `.git` from that source, the ISO also
+carries `/etc/nixos-config.bundle`, generated at the clean flake revision used by the ISO
+build. The installer clones that bundle fully offline, then changes `origin` to
+`git@github.com:lyh970817/nixos-configuration.git`; the checked-out `master` branch therefore
+has real history, a tracked index, and a normal `origin/master` upstream without putting SSH
+keys or other Git authentication material on the ISO.
+
+The ISO must be built from the clean `master` tip of the canonical checkout at
+`/home/andongni/.nixos-config`. During impure evaluation, `iso.nix` resolves that checkout's
+real `refs/heads/master` from either its loose ref or `packed-refs`, then requires it to equal
+the exact flake commit in `self.rev`. Dirty, non-Git, detached, and non-`master` flake sources
+fail evaluation instead of manufacturing a `master` branch from an arbitrary revision. A
+revision missing from the imported object database fails the bundle build.
+
+The derivation imports only `.git/objects`, then constructs a new builder-owned bare repository
+whose sole ref is the already-verified `master`. Repository config, credential files, hooks,
+refs (including the stash ref), reflogs, the index, and worktree metadata are not imported. The
+complete object database is an intermediate Nix store input, however, so it can include
+unreachable or dangling objects—including objects formerly reachable through a stash—and
+remains locally visible in that store path until garbage-collected. The final ISO
+bundle includes only history reachable from `master`; that history necessarily includes any
+secrets committed historically to the branch. Commit the intended installer/config state and
+build from canonical `master` so the bundle and flake source describe the same revision.
 
 Like the `system` output, `configuration.nix` reads `/etc/nixos/hardware-configuration.nix`
 and `/etc/nixos/local.nix` by absolute path under `--impure`, so evaluating or building the
