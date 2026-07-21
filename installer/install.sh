@@ -471,6 +471,69 @@ seed_secrets() {
   # USB copies are intentionally retained (install(1) copies, never moves).
 }
 
+# seed_coding_cli_secrets
+#
+# Seeds the maintainer's own Claude Code / Codex login credentials and Codex
+# profile files (baked onto the ISO at /etc/nixos-secrets/coding-cli by
+# iso.nix) into the target user's home, so a fresh install has a working
+# coding agent without a manual `claude login` / `codex login`. Unlike
+# seed_secrets above (mihomo proxy + dictation, both required for the system
+# to work), every file here is a pure convenience -- a missing one just means
+# the operator logs in by hand later -- so each copy is best-effort: log a
+# warning and move on instead of dying, and never abort the install.
+#
+# Deliberately does NOT seed ~/.codex/config.toml: that name is reserved for
+# Home Manager's managed symlink (created on first activation), so seeding a
+# real file there would collide with it. Only the *.config.toml PROFILE files
+# and the auth/credentials files are seeded; they have different basenames
+# from config.toml, so they sit alongside the symlink with no collision.
+seed_coding_cli_secrets() {
+  local src_dir="$SECRETS_SOURCE_DIR/coding-cli"
+  local uid gid claude_dir codex_dir f
+
+  if [[ ! -d "$src_dir" ]]; then
+    log "coding-cli secrets not found at $src_dir, skipping (no coding agent credentials seeded)"
+    return
+  fi
+
+  read -r uid gid < <(target_user_ids)
+  claude_dir="$MOUNT_ROOT/home/$TARGET_USER/.config/claude"
+  codex_dir="$MOUNT_ROOT/home/$TARGET_USER/.codex"
+
+  log "Seeding coding-cli credentials/profiles to $claude_dir and $codex_dir..."
+  install -d -m 0755 -o "$uid" -g "$gid" "$MOUNT_ROOT/home/$TARGET_USER/.config"
+  install -d -m 0700 -o "$uid" -g "$gid" "$claude_dir"
+  install -d -m 0700 -o "$uid" -g "$gid" "$codex_dir"
+
+  if [[ -f "$src_dir/claude/.credentials.json" ]]; then
+    install -m 0600 -o "$uid" -g "$gid" \
+      "$src_dir/claude/.credentials.json" "$claude_dir/.credentials.json"
+  else
+    log "no Claude credentials at $src_dir/claude/.credentials.json, skipping"
+  fi
+
+  for f in "$src_dir/codex/auth.json" "$src_dir/codex/auth_1.json"; do
+    if [[ -f "$f" ]]; then
+      install -m 0600 -o "$uid" -g "$gid" "$f" "$codex_dir/$(basename "$f")"
+    else
+      log "no Codex auth file at $f, skipping"
+    fi
+  done
+
+  # Codex profile files (e.g. mattpocock.config.toml, openai.config.toml).
+  # Globbed, not hardcoded by name -- the profile set is expected to grow.
+  shopt -s nullglob
+  local profiles=("$src_dir"/codex/*.config.toml)
+  shopt -u nullglob
+  if [[ ${#profiles[@]} -eq 0 ]]; then
+    log "no Codex profile files (*.config.toml) found at $src_dir/codex, skipping"
+  else
+    for f in "${profiles[@]}"; do
+      install -m 0600 -o "$uid" -g "$gid" "$f" "$codex_dir/$(basename "$f")"
+    done
+  fi
+}
+
 # ---------------------------------------------------------------------------
 # Install
 # ---------------------------------------------------------------------------
@@ -624,6 +687,7 @@ main() {
   # (and git clone sees an empty dest), then seed secrets into it.
   populate_repo_clone
   seed_secrets
+  seed_coding_cli_secrets
   # Facts live in the repo and /etc/nixos becomes a symlink to it (home layout),
   # so the `rebuild` alias works on the installed machine.
   link_target_etc_nixos
