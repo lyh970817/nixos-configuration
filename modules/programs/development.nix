@@ -10,9 +10,10 @@
   programs.direnv.enable = true;
   programs.direnv.nix-direnv.enable = true;
 
-  # nix-ld only matters for running foreign dynamically-linked dev binaries;
-  # the remote does its development over `mosh home`, so gate it to home.
-  programs.nix-ld.enable = lib.mkIf (config.portable.role == "home") true;
+  # Claude Code ships a foreign dynamically-linked executable on both roles.
+  # Keep nix-ld enabled wherever the launcher is installed without restoring
+  # the home-only development toolchain on the remote.
+  programs.nix-ld.enable = true;
 
   programs.ssh.startAgent = lib.mkForce false;
 
