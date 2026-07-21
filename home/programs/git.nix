@@ -3,12 +3,12 @@
 {
   programs.git = {
     enable = true;
-    userName = "lyh970817";
-    userEmail = "32429705+lyh970817@users.noreply.github.com";
     ignores = [
       "**/.claude/settings.local.json"
     ];
     settings = {
+      user.name = "lyh970817";
+      user.email = "32429705+lyh970817@users.noreply.github.com";
       safe.directory = "*";
     };
   };
