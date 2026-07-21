@@ -47,9 +47,10 @@ let
 in
 {
   # Keep a tracked, non-secret Claude baseline while leaving each profile's
-  # runtime file mutable. Existing profile-specific settings win over the
-  # baseline; only the theme is synchronized to the active desktop mode. The
-  # files must be ordinary files because the theme hooks replace them atomically.
+  # runtime file as an ordinary mutable file. Every activation replaces the
+  # shared settings with that baseline and derives only its theme from the
+  # active desktop mode. The files must be ordinary files because the theme
+  # hooks replace them atomically.
   home.activation.claudeSettings = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     claude_theme="dark-ansi"
     case "$(readlink "$HOME/.local/state/hypr/current-theme.conf" 2>/dev/null || true)" in
@@ -62,15 +63,9 @@ in
       run ${pkgs.coreutils}/bin/install -d -m 0700 "$claude_settings_dir"
       claude_settings_tmp="$(${pkgs.coreutils}/bin/mktemp "$claude_settings.XXXXXX")"
 
-      if [ -f "$claude_settings" ] && ${pkgs.jq}/bin/jq --arg theme "$claude_theme" \
-        -s '.[0] * .[1] | .theme = $theme' \
-        ${lib.escapeShellArg (toString claudeSettings)} "$claude_settings" > "$claude_settings_tmp"; then
-        :
-      else
-        ${pkgs.jq}/bin/jq --arg theme "$claude_theme" \
-          '.theme = $theme' \
-          ${lib.escapeShellArg (toString claudeSettings)} > "$claude_settings_tmp"
-      fi
+      ${pkgs.jq}/bin/jq --arg theme "$claude_theme" \
+        '.theme = $theme' \
+        ${lib.escapeShellArg (toString claudeSettings)} > "$claude_settings_tmp"
 
       run ${pkgs.coreutils}/bin/chmod 0600 "$claude_settings_tmp"
       run ${pkgs.coreutils}/bin/mv -f "$claude_settings_tmp" "$claude_settings"

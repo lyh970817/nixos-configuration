@@ -12,9 +12,9 @@ let
     for claude_settings in \
       "$HOME/.config/claude/settings.json" \
       "$HOME/.config/claude-mattpocock/settings.json"; do
-      mkdir -p "$(dirname "$claude_settings")"
-      if [ ! -e "$claude_settings" ]; then
-        printf '{}\n' > "$claude_settings"
+      if [ ! -f "$claude_settings" ]; then
+        echo "Claude Code settings are missing: $claude_settings" >&2
+        continue
       fi
       claude_settings_tmp="$(${pkgs.coreutils}/bin/mktemp "$claude_settings.XXXXXX")"
       if ${pkgs.jq}/bin/jq --arg theme "${theme}" '.theme = $theme' "$claude_settings" > "$claude_settings_tmp"; then
