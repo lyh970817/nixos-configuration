@@ -12,6 +12,9 @@ secrets/*
 hardware-configuration.nix
 local.nix
 
+# Base Codex config contains machine-local paths and remains unmanaged
+/dotfiles/codex/config.toml
+
 # Regenerated fcitx5 keyboard-layout cache (lives inside the linked config dir)
 dotfiles/fcitx5/conf/cached_layouts
 

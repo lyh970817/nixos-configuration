@@ -490,11 +490,10 @@ seed_secrets() {
 # the operator logs in by hand later -- so each copy is best-effort: log a
 # warning and move on instead of dying, and never abort the install.
 #
-# Deliberately does NOT seed ~/.codex/config.toml: that name is reserved for
-# Home Manager's managed symlink (created on first activation), so seeding a
-# real file there would collide with it. Only the *.config.toml PROFILE files
-# and the auth/credentials files are seeded; they have different basenames
-# from config.toml, so they sit alongside the symlink with no collision.
+# Deliberately does NOT seed ~/.codex/config.toml: the base config contains
+# machine-local paths and is intentionally left unmanaged. The extra
+# *.config.toml profile files and auth/credentials files are still seeded so
+# the portable profiles remain available after installation.
 seed_coding_cli_secrets() {
   local src_dir="$SECRETS_SOURCE_DIR/coding-cli"
   local uid gid claude_dir codex_dir f

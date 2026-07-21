@@ -6,13 +6,14 @@ let
   # the working tree in the config repo (portable.configDir) instead of a
   # read-only /nix/store copy, so edits are live and land in version control.
   #
-  # Only the authored subpaths below are linked. Secrets, session history, and
-  # caches stay mutable and unmanaged in place (e.g. ~/.codex/auth.json,
+  # Only the authored subpaths below are linked. Machine-local base config,
+  # secrets, session history, and caches stay mutable and unmanaged in place
+  # (e.g. ~/.codex/config.toml, ~/.codex/auth.json,
   # ~/.config/claude/.credentials.json, projects/, sessions/, sqlite logs).
   #
   # Directory links are robust: files the app creates or rewrites inside them
-  # land in the repo. Single-file links (AGENTS.md, config.toml, CLAUDE.md,
-  # statusline.sh) can be replaced by a real file if the owning app rewrites
+  # land in the repo. Single-file links (AGENTS.md, CLAUDE.md, statusline.sh)
+  # can be replaced by a real file if the owning app rewrites
   # them via a temp-file+rename; if that happens, re-run `nixos-rebuild switch`
   # to restore the link. ~/.config/claude/settings.json is intentionally NOT
   # linked because the darkman theme switcher rewrites it via mktemp+mv on every
@@ -21,9 +22,9 @@ let
 in
 {
   home.file = {
-    # Codex CLI (~/.codex) — authored config only.
+    # Codex CLI (~/.codex) — portable authored files only. The base
+    # config.toml remains machine-local and unmanaged.
     ".codex/AGENTS.md".source = link "dotfiles/codex/AGENTS.md";
-    ".codex/config.toml".source = link "dotfiles/codex/config.toml";
     ".codex/rules".source = link "dotfiles/codex/rules";
     ".codex/skills".source = link "dotfiles/codex/skills";
 
