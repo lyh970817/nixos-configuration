@@ -20,7 +20,8 @@ Codex mutable state lives under `/home/andongni/.codex`.
 
 - Base Codex config: `/home/andongni/.codex/config.toml`.
 - Separate Codex profiles: `/home/andongni/.codex/*.config.toml`, selected with `codex --profile <name>`.
-- Codex skill entries: `[[skills.config]]` stanzas pointing at `SKILL.md` files with `enabled = true` or `false`.
+- Codex skill entries: `[[skills.config]]` stanzas target skill directories containing `SKILL.md`, with `enabled = true` or `false`.
+- Portable relative profile paths are resolved from the profile's runtime location under `/home/andongni/.codex`: `skills/<skill>` targets `/home/andongni/.codex/skills/<skill>`, while `../.agents/skills/<skill>` targets `/home/andongni/.agents/skills/<skill>`.
 - Global Codex skills live once under `/home/andongni/.codex/skills/<skill>/SKILL.md`; a global Codex skill is enabled or referenced through Codex configuration for all profiles, not copied into each profile.
 - System Codex skills: `/home/andongni/.codex/skills/.system/<skill>/SKILL.md`.
 - Shared/user workflow skills used by profiles: `/home/andongni/.agents/skills/<skill>/SKILL.md`.

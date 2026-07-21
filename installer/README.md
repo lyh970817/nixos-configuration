@@ -150,12 +150,42 @@ The ISO may also carry an optional coding-CLI convenience payload from the build
 machine's `/home/andongni/.nixos-config/secrets/coding-cli` directory. When that
 directory exists, it is exposed in the booted installer as
 `/etc/nixos-secrets/coding-cli`; when it does not exist, the ISO omits the path
-and still evaluates normally. `install.sh` copies any available Claude Code
-credentials, Codex auth files, and Codex `*.config.toml` profile files into the
-target user's home on a best-effort basis. It deliberately does not seed the
-base `~/.codex/config.toml`, because that file may contain machine- and
-home-specific paths. Missing payloads or individual files only require the user
-to log in or recreate the affected profile later; they do not abort installation.
+and still evaluates normally. This payload is limited to credentials; profiles
+and agent configuration are tracked in the repository and are deployed by Home
+Manager after installation. Its supported layout is:
+
+```
+secrets/coding-cli/
+  claude/default/.credentials.json
+  claude/mattpocock/.credentials.json
+  codex/auth.json
+  codex/auth_1.json
+```
+
+Only supported credentials are copied into the ISO; the installer ignores other
+files in the ignored source directory.
+
+For compatibility with existing installer media, the deprecated flat path
+`claude/.credentials.json` is also accepted for the `default` profile. When
+both it and `claude/default/.credentials.json` exist, the new per-profile path
+takes precedence. The ISO normalizes either accepted default credential to
+`claude/default/.credentials.json` in its filtered payload. Move to the
+per-profile path before relying on any future payload layout changes.
+
+`install.sh` copies each available credential to its corresponding target with
+private permissions: `default` goes to
+`~/.config/claude/.credentials.json`, `mattpocock` goes to
+`~/.config/claude-mattpocock/.credentials.json`, and Codex auth files go to
+`~/.codex/`. It reports each Claude profile separately. Every entry is optional:
+if the payload directory or an individual credential is absent, installation
+continues and that profile simply needs a later login. The installer never copies
+Codex `*.config.toml` files from `secrets/`; a fresh installation receives the
+tracked profile definitions when Home Manager activates.
+
+The payload is copied into the ISO's Nix store in cleartext. Treat every ISO
+that includes it as credential-bearing media: keep it private, erase or destroy
+it when it is no longer needed, and build without this directory when portable
+login seeding is not appropriate.
 
 The derivation imports only `.git/objects`, then constructs a new builder-owned bare repository
 whose sole ref is the already-verified `master`. Repository config, credential files, hooks,

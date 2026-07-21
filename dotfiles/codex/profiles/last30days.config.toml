@@ -1,0 +1,8 @@
+model = "gpt-5.5"
+model_reasoning_effort = "high"
+# Profile for the last30days research skill.
+# Select it with: codex --profile last30days
+
+[[skills.config]]
+path = "../.agents/skills/last30days"
+enabled = true

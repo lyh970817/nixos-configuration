@@ -1,0 +1,102 @@
+model = "gpt-5.6-terra"
+model_reasoning_effort = "medium"
+# Profile for the Matt Pocock/user workflow skill set.
+# Select it with: codex --profile mattpocock
+[plugins."browser@openai-bundled"]
+enabled = false
+
+[[skills.config]]
+path = "../.agents/skills/ask-matt"
+enabled = true
+
+[[skills.config]]
+path = "../.agents/skills/codebase-design"
+enabled = true
+
+[[skills.config]]
+path = "../.agents/skills/wayfinder"
+enabled = true
+
+[[skills.config]]
+path = "../.agents/skills/loop-me"
+enabled = true
+
+[[skills.config]]
+path = "../.agents/skills/diagnosing-bugs"
+enabled = true
+
+[[skills.config]]
+path = "../.agents/skills/grill-me"
+enabled = true
+
+[[skills.config]]
+path = "../.agents/skills/grill-with-docs"
+enabled = true
+
+[[skills.config]]
+path = "../.agents/skills/grilling"
+enabled = true
+
+[[skills.config]]
+path = "../.agents/skills/handoff"
+enabled = true
+
+[[skills.config]]
+path = "../.agents/skills/implement"
+enabled = true
+
+[[skills.config]]
+path = "../.agents/skills/improve-codebase-architecture"
+enabled = true
+
+[[skills.config]]
+path = "../.agents/skills/prototype"
+enabled = true
+
+[[skills.config]]
+path = "../.agents/skills/resolving-merge-conflicts"
+enabled = true
+
+[[skills.config]]
+path = "../.agents/skills/setup-matt-pocock-skills"
+enabled = true
+
+[[skills.config]]
+path = "../.agents/skills/setup-pre-commit"
+enabled = true
+
+[[skills.config]]
+path = "../.agents/skills/tdd"
+enabled = true
+
+[[skills.config]]
+path = "../.agents/skills/to-tickets"
+enabled = true
+
+[[skills.config]]
+path = "../.agents/skills/to-spec"
+enabled = true
+
+[[skills.config]]
+path = "../.agents/skills/triage"
+enabled = true
+
+[[skills.config]]
+path = "../.agents/skills/writing-great-skills"
+enabled = true
+
+[[skills.config]]
+path = "../.agents/skills/code-review"
+enabled = true
+
+[[skills.config]]
+path = "../.agents/skills/research"
+enabled = true
+
+[[skills.config]]
+path = "../.agents/skills/wizard"
+enabled = true
+
+[tui]
+status_line = ["model-with-reasoning", "current-dir", "git-branch", "five-hour-limit", "context-used", "weekly-limit"]
+status_line_use_colors = true
