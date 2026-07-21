@@ -21,6 +21,10 @@ let
     };
   };
   hiddenLauncherEntries = [
+    # Upstream brave duplicate: nixpkgs brave ships two desktop files with the
+    # same Name; com.brave.Browser's NoDisplay=true is misplaced upstream
+    # inside a [Desktop Action] stanza so it never hides.
+    "com.brave.Browser"
     "calibre-ebook-edit"
     "calibre-ebook-viewer"
     "calibre-lrfviewer"
@@ -318,7 +322,10 @@ in
       icon = "system-suspend-hibernate";
       terminal = false;
       type = "Application";
-      categories = [ "System" ];
+      categories = [
+        "System"
+        "Power"
+      ];
       settings = {
         Keywords = "suspend;sleep;disk;";
       };
@@ -374,7 +381,7 @@ in
     lvim = {
       name = "LunarVim";
       genericName = "Text Editor";
-      comment = "An IDE layer for Neovim with sane defaults";
+      comment = "An IDE layer for Neovim with sane defaults. Completely free and community driven.";
       exec = "lvim %F";
       terminal = true;
       type = "Application";
