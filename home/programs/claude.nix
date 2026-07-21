@@ -44,9 +44,8 @@ let
 
 in
 {
-  # Coding CLI: home role only. The remote laptop drives Claude Code on the home
-  # box over `mosh home`, so the local launcher is omitted there.
-  config = lib.mkIf (osConfig.portable.role == "home") {
+  # Coding CLI: installed on both home and remote roles.
+  config = {
     home.packages = [
       claudeHostLauncher
     ];
