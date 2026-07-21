@@ -1,0 +1,126 @@
+# Opt-in profile for the OpenAI-provided skill and plugin surface.
+# Select it with: codex --profile openai
+
+# OpenAI system skills.
+[[skills.config]]
+name = "openai-docs"
+enabled = true
+
+[[skills.config]]
+name = "skill-creator"
+enabled = true
+
+[[skills.config]]
+name = "skill-installer"
+enabled = true
+
+[[skills.config]]
+path = "skills/.system/imagegen"
+enabled = true
+
+[[skills.config]]
+path = "skills/.system/plugin-creator"
+enabled = true
+
+# OpenAI global artifact templates.
+[plugins."openai-templates@openai-curated-remote"]
+enabled = true
+
+[[skills.config]]
+name = "openai-templates:artifact-template-analytics-dashboard"
+enabled = true
+
+[[skills.config]]
+name = "openai-templates:artifact-template-business-review"
+enabled = true
+
+[[skills.config]]
+name = "openai-templates:artifact-template-design-report"
+enabled = true
+
+[[skills.config]]
+name = "openai-templates:artifact-template-experiment-analysis"
+enabled = true
+
+[[skills.config]]
+name = "openai-templates:artifact-template-financial-budget"
+enabled = true
+
+[[skills.config]]
+name = "openai-templates:artifact-template-investment-committee-memo"
+enabled = true
+
+[[skills.config]]
+name = "openai-templates:artifact-template-legal-memorandum"
+enabled = true
+
+[[skills.config]]
+name = "openai-templates:artifact-template-market-trends-report"
+enabled = true
+
+[[skills.config]]
+name = "openai-templates:artifact-template-minimal-letterhead"
+enabled = true
+
+[[skills.config]]
+name = "openai-templates:artifact-template-operating-calendar"
+enabled = true
+
+[[skills.config]]
+name = "openai-templates:artifact-template-operating-review"
+enabled = true
+
+[[skills.config]]
+name = "openai-templates:artifact-template-project-kickoff"
+enabled = true
+
+[[skills.config]]
+name = "openai-templates:artifact-template-project-tracker"
+enabled = true
+
+[[skills.config]]
+name = "openai-templates:artifact-template-sales-pipeline"
+enabled = true
+
+[[skills.config]]
+name = "openai-templates:artifact-template-simple-dark-mode"
+enabled = true
+
+[[skills.config]]
+name = "openai-templates:artifact-template-simple-light-mode"
+enabled = true
+
+[[skills.config]]
+name = "openai-templates:artifact-template-strategy-memorandum"
+enabled = true
+
+[[skills.config]]
+name = "openai-templates:artifact-template-system-design"
+enabled = true
+
+[[skills.config]]
+name = "openai-templates:artifact-template-team-alignment"
+enabled = true
+
+[[skills.config]]
+name = "openai-templates:artifact-template-three-statement-forecast"
+enabled = true
+
+# Installed OpenAI plugins.
+[plugins."documents@openai-primary-runtime"]
+enabled = true
+
+[plugins."pdf@openai-primary-runtime"]
+enabled = true
+
+[plugins."spreadsheets@openai-primary-runtime"]
+enabled = true
+
+[plugins."presentations@openai-primary-runtime"]
+enabled = true
+
+[plugins."template-creator@openai-primary-runtime"]
+enabled = true
+
+[plugins."slack@openai-curated"]
+enabled = true

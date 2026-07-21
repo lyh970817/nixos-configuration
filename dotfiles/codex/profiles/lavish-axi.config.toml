@@ -1,0 +1,6 @@
+# Profile for the Lavish Editor skill powered by lavish-axi.
+# Select it with: codex --profile lavish-axi
+
+[[skills.config]]
+path = "skills/lavish"
+enabled = true

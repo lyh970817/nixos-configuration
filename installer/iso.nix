@@ -44,10 +44,38 @@ let
   inputSources = lib.unique (collectInputSources flakeInputs);
 
   # Optional convenience payload: unlike the proxy and dictation secrets, a
-  # missing coding-agent login/profile directory must not prevent ISO
-  # evaluation. install.sh already treats the corresponding ISO path as
-  # best-effort when it is absent.
-  codingCliPayload = /home/andongni/.nixos-config/secrets/coding-cli;
+  # missing coding-agent credential directory must not prevent ISO evaluation.
+  # Whitelist its credential files rather than copying its entire contents so
+  # an obsolete profile TOML left in the ignored source cannot reach the ISO.
+  # install.sh already treats the corresponding ISO path as best-effort when
+  # it is absent.
+  codingCliPayloadSource = /home/andongni/.nixos-config/secrets/coding-cli;
+  hasCodingCliPayload = builtins.pathExists codingCliPayloadSource;
+  codingCliPayload =
+    if hasCodingCliPayload then
+      pkgs.runCommandLocal "coding-cli-credentials" { } ''
+        install -d "$out/claude/default" "$out/claude/mattpocock" "$out/codex"
+
+        if [ -f ${codingCliPayloadSource}/claude/default/.credentials.json ]; then
+          install -m 0600 ${codingCliPayloadSource}/claude/default/.credentials.json \
+            "$out/claude/default/.credentials.json"
+        elif [ -f ${codingCliPayloadSource}/claude/.credentials.json ]; then
+          install -m 0600 ${codingCliPayloadSource}/claude/.credentials.json \
+            "$out/claude/default/.credentials.json"
+        fi
+        if [ -f ${codingCliPayloadSource}/claude/mattpocock/.credentials.json ]; then
+          install -m 0600 ${codingCliPayloadSource}/claude/mattpocock/.credentials.json \
+            "$out/claude/mattpocock/.credentials.json"
+        fi
+        if [ -f ${codingCliPayloadSource}/codex/auth.json ]; then
+          install -m 0600 ${codingCliPayloadSource}/codex/auth.json "$out/codex/auth.json"
+        fi
+        if [ -f ${codingCliPayloadSource}/codex/auth_1.json ]; then
+          install -m 0600 ${codingCliPayloadSource}/codex/auth_1.json "$out/codex/auth_1.json"
+        fi
+      ''
+    else
+      null;
 
   # Resolve the canonical checkout's actual master ref without importing its
   # complete Git metadata. Git stores a branch either as a loose ref or in
@@ -220,16 +248,16 @@ in
   environment.etc."nixos-secrets/mihomo-cache".source =
     /home/andongni/.nixos-config/secrets/mihomo-cache;
 
-  # When available, bake this machine's coding-agent logins (Claude Code +
-  # Codex credentials, plus the maintainer's Codex profile files) so a fresh
-  # install has a working coding agent without a manual `claude login` /
-  # `codex login`.
-  # Whole-dir source (same idiom as mihomo-cache above), so dotfiles like
-  # claude/.credentials.json are carried along -- it's a plain store copy of
-  # the directory, not a glob. Purely a convenience: install.sh seeds these
-  # best-effort and never aborts the install if one is missing. Same
-  # cleartext-on-the-USB caveat as the other secrets above.
-  environment.etc."nixos-secrets/coding-cli" = lib.mkIf (builtins.pathExists codingCliPayload) {
+  # When available, bake this machine's coding-agent credentials (Claude
+  # profile credentials + Codex auth) so a fresh install can log in without a
+  # manual `claude login` / `codex login`. This ignored payload must contain
+  # only credentials; tracked Codex and Claude profile configuration is
+  # deployed by Home Manager after installation.
+  # The filtered output above carries only the supported credential files.
+  # Purely a convenience: install.sh seeds these best-effort and never aborts
+  # the install if one is missing. Same cleartext-on-the-USB caveat as the
+  # other secrets above.
+  environment.etc."nixos-secrets/coding-cli" = lib.mkIf hasCodingCliPayload {
     source = codingCliPayload;
   };
 

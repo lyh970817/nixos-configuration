@@ -481,22 +481,29 @@ seed_secrets() {
 
 # seed_coding_cli_secrets
 #
-# Seeds the maintainer's own Claude Code / Codex login credentials and Codex
-# profile files (baked onto the ISO at /etc/nixos-secrets/coding-cli by
-# iso.nix) into the target user's home, so a fresh install has a working
-# coding agent without a manual `claude login` / `codex login`. Unlike
-# seed_secrets above (mihomo proxy + dictation, both required for the system
-# to work), every file here is a pure convenience -- a missing one just means
-# the operator logs in by hand later -- so each copy is best-effort: log a
-# warning and move on instead of dying, and never abort the install.
+# Seeds the maintainer's own Claude Code / Codex login credentials (baked onto
+# the ISO at /etc/nixos-secrets/coding-cli by iso.nix) into the target user's
+# home, so a fresh install has a working coding agent without a manual `claude
+# login` / `codex login`. Unlike seed_secrets above (mihomo proxy + dictation,
+# both required for the system to work), every file here is a pure convenience
+# -- a missing one just means the operator logs in by hand later -- so each
+# copy is best-effort: log a warning and move on instead of dying, and never
+# abort the install.
 #
-# Deliberately does NOT seed ~/.codex/config.toml: the base config contains
-# machine-local paths and is intentionally left unmanaged. The extra
-# *.config.toml profile files and auth/credentials files are still seeded so
-# the portable profiles remain available after installation.
+# The optional payload contains credentials only. Codex profile TOMLs and
+# Claude profile configuration are tracked and deployed declaratively after
+# installation; this script must never copy profile configuration from the
+# ignored secrets directory.
+#
+# Claude credentials use an explicit per-profile payload convention:
+#   claude/default/.credentials.json     -> ~/.config/claude/.credentials.json
+#   claude/mattpocock/.credentials.json  -> ~/.config/claude-mattpocock/.credentials.json
+# The former claude/.credentials.json path remains a deprecated fallback for
+# the default profile only. When both default paths exist, the new path wins.
 seed_coding_cli_secrets() {
   local src_dir="$SECRETS_SOURCE_DIR/coding-cli"
-  local uid gid claude_dir codex_dir f
+  local uid gid codex_dir f profile_name profile_src profile_dir legacy_default_src
+  local -a claude_profiles
 
   if [[ ! -d "$src_dir" ]]; then
     log "coding-cli secrets not found at $src_dir, skipping (no coding agent credentials seeded)"
@@ -504,21 +511,35 @@ seed_coding_cli_secrets() {
   fi
 
   read -r uid gid < <(target_user_ids)
-  claude_dir="$MOUNT_ROOT/home/$TARGET_USER/.config/claude"
   codex_dir="$MOUNT_ROOT/home/$TARGET_USER/.codex"
 
-  log "Seeding coding-cli credentials/profiles to $claude_dir and $codex_dir..."
+  log "Seeding optional coding-cli credentials..."
   install -d -m 0755 -o "$uid" -g "$gid" "$MOUNT_ROOT/home/$TARGET_USER/.config"
-  install -d -m 0700 -o "$uid" -g "$gid" "$claude_dir"
+
+  claude_profiles=(
+    "default:$src_dir/claude/default/.credentials.json:$MOUNT_ROOT/home/$TARGET_USER/.config/claude"
+    "mattpocock:$src_dir/claude/mattpocock/.credentials.json:$MOUNT_ROOT/home/$TARGET_USER/.config/claude-mattpocock"
+  )
+  for f in "${claude_profiles[@]}"; do
+    IFS=: read -r profile_name profile_src profile_dir <<< "$f"
+    if [[ "$profile_name" == "default" && ! -f "$profile_src" ]]; then
+      legacy_default_src="$src_dir/claude/.credentials.json"
+      if [[ -f "$legacy_default_src" ]]; then
+        profile_src="$legacy_default_src"
+        log "using deprecated legacy Claude credentials for profile default"
+      fi
+    fi
+    if [[ -f "$profile_src" ]]; then
+      install -d -m 0700 -o "$uid" -g "$gid" "$profile_dir"
+      install -m 0600 -o "$uid" -g "$gid" \
+        "$profile_src" "$profile_dir/.credentials.json"
+      log "seeded Claude credentials for profile $profile_name"
+    else
+      log "no Claude credentials for profile $profile_name at $profile_src, skipping"
+    fi
+  done
+
   install -d -m 0700 -o "$uid" -g "$gid" "$codex_dir"
-
-  if [[ -f "$src_dir/claude/.credentials.json" ]]; then
-    install -m 0600 -o "$uid" -g "$gid" \
-      "$src_dir/claude/.credentials.json" "$claude_dir/.credentials.json"
-  else
-    log "no Claude credentials at $src_dir/claude/.credentials.json, skipping"
-  fi
-
   for f in "$src_dir/codex/auth.json" "$src_dir/codex/auth_1.json"; do
     if [[ -f "$f" ]]; then
       install -m 0600 -o "$uid" -g "$gid" "$f" "$codex_dir/$(basename "$f")"
@@ -526,19 +547,6 @@ seed_coding_cli_secrets() {
       log "no Codex auth file at $f, skipping"
     fi
   done
-
-  # Codex profile files (e.g. mattpocock.config.toml, openai.config.toml).
-  # Globbed, not hardcoded by name -- the profile set is expected to grow.
-  shopt -s nullglob
-  local profiles=("$src_dir"/codex/*.config.toml)
-  shopt -u nullglob
-  if [[ ${#profiles[@]} -eq 0 ]]; then
-    log "no Codex profile files (*.config.toml) found at $src_dir/codex, skipping"
-  else
-    for f in "${profiles[@]}"; do
-      install -m 0600 -o "$uid" -g "$gid" "$f" "$codex_dir/$(basename "$f")"
-    done
-  fi
 }
 
 # ---------------------------------------------------------------------------

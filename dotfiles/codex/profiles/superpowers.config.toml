@@ -1,0 +1,33 @@
+model = "gpt-5.5"
+model_reasoning_effort = "high"
+service_tier = "fast"
+# Profile for the Superpowers plugin and related local skills.
+# Select it with: codex --profile superpowers
+
+[plugins."superpowers@superpowers-dev"]
+enabled = true
+
+[plugins."kami@kami"]
+enabled = false
+
+[marketplaces.superpowers-dev]
+source_type = "git"
+source = "https://github.com/obra/superpowers.git"
+sparse_paths = [".agents/plugins"]
+
+[hooks.state]
+
+[hooks.state."superpowers@superpowers-dev:hooks/hooks-codex.json:session_start:0:0"]
+trusted_hash = "sha256:2ebfd7a7b67932638f98a85848d1b7f35f95aff3d681833eb639d2e113e10d30"
+enabled = true
+
+[[skills.config]]
+path = "skills/superpowers-domain-context"
+enabled = true
+
+[[skills.config]]
+path = "skills/codex-dynamic-workflows"
+enabled = false
+
+[tui]
+status_line = ["model", "current-dir", "git-branch", "context-used", "branch-changes"]
