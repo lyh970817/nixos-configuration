@@ -1,11 +1,11 @@
 ---
 name: agent-config-setup
-description: Use when configuring Claude Code, its config directories (CLAUDE_CONFIG_DIR), skills, commands, settings.json, profiles, or launchers on this machine. Not for other NixOS/Home Manager, host package, service, desktop, or launcher work.
+description: Use when configuring Claude Code, Codex, AI agents, skills, profiles, plugins, launchers, or agent config directories on this machine. Not for other NixOS/Home Manager, host package, service, desktop, or launcher work.
 ---
 
-# Agent Configuration (Claude)
+# Agent Configuration
 
-## Model
+## Claude
 
 The tracked source of truth is `/home/andongni/.nixos-config/dotfiles/claude/`. Home Manager module `home/programs/mutable-configs.nix` wires it into `$CLAUDE_CONFIG_DIR` mostly via `mkOutOfStoreSymlink` — an out-of-store symlink pointing at this repo checkout (`osConfig.portable.configDir`) instead of a store copy. **Edits to symlinked files are live immediately; no rebuild needed.**
 
@@ -26,9 +26,20 @@ Claude has no Codex-style named profiles; each `CLAUDE_CONFIG_DIR` acts like a s
 - Launcher: `home/programs/claude.nix` (`writeShellApplication`) — sets proxy env (`HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY`/`NO_PROXY` and lowercase mirrors), locale (`LANG`/`LANGUAGE`/`LOCALE_ARCHIVE`), and `CLAUDE_CODE_*` env vars.
 - Package derivation: `pkgs/claude-code.nix`.
 
+## Codex
+
+Tracked source of truth: `/home/andongni/.nixos-config/dotfiles/codex/` (plus `dotfiles/agents/` for shared skills). `mutable-configs.nix` wires it into `~/.codex` the same way: symlinked content is live immediately, no rebuild needed.
+
+- Symlinked: `AGENTS.md`, `rules/`, `skills/` — 13 tracked Codex-specific skills (includes this skill and `sync-mattpocock-skills`).
+- Copied, not linked: profiles. `home.activation.codexProfiles` copies `dotfiles/codex/profiles/*.config.toml` to `~/.codex/<name>.config.toml` on every activation (6 tracked profiles: `last30days`, `lavish-axi`, `mattpocock`, `openai`, `superpowers`, `understand-anything-codegraph`), so their relative skill paths resolve from `~/.codex`. Editing a runtime `~/.codex/*.config.toml` is futile — it's overwritten on the next rebuild; edit `dotfiles/codex/profiles/<name>.config.toml` and rebuild to propagate.
+- `~/.agents` is a separate out-of-store symlink to `dotfiles/agents` — a curated, shared 36-skill set used across profiles, not Codex-specific.
+- Codex does not auto-scan for skills; there is no implicit "system" layer. A profile enables a skill only via an explicit `[[skills.config]]` stanza with a path resolved relative to the profile's runtime location under `~/.codex`: `skills/<name>` targets `~/.codex/skills/<name>`, `../.agents/skills/<name>` targets `~/.agents/skills/<name>`. Select a profile with `codex --profile <name>`.
+- Mutable, not sourced from the repo: `config.toml`, `auth.json`, sqlite state, `history.jsonl`, `sessions/`, caches.
+- CLI package derivation: `pkgs/codex.nix`, wired via `home/programs/codex-desktop.nix` (`home.packages`); Codex Desktop (GUI) uses `pkgs/codex-desktop-isolated.nix` through the same module and keeps its state under `~/.codex-desktop`, isolated from the CLI. Shell alias `cdy` runs `codex --yolo` (bypasses approval prompts, unrelated to profile selection).
+
 ## Workflow
 
-1. Locate the tracked source under `dotfiles/claude/` first; edit there, never a runtime copy under `$CLAUDE_CONFIG_DIR`.
+1. Locate the tracked source under `dotfiles/claude/` (Claude) or `dotfiles/codex/` / `dotfiles/agents/` (Codex) first; edit there, never a runtime copy under `$CLAUDE_CONFIG_DIR` or `~/.codex`.
 2. Keep edits scoped to the requested change.
 3. Commit the change so the repo's pre-commit hooks are the verification gate (repo policy) — do this even for changes that are already live via symlink.
-4. Rebuild with `sudo nixos-rebuild switch --flake .#system --impure` (or the `rebuild` alias, which targets `/etc/nixos#system` and works from any directory) only when the change touches the materialized `settings.json` or Nix wiring itself (`mutable-configs.nix`, `theming.nix`, `claude.nix`, `pkgs/claude-code.nix`). Pure content edits to symlinked files (`CLAUDE.md`, `skills/`, `commands/`, `output-styles/`, `statusline.sh`) are already live — commit only, no rebuild required.
+4. Rebuild with `sudo nixos-rebuild switch --flake .#system --impure` (or the `rebuild` alias, which targets `/etc/nixos#system` and works from any directory) only when the change touches a materialized/copied file (`settings.json`, a Codex profile under `dotfiles/codex/profiles/`) or Nix wiring itself (`mutable-configs.nix`, `theming.nix`, `claude.nix`, `codex-desktop.nix`, `pkgs/claude-code.nix`, `pkgs/codex.nix`, `pkgs/codex-desktop-isolated.nix`). Pure content edits to symlinked files (`CLAUDE.md`, `skills/`, `commands/`, `output-styles/`, `statusline.sh`, `AGENTS.md`, `rules/`, `dotfiles/agents/skills/`) are already live — commit only, no rebuild required.
