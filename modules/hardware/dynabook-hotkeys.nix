@@ -52,8 +52,21 @@ in
       "toshiba_acpi_dnbk"
     ];
 
+    # The driver's main keymap sends 0x13e (Fn+F4, whose keycap is the
+    # microphone-mute key) as KEY_SUSPEND, which logind would act on. Remap it
+    # to KEY_MICMUTE so the existing XF86AudioMicMute bind handles it and
+    # nothing suspends the machine on a mic-mute press.
+    services.udev.extraHwdb = ''
+      evdev:name:Toshiba input device:dmi:*
+       KEYBOARD_KEY_13e=micmute
+    '';
+
+    # Fn+F2 emits XF86Battery, bound to cycle power profiles. The X30W-K uses
+    # intel_pstate EPP (no platform_profile), which ppd drives fine.
+    services.power-profiles-daemon.enable = true;
+
     systemd.services.dynabook-hotkeys-enable = {
-      description = "Load Dynabook hotkey SSDT and enable Fn+F6/F7 brightness mailbox flags";
+      description = "Load Dynabook hotkey SSDT, arm brightness flags, and set up keyboard backlight";
       after = [
         "systemd-modules-load.service"
         "sys-kernel-config.mount"
@@ -74,6 +87,17 @@ in
             cat ${ssdtAml} > "$tbl/aml"
           fi
           ${hpstEnable}
+          # This is a "type 2" Toshiba keyboard backlight: the LED's on/off bit
+          # is overridden by the SCI mode (auto=2/on=8/off=16), so real control
+          # is the kbd_backlight_mode attribute. Default it to auto (lights on
+          # keypress, off after the firmware timeout) and make it writable by
+          # the input group so the Fn+Z script can cycle it without root.
+          mode=/sys/bus/acpi/devices/DNBK0001:00/kbd_backlight_mode
+          if [ -e "$mode" ]; then
+            echo 2 > "$mode" || true
+            chgrp input "$mode" || true
+            chmod g+w "$mode" || true
+          fi
         '';
       };
     };
