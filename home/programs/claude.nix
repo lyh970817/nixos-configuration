@@ -36,8 +36,6 @@ let
       # Force full alt-screen repaints to stop residual flicker/jumping on the
       # fullscreen renderer (terminal coalesces positioned writes otherwise).
       export CLAUDE_CODE_ALT_SCREEN_FULL_REPAINT="1"
-      # Classic renderer has no keyboard transcript scrolling; force the fullscreen one.
-      export CLAUDE_CODE_NO_FLICKER="1"
       export MCP_TIMEOUT="60000"
 
       exec ${pkgs.claude-code}/bin/claude "$@"
