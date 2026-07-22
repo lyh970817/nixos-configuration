@@ -1,20 +1,17 @@
 ---
-name: system-maintenance
-description: Use when the user asks for system maintenance, NixOS or Home Manager changes, host package, service, desktop, launcher, or rebuild work, machine-level troubleshooting, or configuring Codex, Claude, Claude Code, AI agents, skills, skills.sh, npx skills, profiles, plugins, launchers, or agent config directories on this machine.
+name: agent-config-setup
+description: Use when configuring Codex, Claude, Claude Code, AI agents, skills, skills.sh, npx skills, profiles, plugins, launchers, or agent config directories on this machine. Not for other NixOS/Home Manager, host package, service, desktop, or launcher work.
 ---
 
-# System Maintenance
-
-Use `/home/andongni/.nixos-config` as the source of truth for this machine's NixOS and Home Manager configuration. If the configuration must be rebuilt, rebuild from that repo with `sudo nixos-rebuild switch --flake .#andongni --impure`.
+# Agent Configuration
 
 ## Workflow
 
-1. For machine-level maintenance, start in `/home/andongni/.nixos-config` and read local guidance such as `AGENTS.md` before editing.
-2. For Codex, Claude, or other AI-agent configuration, identify the active profile, config directory, and launcher path before editing mutable state or NixOS/Home Manager files.
-3. Keep edits scoped to the requested maintenance task and to the existing configuration structure.
-4. For NixOS/Home Manager changes, commit the scoped change before rebuilding so the configured pre-commit hooks are the verification gate.
+1. Identify the active profile, config directory, and launcher path before editing mutable agent state or NixOS/Home Manager files.
+2. Keep edits scoped to the requested agent-configuration task and to the existing configuration structure.
+3. If the change lives in `/home/andongni/.nixos-config` (this skill's own files, other tracked dotfiles, or launcher derivations), commit the scoped change first so the configured pre-commit hooks are the verification gate, then apply with `sudo nixos-rebuild switch --flake .#andongni --impure` from that repo.
 
-## Agent Configuration Map
+## Codex
 
 Codex mutable state lives under `/home/andongni/.codex`.
 
@@ -28,6 +25,8 @@ Codex mutable state lives under `/home/andongni/.codex`.
 - Codex skills may be installed or updated with the `npx skills@latest` CLI linked by the skills.sh ecosystem, and managed sources are tracked in `/home/andongni/.local/state/skills/.skill-lock.json`.
 - When updating a whole managed skill set, delete skills that the upstream source removed; also remove stale lock entries and Codex profile entries.
 - Keep whole skill sets in their own Codex profile, for example `/home/andongni/.codex/mattpocock.config.toml`, except for individual skills explicitly included in other profiles.
+
+## Claude
 
 Claude mutable state lives under `CLAUDE_CONFIG_DIR`.
 
@@ -43,13 +42,9 @@ Claude mutable state lives under `CLAUDE_CONFIG_DIR`.
 - `dotfiles/claude/settings.json` is the tracked non-secret baseline for every shared Claude setting. Home Manager replaces both independent, ordinary runtime files with that baseline on activation, deriving only their theme from the active desktop mode; theme automation in `/home/andongni/.nixos-config/home/desktop/theming.nix` is the only intentional runtime settings variance.
 - Claude plugins are managed through Claude's `/plugin` commands; installed plugin state is in `$CLAUDE_CONFIG_DIR/plugins/installed_plugins.json` and known marketplaces are in `$CLAUDE_CONFIG_DIR/plugins/known_marketplaces.json`.
 
-Claude does not have Codex-style profiles, but each `CLAUDE_CONFIG_DIR` acts like a separate profile folder. Keep this Claude-format `system-maintenance` skill present in every Claude config dir's `skills` folder, using symlinks where appropriate:
+Claude does not have Codex-style profiles, but each `CLAUDE_CONFIG_DIR` acts like a separate profile folder. Keep this Claude-format `agent-config-setup` skill present in every Claude config dir's `skills` folder, using symlinks where appropriate:
 
-- `/home/andongni/.config/claude/skills/system-maintenance`
-- `/home/andongni/.config/claude-mattpocock/skills/system-maintenance`
+- `/home/andongni/.config/claude/skills/agent-config-setup`
+- `/home/andongni/.config/claude-mattpocock/skills/agent-config-setup`
 
-Portable upstream Agent Skills may use identical `SKILL.md` content for Codex and Claude, but keep their installation trees, selected agent targets, config directories, and update lifecycles explicit. Locally authored agent-specific workflows such as `system-maintenance` and `sync-mattpocock-skills` use separate Codex and Claude implementations when their paths or behavior differ. Do not symlink this Claude workflow to `/home/andongni/.codex/skills/system-maintenance/SKILL.md`.
-
-## Rebuild Discipline
-
-For configuration changes in `/home/andongni/.nixos-config`, follow the repo policy: commit the scoped change first, then apply the committed configuration with `sudo nixos-rebuild switch --flake .#andongni --impure`. If the rebuild fails, make a follow-up fix commit and rebuild again.
+Portable upstream Agent Skills may use identical `SKILL.md` content for Codex and Claude, but keep their installation trees, selected agent targets, config directories, and update lifecycles explicit. Locally authored agent-specific workflows such as `agent-config-setup` and `sync-mattpocock-skills` use separate Codex and Claude implementations when their paths or behavior differ. Do not symlink this Claude workflow to `/home/andongni/.codex/skills/agent-config-setup/SKILL.md`.

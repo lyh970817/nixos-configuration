@@ -1,4 +1,0 @@
-interface:
-  display_name: "System Maintenance"
-  short_description: "Maintain NixOS and AI agent configs"
-  default_prompt: "Use $system-maintenance to handle system maintenance or AI agent configuration on this machine."
