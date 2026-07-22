@@ -20,6 +20,7 @@
     ./modules/system/networking.nix
     ./modules/system/locale.nix
     ./modules/system/portable.nix
+    ./modules/system/lid.nix
 
     # Desktop environment
     ./modules/desktop/hyprland.nix
