@@ -3,6 +3,9 @@ mihomo-configbk.yaml
 .worktrees/
 .pre-commit-config.yaml
 
+# Claude Code EnterWorktree scratch checkouts (session-scoped, own nested .git)
+.claude/worktrees/
+
 # Nix build-result symlinks (nix build -o <name>); these point into
 # /nix/store and installer ISOs can embed cleartext secrets.
 result
