@@ -9,7 +9,7 @@ description: Configuration workflow for Codex, Claude, Claude Code, AI agents, s
 
 1. Use the configuration map below to determine whether the change belongs in mutable agent state or the NixOS/Home Manager repo. Completion criterion: the active profile, config directory, and launcher path are identified.
 2. Make scoped configuration changes in the existing mutable agent config structure or NixOS/Home Manager structure. Completion criterion: only files needed for the requested agent-configuration task are changed.
-3. If applying a change in `/home/andongni/.nixos-config` is needed (this skill's own files, other tracked dotfiles, or launcher derivations), commit the scoped change first so the configured pre-commit hooks are the verification gate, then apply with `sudo nixos-rebuild switch --flake .#andongni --impure` from that repo. Completion criterion: the rebuild command is run from `/home/andongni/.nixos-config`, or the user is told why it was not run.
+3. If applying a change in `/home/andongni/.nixos-config` is needed (this skill's own files, other tracked dotfiles, or launcher derivations), commit the scoped change first so the configured pre-commit hooks are the verification gate, then apply with `sudo nixos-rebuild switch --flake .#system --impure` from that repo. Completion criterion: the rebuild command is run from `/home/andongni/.nixos-config`, or the user is told why it was not run.
 
 ## Codex
 

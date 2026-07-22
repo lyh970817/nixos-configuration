@@ -9,7 +9,7 @@ description: Use when configuring Codex, Claude, Claude Code, AI agents, skills,
 
 1. Identify the active profile, config directory, and launcher path before editing mutable agent state or NixOS/Home Manager files.
 2. Keep edits scoped to the requested agent-configuration task and to the existing configuration structure.
-3. If the change lives in `/home/andongni/.nixos-config` (this skill's own files, other tracked dotfiles, or launcher derivations), commit the scoped change first so the configured pre-commit hooks are the verification gate, then apply with `sudo nixos-rebuild switch --flake .#andongni --impure` from that repo.
+3. If the change lives in `/home/andongni/.nixos-config` (this skill's own files, other tracked dotfiles, or launcher derivations), commit the scoped change first so the configured pre-commit hooks are the verification gate, then apply with `sudo nixos-rebuild switch --flake .#system --impure` from that repo.
 
 ## Codex
 
