@@ -43,4 +43,16 @@
       pair. Left empty to disable cross-machine features.
     '';
   };
+
+  # Opt-in, per-machine hardware workarounds. Not implied by role, since
+  # role is shared by any host on that side of the pair, not by this quirk.
+  options.portable.quirks.dynabookX30wkDmic = lib.mkOption {
+    type = lib.types.bool;
+    default = false;
+    description = ''
+      Enables the DMIC quirk for the Dynabook PORTEGE X30W-K, whose NHLT
+      table under-reports 2 DMICs instead of 4, leaving the internal mic
+      silent.
+    '';
+  };
 }
