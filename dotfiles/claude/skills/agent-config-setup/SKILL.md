@@ -1,50 +1,34 @@
 ---
 name: agent-config-setup
-description: Use when configuring Codex, Claude, Claude Code, AI agents, skills, skills.sh, npx skills, profiles, plugins, launchers, or agent config directories on this machine. Not for other NixOS/Home Manager, host package, service, desktop, or launcher work.
+description: Use when configuring Claude Code, its config directories (CLAUDE_CONFIG_DIR), skills, commands, settings.json, profiles, or launchers on this machine. Not for other NixOS/Home Manager, host package, service, desktop, or launcher work.
 ---
 
-# Agent Configuration
+# Agent Configuration (Claude)
+
+## Model
+
+The tracked source of truth is `/home/andongni/.nixos-config/dotfiles/claude/`. Home Manager module `home/programs/mutable-configs.nix` wires it into `$CLAUDE_CONFIG_DIR` mostly via `mkOutOfStoreSymlink` — an out-of-store symlink pointing at this repo checkout (`osConfig.portable.configDir`) instead of a store copy. **Edits to symlinked files are live immediately; no rebuild needed.**
+
+- Symlinked (edit under `dotfiles/claude/`, changes are live at once): `CLAUDE.md`, `statusline.sh`, `skills/`, `commands/`, `output-styles/`.
+- Materialized, not symlinked: `settings.json`. `dotfiles/claude/settings.json` is the tracked non-secret baseline. `home.activation.claudeSettings` (in `mutable-configs.nix`) jq-injects the current desktop theme (`dark-ansi` / `light-ansi`) into that baseline and installs the result as an ordinary mutable `0600` file at `$CLAUDE_CONFIG_DIR/settings.json` on every activation; `home/desktop/theming.nix` (`setClaudeTheme`) re-applies just the theme on every dark/light switch. Theme is the only intentional runtime variance — edit the tracked file, not the runtime copy, and rebuild to propagate non-theme changes.
+- Machine-local mutable state, not sourced from the repo, not configuration to manage here: `.claude.json`, `.credentials.json`, `history.jsonl`, `projects/`, `sessions/`, `plugins/` (`installed_plugins.json`, `known_marketplaces.json` — managed via Claude's `/plugin` command), and caches. There is no `agents/` directory under `$CLAUDE_CONFIG_DIR`.
+
+## Config directories
+
+Claude has no Codex-style named profiles; each `CLAUDE_CONFIG_DIR` acts like a separate profile directory.
+
+- Default: `/home/andongni/.config/claude` (default `CLAUDE_CONFIG_DIR`).
+- `claude-mattpocock`: `/home/andongni/.config/claude-mattpocock`, selected by the `claude-matt` shell alias in `home/programs/shell.nix`, which sets `CLAUDE_CONFIG_DIR="$HOME/.config/claude-mattpocock"` before invoking `claude` (it's an alias, not a separate binary). `cly` / `clty` are `claude` / `claude-matt` with `--dangerously-skip-permissions`.
+- `mutable-configs.nix` wires the same dotfiles sources into `claude-mattpocock` with `force = true`, but skills are wired per-skill, not as a whole `skills/` directory link: only `agent-config-setup` and `nix-environment-setup` (from `dotfiles/claude/skills/`) plus `visual-verification` (from the repo-root `skills/visual-verification`) are shared. Every other skill under `claude-mattpocock/skills` is independent and mutable, managed outside this repo.
+
+## Launcher and package
+
+- Launcher: `home/programs/claude.nix` (`writeShellApplication`) — sets proxy env (`HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY`/`NO_PROXY` and lowercase mirrors), locale (`LANG`/`LANGUAGE`/`LOCALE_ARCHIVE`), and `CLAUDE_CODE_*` env vars.
+- Package derivation: `pkgs/claude-code.nix`.
 
 ## Workflow
 
-1. Identify the active profile, config directory, and launcher path before editing mutable agent state or NixOS/Home Manager files.
-2. Keep edits scoped to the requested agent-configuration task and to the existing configuration structure.
-3. If the change lives in `/home/andongni/.nixos-config` (this skill's own files, other tracked dotfiles, or launcher derivations), commit the scoped change first so the configured pre-commit hooks are the verification gate, then apply with `sudo nixos-rebuild switch --flake .#system --impure` from that repo.
-
-## Codex
-
-Codex mutable state lives under `/home/andongni/.codex`.
-
-- Base Codex config: `/home/andongni/.codex/config.toml`.
-- Separate Codex profiles: `/home/andongni/.codex/*.config.toml`, selected with `codex --profile <name>`.
-- Codex skill entries: `[[skills.config]]` stanzas target skill directories containing `SKILL.md`, with `enabled = true` or `false`.
-- Portable relative profile paths are resolved from the profile's runtime location under `/home/andongni/.codex`: `skills/<skill>` targets `/home/andongni/.codex/skills/<skill>`, while `../.agents/skills/<skill>` targets `/home/andongni/.agents/skills/<skill>`.
-- Global Codex skills live once under `/home/andongni/.codex/skills/<skill>/SKILL.md`; a global Codex skill is enabled or referenced through Codex configuration for all profiles, not copied into each profile.
-- System Codex skills: `/home/andongni/.codex/skills/.system/<skill>/SKILL.md`.
-- Shared/user workflow skills used by profiles: `/home/andongni/.agents/skills/<skill>/SKILL.md`.
-- Codex skills may be installed or updated with the `npx skills@latest` CLI linked by the skills.sh ecosystem, and managed sources are tracked in `/home/andongni/.local/state/skills/.skill-lock.json`.
-- When updating a whole managed skill set, delete skills that the upstream source removed; also remove stale lock entries and Codex profile entries.
-- Keep whole skill sets in their own Codex profile, for example `/home/andongni/.codex/mattpocock.config.toml`, except for individual skills explicitly included in other profiles.
-
-## Claude
-
-Claude mutable state lives under `CLAUDE_CONFIG_DIR`.
-
-- Default Claude config dir: `/home/andongni/.config/claude`.
-- Claude mattpocock config dir: `/home/andongni/.config/claude-mattpocock`, selected by the `claude-matt` launcher.
-- Claude launcher and default environment: `/home/andongni/.nixos-config/home/programs/claude.nix`.
-- Claude Code package derivation: `/home/andongni/.nixos-config/pkgs/claude-code.nix`.
-- Claude settings: `$CLAUDE_CONFIG_DIR/settings.json`.
-- Claude guidance: `$CLAUDE_CONFIG_DIR/CLAUDE.md`.
-- Claude commands, agents, plugins, and skills: `$CLAUDE_CONFIG_DIR/commands`, `$CLAUDE_CONFIG_DIR/agents`, `$CLAUDE_CONFIG_DIR/plugins`, and `$CLAUDE_CONFIG_DIR/skills`.
-- Matt Pocock skills in the `claude-mattpocock` profile are independent copies managed with the upstream-recommended `npx skills@latest add mattpocock/skills` flow. For exact synchronization and removal of deprecated skills, invoke `$sync-mattpocock-skills` from that profile; never link those skills to `/home/andongni/.agents/skills` or `/home/andongni/.codex/skills`.
-- `claude-matt` sets `CLAUDE_CONFIG_DIR="$HOME/.config/claude-mattpocock"` in `/home/andongni/.nixos-config/home/programs/shell.nix`.
-- `dotfiles/claude/settings.json` is the tracked non-secret baseline for every shared Claude setting. Home Manager replaces both independent, ordinary runtime files with that baseline on activation, deriving only their theme from the active desktop mode; theme automation in `/home/andongni/.nixos-config/home/desktop/theming.nix` is the only intentional runtime settings variance.
-- Claude plugins are managed through Claude's `/plugin` commands; installed plugin state is in `$CLAUDE_CONFIG_DIR/plugins/installed_plugins.json` and known marketplaces are in `$CLAUDE_CONFIG_DIR/plugins/known_marketplaces.json`.
-
-Claude does not have Codex-style profiles, but each `CLAUDE_CONFIG_DIR` acts like a separate profile folder. Keep this Claude-format `agent-config-setup` skill present in every Claude config dir's `skills` folder, using symlinks where appropriate:
-
-- `/home/andongni/.config/claude/skills/agent-config-setup`
-- `/home/andongni/.config/claude-mattpocock/skills/agent-config-setup`
-
-Portable upstream Agent Skills may use identical `SKILL.md` content for Codex and Claude, but keep their installation trees, selected agent targets, config directories, and update lifecycles explicit. Locally authored agent-specific workflows such as `agent-config-setup` and `sync-mattpocock-skills` use separate Codex and Claude implementations when their paths or behavior differ. Do not symlink this Claude workflow to `/home/andongni/.codex/skills/agent-config-setup/SKILL.md`.
+1. Locate the tracked source under `dotfiles/claude/` first; edit there, never a runtime copy under `$CLAUDE_CONFIG_DIR`.
+2. Keep edits scoped to the requested change.
+3. Commit the change so the repo's pre-commit hooks are the verification gate (repo policy) — do this even for changes that are already live via symlink.
+4. Rebuild with `sudo nixos-rebuild switch --flake .#system --impure` (or the `rebuild` alias, which targets `/etc/nixos#system` and works from any directory) only when the change touches the materialized `settings.json` or Nix wiring itself (`mutable-configs.nix`, `theming.nix`, `claude.nix`, `pkgs/claude-code.nix`). Pure content edits to symlinked files (`CLAUDE.md`, `skills/`, `commands/`, `output-styles/`, `statusline.sh`) are already live — commit only, no rebuild required.

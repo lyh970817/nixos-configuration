@@ -1,49 +1,38 @@
 ---
 name: agent-config-setup
-description: Configuration workflow for Codex, Claude, Claude Code, AI agents, skills, skills.sh, npx skills, profiles, plugins, launchers, or agent config directories on this machine. Not for other NixOS/Home Manager, host package, service, desktop, or launcher work.
+description: Configuration workflow for Codex, its config directory (~/.codex), skills, profiles, or launchers on this machine. Not for other NixOS/Home Manager, host package, service, desktop, or launcher work.
 ---
 
-# Agent Configuration
+# Agent Configuration (Codex)
+
+## Model
+
+The tracked source of truth is `/home/andongni/.nixos-config/dotfiles/codex/` (plus `dotfiles/agents/` for the shared skill set). Home Manager module `home/programs/mutable-configs.nix` wires it into `~/.codex` mostly via `mkOutOfStoreSymlink` — an out-of-store symlink pointing at this repo checkout (`osConfig.portable.configDir`) instead of a store copy. **Edits to symlinked files are live immediately; no rebuild needed.**
+
+- Symlinked: `AGENTS.md`, `rules/`, `skills/` — 13 tracked Codex-specific skills (`agent-config-setup`, `codex-dynamic-workflows`, `commit-guidelines`, `domain-context`, `lavish`, `nix-environment-setup`, `playwright`, `r-dev-shell`, `root-browser-control`, `run-sandcastle`, `superpowers-domain-context`, `sync-mattpocock-skills`, `visual-verification`).
+- Copied, not linked: profiles. `home.activation.codexProfiles` copies `dotfiles/codex/profiles/*.config.toml` to `~/.codex/<name>.config.toml` on every activation (six tracked profiles: `last30days`, `lavish-axi`, `mattpocock`, `openai`, `superpowers`, `understand-anything-codegraph`). They are copied rather than symlinked so each profile's relative skill paths resolve correctly from `~/.codex`. Editing a runtime `~/.codex/*.config.toml` directly is futile — it is overwritten on the next `nixos-rebuild switch`; edit `dotfiles/codex/profiles/<name>.config.toml` instead and rebuild to propagate.
+- `~/.agents` is a separate out-of-store symlink to `dotfiles/agents` — a curated, shared 36-skill set used across profiles, not Codex-specific.
+- Mutable, not sourced from the repo, not configuration to manage here: `config.toml` (base config), `auth.json`, sqlite state, `history.jsonl`, `sessions/`, shell snapshots, caches.
+
+## How profiles select skills
+
+Codex does not auto-scan for skills, and there is no implicit "system skills" layer distinct from the tracked `skills/` tree. A profile enables a skill only by explicitly listing a `[[skills.config]]` stanza whose path is resolved relative to the profile file's own runtime location under `~/.codex`:
+
+- `skills/<name>` resolves to `~/.codex/skills/<name>` (from `dotfiles/codex/skills/`).
+- `../.agents/skills/<name>` resolves to `~/.agents/skills/<name>` (from `dotfiles/agents/skills/`, the shared 36-skill set).
+
+Select a profile with `codex --profile <name>`. To add or drop a skill from a profile, edit the profile's `[[skills.config]]` stanzas in `dotfiles/codex/profiles/<name>.config.toml`.
+
+For synchronizing the whole Matt Pocock skill set, see the `sync-mattpocock-skills` skill (`dotfiles/codex/skills/sync-mattpocock-skills`) — it is a plain git-tracked Codex skill, not an externally managed install flow.
+
+## Launcher and package
+
+- CLI package derivation: `pkgs/codex.nix`; the CLI runs directly against `~/.codex` (`home/programs/codex-desktop.nix` adds `pkgs.codex` to `home.packages`). Shell alias `cdy` runs `codex --yolo` (bypasses approval prompts).
+- Codex Desktop (GUI) is wired through the same `home/programs/codex-desktop.nix` via `programs.codexDesktopLinux`, using `pkgs.codex-desktop-isolated` (`pkgs/codex-desktop-isolated.nix`), which wraps the desktop app to keep its state under `~/.codex-desktop`/isolated XDG dirs instead of `~/.codex`, so it does not share state with the CLI.
 
 ## Workflow
 
-1. Use the configuration map below to determine whether the change belongs in mutable agent state or the NixOS/Home Manager repo. Completion criterion: the active profile, config directory, and launcher path are identified.
-2. Make scoped configuration changes in the existing mutable agent config structure or NixOS/Home Manager structure. Completion criterion: only files needed for the requested agent-configuration task are changed.
-3. If applying a change in `/home/andongni/.nixos-config` is needed (this skill's own files, other tracked dotfiles, or launcher derivations), commit the scoped change first so the configured pre-commit hooks are the verification gate, then apply with `sudo nixos-rebuild switch --flake .#system --impure` from that repo. Completion criterion: the rebuild command is run from `/home/andongni/.nixos-config`, or the user is told why it was not run.
-
-## Codex
-
-Codex mutable state lives under `/home/andongni/.codex`.
-
-- Base Codex config: `/home/andongni/.codex/config.toml`.
-- Separate Codex profiles: `/home/andongni/.codex/*.config.toml`, selected with `codex --profile <name>`.
-- Codex skill entries: `[[skills.config]]` stanzas target skill directories containing `SKILL.md`, with `enabled = true` or `false`.
-- Portable relative profile paths are resolved from the profile's runtime location under `/home/andongni/.codex`: `skills/<skill>` targets `/home/andongni/.codex/skills/<skill>`, while `../.agents/skills/<skill>` targets `/home/andongni/.agents/skills/<skill>`.
-- Global Codex skills: `/home/andongni/.codex/skills/<skill>/SKILL.md`.
-- System Codex skills: `/home/andongni/.codex/skills/.system/<skill>/SKILL.md`.
-- Shared/user workflow skills used by profiles: `/home/andongni/.agents/skills/<skill>/SKILL.md`.
-- Codex automatically scans both `/home/andongni/.codex/skills` and `/home/andongni/.agents/skills` for every user config layer. If a managed skill set lives under `/home/andongni/.agents/skills` but should not appear in the base profile, add explicit base-profile `[[skills.config]]` name disables for the unwanted skills; profile-specific path enables can re-enable them when launched with `codex --profile <name>`.
-- A global Codex skill should live once in the global Codex skills folder, for example `/home/andongni/.codex/skills/agent-config-setup/SKILL.md`; do not duplicate it into each Codex profile. Enable or reference it through Codex's global/profile configuration so it is available to all profiles.
-- Codex skills may be installed or updated with the `npx skills@latest` CLI linked by the skills.sh ecosystem. Follow upstream installation instructions and check `/home/andongni/.local/state/skills/.skill-lock.json` for managed sources and update metadata. Matt Pocock publishes one portable source rather than separate Codex and Claude editions: the selected agent controls registration and installation location.
-- Codex curated skills may also be installed with `$skill-installer`; distinguish those from `npx skills@latest` managed skills before changing or updating them.
-- When updating a whole managed skill set, delete skills that the upstream source has removed; do not leave stale copied folders, lock entries, or Codex profile entries pointing at removed upstream skills.
-- For synchronizing the complete `mattpocock/skills` installation, removing deprecated upstream skills, and maintaining Codex profile boundaries, invoke `$sync-mattpocock-skills`.
-- Keep whole skill sets in their own Codex profile, for example `/home/andongni/.codex/mattpocock.config.toml` for Matt Pocock skills. Only include individual skills from that set in other profiles when they are explicitly needed there.
-- Codex Desktop installation and CLI wrapper: `/home/andongni/.nixos-config/home/programs/codex-desktop.nix`.
-
-## Claude
-
-Claude mutable state lives under `CLAUDE_CONFIG_DIR`.
-
-- Default Claude config dir: `/home/andongni/.config/claude`.
-- Claude launcher and default environment: `/home/andongni/.nixos-config/home/programs/claude.nix`.
-- Claude Code package derivation: `/home/andongni/.nixos-config/pkgs/claude-code.nix`.
-- Claude settings: `$CLAUDE_CONFIG_DIR/settings.json`.
-- Claude guidance: `$CLAUDE_CONFIG_DIR/CLAUDE.md`.
-- Claude commands, agents, plugins, and skills: `$CLAUDE_CONFIG_DIR/commands`, `$CLAUDE_CONFIG_DIR/agents`, `$CLAUDE_CONFIG_DIR/plugins`, and `$CLAUDE_CONFIG_DIR/skills`.
-- Separate Claude profile example: `claude-matt` sets `CLAUDE_CONFIG_DIR="$HOME/.config/claude-mattpocock"` in `/home/andongni/.nixos-config/home/programs/shell.nix`.
-- `dotfiles/claude/settings.json` is the tracked non-secret baseline for every shared Claude setting. Home Manager replaces both independent, ordinary runtime files with that baseline on activation, deriving only their theme from the active desktop mode; theme automation in `/home/andongni/.nixos-config/home/desktop/theming.nix` is the only intentional runtime settings variance.
-- Claude plugins are managed through Claude's `/plugin` commands; installed plugin state is in `$CLAUDE_CONFIG_DIR/plugins/installed_plugins.json` and known marketplaces are in `$CLAUDE_CONFIG_DIR/plugins/known_marketplaces.json`.
-- Claude does not have Codex-style profiles, but each `CLAUDE_CONFIG_DIR` acts like a separate profile folder. Keep the Claude-format `agent-config-setup` skill present in every Claude config dir's `skills` folder, using symlinks where appropriate, for example `/home/andongni/.config/claude/skills/agent-config-setup` and `/home/andongni/.config/claude-mattpocock/skills/agent-config-setup`.
-
-Portable upstream Agent Skills may use identical `SKILL.md` content for Codex and Claude, but keep their installation trees, selected agent targets, profiles, and update lifecycles explicit. Locally authored agent-specific workflows such as `agent-config-setup` and `sync-mattpocock-skills` use separate Codex and Claude implementations when their paths or behavior differ; do not symlink Claude to Codex's local workflow files. Use `npx skills@latest` to list, add, remove, check, or update a source when `/home/andongni/.local/state/skills/.skill-lock.json` shows that it is managed by that CLI.
+1. Locate the tracked source under `dotfiles/codex/` (or `dotfiles/agents/` for shared skills) first; edit there, never a runtime copy under `~/.codex`.
+2. Keep edits scoped to the requested change.
+3. Commit the change so the repo's pre-commit hooks are the verification gate (repo policy) — do this even for changes that are already live via symlink.
+4. Rebuild with `sudo nixos-rebuild switch --flake .#system --impure` (or the `rebuild` alias, which targets `/etc/nixos#system` and works from any directory) only when the change touches a copied profile (`dotfiles/codex/profiles/*.config.toml`) or Nix wiring itself (`mutable-configs.nix`, `codex-desktop.nix`, `pkgs/codex.nix`, `pkgs/codex-desktop-isolated.nix`). Pure content edits to symlinked files (`AGENTS.md`, `rules/`, `skills/`, `dotfiles/agents/skills/`) are already live — commit only, no rebuild required.
