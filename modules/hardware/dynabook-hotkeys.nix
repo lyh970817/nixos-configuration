@@ -61,6 +61,17 @@ in
        KEYBOARD_KEY_13e=micmute
     '';
 
+    # Keep the keyboard-backlight mode attribute writable by the input group so
+    # the Fn+Z script can cycle it. A udev rule (not a one-shot) is used because
+    # the driver recreates the attribute root-owned on every rebind/coldplug
+    # (e.g. the udev re-trigger during nixos-rebuild), which would revert a
+    # boot-time chmod. Runs on bind (when the attribute first appears) and on
+    # later add/change re-triggers; the TEST guard skips the early add before
+    # the module has bound.
+    services.udev.extraRules = ''
+      ACTION=="add|bind|change", SUBSYSTEM=="acpi", KERNEL=="DNBK0001:00", TEST=="kbd_backlight_mode", RUN+="${pkgs.coreutils}/bin/chgrp input %S%p/kbd_backlight_mode", RUN+="${pkgs.coreutils}/bin/chmod g+w %S%p/kbd_backlight_mode"
+    '';
+
     # Fn+F2 emits XF86Battery, bound to cycle power profiles. The X30W-K uses
     # intel_pstate EPP (no platform_profile), which ppd drives fine.
     services.power-profiles-daemon.enable = true;
@@ -90,13 +101,11 @@ in
           # This is a "type 2" Toshiba keyboard backlight: the LED's on/off bit
           # is overridden by the SCI mode (auto=2/on=8/off=16), so real control
           # is the kbd_backlight_mode attribute. Default it to auto (lights on
-          # keypress, off after the firmware timeout) and make it writable by
-          # the input group so the Fn+Z script can cycle it without root.
+          # keypress, off after the firmware timeout); the input-group write
+          # permission the Fn+Z script needs is (re)applied by a udev rule.
           mode=/sys/bus/acpi/devices/DNBK0001:00/kbd_backlight_mode
           if [ -e "$mode" ]; then
             echo 2 > "$mode" || true
-            chgrp input "$mode" || true
-            chmod g+w "$mode" || true
           fi
         '';
       };
