@@ -227,6 +227,23 @@ in
 
   environment.systemPackages = [ mihomoGuard ];
 
+  # Let the active local wheel session start/stop just this unit without a
+  # password prompt, so the laptop's Fn+F8 key (bound to a mihomo toggle in
+  # Hyprland) works from the session. Scoped to mihomo.service and the
+  # start/stop/restart verbs; every other unit still needs normal auth.
+  security.polkit.extraConfig = ''
+    polkit.addRule(function(action, subject) {
+      if (action.id == "org.freedesktop.systemd1.manage-units" &&
+          action.lookup("unit") == "mihomo.service" &&
+          subject.active && subject.isInGroup("wheel")) {
+        var verb = action.lookup("verb");
+        if (verb == "start" || verb == "stop" || verb == "restart") {
+          return polkit.Result.YES;
+        }
+      }
+    });
+  '';
+
   # Ensure the root-owned state dir exists for the guard/boot-check tools.
   systemd.tmpfiles.rules = [
     "d ${acceptedStateDir} 0755 root root -"
