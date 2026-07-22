@@ -50,6 +50,5 @@
   "effortLevel": "high",
   "skipDangerousModePermissionPrompt": true,
   "editorMode": "vim",
-  "teammateMode": "in-process",
-  "autoScrollEnabled": false
+  "teammateMode": "in-process"
 }
