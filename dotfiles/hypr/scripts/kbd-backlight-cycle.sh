@@ -3,8 +3,10 @@
 # Fn+Z (XF86KbdLightOnOff) cycles the keyboard backlight. This is a "type 2"
 # Toshiba backlight: the toshiba_acpi_dnbk driver's kbd_backlight LED only
 # flips an illumination bit that the SCI *mode* overrides, so real control is
-# the kbd_backlight_mode attribute (auto=2, on=8, off=16). A NixOS udev/service
-# rule makes that attribute group-writable; cycle Auto -> On -> Off.
+# the kbd_backlight_mode attribute (auto=2, on=8, off=16). The driver recreates
+# that attribute root-owned on every mode change (sysfs_update_group), so it
+# can't be made group-writable; write it via passwordless sudo instead (this
+# host runs wheel without a sudo password).
 set -euo pipefail
 
 attr=/sys/bus/acpi/devices/DNBK0001:00/kbd_backlight_mode
@@ -15,7 +17,7 @@ notify() {
       "Keyboard backlight" "$1"
 }
 
-if [ ! -w "$attr" ]; then
+if [ ! -r "$attr" ]; then
   notify "control unavailable"
   exit 1
 fi
@@ -26,5 +28,9 @@ case "$(cat "$attr")" in
   *) next=2 label="Auto" ;; # off  -> auto
 esac
 
-printf '%s\n' "$next" > "$attr"
-notify "$label"
+if printf '%s\n' "$next" | sudo -n tee "$attr" > /dev/null 2>&1; then
+  notify "$label"
+else
+  notify "control unavailable"
+  exit 1
+fi
