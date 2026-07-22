@@ -2,6 +2,11 @@ mihomo-config.yaml
 mihomo-configbk.yaml
 .worktrees/
 .pre-commit-config.yaml
+
+# Nix build-result symlinks (nix build -o <name>); these point into
+# /nix/store and installer ISOs can embed cleartext secrets.
+result
+result-*
 # Ignore real secret files under secrets/, but keep *.example.* templates tracked
 # (they carry no real secrets and document the expected files).
 secrets/*
