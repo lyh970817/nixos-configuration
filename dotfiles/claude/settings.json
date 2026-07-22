@@ -1,5 +1,6 @@
 {
   "theme": "light-ansi",
+  "tui": "fullscreen",
   "env": {
     "ALL_PROXY": "socks5h://127.0.0.1:7890",
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
