@@ -28,6 +28,7 @@
     # Hardware support
     ./modules/hardware/audio.nix
     ./modules/hardware/bluetooth.nix
+    ./modules/hardware/dynabook-hotkeys.nix
     ./modules/hardware/printing.nix
     ./modules/hardware/video.nix
 

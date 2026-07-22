@@ -55,4 +55,15 @@
       silent.
     '';
   };
+
+  options.portable.quirks.dynabookX30wkHotkeys = lib.mkOption {
+    type = lib.types.bool;
+    default = false;
+    description = ''
+      Enables the Fn hotkey quirk for the Dynabook PORTEGE X30W-K, whose
+      firmware only emits ACPI brightness events for Fn+F6/F7 after mailbox
+      flags are set that Windows vendor software normally sets. Loads a
+      custom SSDT and arms the flags via acpi_call at boot and resume.
+    '';
+  };
 }
