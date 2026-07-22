@@ -1,0 +1,32 @@
+--- a/toshiba_acpi.c
++++ b/toshiba_acpi.c
+@@ -2819,11 +2819,25 @@
+ static void toshiba_acpi_process_hotkeys(struct toshiba_acpi_dev *dev)
+ {
+ 	if (dev->info_supported) {
+-		int scancode = toshiba_acpi_query_hotkey(dev);
++		int scancode;
++		int i;
+ 
+-		if (scancode < 0) {
+-			pr_err("Failed to query hotkey event\n");
+-		} else if (scancode != 0) {
++		/*
++		 * A single Fn combo pushes several INFO FIFO entries (Fn-down
++		 * marker, press, release, Fn-up marker), and a notify can be
++		 * dropped or coalesced, so popping one entry per notify leaves
++		 * stale codes queued and desyncs later presses. Drain the whole
++		 * FIFO on every notify; INFO returns 0 when empty. Cap the loop
++		 * to guard against a pathological never-empty FIFO.
++		 */
++		for (i = 0; i < 16; i++) {
++			scancode = toshiba_acpi_query_hotkey(dev);
++			if (scancode < 0) {
++				pr_err("Failed to query hotkey event\n");
++				break;
++			}
++			if (scancode == 0)
++				break;
+ 			toshiba_acpi_report_hotkey(dev, scancode);
+ 			dev->key_event_valid = 1;
+ 			dev->last_key_event = scancode;

@@ -5,11 +5,15 @@
   kernelModuleMakeFlags,
 }:
 
-# Out-of-tree build of the in-tree toshiba_acpi driver, patched only to add the
-# Dynabook Portege X30W-K's ACPI HID (DNBK0001) to the match table. That
-# firmware's \_SB.VALZ device (_HID DNBK0001) implements the exact mainline
-# HCI/SCI GHCI protocol and an INFO() hotkey FIFO, but mainline matches only the
-# older TOS6200/6207/6208/1900 HIDs, so the stock module never binds here.
+# Out-of-tree build of the in-tree toshiba_acpi driver with two small patches:
+# (1) add the Dynabook Portege X30W-K's ACPI HID (DNBK0001) to the match table
+# (below, via substituteInPlace), and (2) drain the INFO() hotkey FIFO fully on
+# each notify instead of popping one entry (toshiba-acpi-dnbk-drain.patch) — this
+# firmware pushes several FIFO entries per Fn combo and a dropped/coalesced
+# notify would otherwise desync later key presses. The \_SB.VALZ device (_HID
+# DNBK0001) implements the exact mainline HCI/SCI GHCI protocol and an INFO()
+# hotkey FIFO, but mainline matches only the older TOS6200/6207/6208/1900 HIDs,
+# so the stock module never binds here.
 #
 # The source is taken verbatim from the running kernel's own tarball (no new
 # fetch/hash), so it always matches the running ABI. The module is renamed to
@@ -38,6 +42,9 @@ stdenv.mkDerivation {
     runHook postUnpack
   '';
   sourceRoot = ".";
+
+  # Applied in patchPhase, before the DNBK substitution/rename in postPatch.
+  patches = [ ./toshiba-acpi-dnbk-drain.patch ];
 
   postPatch = ''
     # Add the X30W-K HID next to the existing Toshiba HIDs in the match table.
