@@ -14,12 +14,15 @@ if [ "${#touchpads[@]}" -eq 0 ]; then
   exit 1
 fi
 
-if [ "$(cat "$state" 2> /dev/null)" = "0" ]; then
-  target=true
-  label="enabled"
-else
+# The state file holds the current enabled state (1 = enabled). A missing file
+# means the touchpad is at its config default, which is disabled, so the first
+# press enables it.
+if [ "$(cat "$state" 2> /dev/null)" = "1" ]; then
   target=false
   label="disabled"
+else
+  target=true
+  label="enabled"
 fi
 
 for dev in "${touchpads[@]}"; do
