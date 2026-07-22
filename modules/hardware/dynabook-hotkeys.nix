@@ -13,6 +13,12 @@ let
     cp out.aml $out
   '';
 
+  # toshiba_acpi patched to bind this machine's \_SB.VALZ (_HID DNBK0001),
+  # giving us the Fn hotkey FIFO (INFO()), keyboard-backlight LED, and rfkill.
+  # Built against the running kernel via kernelPackages.callPackage so it picks
+  # up `kernel` and `kernelModuleMakeFlags` from that scope.
+  toshibaAcpiDnbk = config.boot.kernelPackages.callPackage ../../pkgs/toshiba-acpi-dnbk.nix { };
+
   hpstEnable = pkgs.writeShellScript "dynabook-hpst-enable" ''
     set -eu
     printf '\\_SB.DYHK.HPST' > /proc/acpi/call
@@ -31,10 +37,19 @@ in
   # it once via acpi_call, since hot-loaded tables don't run _INI. Opt-in per
   # machine via portable.quirks.dynabookX30wkHotkeys in local.nix.
   config = lib.mkIf config.portable.quirks.dynabookX30wkHotkeys {
-    boot.extraModulePackages = [ config.boot.kernelPackages.acpi_call ];
+    boot.extraModulePackages = [
+      config.boot.kernelPackages.acpi_call
+      toshibaAcpiDnbk
+    ];
     boot.kernelModules = [
       "acpi_call"
       "acpi_configfs"
+      # Patched toshiba_acpi that matches DNBK0001; provides the Fn hotkey input
+      # device, kbd_backlight LED, and rfkill. Note: this reports
+      # KEY_BRIGHTNESSUP/DOWN for Fn+F6/F7 in addition to the Video Bus notifies
+      # the SSDT/HPEN path already enables, so brightness may double-step until
+      # one path is suppressed (known follow-up; HPEN kept for now).
+      "toshiba_acpi_dnbk"
     ];
 
     systemd.services.dynabook-hotkeys-enable = {
