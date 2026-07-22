@@ -45,7 +45,7 @@ let
   # "c" target to every attached client tty. tmux's own set-clipboard emission
   # uses an empty target field, which mosh silently drops, so copies made over
   # a mosh session never reached the connecting machine's clipboard.
-  osc52Copy = pkgs.writeShellScript "tmux-osc52-copy" ''
+  osc52Copy = pkgs.writeShellScriptBin "osc52-copy" ''
     buf="$(${pkgs.coreutils}/bin/mktemp)"
     trap '${pkgs.coreutils}/bin/rm -f "$buf"' EXIT
     ${pkgs.coreutils}/bin/cat > "$buf"
@@ -59,6 +59,8 @@ let
   '';
 in
 {
+  home.packages = [ osc52Copy ];
+
   programs.tmux = {
     enable = true;
     terminal = "tmux-256color"; # Use screen-256color or tmux-256color
@@ -171,11 +173,11 @@ in
       bind -T copy-mode-vi C-f send-keys -X page-down
 
       # Bind 'y' to copy to Wayland clipboard (and OSC 52 for mosh/SSH clients)
-      bind -T copy-mode-vi y send-keys -X copy-pipe "${osc52Copy}"
+      bind -T copy-mode-vi y send-keys -X copy-pipe "${osc52Copy}/bin/osc52-copy"
 
       # 4. Mouse Dragging
       # When you release the mouse click after selecting, copy to clipboard automatically
-      bind -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-pipe "${osc52Copy}"
+      bind -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-pipe "${osc52Copy}/bin/osc52-copy"
 
       # --- Matrix Green Theme (10% Dimmer Colors) ---
 

@@ -4,7 +4,33 @@ vim.g.maplocalleader = "\\"
 local opt = vim.opt
 
 opt.autowrite = true
-opt.clipboard = vim.env.SSH_CONNECTION and "" or "unnamedplus"
+
+-- Over SSH, sync yanks to the client terminal's clipboard via OSC 52.
+-- osc52-copy (from tmux.nix) targets every tmux client tty explicitly,
+-- since tmux/mosh drop the empty-target form. Paste queries are not
+-- answerable over mosh, so paste returns the last in-instance yank;
+-- pasting from the client side works via terminal (bracketed) paste.
+if vim.env.SSH_CONNECTION then
+  local cache = { lines = {}, regtype = "v" }
+  local function copy(lines, regtype)
+    cache = { lines = lines, regtype = regtype }
+    if vim.env.TMUX then
+      vim.system({ "osc52-copy" }, { stdin = table.concat(lines, "\n") })
+    else
+      require("vim.ui.clipboard.osc52").copy("+")(lines)
+    end
+  end
+  local function paste()
+    return { cache.lines, cache.regtype }
+  end
+  vim.g.clipboard = {
+    name = "osc52-tmux",
+    copy = { ["+"] = copy, ["*"] = copy },
+    paste = { ["+"] = paste, ["*"] = paste },
+  }
+end
+opt.clipboard = "unnamedplus"
+
 opt.completeopt = "menu,menuone,noselect"
 opt.conceallevel = 2
 opt.confirm = true
