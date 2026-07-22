@@ -110,7 +110,7 @@ in
 
     # Claude has a profile per CLAUDE_CONFIG_DIR. Share only portable authored
     # assets with claude-mattpocock; its credential, settings, plugin state,
-  # history, and independently managed Matt Pocock skill set stay mutable.
+    # history, and independently managed Matt Pocock skill set stay mutable.
     "claude-mattpocock/CLAUDE.md" = {
       source = link "dotfiles/claude/CLAUDE.md";
       force = true;
@@ -133,6 +133,10 @@ in
     };
     "claude-mattpocock/skills/system-maintenance" = {
       source = link "dotfiles/claude/skills/system-maintenance";
+      force = true;
+    };
+    "claude-mattpocock/skills/agent-config-setup" = {
+      source = link "dotfiles/claude/skills/agent-config-setup";
       force = true;
     };
     "claude-mattpocock/skills/visual-verification" = {

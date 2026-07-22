@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Config Setup"
+  short_description: "Configure Codex, Claude, and agent skill setups"
+  default_prompt: "Use $agent-config-setup to configure Codex, Claude, or other coding-agent setups on this machine."
