@@ -24,7 +24,8 @@ let
       fi
 
       for _ in 1 2 3; do
-        if mosh "$PEER" -- tmux new-session -A -s main; then
+        # Adaptive prediction disables local echo on fast links; force it on.
+        if mosh --predict=always --predict-overwrite "$PEER" -- tmux new-session -A -s main; then
           exit 0
         fi
         sleep 2
