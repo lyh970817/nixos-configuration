@@ -74,13 +74,18 @@ in
       "toshiba_acpi_dnbk"
     ];
 
-    # The driver's main keymap sends 0x13e (Fn+F4, whose keycap is the
-    # microphone-mute key) as KEY_SUSPEND, which logind would act on. Remap it
-    # to KEY_MICMUTE so the existing XF86AudioMicMute bind handles it and
-    # nothing suspends the machine on a mic-mute press.
+    # Remaps for the Toshiba hotkey device:
+    # - 0x13e (Fn+F4, mic-mute keycap) is KEY_SUSPEND in the driver keymap,
+    #   which logind would act on; remap to KEY_MICMUTE so the existing
+    #   XF86AudioMicMute bind handles it and nothing suspends on a mic press.
+    # - 0x139 (Fn+Space) is KEY_ZOOMRESET (420), but keyd's virtual keyboard
+    #   (it grabs all keyboards) does not declare code 420, so it silently drops
+    #   the event on re-emit and Hyprland never sees it. Remap to KEY_F21 (191),
+    #   an ordinary sub-256 code keyd forwards, and bind that in Hyprland.
     services.udev.extraHwdb = ''
       evdev:name:Toshiba input device:dmi:*
        KEYBOARD_KEY_13e=micmute
+       KEYBOARD_KEY_139=f21
     '';
 
     # Fn+F2 emits XF86Battery, bound to cycle power profiles. The X30W-K uses

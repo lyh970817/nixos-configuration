@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Fn+Space (XF86ZoomReset) cycles the focused monitor's scale. Monitor names
+# Fn+Space (KEY_F21 via hwdb remap) cycles the focused monitor's scale. Monitor names
 # and valid scales differ across hosts, so discover the focused monitor and its
 # current scale at runtime rather than hardcoding. Hyprland rounds a scale that
 # would give fractional logical pixels and reports the rounded value; treat a
