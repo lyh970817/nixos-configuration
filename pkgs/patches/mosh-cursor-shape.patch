@@ -1,0 +1,165 @@
+Add DECSCUSR (CSI Ps SP q) cursor-shape escape support.
+
+Hand-port of unmerged upstream PR mobile-shell/mosh#1355 (author dabeibao)
+onto the mosh 1.4.0 release tag. The PR's raw diff does not apply cleanly
+to 1.4.0 because master was reformatted by clang-format (PR #1292) after
+the 1.4.0 tag; this patch reproduces the same DrawState cursor_shape field,
+DECSCUSR parsing, and escape-emission logic against the pre-reformat code
+style, plus the PR's e2e test (registered in src/tests/Makefile.am).
+
+diff --git a/src/terminal/terminaldisplay.cc b/src/terminal/terminaldisplay.cc
+index e7595c2..637f3c6 100644
+--- a/src/terminal/terminaldisplay.cc
++++ b/src/terminal/terminaldisplay.cc
+@@ -130,6 +130,12 @@ std::string Display::new_frame( bool initialized, const Framebuffer &last, const
+     frame.append( tmp );
+   }
+ 
++  /* has cursor shape changed? */
++  if ( f.ds.cursor_shape != frame.last_frame.ds.cursor_shape && f.ds.cursor_shape != -1 ) {
++    snprintf( tmp, 64, "\033[%d q", f.ds.cursor_shape );
++    frame.append( tmp );
++  }
++
+   /* has size changed? */
+   if ( (!initialized)
+        || (f.ds.get_width() != frame.last_frame.ds.get_width())
+diff --git a/src/terminal/terminalframebuffer.cc b/src/terminal/terminalframebuffer.cc
+index 70284a4..e7c8f2c 100644
+--- a/src/terminal/terminalframebuffer.cc
++++ b/src/terminal/terminalframebuffer.cc
+@@ -71,7 +71,7 @@ DrawState::DrawState( int s_width, int s_height )
+     renditions( 0 ), save(),
+     next_print_will_wrap( false ), origin_mode( false ), auto_wrap_mode( true ),
+     insert_mode( false ), cursor_visible( true ), reverse_video( false ),
+-    bracketed_paste( false ), mouse_reporting_mode( MOUSE_REPORTING_NONE ), mouse_focus_event( false ),
++    bracketed_paste( false ), cursor_shape( -1 ), mouse_reporting_mode( MOUSE_REPORTING_NONE ), mouse_focus_event( false ),
+     mouse_alternate_scroll( false ), mouse_encoding_mode( MOUSE_ENCODING_DEFAULT ), application_mode_cursor_keys( false )
+ {
+   reinitialize_tabs( 0 );
+diff --git a/src/terminal/terminalframebuffer.h b/src/terminal/terminalframebuffer.h
+index de93869..afb0273 100644
+--- a/src/terminal/terminalframebuffer.h
++++ b/src/terminal/terminalframebuffer.h
+@@ -255,6 +255,8 @@ namespace Terminal {
+ 
+   class DrawState {
+   private:
++    static const int cursor_shape_count = 7; /* 0-6 are valid cursor control code */
++
+     int width, height;
+ 
+     void new_grapheme( void );
+@@ -282,6 +284,7 @@ namespace Terminal {
+     bool cursor_visible;
+     bool reverse_video;
+     bool bracketed_paste;
++    int cursor_shape;
+ 
+     enum MouseReportingMode {
+       MOUSE_REPORTING_NONE = 0,
+@@ -315,6 +318,12 @@ namespace Terminal {
+     int get_combining_char_row( void ) const { return combining_char_row; }
+     int get_width( void ) const { return width; }
+     int get_height( void ) const { return height; }
++    void set_cursor_shape( int shape )
++    {
++      if ( shape >= 0 && shape < cursor_shape_count ) {
++        cursor_shape = shape;
++      }
++    }
+ 
+     void set_tab( void );
+     void clear_tab( int col );
+@@ -353,7 +362,7 @@ namespace Terminal {
+ 	( reverse_video == x.reverse_video ) && ( renditions == x.renditions ) &&
+   ( bracketed_paste == x.bracketed_paste ) && ( mouse_reporting_mode == x.mouse_reporting_mode ) &&
+   ( mouse_focus_event == x.mouse_focus_event ) && ( mouse_alternate_scroll == x.mouse_alternate_scroll) &&
+-  ( mouse_encoding_mode == x.mouse_encoding_mode );
++  ( mouse_encoding_mode == x.mouse_encoding_mode ) && ( cursor_shape == x.cursor_shape );
+     }
+   };
+ 
+diff --git a/src/terminal/terminalfunctions.cc b/src/terminal/terminalfunctions.cc
+index ca141dd..451d314 100644
+--- a/src/terminal/terminalfunctions.cc
++++ b/src/terminal/terminalfunctions.cc
+@@ -132,6 +132,16 @@ static Function func_CSI_cursormove_D( CSI, "D", CSI_cursormove );
+ static Function func_CSI_cursormove_H( CSI, "H", CSI_cursormove );
+ static Function func_CSI_cursormove_f( CSI, "f", CSI_cursormove );
+ 
++/* cursor shape */
++static void CSI_cursorshape( Framebuffer *fb, Dispatcher *dispatch )
++{
++  int shape = dispatch->getparam( 0, 0 );
++
++  fb->ds.set_cursor_shape( shape );
++}
++
++static Function func_CSI_cursorshape( CSI, " q", CSI_cursorshape );
++
+ /* device attributes */
+ static void CSI_DA( Framebuffer *fb __attribute((unused)), Dispatcher *dispatch )
+ {
+diff --git a/src/tests/Makefile.am b/src/tests/Makefile.am
+index a52f800..c2a7d5b 100644
+--- a/src/tests/Makefile.am
++++ b/src/tests/Makefile.am
+@@ -23,6 +23,7 @@ displaytests = \
+ 	emulation-attributes-bce.test \
+ 	emulation-back-tab.test \
+ 	emulation-cursor-motion.test \
++	emulation-cursor-shape.test \
+ 	emulation-multiline-scroll.test \
+ 	emulation-scroll.test \
+ 	emulation-wrap-across-frames.test \
+diff --git a/src/tests/emulation-cursor-shape.test b/src/tests/emulation-cursor-shape.test
+new file mode 100755
+index 0000000..6fa3d09
+--- /dev/null
++++ b/src/tests/emulation-cursor-shape.test
+@@ -0,0 +1,44 @@
++#!/bin/sh
++
++#
++# This test exercises the cursor shape ascii sequence in Mosh.
++#
++
++# shellcheck source=e2e-test-subrs
++. "$(dirname "$0")/e2e-test-subrs"
++PATH=$PATH:.:$srcdir
++# Top-level wrapper.
++if [ $# -eq 0 ]; then
++    e2e-test "$0" baseline direct verify
++    exit
++fi
++
++# OK, we have arguments, we're one of the test hooks.
++if [ $# -ne 1 ]; then
++    fail "bad arguments %s\n" "$@"
++fi
++
++baseline()
++{
++    while read -r shape sleep_time text; do
++        printf '\n\033[%d q%s' "$shape" "$text"
++        sleep $sleep_time
++    done <<EOF
++0 2 BlinkBlock0
++1 2 BlinkBlock1
++2 2 SteadyBlock
++3 2 BlinkUnderline
++4 2 SteadyUnderline
++5 2 BlinkBar
++6 2 SteadyBar
++0 0 done
++EOF
++    echo
++}
++
++case $1 in
++    baseline|direct)
++        baseline;;
++    *)
++        fail "unknown test argument %s\n" "$1";;
++esac

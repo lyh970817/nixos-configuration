@@ -49,6 +49,11 @@
         kreuzberg-cli = final.callPackage ./pkgs/kreuzberg-cli.nix { };
         digg-pp-cli = final.callPackage ./pkgs/digg-pp-cli.nix { };
         hyprwhspr = final.callPackage ./pkgs/hyprwhspr.nix { };
+        # DECSCUSR cursor-shape support (unmerged upstream PR #1355) — needed on
+        # both roles: mosh-server parses the escape, mosh-client renders it.
+        mosh = prev.mosh.overrideAttrs (old: {
+          patches = (old.patches or [ ]) ++ [ ./pkgs/patches/mosh-cursor-shape.patch ];
+        });
       };
       preCommitCheck = pre-commit-hooks.lib.${system}.run {
         src = ./.;
