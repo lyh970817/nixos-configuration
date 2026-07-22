@@ -549,6 +549,40 @@ seed_coding_cli_secrets() {
   done
 }
 
+# seed_ssh_key
+#
+# Seeds this machine's SSH keypair (baked onto the ISO at
+# /etc/nixos-secrets/ssh by iso.nix) into the target user's ~/.ssh, so a fresh
+# install can `git push` to the private GitHub SSH remote on first boot without
+# any manual key setup. It is the same id_ed25519 already registered on GitHub
+# and used for the KCL HPC host -- one shared key across machines by design.
+#
+# Best-effort like seed_coding_cli_secrets: a missing key is just a convenience
+# lost (operator adds one by hand later), never a reason to abort an
+# already-installed system at the final step.
+seed_ssh_key() {
+  local key_src="$SECRETS_SOURCE_DIR/ssh/id_ed25519"
+  local pub_src="$SECRETS_SOURCE_DIR/ssh/id_ed25519.pub"
+  local uid gid ssh_dir
+
+  if [[ ! -f "$key_src" ]]; then
+    log "SSH key not found at $key_src, skipping (no GitHub push key seeded)"
+    return
+  fi
+
+  read -r uid gid < <(target_user_ids)
+  ssh_dir="$MOUNT_ROOT/home/$TARGET_USER/.ssh"
+
+  log "Seeding SSH key to $ssh_dir..."
+  install -d -m 0700 -o "$uid" -g "$gid" "$ssh_dir"
+  install -m 0600 -o "$uid" -g "$gid" "$key_src" "$ssh_dir/id_ed25519"
+  if [[ -f "$pub_src" ]]; then
+    install -m 0644 -o "$uid" -g "$gid" "$pub_src" "$ssh_dir/id_ed25519.pub"
+  else
+    log "no public key at $pub_src, skipping (private key alone suffices for auth)"
+  fi
+}
+
 # ---------------------------------------------------------------------------
 # Install
 # ---------------------------------------------------------------------------
@@ -705,6 +739,7 @@ main() {
   populate_repo_clone
   seed_secrets
   seed_coding_cli_secrets
+  seed_ssh_key
   # Facts live in the repo and /etc/nixos becomes a symlink to it (home layout),
   # so the `rebuild` alias works on the installed machine.
   link_target_etc_nixos

@@ -83,13 +83,15 @@ let
   canonicalGitDir = /home/andongni/.nixos-config/.git;
   masterLooseRef = /home/andongni/.nixos-config/.git/refs/heads/master;
   packedRefs = /home/andongni/.nixos-config/.git/packed-refs;
-  parseLooseRevision = contents:
+  parseLooseRevision =
+    contents:
     let
       match = builtins.match "([0-9a-f]+)[[:space:]]*" contents;
       revision = if match == null then null else builtins.elemAt match 0;
     in
     if revision != null && builtins.stringLength revision == 40 then revision else null;
-  parsePackedMaster = line:
+  parsePackedMaster =
+    line:
     let
       match = builtins.match "([0-9a-f]+)[[:space:]]+refs/heads/master" line;
       revision = if match == null then null else builtins.elemAt match 0;
@@ -148,10 +150,12 @@ let
   # The builder reconstructs its own bare repository and recreates the already
   # verified master ref, so neither host refs nor Git's safe.directory check
   # influence bundle creation.
-  repoGitObjects = builtins.seq repoRevision (builtins.path {
-    path = canonicalGitDir + "/objects";
-    name = "nixos-config-git-objects";
-  });
+  repoGitObjects = builtins.seq repoRevision (
+    builtins.path {
+      path = canonicalGitDir + "/objects";
+      name = "nixos-config-git-objects";
+    }
+  );
   repoBundle = pkgs.runCommand "nixos-config-master.bundle" { nativeBuildInputs = [ pkgs.git ]; } ''
     export HOME="$TMPDIR"
     repo_dir="$TMPDIR/repository.git"
@@ -260,6 +264,19 @@ in
   environment.etc."nixos-secrets/coding-cli" = lib.mkIf hasCodingCliPayload {
     source = codingCliPayload;
   };
+
+  # Bake this machine's SSH keypair so a fresh install can `git push` to the
+  # private GitHub remote (git@github.com:...) on first boot without any manual
+  # key setup. This is the same id_ed25519 already registered on GitHub (and
+  # used for the KCL HPC host), reused deliberately -- one shared key across
+  # machines is acceptable here. install.sh seeds it best-effort into the target
+  # user's ~/.ssh. Same cleartext-on-the-USB caveat as the secrets above: the
+  # private key lands world-readable in the ISO /nix/store, so keep the USB
+  # private / wipe it after.
+  environment.etc."nixos-secrets/ssh/id_ed25519".source =
+    /home/andongni/.nixos-config/secrets/ssh/id_ed25519;
+  environment.etc."nixos-secrets/ssh/id_ed25519.pub".source =
+    /home/andongni/.nixos-config/secrets/ssh/id_ed25519.pub;
 
   # Auto-launch the installer on the console so booting the USB drops straight
   # into the install flow with no manual command typing. Root autologin on
