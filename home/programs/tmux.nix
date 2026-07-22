@@ -62,6 +62,12 @@ in
 
       set -g allow-passthrough on
 
+      # Emit OSC 52 on copy so copy-mode selections reach the local terminal's
+      # clipboard over mosh/SSH (the wl-copy pipe only sets the local host's
+      # Wayland clipboard). Requires advertising the terminal clipboard feature.
+      set -g set-clipboard on
+      set -as terminal-features '*:clipboard'
+
       # Use C-a as the tmux prefix so C-b remains available for copy-mode paging.
       set -g prefix C-a
       unbind -T prefix C-b
