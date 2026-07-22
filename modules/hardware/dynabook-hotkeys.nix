@@ -6,7 +6,7 @@
 }:
 
 let
-  # Dynabook X30W-K only; the SSDT targets ACPI objects (\SYSE/\VALF/\HPEN,
+  # Dynabook X30W-K only; the SSDT targets ACPI objects (\SYSE/\VALF,
   # \_SB.VALZ) specific to this machine's firmware.
   ssdtAml = pkgs.runCommand "ssdt-dynahk.aml" { nativeBuildInputs = [ pkgs.acpica-tools ]; } ''
     iasl -oa -p out ${./dynabook-hotkeys.dsl}
@@ -31,11 +31,13 @@ let
   '';
 in
 {
-  # Fn+F6/F7 brightness keys: the EC only emits ACPI video brightness notifies
-  # once firmware mailbox flags SYSE/VALF/HPEN are set. Windows vendor tools
-  # set them; on Linux we load a custom SSDT defining \_SB.DYHK.HPST and call
-  # it once via acpi_call, since hot-loaded tables don't run _INI. Opt-in per
-  # machine via portable.quirks.dynabookX30wkHotkeys in local.nix.
+  # Fn+F6/F7 brightness keys: the EC only pushes the hotkey codes into the VALZ
+  # INFO() FIFO once firmware mailbox flags SYSE/VALF are set. Windows vendor
+  # tools set them; on Linux we load a custom SSDT defining \_SB.DYHK.HPST and
+  # call it once via acpi_call, since hot-loaded tables don't run _INI. The
+  # toshiba_acpi_dnbk driver then turns those FIFO codes into KEY_BRIGHTNESS*
+  # events. Opt-in per machine via portable.quirks.dynabookX30wkHotkeys in
+  # local.nix.
   config = lib.mkIf config.portable.quirks.dynabookX30wkHotkeys {
     boot.extraModulePackages = [
       config.boot.kernelPackages.acpi_call
@@ -45,10 +47,10 @@ in
       "acpi_call"
       "acpi_configfs"
       # Patched toshiba_acpi that matches DNBK0001; provides the Fn hotkey input
-      # device, kbd_backlight LED, and rfkill. Note: this reports
-      # KEY_BRIGHTNESSUP/DOWN for Fn+F6/F7 in addition to the Video Bus notifies
-      # the SSDT/HPEN path already enables, so brightness may double-step until
-      # one path is suppressed (known follow-up; HPEN kept for now).
+      # device, kbd_backlight LED, and rfkill. Fn+F6/F7 brightness now flows
+      # solely through this driver's keymap (KEY_BRIGHTNESSDOWN/UP); the SSDT no
+      # longer sets HPEN, so the firmware's duplicate acpi_video notifies are
+      # suppressed and brightness steps once per press.
       "toshiba_acpi_dnbk"
     ];
 
