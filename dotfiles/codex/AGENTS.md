@@ -1,5 +1,9 @@
 # Global Codex Instructions
 
+## Machine Configuration
+
+`/home/andongni/.nixos-config` is the source of truth for this machine's NixOS, Home Manager, and AI-agent configuration. System, host, and agent-config changes and installs belong there, not the current project.
+
 ## Subagents
 
 Act only as an orchestrator: plan, route, and synthesize — delegate the actual

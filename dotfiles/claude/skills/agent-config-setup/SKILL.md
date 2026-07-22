@@ -1,6 +1,6 @@
 ---
 name: agent-config-setup
-description: Use when configuring Codex, Claude, Claude Code, AI agents, skills, skills.sh, npx skills, profiles, plugins, launchers, or agent config directories on this machine. Use system-maintenance instead for NixOS/Home Manager, host packages, services, desktop, launcher, or rebuild work unrelated to agent configuration.
+description: Use when configuring Codex, Claude, Claude Code, AI agents, skills, skills.sh, npx skills, profiles, plugins, launchers, or agent config directories on this machine. Not for other NixOS/Home Manager, host package, service, desktop, or launcher work.
 ---
 
 # Agent Configuration
@@ -47,4 +47,4 @@ Claude does not have Codex-style profiles, but each `CLAUDE_CONFIG_DIR` acts lik
 - `/home/andongni/.config/claude/skills/agent-config-setup`
 - `/home/andongni/.config/claude-mattpocock/skills/agent-config-setup`
 
-Portable upstream Agent Skills may use identical `SKILL.md` content for Codex and Claude, but keep their installation trees, selected agent targets, config directories, and update lifecycles explicit. Locally authored agent-specific workflows such as `agent-config-setup`, `system-maintenance`, and `sync-mattpocock-skills` use separate Codex and Claude implementations when their paths or behavior differ. Do not symlink this Claude workflow to `/home/andongni/.codex/skills/agent-config-setup/SKILL.md`.
+Portable upstream Agent Skills may use identical `SKILL.md` content for Codex and Claude, but keep their installation trees, selected agent targets, config directories, and update lifecycles explicit. Locally authored agent-specific workflows such as `agent-config-setup` and `sync-mattpocock-skills` use separate Codex and Claude implementations when their paths or behavior differ. Do not symlink this Claude workflow to `/home/andongni/.codex/skills/agent-config-setup/SKILL.md`.

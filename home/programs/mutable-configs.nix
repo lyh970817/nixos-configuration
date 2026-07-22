@@ -131,10 +131,6 @@ in
       source = link "dotfiles/claude/skills/nix-environment-setup";
       force = true;
     };
-    "claude-mattpocock/skills/system-maintenance" = {
-      source = link "dotfiles/claude/skills/system-maintenance";
-      force = true;
-    };
     "claude-mattpocock/skills/agent-config-setup" = {
       source = link "dotfiles/claude/skills/agent-config-setup";
       force = true;

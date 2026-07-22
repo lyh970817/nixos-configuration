@@ -1,6 +1,6 @@
 ---
 name: agent-config-setup
-description: Configuration workflow for Codex, Claude, Claude Code, AI agents, skills, skills.sh, npx skills, profiles, plugins, launchers, or agent config directories on this machine. Use system-maintenance instead for NixOS/Home Manager, host packages, services, desktop, launcher, or rebuild work unrelated to agent configuration.
+description: Configuration workflow for Codex, Claude, Claude Code, AI agents, skills, skills.sh, npx skills, profiles, plugins, launchers, or agent config directories on this machine. Not for other NixOS/Home Manager, host package, service, desktop, or launcher work.
 ---
 
 # Agent Configuration
@@ -46,4 +46,4 @@ Claude mutable state lives under `CLAUDE_CONFIG_DIR`.
 - Claude plugins are managed through Claude's `/plugin` commands; installed plugin state is in `$CLAUDE_CONFIG_DIR/plugins/installed_plugins.json` and known marketplaces are in `$CLAUDE_CONFIG_DIR/plugins/known_marketplaces.json`.
 - Claude does not have Codex-style profiles, but each `CLAUDE_CONFIG_DIR` acts like a separate profile folder. Keep the Claude-format `agent-config-setup` skill present in every Claude config dir's `skills` folder, using symlinks where appropriate, for example `/home/andongni/.config/claude/skills/agent-config-setup` and `/home/andongni/.config/claude-mattpocock/skills/agent-config-setup`.
 
-Portable upstream Agent Skills may use identical `SKILL.md` content for Codex and Claude, but keep their installation trees, selected agent targets, profiles, and update lifecycles explicit. Locally authored agent-specific workflows such as `agent-config-setup`, `system-maintenance`, and `sync-mattpocock-skills` use separate Codex and Claude implementations when their paths or behavior differ; do not symlink Claude to Codex's local workflow files. Use `npx skills@latest` to list, add, remove, check, or update a source when `/home/andongni/.local/state/skills/.skill-lock.json` shows that it is managed by that CLI.
+Portable upstream Agent Skills may use identical `SKILL.md` content for Codex and Claude, but keep their installation trees, selected agent targets, profiles, and update lifecycles explicit. Locally authored agent-specific workflows such as `agent-config-setup` and `sync-mattpocock-skills` use separate Codex and Claude implementations when their paths or behavior differ; do not symlink Claude to Codex's local workflow files. Use `npx skills@latest` to list, add, remove, check, or update a source when `/home/andongni/.local/state/skills/.skill-lock.json` shows that it is managed by that CLI.
