@@ -39,7 +39,6 @@ let
     "last30days.config.toml" = ../../dotfiles/codex/profiles/last30days.config.toml;
     "lavish-axi.config.toml" = ../../dotfiles/codex/profiles/lavish-axi.config.toml;
     "mattpocock.config.toml" = ../../dotfiles/codex/profiles/mattpocock.config.toml;
-    "openai.config.toml" = ../../dotfiles/codex/profiles/openai.config.toml;
     "superpowers.config.toml" = ../../dotfiles/codex/profiles/superpowers.config.toml;
     "understand-anything-codegraph.config.toml" =
       ../../dotfiles/codex/profiles/understand-anything-codegraph.config.toml;
