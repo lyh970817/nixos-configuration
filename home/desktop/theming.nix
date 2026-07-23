@@ -31,6 +31,12 @@ let
       export XDG_RUNTIME_DIR="/run/user/$(id -u)"
       mkdir -p "$HOME/.local/state/hypr"
 
+      # A manual switch wins over an SSH theme override: overwrite it so
+      # monitor-switch.sh's poll loop doesn't revert to the override mode a
+      # couple seconds later. No theme-push here (switch-* never pushes).
+      override="/run/user/$(id -u)/theme-ssh-override/mode"
+      [ -f "$override" ] && echo dark > "$override"
+
       # 1. WALLPAPER (Kill old, start new)
         pkill swaybg || true
         ${pkgs.util-linux}/bin/setsid -f ${pkgs.swaybg}/bin/swaybg -c 000000 >/dev/null 2>&1
@@ -82,6 +88,12 @@ let
   lightModeHook = pkgs.writeShellScript "light-mode-hook" ''
     export XDG_RUNTIME_DIR="/run/user/$(id -u)"
     mkdir -p "$HOME/.local/state/hypr"
+
+    # A manual switch wins over an SSH theme override: overwrite it so
+    # monitor-switch.sh's poll loop doesn't revert to the override mode a
+    # couple seconds later. No theme-push here (switch-* never pushes).
+    override="/run/user/$(id -u)/theme-ssh-override/mode"
+    [ -f "$override" ] && echo light > "$override"
 
     ln -sf "$HOME/.config/hypr/themes/light.conf" "${hyprCurrentTheme}"
 
