@@ -53,6 +53,12 @@ let
 
       ${claudeHostEnvironment}
 
+      case "''${1:-}" in
+        --help | -h | --version | -v)
+          exec ${pkgs.claude-code}/bin/claude "$@"
+          ;;
+      esac
+
       state_home="''${XDG_STATE_HOME:-$HOME/.local/state}"
       data_home="''${XDG_DATA_HOME:-$HOME/.local/share}"
       client_key_file="$state_home/cli-proxy-api/client-key"
