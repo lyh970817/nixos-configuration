@@ -5,101 +5,100 @@ model_reasoning_effort = "medium"
 [plugins."browser@openai-bundled"]
 enabled = false
 
-# All shared-skills entries below are INERT on Codex 0.144.5: no config
-# mechanism can load a skill from the unscanned shared-skills pool; only
-# ~/.codex/skills is scanned. Kept to record intent until upstream exposes
-# extra scan roots (app-server has skills/extraRoots/set, config.toml doesn't).
+# Skill group dotfiles/codex/skills/mattpocock/ (symlinks into the pool);
+# disabled in base config.toml, enabled here. Only name selectors work in
+# Codex 0.144.5.
 
 [[skills.config]]
-path = "shared-skills/ask-matt"
+name = "ask-matt"
 enabled = true
 
 [[skills.config]]
-path = "shared-skills/codebase-design"
+name = "codebase-design"
 enabled = true
 
 [[skills.config]]
-path = "shared-skills/wayfinder"
+name = "wayfinder"
 enabled = true
 
 [[skills.config]]
-path = "shared-skills/loop-me"
+name = "loop-me"
 enabled = true
 
 [[skills.config]]
-path = "shared-skills/diagnosing-bugs"
+name = "diagnosing-bugs"
 enabled = true
 
 [[skills.config]]
-path = "shared-skills/grill-me"
+name = "grill-me"
 enabled = true
 
 [[skills.config]]
-path = "shared-skills/grill-with-docs"
+name = "grill-with-docs"
 enabled = true
 
 [[skills.config]]
-path = "shared-skills/grilling"
+name = "grilling"
 enabled = true
 
 [[skills.config]]
-path = "shared-skills/handoff"
+name = "handoff"
 enabled = true
 
 [[skills.config]]
-path = "shared-skills/implement"
+name = "implement"
 enabled = true
 
 [[skills.config]]
-path = "shared-skills/improve-codebase-architecture"
+name = "improve-codebase-architecture"
 enabled = true
 
 [[skills.config]]
-path = "shared-skills/prototype"
+name = "prototype"
 enabled = true
 
 [[skills.config]]
-path = "shared-skills/resolving-merge-conflicts"
+name = "resolving-merge-conflicts"
 enabled = true
 
 [[skills.config]]
-path = "shared-skills/setup-matt-pocock-skills"
+name = "setup-matt-pocock-skills"
 enabled = true
 
 [[skills.config]]
-path = "shared-skills/setup-pre-commit"
+name = "setup-pre-commit"
 enabled = true
 
 [[skills.config]]
-path = "shared-skills/tdd"
+name = "tdd"
 enabled = true
 
 [[skills.config]]
-path = "shared-skills/to-tickets"
+name = "to-tickets"
 enabled = true
 
 [[skills.config]]
-path = "shared-skills/to-spec"
+name = "to-spec"
 enabled = true
 
 [[skills.config]]
-path = "shared-skills/triage"
+name = "triage"
 enabled = true
 
 [[skills.config]]
-path = "shared-skills/writing-great-skills"
+name = "writing-great-skills"
 enabled = true
 
 [[skills.config]]
-path = "shared-skills/code-review"
+name = "code-review"
 enabled = true
 
 [[skills.config]]
-path = "shared-skills/research"
+name = "research"
 enabled = true
 
 [[skills.config]]
-path = "shared-skills/wizard"
+name = "wizard"
 enabled = true
 
 [tui]
