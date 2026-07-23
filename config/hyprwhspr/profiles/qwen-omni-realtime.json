@@ -17,6 +17,7 @@
   },
   "paste_mode": "ctrl",
   "prefer_clipboard_paste": true,
+  "filter_filler_words": true,
   "post_transcription_hook": null,
   "notification_timeout_ms": 0,
   "whisper_prompt": ""
