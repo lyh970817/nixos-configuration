@@ -66,43 +66,35 @@ in
       load_shell_themes
 
       ${lib.optionalString (peerHost != "") ''
-        # SSH theme override (client side): wrap the bare `ssh ${peerHost}` form
-        # so the peer picks up our current theme for the session. Flags,
-        # commands, and scp/rsync (which exec the ssh binary directly) fall
-        # through untouched. See monitor-switch.sh and the login registration
-        # snippet below for the receiving end.
+        # SSH/mosh theme override (client side): wrap the bare `ssh ${peerHost}`
+        # and `mosh ${peerHost}` forms so the peer picks up our current theme
+        # for the session. Both hand the theme off via theme-hold, which
+        # registers the wrapped session process (tmux client or login shell)
+        # for monitor-switch.sh's liveness check (see theming.nix and
+        # monitor-switch.sh for the receiving end). Flags, commands, and
+        # scp/rsync (which exec their binaries directly) fall through
+        # untouched.
         ssh() {
           if [[ $# -eq 1 && "$1" == "${peerHost}" ]]; then
-            local mode=dark
-            case "$(readlink "$HOME/.local/state/hypr/current-theme.conf" 2>/dev/null)" in
-            *light.conf) mode=light ;;
-            esac
-            command ssh -t "$1" "SSH_THEME=$mode exec zsh -l"
+            local mode; mode=$(theme-mode 2>/dev/null || echo dark)
+            command ssh -t "$1" "theme-hold $mode zsh -l"
           else
             command ssh "$@"
           fi
         }
-      ''}
 
-      # SSH theme override (server side): register a login shell that arrived
-      # with SSH_THEME so monitor-switch.sh's poll loop applies the client's
-      # theme instead of this host's own monitor detection, for as long as any
-      # such shell is alive. Not peerHost-gated: only our own machines ever
-      # send SSH_THEME. Tmux panes survive disconnect, so shells inside tmux
-      # must not register.
-      if [[ -o login && -n "$SSH_CONNECTION" && -z "$TMUX" ]]; then
-        case "$SSH_THEME" in
-        dark | light)
-          typeset -g _theme_ssh_dir=/run/user/$(id -u)/theme-ssh-override
-          mkdir -p "$_theme_ssh_dir/pids"
-          echo "$SSH_THEME" > "$_theme_ssh_dir/mode"
-          touch "$_theme_ssh_dir/pids/$$"
-          theme_ssh_override_cleanup() { rm -f "$_theme_ssh_dir/pids/$$"; }
-          add-zsh-hook zshexit theme_ssh_override_cleanup
-          unset SSH_THEME
-          ;;
-        esac
-      fi
+        mosh() {
+          if [[ $# -eq 1 && "$1" == "${peerHost}" ]]; then
+            local mode; mode=$(theme-mode 2>/dev/null || echo dark)
+            # mosh-server never times out by default, so a vanished client
+            # (suspend, killed terminal) would pin the override forever; the
+            # 60s timeout releases it, and real work lives in tmux anyway.
+            command mosh --server 'MOSH_SERVER_NETWORK_TMOUT=60 mosh-server' "$1" -- theme-hold "$mode" zsh -l
+          else
+            command mosh "$@"
+          fi
+        }
+      ''}
 
       # Accept next word from suggestion
       bindkey '^[f' forward-word  # Alt+F

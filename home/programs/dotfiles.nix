@@ -23,9 +23,15 @@ let
         exec "''${SHELL:-${pkgs.bash}/bin/bash}"
       fi
 
+      # theme-mode resolves from the HM profile PATH at runtime (deliberately
+      # not a runtimeInput here); theme-hold below runs on the peer.
+      mode="$(theme-mode 2>/dev/null || echo dark)"
+
       for _ in 1 2 3; do
         # Adaptive prediction disables local echo on fast links; force it on.
-        if mosh --predict=always --predict-overwrite "$PEER" -- tmux new-session -A -s main; then
+        # mosh-server never times out by default, so the 60s network timeout
+        # ensures a vanished client releases the peer's theme override.
+        if mosh --server 'MOSH_SERVER_NETWORK_TMOUT=60 mosh-server' --predict=always --predict-overwrite "$PEER" -- theme-hold "$mode" tmux new-session -A -s main; then
           exit 0
         fi
         sleep 2
