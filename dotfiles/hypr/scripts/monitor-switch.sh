@@ -6,8 +6,10 @@
 # back to the peer.
 STATE_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/theme-monitor-mode"
 
-# SSH theme override: a client's login shell registers its PID here (see
-# shell.nix) to hand its theme off to this host for the session's duration.
+# SSH/mosh theme override: theme-hold (see theming.nix), exec'd by the
+# client's ssh/mosh wrapper (shell.nix) or home-terminal (dotfiles.nix),
+# registers the wrapped session process's PID here to hand its theme off to
+# this host for the session's duration.
 OVERRIDE_DIR="/run/user/$(id -u)/theme-ssh-override"
 
 # Prints "<mode> <source>". source is "override" while an SSH session has
@@ -35,13 +37,13 @@ current_mode() {
       # Mode file missing/empty/torn (mid-write race): fall through below
       # rather than apply_mode-ing garbage.
     fi
-    # No registered shell survived: the override has expired. Leave the
-    # (now-empty) dir in place rather than rm -rf it here: registration in
-    # shell.nix is non-atomic (mkdir, then echo mode, then touch pid), so a
-    # poll tick landing mid-registration could otherwise delete the dir out
-    # from under a shell that's still logging in. A lingering dir on tmpfs is
-    # harmless; only live registered PIDs gate the override, and the next
-    # login just reuses/overwrites its contents.
+    # No registered process survived: the override has expired. Leave the
+    # (now-empty) dir in place rather than rm -rf it here: theme-hold's
+    # registration is non-atomic (mkdir, then echo mode, then touch pid), so
+    # a poll tick landing mid-registration could otherwise delete the dir out
+    # from under a session that's still starting up. A lingering dir on
+    # tmpfs is harmless; only live registered PIDs gate the override, and the
+    # next registration just reuses/overwrites its contents.
   fi
 
   # Monitor presence is the automatic theme trigger. The DSC e-ink display

@@ -171,6 +171,38 @@ let
     switch-"$new"
     theme-push "$new"
   '';
+
+  # theme-mode: prints the currently applied mode, derived from the hypr
+  # current-theme symlink target using the same idiom (and the same "light"
+  # default when unknown) as theme-toggle above. Used by the ssh/mosh client
+  # wrappers and home-terminal to learn which mode to hand off to the peer.
+  themeMode = pkgs.writeShellScriptBin "theme-mode" ''
+    target="$(readlink "${hyprCurrentTheme}" 2>/dev/null || true)"
+    case "$target" in
+    *light.conf) echo light ;;
+    *dark.conf) echo dark ;;
+    *) echo light ;;
+    esac
+  '';
+
+  # theme-hold: usage `theme-hold <mode> <command...>`. Registers this
+  # process for the SSH/mosh theme override (see monitor-switch.sh), then
+  # execs the wrapped command in its place. exec preserves the PID, so the
+  # registered PID tracks the wrapped session process (tmux client or login
+  # shell) for as long as it lives; monitor-switch.sh prunes the registration
+  # once that process dies, so no cleanup hook is needed here.
+  themeHold = pkgs.writeShellScriptBin "theme-hold" ''
+    case "$1" in
+    dark | light)
+      dir="/run/user/$(id -u)/theme-ssh-override"
+      mkdir -p "$dir/pids"
+      echo "$1" > "$dir/mode"
+      touch "$dir/pids/$$"
+      ;;
+    esac
+    shift
+    exec "$@"
+  '';
 in
 {
   # Theme switching scripts
@@ -179,6 +211,8 @@ in
     (pkgs.writeShellScriptBin "switch-light" "${lightModeHook}")
     themePush
     themeToggle
+    themeMode
+    themeHold
   ];
 
   # Monitor presence in hypr/scripts/monitor-switch.sh is the sole automatic
