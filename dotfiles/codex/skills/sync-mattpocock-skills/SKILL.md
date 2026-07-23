@@ -17,19 +17,57 @@ must use an independent skill tree.
 
 Matt Pocock publishes one portable skill source rather than separate Codex and
 Claude editions. Follow upstream's recommended `npx skills@latest add
-mattpocock/skills` flow and target Codex explicitly. On this machine,
-the `npx skills@latest` CLI reuses the existing universal `/home/andongni/.agents/skills` copy
-for Codex and the other universal consumers; it installs a separate copy for
-the non-universal `claude-code` target.
+mattpocock/skills` flow and target Codex explicitly. Left to its defaults, the
+`npx skills@latest` CLI writes its universal-agent copy (covering Codex and the
+other universal consumers) to `$HOME/.agents/skills`, with no flag to redirect
+that path elsewhere; it installs a separate copy for the non-universal
+`claude-code` target. `$HOME/.agents` must never exist on this machine: the
+Codex engine hardcodes a scan of `$HOME/.agents/skills` as a user-scope skill
+source, so anything left there — even transiently — leaks into Codex Desktop
+with no per-skill opt-out. This machine's real shared installation is instead
+`dotfiles/agents/skills` in this repo, reachable for the Codex CLI via the
+`~/.codex/shared-skills` symlink. Every step below that would otherwise write
+under `$HOME/.agents` must be redirected per "Isolate the install root" and
+finish by syncing into the repo pool, never onto the real `$HOME/.agents`.
 
 Whether the installed CLI calls the operation `install` or `add`, its
 installation command must explicitly select only the intended non-Claude
 shared-set agents. Never select, pass to `--agent`, or otherwise install for
 the `Other` agent/target; deselect `Other` if the CLI presents it interactively.
 
-Use the `npx skills@latest` CLI. Do not implement synchronization by directly
-deleting or copying managed skill folders or by editing
-`/home/andongni/.local/state/skills/.skill-lock.json`.
+Use the `npx skills@latest` CLI for every install/removal decision. The only
+permitted direct file copy in this workflow is the pool relocation in "Isolate
+the install root" and Section 3 step 3 below — relocating the CLI's own output
+from its temporary install root into the repo pool. Never otherwise hand-pick,
+edit, or delete skill folders, and never edit
+`/home/andongni/.local/state/skills/.skill-lock.json` by hand.
+
+### Isolate the install root
+
+Because the CLI cannot target the repo pool directly, every `npx
+skills@latest` invocation in this workflow (enumeration, remove, add) must run
+against a throwaway install root instead of the real `$HOME`:
+
+1. Create an ephemeral working directory, e.g. `workHome=$(mktemp -d)`.
+2. Run every `npx skills@latest` command in this workflow with `HOME="$workHome"`
+   set, leaving every other inherited environment variable (in particular
+   `XDG_STATE_HOME`, if set) untouched, so the CLI's own lock-file bookkeeping
+   keeps resolving to its normal location and prior-run history stays intact.
+   If Preflight step 1 below shows the lock file instead moved under
+   `$workHome` (i.e. this CLI version derives its state path from `HOME` rather
+   than `XDG_STATE_HOME`), read the pre-sync manifest from `$workHome`'s copy
+   for this run only — the rest of this workflow is unaffected.
+3. After Section 3's reinstall succeeds, copy every resulting
+   `$workHome/.agents/skills/<name>` directory into `dotfiles/agents/skills/<name>`
+   in this repo, removing any pool subdirectory owned by `mattpocock/skills`
+   that's no longer present under `$workHome/.agents/skills`, so the pool
+   matches the CLI's reinstalled set exactly.
+4. Delete `$workHome` entirely once that pool copy is verified complete.
+5. Before reporting completion, confirm the real `$HOME/.agents` still does not
+   exist. If any invocation ignored the `HOME` override and wrote there anyway,
+   copy its content into the pool the same way and then delete the real
+   `$HOME/.agents` tree — its persistence would otherwise let Codex Desktop's
+   hardcoded `$HOME/.agents/skills` scan pick up every synced skill.
 
 ## 1. Preflight
 
@@ -58,8 +96,9 @@ deprecated names, and treat only the maintained name set as installable.
    accepted by `npx skills@latest --agent`; do not assume its `Agents` display
    labels prove runtime path selection or are valid command arguments.
 6. Search every `/home/andongni/.config/claude*/skills` tree for a symlink or
-   path that resolves into `/home/andongni/.agents/skills`. Claude Code must not
-   consume the shared set. If any such link exists, stop before synchronization
+   path that resolves into `dotfiles/agents/skills` (whether via
+   `~/.codex/shared-skills` or any other path). Claude Code must not consume
+   the shared set. If any such link exists, stop before synchronization
    and report that Claude must first be migrated to independent skill copies;
    never replace the links with Codex-format copies as part of this workflow.
    If no shared link exists, record a lightweight manifest of every Claude skill
@@ -88,22 +127,28 @@ installation, profile reconciliation, and verification without asking again.
 ## 3. Replace the Managed Set
 
 1. Remove every existing global registration owned by `mattpocock/skills`
-   through `npx skills@latest remove`, passing the complete recorded name set, global
-   scope, every registered non-Claude shared-set agent, and non-interactive
-   confirmation.
+   through `npx skills@latest remove` (with `HOME="$workHome"` per "Isolate the
+   install root"), passing the complete recorded name set, global scope, every
+   registered non-Claude shared-set agent, and non-interactive confirmation.
    Completion criterion: every recorded pre-sync Matt Pocock registration has
    been removed for the shared set and no Claude registration or configuration
    changed.
 2. Reinstall every current non-deprecated skill through `npx skills@latest add
-`mattpocock/skills`, using global scope, all recorded non-Claude shared-set
-agents except `Other`, the explicit maintained-name list (never `--skill '*'`
-when that would include a deprecated skill), `--copy`, and non-interactive
-confirmation. Explicitly omit `Other` from `--agent` arguments; if this CLI
-version presents agent choices interactively, leave `Other` unselected.
+`mattpocock/skills` (again with `HOME="$workHome"`), using global scope, all
+recorded non-Claude shared-set agents except `Other`, the explicit
+maintained-name list (never `--skill '*'` when that would include a deprecated
+skill), `--copy`, and non-interactive confirmation. Explicitly omit `Other`
+from `--agent` arguments; if this CLI version presents agent choices
+interactively, leave `Other` unselected.
    Completion criterion: every enumerated non-deprecated upstream name is
 installed for the shared set and attributed to `mattpocock/skills` by the
 manager; no deprecated upstream skill is installed.
-3. If installation fails, retry the failed manager operation once. If it still
+3. Copy the result into the repo pool and clean up the install root as
+   described in "Isolate the install root" above. Completion criterion:
+   `dotfiles/agents/skills` exactly matches `$workHome/.agents/skills`'s
+   `mattpocock/skills`-owned entries, and neither `$workHome` nor the real
+   `$HOME/.agents` remain on disk.
+4. If installation fails, retry the failed manager operation once. If it still
    fails, stop. Do not restore folders or lock entries manually. Report the
    pre-sync manifest, the current installed set, missing and stale names, and
    exact manager commands for recovery.
@@ -134,7 +179,7 @@ every `/home/andongni/.codex/*.config.toml` profile.
    those memberships separately.
 5. Do not edit `/home/andongni/.config/claude*`. Do not add Claude Code as a
    manager target or permit Claude skill paths to resolve into the shared
-   `/home/andongni/.agents/skills` tree.
+   `dotfiles/agents/skills` pool.
 
 Completion criterion: no Codex profile points at a deprecated Matt Pocock
 skill, every installed non-deprecated member other than `domain-modeling` is
@@ -155,10 +200,16 @@ and Codex profile entries. Verify all of the following:
 - every installed member other than `domain-modeling` is disabled in the base
   profile, while `domain-modeling` is enabled in every Codex profile;
 - the non-Claude shared-set registrations were restored exactly;
+- `dotfiles/agents/skills` exactly reflects the CLI's reinstalled set, and
+  neither the real `$HOME/.agents` nor the ephemeral install root remain on
+  disk;
 - no Claude configuration directory, registration, or resolved skill path uses
   the shared set; and
 - the post-sync Claude skill-path manifest exactly equals its pre-sync manifest.
 
 Report the removed, installed, newly added, deprecated, and profile-reconciled
-names, plus the verification evidence. This workflow changes mutable Codex
-state and does not require a NixOS rebuild.
+names, plus the verification evidence. Because `dotfiles/agents/skills` is
+git-tracked, stage and commit the pool changes (following this repo's commit
+conventions) once verification passes. The pool itself is reachable live via
+the `~/.codex/shared-skills` out-of-store symlink; this workflow otherwise
+changes only mutable Codex state and does not require a NixOS rebuild.
