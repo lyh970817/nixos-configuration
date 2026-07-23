@@ -76,7 +76,7 @@
 
       # Normal colors - using green gradient
       [colors.normal]
-      black   = '#000000'  # Deep Green (darkest)
+      black   = '#0C3A0E'  # Dark green — lifted off pure-black bg so ANSI-selected rows are visible
       red     = '#126D15'  # Verse Green
       green   = '#207F23'  # Web Forest Green
       yellow  = '#2E9031'  # Wageningen Green
