@@ -4,5 +4,5 @@ model_reasoning_effort = "high"
 # Select it with: codex --profile last30days
 
 [[skills.config]]
-path = "../.agents/skills/last30days"
+path = "shared-skills/last30days"
 enabled = true

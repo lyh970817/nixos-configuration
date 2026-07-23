@@ -34,7 +34,7 @@ let
   # Codex resolves profile-relative skill paths from the profile file's runtime
   # location. Materialize these tracked files at ~/.codex instead of linking
   # them to a store or worktree location, so the portable relative paths keep
-  # the ~/.codex and ~/.agents roots on every host.
+  # the ~/.codex root on every host.
   codexProfiles = {
     "last30days.config.toml" = ../../dotfiles/codex/profiles/last30days.config.toml;
     "lavish-axi.config.toml" = ../../dotfiles/codex/profiles/lavish-axi.config.toml;
@@ -91,8 +91,13 @@ in
     ".codex/rules".source = link "dotfiles/codex/rules";
     ".codex/skills".source = link "dotfiles/codex/skills";
 
-    # Curated agent skill set + local plugins (~/.agents).
-    ".agents".source = link "dotfiles/agents";
+    # Curated agent skill pool, shared with Codex profiles via relative
+    # shared-skills/<name> paths. Force because a manually created bridge
+    # symlink will already exist at activation time.
+    ".codex/shared-skills" = {
+      source = link "dotfiles/agents/skills";
+      force = true;
+    };
   };
 
   xdg.configFile = {
