@@ -1,7 +1,14 @@
 # Opt-in profile for the OpenAI-provided skill and plugin surface.
 # Select it with: codex --profile openai
 
-# OpenAI system skills.
+# Base ~/.codex/config.toml turns the remote-plugin catalog off CLI-wide;
+# restore it here so this profile keeps connector suggestions and
+# @openai-curated-remote plugin sources.
+[features]
+remote_plugin = true
+
+# OpenAI system skills. Use name selectors: path selectors fail to match
+# because ~/.codex/skills is a symlink and the loader canonicalizes paths.
 [[skills.config]]
 name = "openai-docs"
 enabled = true
@@ -15,11 +22,11 @@ name = "skill-installer"
 enabled = true
 
 [[skills.config]]
-path = "skills/.system/imagegen"
+name = "imagegen"
 enabled = true
 
 [[skills.config]]
-path = "skills/.system/plugin-creator"
+name = "plugin-creator"
 enabled = true
 
 # OpenAI global artifact templates.
