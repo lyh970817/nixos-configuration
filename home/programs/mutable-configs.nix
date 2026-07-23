@@ -25,10 +25,19 @@ let
   # theme hook atomically replaces each profile's runtime JSON on every switch.
   link = subpath: config.lib.file.mkOutOfStoreSymlink "${osConfig.portable.configDir}/${subpath}";
 
-  claudeSettings = ../../dotfiles/claude/settings.json;
-  claudeConfigDirs = [
-    ".config/claude"
-    ".config/claude-mattpocock"
+  claudeProfiles = [
+    {
+      configDir = ".config/claude";
+      settings = ../../dotfiles/claude/settings.json;
+    }
+    {
+      configDir = ".config/claude-mattpocock";
+      settings = ../../dotfiles/claude/settings.json;
+    }
+    {
+      configDir = ".config/claude-gpt56";
+      settings = ../../dotfiles/claude-gpt56/settings.json;
+    }
   ];
 
   # Codex canonicalizes skill paths at scan time, so a symlinked profile
@@ -65,19 +74,19 @@ in
       *light.conf) claude_theme="light-ansi" ;;
     esac
 
-    ${lib.concatMapStringsSep "\n" (configDir: ''
-      claude_settings_dir="$HOME/${configDir}"
+    ${lib.concatMapStringsSep "\n" (profile: ''
+      claude_settings_dir="$HOME/${profile.configDir}"
       claude_settings="$claude_settings_dir/settings.json"
       run ${pkgs.coreutils}/bin/install -d -m 0700 "$claude_settings_dir"
       claude_settings_tmp="$(${pkgs.coreutils}/bin/mktemp "$claude_settings.XXXXXX")"
 
       ${pkgs.jq}/bin/jq --arg theme "$claude_theme" \
         '.theme = $theme' \
-        ${lib.escapeShellArg (toString claudeSettings)} > "$claude_settings_tmp"
+        ${lib.escapeShellArg (toString profile.settings)} > "$claude_settings_tmp"
 
       run ${pkgs.coreutils}/bin/chmod 0600 "$claude_settings_tmp"
       run ${pkgs.coreutils}/bin/mv -f "$claude_settings_tmp" "$claude_settings"
-    '') claudeConfigDirs}
+    '') claudeProfiles}
   '';
 
   home.file = codexProfileLinks // {
@@ -109,6 +118,20 @@ in
     "claude/skills".source = link "dotfiles/claude/skills";
     "claude/commands".source = link "dotfiles/claude/commands";
     "claude/output-styles".source = link "dotfiles/claude/output-styles";
+
+    # GPT-5.6 gateway profile. Share portable authored assets from the standard
+    # profile, but keep credentials, history, sessions, plugins, caches, and all
+    # other mutable state isolated under its own CLAUDE_CONFIG_DIR.
+    "claude-gpt56/CLAUDE.md".source = link "dotfiles/claude-gpt56/CLAUDE.md";
+    "claude-gpt56/statusline.sh".source = link "dotfiles/claude/statusline.sh";
+    "claude-gpt56/commands".source = link "dotfiles/claude/commands";
+    "claude-gpt56/output-styles".source = link "dotfiles/claude/output-styles";
+    "claude-gpt56/agents".source = link "dotfiles/claude-gpt56/agents";
+    "claude-gpt56/skills/agent-config-setup".source = link "dotfiles/claude/skills/agent-config-setup";
+    "claude-gpt56/skills/nix-environment-setup".source =
+      link "dotfiles/claude/skills/nix-environment-setup";
+    "claude-gpt56/skills/visual-verification".source =
+      link "dotfiles/claude/skills/visual-verification";
 
     # Claude has a profile per CLAUDE_CONFIG_DIR. Share only portable authored
     # assets with claude-mattpocock; its credential, settings, plugin state,
