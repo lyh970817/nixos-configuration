@@ -31,18 +31,27 @@ let
     ".config/claude-mattpocock"
   ];
 
-  # Codex resolves profile-relative skill paths from the profile file's runtime
-  # location. Materialize these tracked files at ~/.codex instead of linking
-  # them to a store or worktree location, so the portable relative paths keep
-  # the ~/.codex root on every host.
-  codexProfiles = {
-    "last30days.config.toml" = ../../dotfiles/codex/profiles/last30days.config.toml;
-    "lavish-axi.config.toml" = ../../dotfiles/codex/profiles/lavish-axi.config.toml;
-    "mattpocock.config.toml" = ../../dotfiles/codex/profiles/mattpocock.config.toml;
-    "superpowers.config.toml" = ../../dotfiles/codex/profiles/superpowers.config.toml;
-    "understand-anything-codegraph.config.toml" =
-      ../../dotfiles/codex/profiles/understand-anything-codegraph.config.toml;
-  };
+  # Codex canonicalizes skill paths at scan time, so a symlinked profile
+  # behaves identically to a materialized copy (verified with
+  # `codex debug prompt-input`). Link profiles like everything else: edits are
+  # live without a rebuild and Home Manager removes dropped ones on switch.
+  # Force because pre-symlink generations left plain-file copies behind.
+  codexProfileNames = [
+    "last30days"
+    "lavish-axi"
+    "mattpocock"
+    "superpowers"
+    "understand-anything-codegraph"
+  ];
+  codexProfileLinks = lib.listToAttrs (
+    map (name: {
+      name = ".codex/${name}.config.toml";
+      value = {
+        source = link "dotfiles/codex/profiles/${name}.config.toml";
+        force = true;
+      };
+    }) codexProfileNames
+  );
 in
 {
   # Keep a tracked, non-secret Claude baseline while leaving each profile's
@@ -71,21 +80,10 @@ in
     '') claudeConfigDirs}
   '';
 
-  home.activation.codexProfiles = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-    ${lib.concatStringsSep "\n" (
-      lib.mapAttrsToList (name: source: ''
-        run ${pkgs.coreutils}/bin/install -D -m 0644 -- \
-          ${lib.escapeShellArg (toString source)} \
-          "$HOME/.codex/${name}"
-      '') codexProfiles
-    )}
-  '';
-
-  home.file = {
+  home.file = codexProfileLinks // {
     # Codex CLI (~/.codex) — portable authored files only. The base
-    # config.toml remains machine-local and unmanaged. Named profiles are
-    # materialized by the activation above so their relative paths resolve
-    # from ~/.codex.
+    # config.toml remains machine-local and unmanaged (it holds absolute
+    # project trust paths and Codex rewrites it at runtime).
     ".codex/AGENTS.md".source = link "dotfiles/codex/AGENTS.md";
     ".codex/rules".source = link "dotfiles/codex/rules";
     ".codex/skills".source = link "dotfiles/codex/skills";
