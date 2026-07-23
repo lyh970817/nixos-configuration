@@ -1,7 +1,18 @@
 # Zsh Shell Configuration
 # Managed by home-manager
-{ config, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  osConfig,
+  ...
+}:
 
+let
+  # Peer machine to hand our theme off to over SSH, baked from the host
+  # config. Empty string ("" default) disables the client-side ssh wrapper.
+  peerHost = osConfig.portable.peerHost;
+in
 {
   programs.zsh = {
     enable = true;
@@ -53,6 +64,45 @@
 
       # Run it once immediately on startup
       load_shell_themes
+
+      ${lib.optionalString (peerHost != "") ''
+        # SSH theme override (client side): wrap the bare `ssh ${peerHost}` form
+        # so the peer picks up our current theme for the session. Flags,
+        # commands, and scp/rsync (which exec the ssh binary directly) fall
+        # through untouched. See monitor-switch.sh and the login registration
+        # snippet below for the receiving end.
+        ssh() {
+          if [[ $# -eq 1 && "$1" == "${peerHost}" ]]; then
+            local mode=dark
+            case "$(readlink "$HOME/.local/state/hypr/current-theme.conf" 2>/dev/null)" in
+            *light.conf) mode=light ;;
+            esac
+            command ssh -t "$1" "SSH_THEME=$mode exec zsh -l"
+          else
+            command ssh "$@"
+          fi
+        }
+      ''}
+
+      # SSH theme override (server side): register a login shell that arrived
+      # with SSH_THEME so monitor-switch.sh's poll loop applies the client's
+      # theme instead of this host's own monitor detection, for as long as any
+      # such shell is alive. Not peerHost-gated: only our own machines ever
+      # send SSH_THEME. Tmux panes survive disconnect, so shells inside tmux
+      # must not register.
+      if [[ -o login && -n "$SSH_CONNECTION" && -z "$TMUX" ]]; then
+        case "$SSH_THEME" in
+        dark | light)
+          typeset -g _theme_ssh_dir=/run/user/$(id -u)/theme-ssh-override
+          mkdir -p "$_theme_ssh_dir/pids"
+          echo "$SSH_THEME" > "$_theme_ssh_dir/mode"
+          touch "$_theme_ssh_dir/pids/$$"
+          theme_ssh_override_cleanup() { rm -f "$_theme_ssh_dir/pids/$$"; }
+          add-zsh-hook zshexit theme_ssh_override_cleanup
+          unset SSH_THEME
+          ;;
+        esac
+      fi
 
       # Accept next word from suggestion
       bindkey '^[f' forward-word  # Alt+F
