@@ -21,12 +21,13 @@ sparse_paths = [".agents/plugins"]
 trusted_hash = "sha256:2ebfd7a7b67932638f98a85848d1b7f35f95aff3d681833eb639d2e113e10d30"
 enabled = true
 
+# Only name selectors work in Codex 0.144.5; path selectors silently no-op.
 [[skills.config]]
-path = "skills/superpowers-domain-context"
+name = "superpowers-domain-context"
 enabled = true
 
 [[skills.config]]
-path = "skills/codex-dynamic-workflows"
+name = "codex-dynamic-workflows"
 enabled = false
 
 [tui]

@@ -1,6 +1,7 @@
 # Profile for the Lavish Editor skill powered by lavish-axi.
 # Select it with: codex --profile lavish-axi
 
+# Only name selectors work in Codex 0.144.5; path selectors silently no-op.
 [[skills.config]]
-path = "skills/lavish"
+name = "lavish"
 enabled = true

@@ -3,6 +3,10 @@ model_reasoning_effort = "high"
 # Profile for the last30days research skill.
 # Select it with: codex --profile last30days
 
+# INERT on Codex 0.144.5: no config mechanism (path/name selector or any
+# [skills] key) can load a skill from the unscanned shared-skills pool; only
+# ~/.codex/skills is scanned. Kept to record intent until upstream exposes
+# extra scan roots (app-server has skills/extraRoots/set, config.toml doesn't).
 [[skills.config]]
 path = "shared-skills/last30days"
 enabled = true

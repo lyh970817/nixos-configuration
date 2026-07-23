@@ -5,6 +5,11 @@ model_reasoning_effort = "medium"
 [plugins."browser@openai-bundled"]
 enabled = false
 
+# All shared-skills entries below are INERT on Codex 0.144.5: no config
+# mechanism can load a skill from the unscanned shared-skills pool; only
+# ~/.codex/skills is scanned. Kept to record intent until upstream exposes
+# extra scan roots (app-server has skills/extraRoots/set, config.toml doesn't).
+
 [[skills.config]]
 path = "shared-skills/ask-matt"
 enabled = true
