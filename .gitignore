@@ -21,6 +21,10 @@ local.nix
 # Base Codex config contains machine-local paths and remains unmanaged
 /dotfiles/codex/config.toml
 
+# Engine-owned bundled skills: the Codex CLI auto-syncs this directory
+# (through the ~/.codex/skills symlink) and rewrites it on version bumps.
+/dotfiles/codex/skills/.system/
+
 # Regenerated fcitx5 keyboard-layout cache (lives inside the linked config dir)
 dotfiles/fcitx5/conf/cached_layouts
 
