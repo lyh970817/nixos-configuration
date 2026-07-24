@@ -21,11 +21,16 @@ work:
 - `opus` routes to GPT-5.6 Sol for ambiguous planning, architecture,
   judgment-heavy review, and synthesis.
 
-The launcher maps Claude Code's three native semantic slots to the gateway:
+The profile's `modelOverrides` map the Claude Code 2.1.217 canonical model
+behind each native semantic slot to the gateway:
 
-- `opus` -> `claude-gpt-5-6-sol`
-- `sonnet` -> `claude-gpt-5-6-terra`
-- `haiku` -> `claude-gpt-5-6-luna`
+- `opus` (`claude-opus-4-8`) -> `claude-gpt-5-6-sol`
+- `sonnet` (`claude-sonnet-5`) -> `claude-gpt-5-6-terra`
+- `haiku` (`claude-haiku-4-5-20251001`) -> `claude-gpt-5-6-luna`
+
+These canonical Claude IDs are version-specific. After upgrading Claude Code,
+verify all three semantic slots and built-in Agent routing against live
+`modelUsage`; update `modelOverrides` if Claude changes the canonical IDs.
 
 Built-in subagents inherit the session's native effort setting. The Agent tool
 can select a model for a call, but it does not expose a per-call effort
