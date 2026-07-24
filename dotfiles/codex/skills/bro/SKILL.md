@@ -1,6 +1,6 @@
 ---
 name: bro
-description: Rewrite your immediately preceding response in plain, natural language without changing its meaning. Use ONLY when the user explicitly asks to rephrase, restate, or simplify the previous response (for example "say that in plain English", "bro"); never invoke it on your own.
+description: Rewrite your immediately preceding response in plain, natural language without changing its meaning.
 ---
 
 # Bro
