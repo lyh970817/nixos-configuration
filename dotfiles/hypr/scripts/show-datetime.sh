@@ -2,7 +2,7 @@
 
 now=$(date +%s)
 
-system_date=$(date -d "@${now}" "+%A, %B %d, %Y")
+system_date=$(date -d "@${now}" "+%Y-%m-%d (%A)")
 system_day=$(date -d "@${now}" "+%F")
 
 beijing_time=$(TZ=Asia/Shanghai date -d "@${now}" "+%H:%M")
@@ -17,6 +17,6 @@ fi
 
 # Send notification
 notify-send \
-  "${beijing_time}  ${uk_time}${uk_day_note}" \
+  "${beijing_time} | ${uk_time}${uk_day_note}" \
   "${system_date}" \
   --urgency=normal
