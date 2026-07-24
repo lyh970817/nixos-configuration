@@ -141,5 +141,9 @@ in
       source = link "skills/visual-verification";
       force = true;
     };
+    "claude-mattpocock/skills/bro" = {
+      source = link "dotfiles/claude/skills/bro";
+      force = true;
+    };
   };
 }
