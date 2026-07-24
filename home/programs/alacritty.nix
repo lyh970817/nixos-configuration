@@ -91,7 +91,7 @@
       red     = '#207F23'  # Web Forest Green
       green   = '#7CDC7F'  # Light green — lifted above the #4AB34D foreground so bright-green emphasis (e.g. selected menu entries) is distinguishable
       yellow  = '#3CA23F'  # American Green
-      blue    = '#7CDC7F'  # Light green — lifted above the #4AB34D foreground so bright-blue emphasis (e.g. command-palette selection) is distinguishable
+      blue    = '#63C766'  # Soft light green — above the #4AB34D foreground but below bright green, so fuzzy-match fragments read as accents rather than glare
       magenta = '#4AB34D'  # Apple
       cyan    = '#4AB34D'  # Apple
       white   = '#4AB34D'  # Apple (brightest)
