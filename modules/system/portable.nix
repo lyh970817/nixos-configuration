@@ -66,4 +66,17 @@
       custom SSDT and arms the flags via acpi_call at boot and resume.
     '';
   };
+
+  options.portable.quirks.arb33pThermalCap = lib.mkOption {
+    type = lib.types.bool;
+    default = false;
+    description = ''
+      Enables the ryzenadj thermal/power envelope for the ARB33P board (AMD
+      Ryzen 7 8840U, amd-pstate-epp), which otherwise runs unmanaged up to
+      the 105/110C ACPI trip points. Loads the ryzen_smu kernel module for
+      SMU access and applies a ryzenadj oneshot + timer that keeps boost
+      usable for bursts while capping sustained STAPM/slow/fast power limits
+      and the Tctl target.
+    '';
+  };
 }

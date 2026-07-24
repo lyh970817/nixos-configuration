@@ -27,6 +27,7 @@
     ./modules/desktop/xdg-portal.nix
 
     # Hardware support
+    ./modules/hardware/arb33p-thermal.nix
     ./modules/hardware/audio.nix
     ./modules/hardware/bluetooth.nix
     ./modules/hardware/dynabook-hotkeys.nix
