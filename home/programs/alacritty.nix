@@ -83,7 +83,7 @@
       blue    = '#3CA23F'  # American Green
       magenta = '#4AB34D'  # Apple (brightest)
       cyan    = '#3CA23F'  # American Green
-      white   = '#4AB34D'  # Apple (brightest)
+      white   = '#2E9031'  # Wageningen Green — receded below the #4AB34D foreground so SGR-37 secondary text (menu descriptions, hints) reads as secondary
 
       # Bright colors - using lighter greens for emphasis
       [colors.bright]
