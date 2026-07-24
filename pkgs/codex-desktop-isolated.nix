@@ -22,5 +22,9 @@ symlinkJoin {
     rm -f "$desktopFile"
     substitute "$target" "$desktopFile" \
       --replace-fail "${codexDesktopPackage}/bin/codex-desktop" "$out/bin/codex-desktop"
+
+    # Add a generic name so launchers can show a descriptive subtitle.
+    sed -i '/^GenericName=/d' "$desktopFile"
+    sed -i '/^\[Desktop Entry\]/a GenericName=AI Assistant' "$desktopFile"
   '';
 }
