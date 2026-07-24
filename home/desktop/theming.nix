@@ -11,7 +11,8 @@ let
   setClaudeTheme = theme: ''
     for claude_settings in \
       "$HOME/.config/claude/settings.json" \
-      "$HOME/.config/claude-mattpocock/settings.json"; do
+      "$HOME/.config/claude-mattpocock/settings.json" \
+      "$HOME/.config/claude-gpt56/settings.json"; do
       if [ ! -f "$claude_settings" ]; then
         echo "Claude Code settings are missing: $claude_settings" >&2
         continue

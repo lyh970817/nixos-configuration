@@ -1,0 +1,65 @@
+{
+  "theme": "light-ansi",
+  "tui": "fullscreen",
+  "env": {
+    "ALL_PROXY": "socks5h://127.0.0.1:7890",
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "DISABLE_ERROR_REPORTING": "1",
+    "DISABLE_TELEMETRY": "1",
+    "ENABLE_EXPERIMENTAL_MCP_CLI": "true",
+    "HTTPS_PROXY": "http://127.0.0.1:7890",
+    "HTTP_PROXY": "http://127.0.0.1:7890",
+    "MCP_TIMEOUT": "60000",
+    "NO_PROXY": "localhost,127.0.0.1,::1,.local,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12"
+  },
+  "includeCoAuthoredBy": false,
+  "permissions": {
+    "allow": [
+      "Bash",
+      "BashOutput",
+      "Edit",
+      "Glob",
+      "Grep",
+      "KillShell",
+      "NotebookEdit",
+      "Read",
+      "SlashCommand",
+      "Task",
+      "TodoWrite",
+      "WebFetch",
+      "WebSearch",
+      "Write"
+    ],
+    "deny": []
+  },
+  "model": "opus",
+  "availableModels": [
+    "opus",
+    "sonnet",
+    "haiku"
+  ],
+  "modelOverrides": {
+    "claude-opus-4-8": "claude-gpt-5-6-sol",
+    "claude-sonnet-5": "claude-gpt-5-6-terra",
+    "claude-haiku-4-5-20251001": "claude-gpt-5-6-luna"
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "~/.config/claude-gpt56/statusline.sh"
+  },
+  "enabledPlugins": {
+    "last30days@last30days-skill": false
+  },
+  "extraKnownMarketplaces": {
+    "last30days-skill": {
+      "source": {
+        "source": "github",
+        "repo": "mvanhorn/last30days-skill"
+      }
+    }
+  },
+  "effortLevel": "high",
+  "skipDangerousModePermissionPrompt": true,
+  "editorMode": "vim",
+  "teammateMode": "in-process"
+}

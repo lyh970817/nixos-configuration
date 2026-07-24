@@ -42,6 +42,7 @@
       customOverlay = final: prev: {
         "115browser" = final.callPackage ./pkgs/115browser.nix { };
         claude-code = final.callPackage ./pkgs/claude-code.nix { };
+        cli-proxy-api = final.callPackage ./pkgs/cli-proxy-api.nix { };
         codex = final.callPackage ./pkgs/codex.nix { };
         codex-desktop-isolated = final.callPackage ./pkgs/codex-desktop-isolated.nix {
           codexDesktopPackage = codex-desktop-linux.packages.${system}.codex-desktop;
