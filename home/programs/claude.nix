@@ -103,7 +103,21 @@ let
       export ANTHROPIC_AUTH_TOKEN="$client_key"
       unset client_key
       unset ANTHROPIC_API_KEY
-      export CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY="1"
+
+      # Keep Claude Code's native semantic model slots, but terminate every
+      # route at the local GPT-5.6 gateway. Built-in Agent calls commonly use
+      # these slot names when selecting a cheaper or stronger subagent.
+      export ANTHROPIC_DEFAULT_OPUS_MODEL="claude-gpt-5-6-sol"
+      export ANTHROPIC_DEFAULT_OPUS_MODEL_NAME="GPT 5.6 Sol"
+      export ANTHROPIC_DEFAULT_OPUS_MODEL_SUPPORTED_CAPABILITIES="effort,xhigh_effort,max_effort"
+      export ANTHROPIC_DEFAULT_SONNET_MODEL="claude-gpt-5-6-terra"
+      export ANTHROPIC_DEFAULT_SONNET_MODEL_NAME="GPT 5.6 Terra"
+      export ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES="effort,xhigh_effort,max_effort"
+      export ANTHROPIC_DEFAULT_HAIKU_MODEL="claude-gpt-5-6-luna"
+      export ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME="GPT 5.6 Luna"
+      export ANTHROPIC_DEFAULT_HAIKU_MODEL_SUPPORTED_CAPABILITIES="effort,xhigh_effort,max_effort"
+
+      unset CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY
       unset CLAUDE_CODE_SUBAGENT_MODEL
 
       exec ${pkgs.claude-code}/bin/claude "$@"

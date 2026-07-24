@@ -7,38 +7,36 @@ Never use the AskUserQuestion tool. Ask clarifying questions as plain text inste
 Act primarily as an orchestrator: plan, route, and synthesize. Delegate bounded
 exploration, implementation, verification, and review when delegation helps.
 
-For every Agent call, choose the model and effort independently to fit that
-specific delegation. Do not inherit one fixed subagent model merely because it
-is the main-session model. The custom agents in `agents/` provide useful
-defaults, but you may override their model and effort on each Agent call.
+Use Claude Code's built-in agents. This profile intentionally has no custom
+role-agent presets in `agents/`; persistent agent definitions are not required
+for the Agent tool or for subagent spawning.
 
-Use this routing policy:
+Choose the semantic model slot for each Agent call according to the delegated
+work:
 
-- Luna low or medium: repository search, extraction, formatting, mechanical
-  transformations, and high-volume repetitive work.
-- Terra medium or high: ordinary implementation, testing, debugging,
-  documentation, and well-defined review.
-- Terra xhigh or max: difficult but well-scoped implementation and debugging.
-- Sol medium or high: ambiguous planning, architecture, judgment-heavy review,
-  and synthesis.
-- Sol xhigh or max: only the hardest judgment-heavy tasks where the additional
-  reasoning depth is materially useful.
+- `haiku` routes to GPT-5.6 Luna for repository search, extraction, formatting,
+  mechanical transformations, and high-volume repetitive work.
+- `sonnet` routes to GPT-5.6 Terra for ordinary implementation, testing,
+  debugging, documentation, and well-defined review.
+- `opus` routes to GPT-5.6 Sol for ambiguous planning, architecture,
+  judgment-heavy review, and synthesis.
 
-The gateway exposes one base alias for each GPT-5.6 model:
+The launcher maps Claude Code's three native semantic slots to the gateway:
 
-- `claude-gpt-5-6-sol`
-- `claude-gpt-5-6-terra`
-- `claude-gpt-5-6-luna`
+- `opus` -> `claude-gpt-5-6-sol`
+- `sonnet` -> `claude-gpt-5-6-terra`
+- `haiku` -> `claude-gpt-5-6-luna`
 
-Select `low`, `medium`, `high`, `xhigh`, or `max` separately through Claude
-Code's native effort setting. CLIProxyAPI translates that setting to the
-upstream `reasoning.effort`; no model alias fixes or overrides the effort.
-Never set or rely on `CLAUDE_CODE_SUBAGENT_MODEL`; the launcher deliberately
-unsets that global pin so each delegation remains independently routable.
+Built-in subagents inherit the session's native effort setting. The Agent tool
+can select a model for a call, but it does not expose a per-call effort
+argument. Select `low`, `medium`, `high`, `xhigh`, or `max` for the session
+through Claude Code's native effort control; CLIProxyAPI translates it to the
+upstream reasoning effort.
 
-When spawning, never route a subagent to a model more capable than the current
-orchestrator. Prefer the least expensive model and lowest effort that still fit
-the work.
+Do not set or rely on `CLAUDE_CODE_SUBAGENT_MODEL`; the launcher deliberately
+unsets that global pin. Gateway model discovery is also disabled so this
+profile exposes only the three semantic GPT-backed slots rather than raw or
+cloud model entries.
 
 ## Machine Configuration
 

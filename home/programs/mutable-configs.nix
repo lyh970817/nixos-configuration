@@ -126,7 +126,6 @@ in
     "claude-gpt56/statusline.sh".source = link "dotfiles/claude/statusline.sh";
     "claude-gpt56/commands".source = link "dotfiles/claude/commands";
     "claude-gpt56/output-styles".source = link "dotfiles/claude/output-styles";
-    "claude-gpt56/agents".source = link "dotfiles/claude-gpt56/agents";
     "claude-gpt56/skills/agent-config-setup".source = link "dotfiles/claude/skills/agent-config-setup";
     "claude-gpt56/skills/nix-environment-setup".source =
       link "dotfiles/claude/skills/nix-environment-setup";
