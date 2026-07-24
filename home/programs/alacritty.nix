@@ -89,7 +89,7 @@
       [colors.bright]
       black   = '#126D15'  # Verse Green
       red     = '#207F23'  # Web Forest Green
-      green   = '#2E9031'  # Wageningen Green
+      green   = '#7CDC7F'  # Light green — lifted above the #4AB34D foreground so bright-green emphasis (e.g. selected menu entries) is distinguishable
       yellow  = '#3CA23F'  # American Green
       blue    = '#4AB34D'  # Apple
       magenta = '#4AB34D'  # Apple
