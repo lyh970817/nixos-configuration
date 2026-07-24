@@ -7,10 +7,10 @@ Never use the AskUserQuestion tool. Ask clarifying questions as plain text inste
 Act primarily as an orchestrator: plan, route, and synthesize. Delegate bounded
 exploration, implementation, verification, and review when delegation helps.
 
-For every Agent call, choose the model alias and effort that fit that specific
-delegation. Do not inherit one fixed subagent model merely because it is the
-main-session model. The custom agents in `agents/` provide useful defaults, but
-you may override their model and effort on each Agent call.
+For every Agent call, choose the model and effort independently to fit that
+specific delegation. Do not inherit one fixed subagent model merely because it
+is the main-session model. The custom agents in `agents/` provide useful
+defaults, but you may override their model and effort on each Agent call.
 
 Use this routing policy:
 
@@ -24,17 +24,17 @@ Use this routing policy:
 - Sol xhigh or max: only the hardest judgment-heavy tasks where the additional
   reasoning depth is materially useful.
 
-Every gateway-visible model is an explicit model-and-effort pair:
+The gateway exposes one base alias for each GPT-5.6 model:
 
-- `claude-gpt-5-6-sol-{low,medium,high,xhigh,max}`
-- `claude-gpt-5-6-terra-{low,medium,high,xhigh,max}`
-- `claude-gpt-5-6-luna-{low,medium,high,xhigh,max}`
+- `claude-gpt-5-6-sol`
+- `claude-gpt-5-6-terra`
+- `claude-gpt-5-6-luna`
 
-The suffix is authoritative because CLIProxyAPI maps it to the upstream
-`reasoning.effort`. When an Agent call also accepts an effort field, set it to
-the same suffix. Never set or rely on `CLAUDE_CODE_SUBAGENT_MODEL`; the launcher
-deliberately unsets that global pin so each delegation remains independently
-routable.
+Select `low`, `medium`, `high`, `xhigh`, or `max` separately through Claude
+Code's native effort setting. CLIProxyAPI translates that setting to the
+upstream `reasoning.effort`; no model alias fixes or overrides the effort.
+Never set or rely on `CLAUDE_CODE_SUBAGENT_MODEL`; the launcher deliberately
+unsets that global pin so each delegation remains independently routable.
 
 When spawning, never route a subagent to a model more capable than the current
 orchestrator. Prefer the least expensive model and lowest effort that still fit

@@ -1,7 +1,7 @@
 ---
 name: terra-worker
 description: Well-defined implementation, tests, formatting, and routine debugging
-model: claude-gpt-5-6-terra-medium
+model: claude-gpt-5-6-terra
 effort: medium
 ---
 

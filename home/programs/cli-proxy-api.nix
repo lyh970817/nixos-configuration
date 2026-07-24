@@ -72,98 +72,14 @@ let
       oauth-model-alias:
         codex:
           - name: "gpt-5.6-sol"
-            alias: "claude-gpt-5-6-sol-low"
-            fork: true
-          - name: "gpt-5.6-sol"
-            alias: "claude-gpt-5-6-sol-medium"
-            fork: true
-          - name: "gpt-5.6-sol"
-            alias: "claude-gpt-5-6-sol-high"
-            fork: true
-          - name: "gpt-5.6-sol"
-            alias: "claude-gpt-5-6-sol-xhigh"
-            fork: true
-          - name: "gpt-5.6-sol"
-            alias: "claude-gpt-5-6-sol-max"
+            alias: "claude-gpt-5-6-sol"
             fork: true
           - name: "gpt-5.6-terra"
-            alias: "claude-gpt-5-6-terra-low"
-            fork: true
-          - name: "gpt-5.6-terra"
-            alias: "claude-gpt-5-6-terra-medium"
-            fork: true
-          - name: "gpt-5.6-terra"
-            alias: "claude-gpt-5-6-terra-high"
-            fork: true
-          - name: "gpt-5.6-terra"
-            alias: "claude-gpt-5-6-terra-xhigh"
-            fork: true
-          - name: "gpt-5.6-terra"
-            alias: "claude-gpt-5-6-terra-max"
+            alias: "claude-gpt-5-6-terra"
             fork: true
           - name: "gpt-5.6-luna"
-            alias: "claude-gpt-5-6-luna-low"
+            alias: "claude-gpt-5-6-luna"
             fork: true
-          - name: "gpt-5.6-luna"
-            alias: "claude-gpt-5-6-luna-medium"
-            fork: true
-          - name: "gpt-5.6-luna"
-            alias: "claude-gpt-5-6-luna-high"
-            fork: true
-          - name: "gpt-5.6-luna"
-            alias: "claude-gpt-5-6-luna-xhigh"
-            fork: true
-          - name: "gpt-5.6-luna"
-            alias: "claude-gpt-5-6-luna-max"
-            fork: true
-
-      payload:
-        override:
-          - models:
-              - name: "claude-gpt-5-6-sol-low"
-                protocol: "codex"
-              - name: "claude-gpt-5-6-terra-low"
-                protocol: "codex"
-              - name: "claude-gpt-5-6-luna-low"
-                protocol: "codex"
-            params:
-              "reasoning.effort": "low"
-          - models:
-              - name: "claude-gpt-5-6-sol-medium"
-                protocol: "codex"
-              - name: "claude-gpt-5-6-terra-medium"
-                protocol: "codex"
-              - name: "claude-gpt-5-6-luna-medium"
-                protocol: "codex"
-            params:
-              "reasoning.effort": "medium"
-          - models:
-              - name: "claude-gpt-5-6-sol-high"
-                protocol: "codex"
-              - name: "claude-gpt-5-6-terra-high"
-                protocol: "codex"
-              - name: "claude-gpt-5-6-luna-high"
-                protocol: "codex"
-            params:
-              "reasoning.effort": "high"
-          - models:
-              - name: "claude-gpt-5-6-sol-xhigh"
-                protocol: "codex"
-              - name: "claude-gpt-5-6-terra-xhigh"
-                protocol: "codex"
-              - name: "claude-gpt-5-6-luna-xhigh"
-                protocol: "codex"
-            params:
-              "reasoning.effort": "xhigh"
-          - models:
-              - name: "claude-gpt-5-6-sol-max"
-                protocol: "codex"
-              - name: "claude-gpt-5-6-terra-max"
-                protocol: "codex"
-              - name: "claude-gpt-5-6-luna-max"
-                protocol: "codex"
-            params:
-              "reasoning.effort": "max"
       EOF
 
             chmod 0600 "$config_tmp"

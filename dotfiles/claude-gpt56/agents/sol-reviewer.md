@@ -1,7 +1,7 @@
 ---
 name: sol-reviewer
 description: Architecture review, ambiguity resolution, and difficult correctness analysis
-model: claude-gpt-5-6-sol-high
+model: claude-gpt-5-6-sol
 effort: high
 tools: Read, Grep, Glob, Bash
 ---

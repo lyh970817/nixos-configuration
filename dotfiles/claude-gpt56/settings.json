@@ -32,7 +32,7 @@
     ],
     "deny": []
   },
-  "model": "claude-gpt-5-6-sol-high",
+  "model": "claude-gpt-5-6-sol",
   "statusLine": {
     "type": "command",
     "command": "~/.config/claude-gpt56/statusline.sh"
