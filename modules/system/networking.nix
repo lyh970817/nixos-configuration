@@ -127,10 +127,11 @@ in
     53
   ];
   networking.firewall.allowedUDPPorts = [ 53 ];
-  # "utun" is the mihomo TUN device; "tailscale0" is added so mosh's UDP and
+  # "Meta" is the mihomo TUN device (mihomo's built-in default name; the config
+  # sets no tun.device override). "tailscale0" is added so mosh's UDP and
   # Tailscale SSH flow freely over the tailnet without opening ports publicly.
   networking.firewall.trustedInterfaces = [
-    "utun"
+    "Meta"
     "tailscale0"
   ];
   networking.firewall.checkReversePath = false;
