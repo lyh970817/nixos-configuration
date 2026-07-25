@@ -118,6 +118,7 @@ in
     "claude/skills".source = link "dotfiles/claude/skills";
     "claude/commands".source = link "dotfiles/claude/commands";
     "claude/output-styles".source = link "dotfiles/claude/output-styles";
+    "claude/agents".source = link "dotfiles/claude/agents";
 
     # GPT-5.6 gateway profile. Share portable authored assets from the standard
     # profile, but keep credentials, history, sessions, plugins, caches, and all
@@ -126,6 +127,7 @@ in
     "claude-gpt56/statusline.sh".source = link "dotfiles/claude/statusline.sh";
     "claude-gpt56/commands".source = link "dotfiles/claude/commands";
     "claude-gpt56/output-styles".source = link "dotfiles/claude/output-styles";
+    "claude-gpt56/agents".source = link "dotfiles/claude/agents";
     "claude-gpt56/skills/bro".source = link "dotfiles/claude/skills/bro";
     "claude-gpt56/skills/agent-config-setup".source = link "dotfiles/claude/skills/agent-config-setup";
     "claude-gpt56/skills/nix-environment-setup".source =
@@ -150,6 +152,10 @@ in
     };
     "claude-mattpocock/output-styles" = {
       source = link "dotfiles/claude/output-styles";
+      force = true;
+    };
+    "claude-mattpocock/agents" = {
+      source = link "dotfiles/claude/agents";
       force = true;
     };
     "claude-mattpocock/skills/nix-environment-setup" = {

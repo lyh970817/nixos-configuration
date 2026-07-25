@@ -16,9 +16,14 @@ Use Claude Code's built-in agents. Choose the model for each delegated task:
 - `opus` routes to GPT-5.6 Sol. Use it for ambiguous planning, architecture,
   judgment-heavy review, and synthesis.
 
-Override the model on an Agent call when the task warrants it. Built-in
-subagents inherit the session effort; the Agent tool has no per-call effort
-setting.
+Choose model capability and reasoning effort independently. Override the model
+on an Agent call when the task warrants it, and use the generic named subagents
+`effort-low`, `effort-medium`, `effort-high`, `effort-xhigh`, and `effort-max`
+to set the effort appropriate for each delegated task. Each effort tier inherits
+the selected model unless the Agent call overrides it.
+
+Prefer ordinary subagents for independent exploration, implementation, review,
+and verification, including parallel work. Do not create or use teammates.
 
 ## Machine Configuration
 
