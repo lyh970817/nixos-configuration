@@ -140,7 +140,7 @@ in
         Type=Application
         Name=Claude Code URL Handler
         Comment=Handle claude-cli:// deep links for Claude Code
-        Exec="/home/andongni/.local/bin/claude" --handle-uri %u
+        Exec="/etc/profiles/per-user/andongni/bin/claude" --handle-uri %u
         NoDisplay=true
         MimeType=x-scheme-handler/claude-cli;
       '';
