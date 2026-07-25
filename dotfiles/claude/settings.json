@@ -3,7 +3,6 @@
   "tui": "fullscreen",
   "env": {
     "ALL_PROXY": "socks5h://127.0.0.1:7890",
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
     "DISABLE_ERROR_REPORTING": "1",
     "DISABLE_TELEMETRY": "1",
     "ENABLE_EXPERIMENTAL_MCP_CLI": "true",
@@ -50,6 +49,5 @@
   },
   "effortLevel": "high",
   "skipDangerousModePermissionPrompt": true,
-  "editorMode": "vim",
-  "teammateMode": "in-process"
+  "editorMode": "vim"
 }
