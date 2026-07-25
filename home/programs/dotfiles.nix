@@ -68,6 +68,11 @@ in
       recursive = true;
     };
     "hypr/role.conf".text = roleConf;
+    # Shell-sourceable twin of role.conf so plain dotfile scripts (which are
+    # deployed verbatim and cannot be templated) can branch on the role.
+    "hypr/role.env".text = ''
+      HYPR_ROLE=${role}
+    '';
     "yazi".source = ../../dotfiles/yazi;
     "znt".source = ../../dotfiles/znt;
   };

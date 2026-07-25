@@ -78,8 +78,12 @@ apply_mode "$mode"
 mkdir -p "$(dirname "$STATE_FILE")"
 printf '%s\n' "$mode_source" > "$STATE_FILE"
 
-# Launch terminal at boot if in Dark Mode (no DSC monitor)
-if [ "$mode" = "dark" ]; then
+# Launch terminal at boot if in Dark Mode (no DSC monitor), but only on the
+# home role: the remote role already gets its own startup terminal via
+# role.conf's exec-once, so this would otherwise double up on it.
+# shellcheck source=/dev/null
+. "${XDG_CONFIG_HOME:-$HOME/.config}/hypr/role.env" 2>/dev/null || true
+if [ "$mode" = "dark" ] && [ "${HYPR_ROLE:-}" != "remote" ]; then
   alacritty --class Alacritty-main --command tmux new-session -A -s main &
 fi
 
