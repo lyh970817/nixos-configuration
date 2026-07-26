@@ -32,7 +32,7 @@ let
     }
     {
       configDir = ".config/claude-mattpocock";
-      settings = ../../dotfiles/claude/settings.json;
+      settings = ../../dotfiles/claude-mattpocock/settings.json;
     }
     {
       configDir = ".config/claude-gpt56";
