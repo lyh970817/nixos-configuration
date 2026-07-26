@@ -29,6 +29,7 @@
     ./programs/visual-verification.nix
     ./programs/gemini.nix
     ./programs/hyprwhspr.nix
+    ./programs/quicktui.nix
     ./programs/launchers.nix
     ./programs/dotfiles.nix
     ./programs/mutable-configs.nix
