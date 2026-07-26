@@ -46,6 +46,30 @@ let
     '';
   };
 
+  # Attaches (or creates) the local 'remote' tmux session — the one mosh
+  # sessions from the laptop land in — from a terminal launched right here on
+  # home. Non-modal: Super+Enter keeps meaning "my local session"; this is a
+  # separate, deliberate action for the rare occasion of walking over to the
+  # home desk and wanting to see what the laptop session was doing.
+  #
+  # Seeds THEME_MODE from this machine's own desktop mode (Layer A), not the
+  # laptop's, because this launcher is a local client on the home box and the
+  # panes it spawns should use home's colours. Uses the verified set-then-attach
+  # idiom rather than `new-session -A -e`: whenever -A takes the attach path it
+  # delegates to attach-session, which has no -e, so -e is silently dropped —
+  # a launcher built on that works once and then silently stops working.
+  attachRemote = pkgs.writeShellApplication {
+    name = "attach-remote";
+    runtimeInputs = [ pkgs.tmux ];
+    text = ''
+      # theme-mode resolves from the HM profile PATH at runtime (deliberately
+      # not a runtimeInput here); see homeTerminal above for the same pattern.
+      mode="$(theme-mode 2>/dev/null || echo dark)"
+
+      exec tmux new-session -A -d -s remote ';' set-environment -t remote THEME_MODE "$mode" ';' attach -t remote
+    '';
+  };
+
   roleConf =
     if role == "remote" then
       ''
@@ -56,13 +80,17 @@ let
       ''
     else
       ''
-        # Home role: Super+Enter attaches to the 'main' tmux session, Super+Shift+Enter opens 'secondary'.
+        # Home role: Super+Enter attaches to the 'main' tmux session, Super+Shift+Enter opens 'secondary', Super+Ctrl+Enter attaches the laptop's 'remote' session.
         bind = $mainMod, Return, exec, btop-workspace exec alacritty --class Alacritty-float --command tmux new-session -A -s main
         bind = $mainMod SHIFT, Return, exec, btop-workspace exec alacritty --class Alacritty-float --command tmux new-session -A -s secondary
+        bind = $mainMod CTRL, Return, exec, btop-workspace exec alacritty --class Alacritty-float --command attach-remote
       '';
 in
 {
-  home.packages = [ homeTerminal ];
+  home.packages = [
+    homeTerminal
+    attachRemote
+  ];
 
   xdg.configFile = {
     "nvim".source = ../../dotfiles/nvim;
