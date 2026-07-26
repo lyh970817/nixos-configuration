@@ -186,20 +186,15 @@ let
     esac
   '';
 
-  # theme-hold: usage `theme-hold <mode> <command...>`. Registers this
-  # process for the SSH/mosh theme override (see monitor-switch.sh), then
-  # execs the wrapped command in its place. exec preserves the PID, so the
-  # registered PID tracks the wrapped session process (tmux client or login
-  # shell) for as long as it lives; monitor-switch.sh prunes the registration
-  # once that process dies, so no cleanup hook is needed here.
+  # theme-hold: usage `theme-hold <mode> <command...>`. Exports THEME_MODE
+  # into the wrapped process and execs it in place. exec preserves the PID,
+  # and the export survives into the wrapped session process (tmux client or
+  # login shell) and everything it forks, so the mode is set once at launch
+  # and frozen for that process's life. This is the entire transport for
+  # session colours; it never touches this machine's own desktop appearance.
   themeHold = pkgs.writeShellScriptBin "theme-hold" ''
     case "$1" in
-    dark | light)
-      dir="/run/user/$(id -u)/theme-ssh-override"
-      mkdir -p "$dir/pids"
-      echo "$1" > "$dir/mode"
-      touch "$dir/pids/$$"
-      ;;
+    dark | light) export THEME_MODE="$1" ;;
     esac
     shift
     exec "$@"

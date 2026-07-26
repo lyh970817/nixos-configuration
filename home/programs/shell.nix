@@ -42,25 +42,61 @@ in
       autoload -Uz add-zsh-hook
       add-zsh-hook -Uz chpwd chpwd_dirstack
 
-      # Define paths
-      FZF_LINK="$HOME/.config/fzf/current_theme"
-      NEWT_LINK="$HOME/.config/newt/current_theme"
+      # THEME_MODE is the per-session colour layer (dark|light), independent
+      # of this machine's own desktop appearance. Remote sessions get it from
+      # theme-hold (see theming.nix), which exports it once at launch and
+      # freezes it for that process's life. Locally — no incoming remote
+      # session — it's unset here, so default it from this machine's own
+      # monitor via theme-mode; anything other than dark/light (including
+      # theme-mode failing) collapses to dark. Done once at startup, not in
+      # the precmd hook below, since the mode never changes within a process.
+      if [ -z "$THEME_MODE" ]; then
+        THEME_MODE="$(theme-mode 2>/dev/null)"
+      fi
+      case "$THEME_MODE" in
+      dark | light) ;;
+      *) THEME_MODE="dark" ;;
+      esac
+      export THEME_MODE
 
-      # Function to read links and export variables
+      # Function to read the per-mode theme files and export variables.
+      # Forkless zsh: $(<file) slurps the file without an external `cat`,
+      # (f) splits it into lines, (j: :) rejoins them with spaces — no `tr`,
+      # no subshell fork.
       load_shell_themes() {
+        local fzf_file="$HOME/.config/fzf/themes/$THEME_MODE"
+        local newt_file="$HOME/.config/newt/themes/$THEME_MODE"
+
         # Load FZF
-        if [ -f "$FZF_LINK" ]; then
-           export FZF_DEFAULT_OPTS=$(tr '\n' ' ' < "$FZF_LINK")
+        if [ -f "$fzf_file" ]; then
+          export FZF_DEFAULT_OPTS="''${(j: :)''${(f)"$(<"$fzf_file")"}}"
         fi
 
         # Load NEWT (nmtui)
-        if [ -f "$NEWT_LINK" ]; then
-           export NEWT_COLORS=$(tr '\n' ' ' < "$NEWT_LINK")
+        if [ -f "$newt_file" ]; then
+          export NEWT_COLORS="''${(j: :)''${(f)"$(<"$newt_file")"}}"
         fi
       }
 
-      # Add it to the precmd array (runs before every prompt)
-      add-zsh-hook precmd load_shell_themes
+      # Runs before every prompt: reload the theme vars (cheap, forkless),
+      # and when inside tmux, re-assert this pane's THEME_MODE into the
+      # session's environment store. tmux's update-environment only copies
+      # the attaching client's THEME_MODE into that store on a fresh attach,
+      # and a resumed mosh session never re-attaches — so without this, a
+      # session left running through a machine switch would keep seeding new
+      # panes with a stale mode. Since every prompt draw re-asserts, whichever
+      # pane was most recently used wins the store for new panes. Flagless
+      # `set-environment` (no -t) auto-resolves to this pane's own session in
+      # a single fork; `-t "$(tmux display -p ...)"` would cost a second fork
+      # for no benefit. Capture/restore $? around this so it doesn't clobber
+      # the exit status starship's own precmd reads.
+      theme_precmd() {
+        local ret=$?
+        load_shell_themes
+        [ -n "$TMUX" ] && tmux set-environment THEME_MODE "$THEME_MODE"
+        return $ret
+      }
+      add-zsh-hook precmd theme_precmd
 
       # Run it once immediately on startup
       load_shell_themes
