@@ -1,6 +1,14 @@
 local M = {}
 
 local function read_system_scheme()
+  -- THEME_MODE is the per-session theme: set by `theme-hold` for ssh/mosh
+  -- sessions, and defaulted from the local monitor by the shell otherwise.
+  -- When present it takes precedence over the machine-global gsettings value.
+  local theme_mode = vim.env.THEME_MODE
+  if theme_mode ~= nil and theme_mode ~= "" then
+    return theme_mode
+  end
+
   local handle = io.popen("gsettings get org.gnome.desktop.interface color-scheme")
   if not handle then
     return "prefer-dark"

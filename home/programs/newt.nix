@@ -1,9 +1,9 @@
 # Newt (nmtui) Theme Files Configuration
 # Managed by home-manager
 # Original: ~/.config/newt/themes/
-# Theme switching handled by darkman hooks (symlinks to current_theme)
-# Consumed by shell.nix's NEWT_COLORS export via the current_theme symlink
-# created by switch-dark/switch-light in desktop/theming.nix
+# Both dark and light variants are written unconditionally by this file;
+# shell.nix selects which one to use per-session based on THEME_MODE and
+# exports it as NEWT_COLORS.
 {
   config,
   lib,
@@ -34,8 +34,13 @@ let
   # interactive shell get the shim.
   nmtui = pkgs.writeShellScriptBin "nmtui" ''
     # The light e-ink palette was never retuned, so only shim in dark mode.
-    case "$(readlink "$HOME/.config/newt/current_theme" 2>/dev/null)" in
-      */dark)
+    # THEME_MODE is the per-session mode: set by theme-hold for ssh/mosh
+    # sessions, otherwise defaulted from this machine's own monitor by
+    # shell.nix. The desktop launcher runs `zsh -i -c nmtui`, so it picks up
+    # that same default. (This replaced the old newt/current_theme symlink,
+    # which no longer exists.)
+    case "''${THEME_MODE:-}" in
+      dark)
         trap 'printf "${resetOsc}"' EXIT INT TERM
         printf "${osc}"
         ;;
@@ -48,7 +53,9 @@ in
 {
   home.packages = [ nmtui ];
 
-  # Theme files for darkman switching
+  # Per-mode (dark/light) theme variant files, selected at shell startup by
+  # THEME_MODE (set by theme-hold for ssh/mosh sessions, otherwise defaulted
+  # from the local monitor)
   home.file = {
     ".config/newt/themes/dark".text = ''
       root=green,black:window=green,black:border=brightgreen,black:listbox=green,black:actlistbox=black,brightgreen:sellistbox=brightgreen,black:actsellistbox=black,green:textbox=green,black:acttextbox=brightgreen,black:entry=brightgreen,black:disentry=white,black:checkbox=green,black:actcheckbox=green,black:button=black,brightgreen:actbutton=green,black:compactbutton=green,black:actcompactbutton=black,brightgreen:label=brightgreen,black:title=brightgreen,black:roottext=green,black:emptyscale=green,black:fullscale=black,brightgreen:shadow=black,black

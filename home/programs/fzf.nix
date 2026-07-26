@@ -1,12 +1,15 @@
 # FZF Theme Files Configuration
 # Managed by home-manager
 # Original: ~/.config/fzf/themes/
-# Theme switching handled by darkman hooks (symlinks to current_theme)
+# Both dark and light variants are written unconditionally by this file;
+# shell.nix selects which one to use per-session based on THEME_MODE.
 # Note: We don't use programs.fzf color options as they conflict with dynamic loading
 { config, pkgs, ... }:
 
 {
-  # Theme files for darkman switching
+  # Per-mode (dark/light) theme variant files, selected at shell startup by
+  # THEME_MODE (set by theme-hold for ssh/mosh sessions, otherwise defaulted
+  # from the local monitor)
   home.file = {
     ".config/fzf/themes/dark".text = ''
       --color=fg:#4AB34D

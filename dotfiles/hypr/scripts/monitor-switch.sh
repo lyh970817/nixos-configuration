@@ -6,53 +6,18 @@
 # back to the peer.
 STATE_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/theme-monitor-mode"
 
-# SSH/mosh theme override: theme-hold (see theming.nix), exec'd by the
-# client's ssh/mosh wrapper (shell.nix) or home-terminal (dotfiles.nix),
-# registers the wrapped session process's PID here to hand its theme off to
-# this host for the session's duration.
-OVERRIDE_DIR="/run/user/$(id -u)/theme-ssh-override"
-
-# Prints "<mode> <source>". source is "override" while an SSH session has
-# handed its theme to us, else "monitor" (the fallback automatic trigger).
+# Prints the monitor-derived mode: "light" when the DSC e-ink panel is
+# present, else "dark". This is Layer A only (this machine's own desktop
+# appearance) — session colours travel separately via THEME_MODE (see
+# theming.nix), which this poll loop never touches.
 current_mode() {
-  if [ -d "$OVERRIDE_DIR" ]; then
-    live=0
-    for pidfile in "$OVERRIDE_DIR"/pids/*; do
-      [ -e "$pidfile" ] || continue
-      pid=$(basename "$pidfile")
-      if kill -0 "$pid" 2>/dev/null; then
-        live=1
-      else
-        rm -f "$pidfile"
-      fi
-    done
-    if [ "$live" -eq 1 ]; then
-      override_mode=$(cat "$OVERRIDE_DIR/mode" 2>/dev/null)
-      case "$override_mode" in
-      dark | light)
-        echo "$override_mode override"
-        return
-        ;;
-      esac
-      # Mode file missing/empty/torn (mid-write race): fall through below
-      # rather than apply_mode-ing garbage.
-    fi
-    # No registered process survived: the override has expired. Leave the
-    # (now-empty) dir in place rather than rm -rf it here: theme-hold's
-    # registration is non-atomic (mkdir, then echo mode, then touch pid), so
-    # a poll tick landing mid-registration could otherwise delete the dir out
-    # from under a session that's still starting up. A lingering dir on
-    # tmpfs is harmless; only live registered PIDs gate the override, and the
-    # next registration just reuses/overwrites its contents.
-  fi
-
   # Monitor presence is the automatic theme trigger. The DSC e-ink display
   # selects light mode; its absence selects dark mode. This setup does not
   # use Darkman's time, location, or GeoClue transition mechanisms.
   if hyprctl monitors | grep -q "DSC"; then
-    echo "light monitor"
+    echo light
   else
-    echo "dark monitor"
+    echo dark
   fi
 }
 
@@ -70,13 +35,11 @@ for i in $(seq 1 6); do
 done
 
 # Run the initial check. Always apply the theme on startup to establish the
-# live Hyprland/wallpaper state and seed the state file, but do not push at
-# boot: pushes happen only on genuine plug/unplug edges (and from theme-toggle).
-mode_source=$(current_mode)
-mode=${mode_source%% *}
+# live Hyprland/wallpaper state and seed the state file.
+mode=$(current_mode)
 apply_mode "$mode"
 mkdir -p "$(dirname "$STATE_FILE")"
-printf '%s\n' "$mode_source" > "$STATE_FILE"
+printf '%s\n' "$mode" > "$STATE_FILE"
 
 # Launch terminal at boot if in Dark Mode (no DSC monitor), but only on the
 # home role: the remote role already gets its own startup terminal via
@@ -90,27 +53,20 @@ fi
 # Poll state so this script has no socat runtime dependency. Apply the theme
 # scripts directly rather than asking Darkman to schedule a transition. Only a
 # change relative to the stored mode is a real edge: on such an edge, record
-# it and apply locally. Only push to the peer when both the old and new
-# state are "monitor": an override transition originates from (or reverts
-# around) the peer's own session, so pushing it back would bounce the peer's
-# theme right back at it.
+# it and apply locally. Monitor edges no longer push to the peer — the only
+# remaining theme-push caller is theme-toggle (see theming.nix), a deliberate
+# manual action, not this automatic poll.
 while sleep 2; do
-  desired_full=$(current_mode)
-  desired=${desired_full%% *}
-  desired_source=${desired_full#* }
+  desired=$(current_mode)
 
-  stored_full=$(cat "$STATE_FILE" 2>/dev/null || true)
-  stored=${stored_full%% *}
-  case "$stored_full" in
-  *' '*) stored_source=${stored_full#* } ;;
-  *) stored_source=monitor ;; # legacy single-word state file
-  esac
+  stored=$(cat "$STATE_FILE" 2>/dev/null || true)
+  # ${stored%% *} keeps only the first word. A state file left over from
+  # before this format dropped its second ("source") word — e.g. a stale
+  # "light monitor" — still parses correctly as just "light".
+  stored=${stored%% *}
 
   if [ "$desired" != "$stored" ]; then
-    printf '%s\n' "$desired_full" > "$STATE_FILE"
+    printf '%s\n' "$desired" > "$STATE_FILE"
     apply_mode "$desired"
-    if [ "$stored_source" = "monitor" ] && [ "$desired_source" = "monitor" ]; then
-      theme-push "$desired"
-    fi
   fi
 done
