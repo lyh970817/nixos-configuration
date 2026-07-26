@@ -47,13 +47,20 @@
     "command": "~/.config/claude-gpt56/statusline.sh"
   },
   "enabledPlugins": {
-    "last30days@last30days-skill": false
+    "last30days@last30days-skill": false,
+    "mattpocock-skills@mattpocock": true
   },
   "extraKnownMarketplaces": {
     "last30days-skill": {
       "source": {
         "source": "github",
         "repo": "mvanhorn/last30days-skill"
+      }
+    },
+    "mattpocock": {
+      "source": {
+        "source": "github",
+        "repo": "mattpocock/skills"
       }
     }
   },
