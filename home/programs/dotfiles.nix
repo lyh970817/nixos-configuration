@@ -31,7 +31,7 @@ let
         # Adaptive prediction disables local echo on fast links; force it on.
         # mosh-server never times out by default, so the 60s network timeout
         # ensures a vanished client releases the peer's theme override.
-        if mosh --server 'MOSH_SERVER_NETWORK_TMOUT=60 mosh-server' --predict=always --predict-overwrite "$PEER" -- theme-hold "$mode" tmux new-session -A -s main; then
+        if mosh --server 'MOSH_SERVER_NETWORK_TMOUT=60 mosh-server' --predict=always --predict-overwrite "$PEER" -- theme-hold "$mode" tmux new-session -A -s remote; then
           exit 0
         fi
         sleep 2

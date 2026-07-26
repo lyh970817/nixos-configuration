@@ -81,6 +81,14 @@ in
 
       set -g allow-passthrough on
 
+      # On each client attach, tmux copies THEME_MODE from the attaching
+      # client's environment into the session's environment store, which
+      # seeds any new panes created afterward. So a mosh client attaching
+      # with THEME_MODE=dark gives new panes dark, and a local client
+      # attaching with THEME_MODE=light gives new panes light. Existing
+      # panes are unaffected — their environment is frozen at fork time.
+      set -ga update-environment THEME_MODE
+
       # Emit OSC 52 on copy so copy-mode selections reach the local terminal's
       # clipboard over mosh/SSH (the wl-copy pipe only sets the local host's
       # Wayland clipboard). Requires advertising the terminal clipboard feature.
