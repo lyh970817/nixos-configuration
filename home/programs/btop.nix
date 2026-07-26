@@ -60,14 +60,15 @@ let
       rm "$out/bin/btop"
       cat > "$out/bin/btop" <<'WRAPPER'
       #!/usr/bin/env bash
-      # THEME_MODE set: a session (interactive shell, mosh/ssh peer) is
-      # authoritative for its own colours - use it as-is (coerced below).
-      # THEME_MODE unset: a non-shell launch (systemd user service, a
-      # Hyprland bind run outside a session) with no session to inherit
-      # from, so fall back to this machine's own desktop mode (Layer A) by
+      # THEME_MODE set: a session (interactive shell, mosh/ssh peer) owns
+      # its own colours (Layer B) - use it as-is (coerced below).
+      # THEME_MODE unset: follow this machine's own monitor (Layer A) by
       # reading the hypr current-theme symlink directly, inline, rather than
       # shelling out to theme-mode - a systemd user service has no
       # guaranteed PATH, which is exactly the failure mode being avoided.
+      # Callers that are part of the desktop environment (not a session)
+      # clear THEME_MODE deliberately to select this path - see
+      # dotfiles/hypr/scripts/btop-dashboard.sh.
       mode="$THEME_MODE"
       if [ -z "$mode" ]; then
         case "$(readlink "$HOME/.local/state/hypr/current-theme.conf" 2>/dev/null)" in

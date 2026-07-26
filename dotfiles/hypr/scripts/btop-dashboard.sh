@@ -23,6 +23,13 @@
     done
 ) &
 
+# The dashboard is part of the desktop environment, so it follows this
+# machine's own monitor (Layer A) and must not inherit a session's
+# THEME_MODE. Clearing it here makes btop's wrapper take its local-monitor
+# path deliberately, rather than relying on the systemd service environment
+# happening to be empty.
+unset THEME_MODE
+
 while true; do
     btop
     sleep 0.25
