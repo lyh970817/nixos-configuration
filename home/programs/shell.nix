@@ -104,12 +104,11 @@ in
       ${lib.optionalString (peerHost != "") ''
         # SSH/mosh theme override (client side): wrap the bare `ssh ${peerHost}`
         # and `mosh ${peerHost}` forms so the peer picks up our current theme
-        # for the session. Both hand the theme off via theme-hold, which
-        # registers the wrapped session process (tmux client or login shell)
-        # for monitor-switch.sh's liveness check (see theming.nix and
-        # monitor-switch.sh for the receiving end). Flags, commands, and
-        # scp/rsync (which exec their binaries directly) fall through
-        # untouched.
+        # for the session. Both hand the theme off via theme-hold, which just
+        # exports THEME_MODE into the wrapped session process (tmux client or
+        # login shell) and everything it forks (see theming.nix). Flags,
+        # commands, and scp/rsync (which exec their binaries directly) fall
+        # through untouched.
         ssh() {
           if [[ $# -eq 1 && "$1" == "${peerHost}" ]]; then
             local mode; mode=$(theme-mode 2>/dev/null || echo dark)
@@ -122,10 +121,13 @@ in
         mosh() {
           if [[ $# -eq 1 && "$1" == "${peerHost}" ]]; then
             local mode; mode=$(theme-mode 2>/dev/null || echo dark)
-            # mosh-server never times out by default, so a vanished client
-            # (suspend, killed terminal) would pin the override forever; the
-            # 60s timeout releases it, and real work lives in tmux anyway.
-            command mosh --server 'MOSH_SERVER_NETWORK_TMOUT=60 mosh-server' "$1" -- theme-hold "$mode" zsh -l
+            # mosh-server never times out by default and nothing else reaps
+            # it, so this bounds orphans from SIGKILL-class client deaths
+            # (crash, OOM, terminal window closed while offline). Deliberate
+            # exits don't need it: mosh-client does a real shutdown handshake
+            # on SIGHUP/SIGTERM and mosh-server exits in well under a second.
+            # 24h is long enough that a suspended laptop reconnects fine.
+            command mosh --server 'MOSH_SERVER_NETWORK_TMOUT=86400 mosh-server' "$1" -- theme-hold "$mode" zsh -l
           else
             command mosh "$@"
           fi

@@ -29,9 +29,13 @@ let
 
       for _ in 1 2 3; do
         # Adaptive prediction disables local echo on fast links; force it on.
-        # mosh-server never times out by default, so the 60s network timeout
-        # ensures a vanished client releases the peer's theme override.
-        if mosh --server 'MOSH_SERVER_NETWORK_TMOUT=60 mosh-server' --predict=always --predict-overwrite "$PEER" -- theme-hold "$mode" tmux new-session -A -s remote; then
+        # mosh-server never times out by default and nothing else reaps it,
+        # so this bounds orphans from SIGKILL-class client deaths (crash,
+        # OOM, terminal window closed while offline). Deliberate exits don't
+        # need it: mosh-client does a real shutdown handshake on
+        # SIGHUP/SIGTERM and mosh-server exits in well under a second. 24h is
+        # long enough that a suspended laptop reconnects fine.
+        if mosh --server 'MOSH_SERVER_NETWORK_TMOUT=86400 mosh-server' --predict=always --predict-overwrite "$PEER" -- theme-hold "$mode" tmux new-session -A -s remote; then
           exit 0
         fi
         sleep 2

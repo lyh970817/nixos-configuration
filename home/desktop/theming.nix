@@ -19,12 +19,6 @@ let
     export XDG_RUNTIME_DIR="/run/user/$(id -u)"
     mkdir -p "$HOME/.local/state/hypr"
 
-    # A manual switch wins over an SSH theme override: overwrite it so
-    # monitor-switch.sh's poll loop doesn't revert to the override mode a
-    # couple seconds later. No theme-push here (switch-* never pushes).
-    override="/run/user/$(id -u)/theme-ssh-override/mode"
-    [ -f "$override" ] && echo dark > "$override"
-
     # 1. WALLPAPER (Kill old, start new)
       pkill swaybg || true
       ${pkgs.util-linux}/bin/setsid -f ${pkgs.swaybg}/bin/swaybg -c 000000 >/dev/null 2>&1
@@ -66,12 +60,6 @@ let
   lightModeHook = pkgs.writeShellScript "light-mode-hook" ''
     export XDG_RUNTIME_DIR="/run/user/$(id -u)"
     mkdir -p "$HOME/.local/state/hypr"
-
-    # A manual switch wins over an SSH theme override: overwrite it so
-    # monitor-switch.sh's poll loop doesn't revert to the override mode a
-    # couple seconds later. No theme-push here (switch-* never pushes).
-    override="/run/user/$(id -u)/theme-ssh-override/mode"
-    [ -f "$override" ] && echo light > "$override"
 
     ln -sf "$HOME/.config/hypr/themes/light.conf" "${hyprCurrentTheme}"
 
@@ -115,6 +103,12 @@ let
   # Tailscale SSH (keyless). Fully detached and silent so it never blocks the
   # caller and never prints. No-op when no peer is configured. It runs
   # switch-<mode> on the peer, and switch-* never pushes, so this cannot loop.
+  #
+  # Each machine now follows its own monitor (Layer A), so automatic
+  # cross-machine sync on a monitor edge would fight that rule instead of
+  # helping it — monitor-switch.sh no longer calls this. The only surviving
+  # caller is theme-toggle: a deliberate, manual global preference ("make
+  # everything dark tonight"), not automatic sync.
   themePush = pkgs.writeShellScriptBin "theme-push" ''
     PEER="${peerHost}"
     [ -n "$PEER" ] || exit 0
