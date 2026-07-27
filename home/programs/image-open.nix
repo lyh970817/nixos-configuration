@@ -70,28 +70,46 @@ let
     text = ''
       PEER=${pkgs.lib.escapeShellArg peerHost}
 
-      # True when a tmux client attached to this session descends from
-      # mosh-server -- i.e. the human is at the far end of a mosh link.
-      # Control-mode clients (editor and agent integrations) are skipped:
-      # nobody is looking at those.
+      # Walk a process ancestry looking for mosh-server.
+      ancestry_has_mosh() {
+        local pid="$1" comm
+        while [ -n "$pid" ]; do
+          case "$pid" in
+            *[!0-9]*) return 1 ;;
+          esac
+          [ "$pid" -gt 1 ] || return 1
+          comm="$(ps -o comm= -p "$pid" 2>/dev/null | tr -d ' ' || true)"
+          if [ "$comm" = "mosh-server" ]; then
+            return 0
+          fi
+          pid="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ' || true)"
+        done
+        return 1
+      }
+
+      # True when the human is at the far end of a mosh link. Two shapes,
+      # because the two entry points differ: `home-terminal` runs tmux on the
+      # far side (session "remote"), while the `mosh` shell function just runs
+      # `zsh -l` with no tmux at all.
       viewer_is_remote() {
+        # No tmux: Yazi's own ancestry reaches mosh-server directly.
+        if ancestry_has_mosh "$$"; then
+          return 0
+        fi
+
+        # Under tmux the pane's shell descends from the tmux server, not from
+        # mosh, so the ancestry above stops short. Ask tmux which clients are
+        # attached and test those instead. Control-mode clients (editor and
+        # agent integrations) are skipped -- nobody is looking at those.
         [ -n "''${TMUX:-}" ] || return 1
 
-        local session pid comm
+        local session pid
         session="$(tmux display-message -p '#{session_name}' 2>/dev/null)" || return 1
 
         while read -r pid; do
-          while [ -n "$pid" ]; do
-            case "$pid" in
-              *[!0-9]*) break ;;
-            esac
-            [ "$pid" -gt 1 ] || break
-            comm="$(ps -o comm= -p "$pid" 2>/dev/null | tr -d ' ' || true)"
-            if [ "$comm" = "mosh-server" ]; then
-              return 0
-            fi
-            pid="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ' || true)"
-          done
+          if ancestry_has_mosh "$pid"; then
+            return 0
+          fi
         done < <(
           tmux list-clients -t "$session" \
             -F '#{client_control_mode} #{client_pid}' 2>/dev/null \
