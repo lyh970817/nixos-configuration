@@ -26,6 +26,7 @@
     gvfs
     file-roller
     imagemagick
+    imv
     ueberzugpp
     ffmpegthumbnailer
     poppler-utils
