@@ -18,7 +18,9 @@ let
     export HTTP_PROXY="''${HTTP_PROXY:-http://127.0.0.1:7890}"
     export HTTPS_PROXY="''${HTTPS_PROXY:-http://127.0.0.1:7890}"
     export ALL_PROXY="''${ALL_PROXY:-socks5h://127.0.0.1:7890}"
-    export NO_PROXY="''${NO_PROXY:-localhost,127.0.0.1,::1,.local,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12}"
+    # 100.64.0.0/10 and .ts.net keep tailnet traffic off the proxy: peer
+    # addresses are reachable only over tailscale0, so proxying them fails.
+    export NO_PROXY="''${NO_PROXY:-localhost,127.0.0.1,::1,.local,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,100.64.0.0/10,.ts.net}"
 
     export http_proxy="$HTTP_PROXY"
     export https_proxy="$HTTPS_PROXY"
