@@ -5,6 +5,7 @@
   autoPatchelfHook,
   makeWrapper,
   runtimeShell,
+  brave,
   libseccomp,
   libsecret,
   glib,
@@ -66,10 +67,16 @@ stdenv.mkDerivation {
     makeWrapper $out/libexec/claude-science $out/bin/claude-science \
       --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath [ stdenv.cc.cc.lib ]}
 
-    # `claude-science open` only talks to an already-running daemon and exits 4
+    # `claude-science url` only talks to an already-running daemon and fails
     # otherwise; under Terminal=false that error is invisible. `serve --detached`
     # returns 0 only once the daemon is ready and is idempotent, but never opens
     # a browser — hence both, in order.
+    # Upstream `claude-science open` hands the URL to xdg-open, which lands as a
+    # tab in the already-running Brave. It honours no $BROWSER override and
+    # prints the URL only on stderr, so drive Brave ourselves: `url` puts the
+    # link alone on stdout (upstream's own idiom). That link is single-use and
+    # expires in ~3 minutes, so call `url` exactly once per launch.
+    # Swap --new-window for --app="$url" to get a chromeless app-style window.
     # --dangerously-no-sandbox: the app's bwrap bind allowlist is hardcoded
     # ["/usr","/lib","/lib64","/bin","/sbin","/opt","/nix"], no "/run", so on
     # NixOS bash (/run/current-system/sw/bin/bash) and nix-ld's NIX_LD
@@ -82,10 +89,13 @@ stdenv.mkDerivation {
     #!${runtimeShell}
     set -eu
     ${placeholder "out"}/bin/claude-science serve --detached --dangerously-no-sandbox
-    exec ${placeholder "out"}/bin/claude-science open
+    url=$(${placeholder "out"}/bin/claude-science url)
+    exec ${brave}/bin/brave --new-window "$url"
     EOF
     chmod 755 $out/bin/claude-science-open
 
+    # No StartupWMClass: a plain `brave --new-window` window carries the shared
+    # brave-browser class, so claiming it here would capture every Brave window.
     # Quoted heredoc: only Nix interpolates, the shell leaves the body alone.
     mkdir -p $out/share/applications
     cat > $out/share/applications/claude-science.desktop <<'EOF'
