@@ -80,6 +80,27 @@ stdenv.mkDerivation {
     EOF
     chmod 755 $out/bin/claude-science-open
 
+    # The app's own bwrap sandbox hardcodes its bind allowlist as ["/usr",
+    # "/lib","/lib64","/bin","/sbin","/opt","/nix"] — no "/run". On NixOS
+    # bash is /run/current-system/sw/bin/bash and nix-ld's NIX_LD is
+    # /run/current-system/sw/share/nix-ld/lib/ld.so, so neither exists inside
+    # the namespace. Measured on this host: sandboxed = 0/20 bundled stdio
+    # MCP connectors work (4/24 total, only the 4 remote http ones); with
+    # --dangerously-no-sandbox = 20/20 bundled (24/24 total), and conda/
+    # micromamba installs fine. `serve --detached` is idempotent, so an
+    # already-running daemon of the other mode is reused as-is; switching
+    # modes needs `claude-science stop` first. No separate unsandboxed binary
+    # wrapper is needed since --dangerously-no-sandbox is just an upstream
+    # `serve` flag usable directly on the plain `claude-science` command.
+    # Quoted heredoc: only Nix interpolates, the shell leaves the body alone.
+    cat > $out/bin/claude-science-open-unsandboxed <<'EOF'
+    #!${runtimeShell}
+    set -eu
+    ${placeholder "out"}/bin/claude-science serve --detached --dangerously-no-sandbox
+    exec ${placeholder "out"}/bin/claude-science open
+    EOF
+    chmod 755 $out/bin/claude-science-open-unsandboxed
+
     # Quoted heredoc: only Nix interpolates, the shell leaves the body alone.
     mkdir -p $out/share/applications
     cat > $out/share/applications/claude-science.desktop <<'EOF'
@@ -94,6 +115,20 @@ stdenv.mkDerivation {
     StartupNotify=false
     EOF
     chmod 444 $out/share/applications/claude-science.desktop
+
+    # Quoted heredoc: only Nix interpolates, the shell leaves the body alone.
+    cat > $out/share/applications/claude-science-unsandboxed.desktop <<'EOF'
+    [Desktop Entry]
+    Type=Application
+    Name=Claude Science (unsandboxed)
+    Comment=Anthropic's AI workbench for scientific research, with the app sandbox disabled so conda and the bundled MCP connectors work on NixOS
+    Exec=${placeholder "out"}/bin/claude-science-open-unsandboxed
+    Terminal=false
+    Categories=Science;Education;Development;
+    Keywords=claude;anthropic;ai;science;research;workbench;unsandboxed;
+    StartupNotify=false
+    EOF
+    chmod 444 $out/share/applications/claude-science-unsandboxed.desktop
 
     runHook postInstall
   '';
