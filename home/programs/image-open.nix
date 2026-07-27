@@ -102,9 +102,13 @@ let
       }
 
       for file in "$@"; do
+        # Hoisted out of the ssh line: shellcheck reads `basename "$file"`
+        # plus `< "$file"` in one command as a read/write conflict (SC2094).
+        base="$(basename "$file")"
+
         if [ -n "$PEER" ] && viewer_is_remote; then
           if ssh -o BatchMode=yes -o ConnectTimeout=5 "$PEER" \
-              ${profileBin}/show-image "$(basename "$file")" < "$file"; then
+              ${profileBin}/show-image "$base" < "$file"; then
             continue
           fi
           echo "yazi-open-image: push to $PEER failed; opening locally" >&2
