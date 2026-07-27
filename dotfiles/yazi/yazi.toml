@@ -24,6 +24,9 @@ edit = [
 play = [
 	{ run = 'mpv --force-window "$@"' },
 ]
+image = [
+	{ run = 'imv "$@"', desc = "Open in imv", orphan = true },
+]
 extract = [
 	{ run = 'ya pub extract --list "$@"', desc = "Extract here" },
 ]
@@ -34,6 +37,9 @@ subtitle = [
 [open]
 prepend_rules = [
 	{ url = "*.{ass,srt,ssa,sty,sup,vtt}", use = [ "subtitle", "edit" ] },
+	# Remote files start out as vfs/absent, so this only matches once Yazi has
+	# cached the file locally -- the built-in download rule runs first.
+	{ mime = "image/*", use = [ "image", "edit" ] },
 ]
 
 [plugin]
