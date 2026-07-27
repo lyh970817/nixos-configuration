@@ -8,14 +8,15 @@
   glib,
 }:
 
-# Upstream publishes only an unversioned `latest` pointer, no checksum. The FOD
-# hash goes stale whenever Anthropic republishes — re-fetch and bump `version`
-# (date-based, from the URL's Last-Modified) and `sha256` together. The store
-# binary is read-only, so the app's own self-updater cannot work; updates come
-# through this derivation.
+# Upstream publishes only an unversioned `latest` pointer, no checksum, so it
+# can't be pinned. The FOD hash goes stale whenever Anthropic republishes —
+# re-fetch and bump `sha256` together with `version`, taken from
+# `claude-science --version` on the fetched binary. The store binary is
+# read-only, so the app's own self-updater cannot work; updates come through
+# this derivation.
 stdenv.mkDerivation {
   pname = "claude-science";
-  version = "2026.07.24";
+  version = "0.1.25";
 
   src = fetchurl {
     url = "https://downloads.claude.ai/claude-science/latest/linux-x64";
