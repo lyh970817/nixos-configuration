@@ -107,7 +107,11 @@ let
         base="$(basename "$file")"
 
         if [ -n "$PEER" ] && viewer_is_remote; then
-          if ssh -o BatchMode=yes -o ConnectTimeout=5 "$PEER" \
+          # accept-new rather than a pinned key: the peer's identity is already
+          # enforced by the tailnet, and a first push should not fail just
+          # because known_hosts has no entry yet.
+          if ssh -o BatchMode=yes -o ConnectTimeout=5 \
+              -o StrictHostKeyChecking=accept-new "$PEER" \
               ${profileBin}/show-image "$base" < "$file"; then
             continue
           fi
