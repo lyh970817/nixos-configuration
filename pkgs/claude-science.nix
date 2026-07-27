@@ -67,39 +67,24 @@ stdenv.mkDerivation {
       --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath [ stdenv.cc.cc.lib ]}
 
     # `claude-science open` only talks to an already-running daemon and exits 4
-    # otherwise; under Terminal=false that error is invisible and the desktop
-    # entry looks like a silent no-op. `serve --detached` returns 0 only once
-    # the daemon is ready and is idempotent, but never opens a browser, so the
-    # launcher has to run both, in order.
+    # otherwise; under Terminal=false that error is invisible. `serve --detached`
+    # returns 0 only once the daemon is ready and is idempotent, but never opens
+    # a browser — hence both, in order.
+    # --dangerously-no-sandbox: the app's bwrap bind allowlist is hardcoded
+    # ["/usr","/lib","/lib64","/bin","/sbin","/opt","/nix"], no "/run", so on
+    # NixOS bash (/run/current-system/sw/bin/bash) and nix-ld's NIX_LD
+    # (/run/current-system/sw/share/nix-ld/lib/ld.so) are unreachable inside the
+    # namespace: 0/20 bundled stdio connectors work sandboxed vs 20/20 with the
+    # flag. Tradeoff: the daemon gets full $HOME read/write and unrestricted
+    # network. Real fix is upstream binding /run.
     # Quoted heredoc: only Nix interpolates, the shell leaves the body alone.
     cat > $out/bin/claude-science-open <<'EOF'
-    #!${runtimeShell}
-    set -eu
-    ${placeholder "out"}/bin/claude-science serve --detached
-    exec ${placeholder "out"}/bin/claude-science open
-    EOF
-    chmod 755 $out/bin/claude-science-open
-
-    # The app's own bwrap sandbox hardcodes its bind allowlist as ["/usr",
-    # "/lib","/lib64","/bin","/sbin","/opt","/nix"] — no "/run". On NixOS
-    # bash is /run/current-system/sw/bin/bash and nix-ld's NIX_LD is
-    # /run/current-system/sw/share/nix-ld/lib/ld.so, so neither exists inside
-    # the namespace. Measured on this host: sandboxed = 0/20 bundled stdio
-    # MCP connectors work (4/24 total, only the 4 remote http ones); with
-    # --dangerously-no-sandbox = 20/20 bundled (24/24 total), and conda/
-    # micromamba installs fine. `serve --detached` is idempotent, so an
-    # already-running daemon of the other mode is reused as-is; switching
-    # modes needs `claude-science stop` first. No separate unsandboxed binary
-    # wrapper is needed since --dangerously-no-sandbox is just an upstream
-    # `serve` flag usable directly on the plain `claude-science` command.
-    # Quoted heredoc: only Nix interpolates, the shell leaves the body alone.
-    cat > $out/bin/claude-science-open-unsandboxed <<'EOF'
     #!${runtimeShell}
     set -eu
     ${placeholder "out"}/bin/claude-science serve --detached --dangerously-no-sandbox
     exec ${placeholder "out"}/bin/claude-science open
     EOF
-    chmod 755 $out/bin/claude-science-open-unsandboxed
+    chmod 755 $out/bin/claude-science-open
 
     # Quoted heredoc: only Nix interpolates, the shell leaves the body alone.
     mkdir -p $out/share/applications
@@ -115,20 +100,6 @@ stdenv.mkDerivation {
     StartupNotify=false
     EOF
     chmod 444 $out/share/applications/claude-science.desktop
-
-    # Quoted heredoc: only Nix interpolates, the shell leaves the body alone.
-    cat > $out/share/applications/claude-science-unsandboxed.desktop <<'EOF'
-    [Desktop Entry]
-    Type=Application
-    Name=Claude Science (unsandboxed)
-    Comment=Anthropic's AI workbench for scientific research, with the app sandbox disabled so conda and the bundled MCP connectors work on NixOS
-    Exec=${placeholder "out"}/bin/claude-science-open-unsandboxed
-    Terminal=false
-    Categories=Science;Education;Development;
-    Keywords=claude;anthropic;ai;science;research;workbench;unsandboxed;
-    StartupNotify=false
-    EOF
-    chmod 444 $out/share/applications/claude-science-unsandboxed.desktop
 
     runHook postInstall
   '';
