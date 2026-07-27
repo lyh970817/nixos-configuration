@@ -76,7 +76,8 @@ stdenv.mkDerivation {
     # prints the URL only on stderr, so drive Brave ourselves: `url` puts the
     # link alone on stdout (upstream's own idiom). That link is single-use and
     # expires in ~3 minutes, so call `url` exactly once per launch.
-    # Swap --new-window for --app="$url" to get a chromeless app-style window.
+    # --app="$url" opens a chromeless app-style window (no tab strip, no address
+    # bar); swap it for --new-window "$url" to get a normal browser window.
     # --dangerously-no-sandbox: the app's bwrap bind allowlist is hardcoded
     # ["/usr","/lib","/lib64","/bin","/sbin","/opt","/nix"], no "/run", so on
     # NixOS bash (/run/current-system/sw/bin/bash) and nix-ld's NIX_LD
@@ -90,18 +91,23 @@ stdenv.mkDerivation {
     set -eu
     ${placeholder "out"}/bin/claude-science serve --detached --dangerously-no-sandbox
     url=$(${placeholder "out"}/bin/claude-science url)
-    exec ${brave}/bin/brave --new-window "$url"
+    exec ${brave}/bin/brave --app="$url"
     EOF
     chmod 755 $out/bin/claude-science-open
 
-    # No StartupWMClass: a plain `brave --new-window` window carries the shared
-    # brave-browser class, so claiming it here would capture every Brave window.
+    # No StartupWMClass: --app= derives the window class from the URL host and path
+    # only, dropping the query and port, so every launch lands on the same
+    # brave-localhost__-Default. That is stable across nonces but not distinct — any
+    # other localhost app window shares it. Chromium's --class=/--wm-class= cannot
+    # narrow it: Brave is normally already running, and the singleton reads those
+    # switches from its own command line, not the forwarded one, so they are ignored.
     # Quoted heredoc: only Nix interpolates, the shell leaves the body alone.
     mkdir -p $out/share/applications
     cat > $out/share/applications/claude-science.desktop <<'EOF'
     [Desktop Entry]
     Type=Application
     Name=Claude Science
+    GenericName=AI Research Workbench
     Comment=Anthropic's AI workbench for scientific research
     Exec=${placeholder "out"}/bin/claude-science-open
     Terminal=false
