@@ -98,9 +98,9 @@ stdenv.mkDerivation {
     # No StartupWMClass: --app= derives the window class from the URL host and path
     # only, dropping the query and port, so every launch lands on the same
     # brave-localhost__-Default. That is stable across nonces but not distinct — any
-    # other localhost app window shares it. Chromium's --class=/--wm-class= cannot
-    # narrow it: Brave is normally already running, and the singleton reads those
-    # switches from its own command line, not the forwarded one, so they are ignored.
+    # other localhost app window shares it. Chromium's --class=/--wm-class= do not
+    # narrow it either: they leave an --app= window's class untouched, both when
+    # Brave is already running and on a cold start.
     # Quoted heredoc: only Nix interpolates, the shell leaves the body alone.
     mkdir -p $out/share/applications
     cat > $out/share/applications/claude-science.desktop <<'EOF'
