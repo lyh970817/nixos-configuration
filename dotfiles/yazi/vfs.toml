@@ -1,0 +1,18 @@
+# Remote filesystems that Yazi can browse, reached as `sftp://home//abs/path`
+# or `sftp~://home/path-relative-to-remote-home`.
+#
+# Yazi downloads a remote file into a local cache before acting on it, so
+# openers and image previews receive a local path and run on this machine.
+# That is what makes viewing the home desktop's images from the laptop work.
+#
+# Authentication is handled by Tailscale SSH at the network layer, keyed on
+# tailnet identity, so no sshd and no authorized_keys entry exist on the home
+# side. `key_file` is still required: without it Yazi falls back to
+# $SSH_AUTH_SOCK, which points at a Bitwarden agent socket that is often
+# absent, and the connection fails with "No such file or directory".
+[services.home]
+type = "sftp"
+host = "home"
+user = "andongni"
+port = 22
+key_file = "/home/andongni/.ssh/id_ed25519"
