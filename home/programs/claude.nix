@@ -144,6 +144,8 @@ in
     home.packages = [
       claudeHostLauncher
       claudeGpt56Launcher
+      # Standalone Claude Science workbench binary, not a Claude Code plugin; no wrapper needed.
+      pkgs.claude-science
     ];
 
     home.sessionVariables.CLAUDE_CONFIG_DIR = "$HOME/.config/claude";
