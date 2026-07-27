@@ -36,6 +36,18 @@ let
     export MCP_TIMEOUT="60000"
   '';
 
+  claudeThemeSettings = ''
+    # Claude Code has no --theme flag or CLAUDE_THEME/CLAUDE_CODE_THEME env
+    # var. --settings lands in flagSettings, which outranks userSettings
+    # (settings.json) and is never written back to disk, so this can't
+    # fight the activation-time settings.json writer.
+    theme_mode="''${THEME_MODE:-dark}"
+    case "$theme_mode" in
+      dark | light) ;;
+      *) theme_mode="dark" ;;
+    esac
+  '';
+
   claudeHostLauncher = pkgs.writeShellApplication {
     name = "claude";
     text = ''
@@ -43,7 +55,8 @@ let
 
       ${claudeHostEnvironment}
 
-      exec ${pkgs.claude-code}/bin/claude "$@"
+      ${claudeThemeSettings}
+      exec ${pkgs.claude-code}/bin/claude --settings "{\"theme\":\"''${theme_mode}-ansi\"}" "$@"
     '';
   };
 
@@ -121,7 +134,8 @@ let
       unset CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY
       unset CLAUDE_CODE_SUBAGENT_MODEL
 
-      exec ${pkgs.claude-code}/bin/claude "$@"
+      ${claudeThemeSettings}
+      exec ${pkgs.claude-code}/bin/claude --settings "{\"theme\":\"''${theme_mode}-ansi\"}" "$@"
     '';
   };
 
@@ -132,6 +146,8 @@ in
     home.packages = [
       claudeHostLauncher
       claudeGpt56Launcher
+      # Standalone Claude Science workbench binary, not a Claude Code plugin; no wrapper needed.
+      pkgs.claude-science
     ];
 
     home.sessionVariables.CLAUDE_CONFIG_DIR = "$HOME/.config/claude";

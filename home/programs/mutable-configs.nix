@@ -21,8 +21,10 @@ let
   # land in the repo. Single-file links (AGENTS.md, CLAUDE.md, statusline.sh)
   # can be replaced by a real file if the owning app rewrites
   # them via a temp-file+rename; if that happens, re-run `nixos-rebuild switch`
-  # to restore the link. Claude settings are materialized below instead: the
-  # theme hook atomically replaces each profile's runtime JSON on every switch.
+  # to restore the link. Claude settings are materialized below instead: each
+  # profile's runtime JSON is atomically replaced with its tracked baseline on
+  # every switch. Theme is no longer derived here — it comes from the
+  # launcher's `--settings` flag, per session (see home/programs/claude.nix).
   link = subpath: config.lib.file.mkOutOfStoreSymlink "${osConfig.portable.configDir}/${subpath}";
 
   claudeProfiles = [
@@ -65,24 +67,18 @@ in
 {
   # Keep a tracked, non-secret Claude baseline while leaving each profile's
   # runtime file as an ordinary mutable file. Every activation replaces the
-  # shared settings with that baseline and derives only its theme from the
-  # active desktop mode. The files must be ordinary files because the theme
-  # hooks replace them atomically.
+  # shared settings with that baseline verbatim — theme is no longer derived
+  # here; it's supplied per session by the launcher's `--settings` flag (see
+  # home/programs/claude.nix). The files must be ordinary files because this
+  # replaces them atomically.
   home.activation.claudeSettings = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-    claude_theme="dark-ansi"
-    case "$(readlink "$HOME/.local/state/hypr/current-theme.conf" 2>/dev/null || true)" in
-      *light.conf) claude_theme="light-ansi" ;;
-    esac
-
     ${lib.concatMapStringsSep "\n" (profile: ''
       claude_settings_dir="$HOME/${profile.configDir}"
       claude_settings="$claude_settings_dir/settings.json"
       run ${pkgs.coreutils}/bin/install -d -m 0700 "$claude_settings_dir"
       claude_settings_tmp="$(${pkgs.coreutils}/bin/mktemp "$claude_settings.XXXXXX")"
 
-      ${pkgs.jq}/bin/jq --arg theme "$claude_theme" \
-        '.theme = $theme' \
-        ${lib.escapeShellArg (toString profile.settings)} > "$claude_settings_tmp"
+      run ${pkgs.coreutils}/bin/cp ${lib.escapeShellArg (toString profile.settings)} "$claude_settings_tmp"
 
       run ${pkgs.coreutils}/bin/chmod 0600 "$claude_settings_tmp"
       run ${pkgs.coreutils}/bin/mv -f "$claude_settings_tmp" "$claude_settings"

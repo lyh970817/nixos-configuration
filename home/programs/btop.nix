@@ -1,27 +1,95 @@
 # Btop system monitor
-# Theme switching is handled by darkman through the current.theme symlink.
-{ ... }:
+# Theme follows the per-session THEME_MODE env var (dark|light), read at launch
+# by the wrapper below. When THEME_MODE isn't set (e.g. the systemd-launched
+# btop dashboard), the wrapper falls back to this machine's own desktop mode
+# by reading the hypr current-theme symlink directly. There is no btop-level
+# theme symlink: btop is invoked with -c pointing at whichever of
+# btop-dark.conf / btop-light.conf matches the resolved mode.
+{ pkgs, ... }:
 
+let
+  # Settings shared by both dark and light configs. Only color_theme differs
+  # between the two variants (see mkBtopConfig below).
+  commonSettings = {
+    theme_background = false;
+    truecolor = true;
+    vim_keys = true;
+    rounded_corners = true;
+    graph_symbol = "braille";
+    update_ms = 1500;
+    proc_sorting = "cpu lazy";
+    proc_tree = false;
+    proc_colors = true;
+    proc_gradient = true;
+    show_battery = true;
+    show_disks = true;
+    only_physical = true;
+    use_fstab = false;
+  };
+
+  # Render a single btop.conf value: bools as True/False, strings quoted,
+  # everything else (ints) bare.
+  renderValue =
+    v:
+    if builtins.isBool v then
+      (if v then "True" else "False")
+    else if builtins.isString v then
+      ''"${v}"''
+    else
+      toString v;
+
+  # Render a full attrset as btop's `key = value` config format.
+  renderConfig =
+    settings:
+    builtins.concatStringsSep "\n" (
+      builtins.attrValues (builtins.mapAttrs (name: value: "${name} = ${renderValue value}") settings)
+    )
+    + "\n";
+
+  mkBtopConfig = colorTheme: renderConfig (commonSettings // { color_theme = colorTheme; });
+
+  # Wrap btop so it always launches with the config matching the session's
+  # THEME_MODE, defaulting to dark when THEME_MODE is set but not exactly
+  # dark/light. Calls btop's store path directly (never a bare `btop`) to
+  # avoid PATH recursion, and is a real executable so it works regardless of
+  # what launches it (Hyprland binds, tmux panes, btop-workspace).
+  btopWrapped = pkgs.symlinkJoin {
+    name = "btop-wrapped";
+    paths = [ pkgs.btop ];
+    postBuild = ''
+      rm "$out/bin/btop"
+      cat > "$out/bin/btop" <<'WRAPPER'
+      #!/usr/bin/env bash
+      # THEME_MODE set: a session (interactive shell, mosh/ssh peer) owns
+      # its own colours (Layer B) - use it as-is (coerced below).
+      # THEME_MODE unset: follow this machine's own monitor (Layer A) by
+      # reading the hypr current-theme symlink directly, inline, rather than
+      # shelling out to theme-mode - a systemd user service has no
+      # guaranteed PATH, which is exactly the failure mode being avoided.
+      # Callers that are part of the desktop environment (not a session)
+      # clear THEME_MODE deliberately to select this path - see
+      # dotfiles/hypr/scripts/btop-dashboard.sh.
+      mode="$THEME_MODE"
+      if [ -z "$mode" ]; then
+        case "$(readlink "$HOME/.local/state/hypr/current-theme.conf" 2>/dev/null)" in
+          *dark.conf) mode=dark ;;
+          *) mode=light ;;
+        esac
+      fi
+      case "$mode" in
+        dark | light) ;;
+        *) mode=dark ;;
+      esac
+      exec ${pkgs.btop}/bin/btop -c "$HOME/.config/btop/btop-$mode.conf" "$@"
+      WRAPPER
+      chmod +x "$out/bin/btop"
+    '';
+  };
+in
 {
   programs.btop = {
     enable = true;
-    settings = {
-      color_theme = "current";
-      theme_background = false;
-      truecolor = true;
-      vim_keys = true;
-      rounded_corners = true;
-      graph_symbol = "braille";
-      update_ms = 1500;
-      proc_sorting = "cpu lazy";
-      proc_tree = false;
-      proc_colors = true;
-      proc_gradient = true;
-      show_battery = true;
-      show_disks = true;
-      only_physical = true;
-      use_fstab = false;
-    };
+    package = btopWrapped;
 
     themes = {
       matrix = ''
@@ -115,4 +183,7 @@
       '';
     };
   };
+
+  xdg.configFile."btop/btop-dark.conf".text = mkBtopConfig "matrix";
+  xdg.configFile."btop/btop-light.conf".text = mkBtopConfig "eink";
 }
