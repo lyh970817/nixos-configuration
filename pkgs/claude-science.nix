@@ -14,6 +14,9 @@
 # `claude-science --version` on the fetched binary. The store binary is
 # read-only, so the app's own self-updater cannot work; updates come through
 # this derivation.
+let
+  icon = ../assets/icons/claude-science.svg;
+in
 stdenv.mkDerivation {
   pname = "claude-science";
   version = "0.1.25";
@@ -50,6 +53,23 @@ stdenv.mkDerivation {
     runHook preInstall
 
     install -Dm755 $src $out/bin/claude-science
+    install -Dm444 ${icon} $out/share/icons/hicolor/scalable/apps/claude-science.svg
+
+    # Quoted heredoc: only Nix interpolates, the shell leaves the body alone.
+    mkdir -p $out/share/applications
+    cat > $out/share/applications/claude-science.desktop <<'EOF'
+    [Desktop Entry]
+    Type=Application
+    Name=Claude Science
+    Comment=Anthropic's AI workbench for scientific research
+    Exec=${placeholder "out"}/bin/claude-science open
+    Icon=claude-science
+    Terminal=false
+    Categories=Science;Education;Development;
+    Keywords=claude;anthropic;ai;science;research;workbench;
+    StartupNotify=false
+    EOF
+    chmod 444 $out/share/applications/claude-science.desktop
 
     runHook postInstall
   '';
