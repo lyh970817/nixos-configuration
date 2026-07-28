@@ -21,6 +21,11 @@
       url = "github:ilysenko/codex-desktop-linux";
     };
 
+    herdr = {
+      url = "github:ogulcancelik/herdr/v0.7.5";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
   };
 
   outputs =
@@ -31,6 +36,7 @@
       nur,
       pre-commit-hooks,
       codex-desktop-linux,
+      herdr,
       ...
     }:
     let
@@ -49,6 +55,8 @@
         };
         kreuzberg-cli = final.callPackage ./pkgs/kreuzberg-cli.nix { };
         digg-pp-cli = final.callPackage ./pkgs/digg-pp-cli.nix { };
+        # Upstream flake ships the package directly; take it from the pinned input.
+        herdr = herdr.packages.${system}.default;
         hyprwhspr = final.callPackage ./pkgs/hyprwhspr.nix { };
         quicktui = final.callPackage ./pkgs/quicktui.nix { };
         # DECSCUSR cursor-shape support (unmerged upstream PR #1355) — needed on

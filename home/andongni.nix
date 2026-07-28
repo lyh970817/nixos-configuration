@@ -28,6 +28,7 @@
     ./programs/codex-desktop.nix
     ./programs/visual-verification.nix
     ./programs/gemini.nix
+    ./programs/herdr.nix
     ./programs/hyprwhspr.nix
     ./programs/quicktui.nix
     ./programs/launchers.nix
