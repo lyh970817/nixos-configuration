@@ -11,11 +11,31 @@ from typing import Any
 from .state import ScreenError
 
 
-ADAPTER_COMMANDS = {
-    "alacritty": ["alacritty", "--class", "screen-verify-alacritty"],
-    "neovim": ["alacritty", "--class", "screen-verify-neovim", "-e", "nvim"],
-    "btop": ["alacritty", "--class", "screen-verify-btop", "-e", "btop"],
-    "rofi": ["rofi", "-show", "drun"],
+# Each adapter declares the surface it renders. Ordinary windows can be placed
+# on the staging workspace by a Hyprland workspace rule; layer surfaces cannot,
+# so they are pinned to the staging output with their own monitor flag instead.
+ADAPTER_COMMANDS: dict[str, dict[str, Any]] = {
+    "alacritty": {
+        "command": ["alacritty", "--class", "screen-verify-alacritty"],
+        "surface": "window",
+    },
+    "neovim": {
+        "command": ["alacritty", "--class", "screen-verify-neovim", "-e", "nvim"],
+        "surface": "window",
+    },
+    "btop": {
+        "command": ["alacritty", "--class", "screen-verify-btop", "-e", "btop"],
+        "surface": "window",
+    },
+    "rofi": {
+        "command": ["rofi", "-show", "drun"],
+        "surface": "layer",
+        "monitor_flag": "-m",
+        "warning": (
+            "rofi renders a layer surface and grabs the keyboard on whichever "
+            "output it opens; it cannot be isolated by the staging workspace"
+        ),
+    },
 }
 ADAPTER_NAMES = ("desktop", *ADAPTER_COMMANDS, "notification")
 
@@ -61,8 +81,9 @@ def focused_monitor() -> str:
     return monitor
 
 
-def active_window_geometry() -> str:
-    window = run_json(["hyprctl", "activewindow", "-j"])
+def window_geometry(window: Any) -> str | None:
+    if not isinstance(window, dict):
+        return None
     position = window.get("at")
     size = window.get("size")
     if not (
@@ -72,8 +93,15 @@ def active_window_geometry() -> str:
         and len(size) == 2
         and all(isinstance(value, int) for value in position + size)
     ):
-        raise ScreenError("Hyprland did not report active-window geometry")
+        return None
     return f"{position[0]},{position[1]} {size[0]}x{size[1]}"
+
+
+def active_window_geometry() -> str:
+    geometry = window_geometry(run_json(["hyprctl", "activewindow", "-j"]))
+    if geometry is None:
+        raise ScreenError("Hyprland did not report active-window geometry")
+    return geometry
 
 
 def descendant_pids(parent: int) -> set[int]:

@@ -12,6 +12,174 @@ from pathlib import Path
 
 SCRIPT = Path(__file__).parents[1] / "screen_verify.py"
 
+# A small stateful Hyprland stand-in: it models monitor creation and removal,
+# workspace rules, focus, and window spawning, and logs every invocation so
+# tests can assert the order in which screen-verify drives the compositor.
+HYPRCTL_FAKE = r"""
+import json, os, subprocess, sys
+from pathlib import Path
+
+arguments = sys.argv[1:]
+with open(os.environ["FAKE_COMMAND_LOG"], "a") as handle:
+    handle.write(json.dumps(["hyprctl", *arguments]) + "\n")
+
+state_path = Path(os.environ["FAKE_HYPR_STATE"])
+state = json.loads(state_path.read_text())
+
+
+def save():
+    state_path.write_text(json.dumps(state))
+
+
+def focused():
+    for monitor in state["monitors"]:
+        if monitor.get("focused") and not monitor.get("hidden_polls"):
+            return monitor
+    return {}
+
+
+def emit(value):
+    print(json.dumps(value))
+
+
+command = arguments[0] if arguments else ""
+# A transient hyprctl failure has to be expressible: screen-verify must not
+# read one as an answer about the compositor's state.
+if command and command in os.environ.get("FAKE_HYPRCTL_FAIL", "").split(","):
+    sys.exit(1)
+if command == "monitors":
+    # Hyprland answers `output create` long before the monitor exists, and the
+    # new output adopts its workspace later still. Both latencies are modelled
+    # as a countdown of `monitors` polls -- never a wall-clock sleep -- so the
+    # waiting loops are actually driven instead of collapsing to single shots.
+    visible = []
+    counted = False
+    for monitor in state["monitors"]:
+        entry = dict(monitor)
+        hidden = entry.pop("hidden_polls", 0)
+        unadopted = entry.pop("workspace_polls", 0)
+        if hidden:
+            monitor["hidden_polls"] = hidden - 1
+            counted = True
+            continue
+        if unadopted:
+            monitor["workspace_polls"] = unadopted - 1
+            counted = True
+            entry["activeWorkspace"] = {"id": 7, "name": "7"}
+        visible.append(entry)
+    if counted:
+        save()
+    emit(visible)
+elif command == "activeworkspace":
+    monitor = focused()
+    workspace = dict(monitor.get("activeWorkspace") or {})
+    workspace["monitor"] = monitor.get("name")
+    emit(workspace)
+elif command == "activewindow":
+    emit(state.get("activewindow", {}))
+elif command == "clients":
+    # A window never maps at the instant its process starts, so the same
+    # poll-counted latency applies here.
+    hidden = state.get("client_hidden_polls", 0)
+    clients = []
+    if hidden:
+        state["client_hidden_polls"] = hidden - 1
+        save()
+    else:
+        for entry in state.get("clients", []):
+            client = dict(entry)
+            pid_file = client.pop("pid_file", None)
+            if pid_file:
+                try:
+                    client["pid"] = int(Path(pid_file).read_text().strip())
+                except (OSError, ValueError):
+                    client["pid"] = 0
+            clients.append(client)
+    emit(clients)
+elif command == "getoption":
+    emit({"custom": "4"})
+elif command == "keyword":
+    if arguments[1:2] == ["workspace"]:
+        rule = {}
+        for field in arguments[2].split(","):
+            key, _, value = field.partition(":")
+            rule[key] = value
+        if rule.get("name") and rule.get("monitor"):
+            state.setdefault("workspace_rules", {})[rule["monitor"]] = rule["name"]
+            save()
+    print("ok")
+elif command == "output":
+    if arguments[1:2] == ["create"]:
+        snapshot = os.environ.get("FAKE_SESSION_SNAPSHOT")
+        source = os.environ.get("FAKE_SESSION_FILE")
+        if snapshot and source:
+            try:
+                Path(snapshot).write_text(Path(source).read_text())
+            except OSError:
+                pass
+        name = arguments[3]
+        rule = state.get("workspace_rules", {}).get(name)
+        if rule and not state.get("ignore_workspace_rules"):
+            workspace = {"id": -13, "name": rule}
+        else:
+            workspace = {"id": 7, "name": "7"}
+        for monitor in state["monitors"]:
+            monitor["focused"] = False
+        created = {
+            "name": name,
+            "focused": True,
+            "width": 1920,
+            "height": 1080,
+            "scale": 1.0,
+            "activeWorkspace": workspace,
+        }
+        if state.get("create_hidden_polls"):
+            created["hidden_polls"] = state["create_hidden_polls"]
+        if state.get("create_workspace_polls"):
+            created["workspace_polls"] = state["create_workspace_polls"]
+        state["monitors"].append(created)
+    elif arguments[1:2] == ["remove"] and not state.get("ignore_output_removals"):
+        name = arguments[2]
+        state["monitors"] = [
+            monitor for monitor in state["monitors"] if monitor.get("name") != name
+        ]
+        if state["monitors"] and not any(m.get("focused") for m in state["monitors"]):
+            state["monitors"][0]["focused"] = True
+    save()
+    print("ok")
+elif command == "dispatch":
+    action = arguments[1] if len(arguments) > 1 else ""
+    if action == "exec":
+        specification = arguments[2]
+        if specification.startswith("["):
+            specification = specification[specification.index("]") + 1 :].lstrip()
+        # Hyprland 0.53.1 calls neither setsid nor setpgid for exec'd
+        # children, so a staged process is never a process-group leader.
+        subprocess.Popen(
+            ["/bin/sh", "-c", specification],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    elif action == "focusmonitor":
+        for monitor in state["monitors"]:
+            monitor["focused"] = monitor.get("name") == arguments[2]
+        save()
+    elif action == "focuswindow":
+        state["focused_window"] = arguments[2]
+        save()
+    elif action == "moveworkspacetomonitor" and not state.get("ignore_workspace_moves"):
+        target, _, destination = arguments[2].partition(" ")
+        name = target.split(":", 1)[-1]
+        for monitor in state["monitors"]:
+            if monitor.get("name") == destination:
+                monitor["activeWorkspace"] = {"id": -13, "name": name}
+        save()
+    print("ok")
+else:
+    print("ok")
+"""
+
 
 class ScreenVerifyCliTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -22,6 +190,7 @@ class ScreenVerifyCliTests(unittest.TestCase):
         self.bin = self.root / "bin"
         self.bin.mkdir()
         self.log = self.root / "commands.jsonl"
+        self.hypr_state = self.root / "hypr-state.json"
         self.environment = os.environ.copy()
         self.environment.update(
             {
@@ -30,12 +199,16 @@ class ScreenVerifyCliTests(unittest.TestCase):
                 "XDG_STATE_HOME": str(self.state),
                 "PATH": f"{self.bin}:{os.environ['PATH']}",
                 "FAKE_COMMAND_LOG": str(self.log),
+                "FAKE_HYPR_STATE": str(self.hypr_state),
             }
         )
+        self.write_hypr_state()
         self.fake(
             "hyprctl",
-            """#!/bin/sh
-if [ "$1" = activeworkspace ]; then printf '%s\n' '{"monitor":"DP-1"}'; else printf '%s\n' '{"at":[10,20],"size":[800,600]}'; fi
+            f"""#!/bin/sh
+{sys.executable} - "$@" <<'PY'
+{HYPRCTL_FAKE}
+PY
 """,
         )
         self.fake(
@@ -63,10 +236,162 @@ PY
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
-    def fake(self, name: str, contents: str) -> None:
+    def fake(self, name: str, contents: str) -> Path:
         path = self.bin / name
         path.write_text(contents)
         path.chmod(0o755)
+        return path
+
+    def write_hypr_state(self, **overrides) -> None:
+        state = {
+            "monitors": [
+                {
+                    "name": "DP-1",
+                    "focused": True,
+                    "width": 2560,
+                    "height": 1440,
+                    "scale": 1.25,
+                    "activeWorkspace": {"id": 1, "name": "1"},
+                }
+            ],
+            "activewindow": {
+                "address": "0xuser",
+                "at": [10, 20],
+                "size": [800, 600],
+            },
+            "clients": [],
+            "workspace_rules": {},
+        }
+        state.update(overrides)
+        self.hypr_state.write_text(json.dumps(state))
+
+    def set_clients(self, clients: list[dict]) -> None:
+        state = json.loads(self.hypr_state.read_text())
+        state["clients"] = clients
+        self.hypr_state.write_text(json.dumps(state))
+
+    def patch_hypr_state(self, **updates) -> None:
+        state = json.loads(self.hypr_state.read_text())
+        state.update(updates)
+        self.hypr_state.write_text(json.dumps(state))
+
+    def set_active_workspace(self, monitor: str, workspace: dict) -> None:
+        state = json.loads(self.hypr_state.read_text())
+        for entry in state["monitors"]:
+            if entry["name"] == monitor:
+                entry["activeWorkspace"] = workspace
+        self.hypr_state.write_text(json.dumps(state))
+
+    def quiet_gsettings(self) -> None:
+        """`set` prints nothing: preview does not capture it, so it would
+        otherwise land in front of the command's own JSON on stdout."""
+        self.fake(
+            "gsettings",
+            "#!/bin/sh\nif [ \"$1\" = get ]; then printf \"'prefer-dark'\\n\"; fi\n",
+        )
+
+    def failing_gsettings(self) -> None:
+        """`gsettings get` still answers, but every `set` fails."""
+        self.fake(
+            "gsettings",
+            "#!/bin/sh\nif [ \"$1\" = get ]; then printf \"'prefer-dark'\\n\"; "
+            "else exit 1; fi\n",
+        )
+
+    def session_file(self, session: str) -> Path:
+        return self.runtime / "screen-verify" / session / "session.json"
+
+    def tamper(self, session: str, **stage) -> None:
+        path = self.session_file(session)
+        data = json.loads(path.read_text())
+        data["stage"] = stage
+        path.write_text(json.dumps(data))
+
+    def run_cli(self, *arguments: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, str(SCRIPT), *arguments],
+            env=self.environment,
+            capture_output=True,
+            text=True,
+        )
+
+    def drop_fake_monitor(self, name: str) -> None:
+        state = json.loads(self.hypr_state.read_text())
+        state["monitors"] = [
+            monitor for monitor in state["monitors"] if monitor["name"] != name
+        ]
+        if state["monitors"] and not any(m.get("focused") for m in state["monitors"]):
+            state["monitors"][0]["focused"] = True
+        self.hypr_state.write_text(json.dumps(state))
+
+    def hypr_monitors(self) -> list[str]:
+        state = json.loads(self.hypr_state.read_text())
+        return [monitor["name"] for monitor in state["monitors"]]
+
+    def hyprctl_calls(self) -> list[list[str]]:
+        return [command for command in self.commands() if command[0] == "hyprctl"]
+
+    def call_index(self, prefix: list[str]) -> int:
+        calls = self.hyprctl_calls()
+        for index, command in enumerate(calls):
+            if command[: len(prefix)] == prefix:
+                return index
+        raise AssertionError(f"hyprctl call not found: {prefix}")
+
+    def stage_names(self, session: str) -> tuple[str, str]:
+        return f"svstage{session[:8]}", f"svws{session[:8]}"
+
+    def eventually(self, predicate, message: str, timeout: float = 10.0):
+        deadline = time.monotonic() + timeout
+        while True:
+            value = predicate()
+            if value:
+                return value
+            if time.monotonic() >= deadline:
+                raise AssertionError(message)
+            time.sleep(0.05)
+
+    def reaped(self, pid: int) -> bool:
+        try:
+            stat = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8")
+        except OSError:
+            return True
+        return stat.rsplit(")", 1)[1].split()[0] == "Z"
+
+    def recorded_argv(self, argv_file: Path) -> list[str]:
+        """The arguments a `sleeper` helper received, in order.
+
+        The record is NUL-separated rather than newline-separated: a
+        newline-separated one cannot express an argument that contains a
+        newline, so such an argument would be silently unrepresentable and any
+        round-trip assertion about it would pass no matter what was delivered.
+        """
+        recorded = argv_file.read_text(encoding="utf-8").split("\0")
+        if recorded and recorded[-1] == "":
+            # Every argument is terminated, so the split leaves a final empty
+            # element that is a separator artefact, not an empty argument.
+            recorded.pop()
+        return recorded
+
+    def sleeper(self, name: str, pid_file: Path, argv_file: Path | None = None) -> Path:
+        """A long-lived helper that owns a child, so descendants are testable."""
+        record = (
+            f"for argument in \"$@\"; do printf '%s\\0' \"$argument\" >> {argv_file}; done\n"
+            if argv_file
+            else ""
+        )
+        return self.fake(
+            name,
+            f"""#!/bin/sh
+{record}sleep 30 &
+printf '%s' $! > {self.child_pid_file(pid_file)}
+printf '%s' $$ > {pid_file}
+wait
+""",
+        )
+
+    def child_pid_file(self, pid_file: Path) -> Path:
+        return pid_file.with_name(pid_file.name + ".child")
 
     def cli(self, *arguments: str, check: bool = True) -> dict:
         result = subprocess.run(
@@ -136,6 +461,7 @@ PY
             "launch",
             "--session",
             session,
+            "--no-stage",
             "--wait-seconds",
             "0",
             "--",
@@ -143,10 +469,20 @@ PY
             "-c",
             "import time; time.sleep(30)",
         )
+        self.assertEqual(launch["spawn"], "direct")
+        self.assertIsNone(launch["stage"])
+        self.assertEqual(
+            [command for command in self.hyprctl_calls() if command[1] == "output"], []
+        )
+        self.assertEqual(
+            [command for command in self.hyprctl_calls() if command[1] == "dispatch"],
+            [],
+        )
 
         result = self.cli("end", "--session", session)
 
         self.assertTrue(result["cleaned"])
+        self.assertFalse(result["stage_removed"])
         self.assertEqual(result["terminated"], 1)
         self.assertFalse(capture.parent.exists())
         with self.assertRaises(ProcessLookupError):
@@ -159,6 +495,7 @@ PY
             "--keep-open",
             "--session",
             session,
+            "--no-stage",
             "--wait-seconds",
             "0",
             "--",
@@ -235,6 +572,7 @@ if [ "$1" = clients ]; then pid=$(cat {pid_file} 2>/dev/null || printf 0); print
             "launch",
             "--session",
             session,
+            "--no-stage",
             "--wait-seconds",
             "1",
             "--",
@@ -385,6 +723,1452 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
         self.assertIn("inside the home directory", result.stderr)
         self.assertFalse((outside / "theme").exists())
         self.cli("end", "--session", session)
+
+    def test_stage_installs_the_workspace_rule_before_creating_the_output(self) -> None:
+        session = self.begin()
+        output, workspace = self.stage_names(session)
+
+        result = self.cli("stage", "--session", session)
+
+        self.assertEqual(result["output"], output)
+        self.assertEqual(result["workspace"], workspace)
+        rule = self.call_index(
+            [
+                "hyprctl",
+                "keyword",
+                "workspace",
+                f"name:{workspace},monitor:{output},default:true",
+            ]
+        )
+        creation = self.call_index(["hyprctl", "output", "create", "headless", output])
+        self.assertLess(rule, creation)
+        self.assertIn(output, self.hypr_monitors())
+
+    def test_stage_sizes_the_output_with_automatic_placement(self) -> None:
+        session = self.begin()
+        output, _ = self.stage_names(session)
+
+        self.cli("stage", "--session", session)
+
+        keyword = next(
+            command
+            for command in self.hyprctl_calls()
+            if command[:3] == ["hyprctl", "keyword", "monitor"]
+        )
+        # "auto" rather than an explicit position: an explicit one shoves the
+        # user's real monitors around in the global layout.
+        self.assertEqual(keyword[3], f"{output},2560x1440@60,auto,1.25")
+
+    def test_stage_restores_the_focus_it_steals(self) -> None:
+        session = self.begin()
+        output, _ = self.stage_names(session)
+
+        self.cli("stage", "--session", session)
+
+        creation = self.call_index(["hyprctl", "output", "create", "headless", output])
+        focus_monitor = self.call_index(
+            ["hyprctl", "dispatch", "focusmonitor", "DP-1"]
+        )
+        focus_window = self.call_index(
+            ["hyprctl", "dispatch", "focuswindow", "address:0xuser"]
+        )
+        self.assertLess(creation, focus_monitor)
+        self.assertLess(focus_monitor, focus_window)
+        state = json.loads(self.hypr_state.read_text())
+        focused = [
+            monitor["name"] for monitor in state["monitors"] if monitor["focused"]
+        ]
+        self.assertEqual(focused, ["DP-1"])
+
+    def test_stage_restores_focus_when_no_monitor_reports_it(self) -> None:
+        session = self.begin()
+        # One monitors query that reports nothing focused must not leave the
+        # snapshot empty; the user would be left typing at the hidden stage.
+        state = json.loads(self.hypr_state.read_text())
+        state["monitors"][0]["focused"] = False
+        self.hypr_state.write_text(json.dumps(state))
+
+        self.cli("stage", "--session", session)
+
+        self.assertIn(["hyprctl", "dispatch", "focusmonitor", "DP-1"], self.commands())
+        state = json.loads(self.hypr_state.read_text())
+        focused = [
+            monitor["name"] for monitor in state["monitors"] if monitor["focused"]
+        ]
+        self.assertEqual(focused, ["DP-1"])
+
+    def test_the_stage_is_recorded_before_the_output_can_exist(self) -> None:
+        session = self.begin()
+        output, workspace = self.stage_names(session)
+        snapshot = self.root / "session-at-create.json"
+        self.environment["FAKE_SESSION_FILE"] = str(self.session_file(session))
+        self.environment["FAKE_SESSION_SNAPSHOT"] = str(snapshot)
+
+        self.cli("stage", "--session", session)
+
+        at_creation = json.loads(snapshot.read_text())
+        self.assertIn("stage", at_creation, "the output was created unrecorded")
+        self.assertEqual(at_creation["stage"]["output"], output)
+        self.assertEqual(at_creation["stage"]["workspace"], workspace)
+
+    def test_stage_creation_is_idempotent(self) -> None:
+        session = self.begin()
+        output, _ = self.stage_names(session)
+
+        first = self.cli("stage", "--session", session)
+        second = self.cli("stage", "--session", session)
+
+        self.assertEqual(first, second)
+        creations = [
+            command
+            for command in self.hyprctl_calls()
+            if command[:3] == ["hyprctl", "output", "create"]
+        ]
+        self.assertEqual(len(creations), 1)
+        self.assertEqual(self.hypr_monitors().count(output), 1)
+
+    def test_stage_creation_fails_when_the_workspace_is_not_adopted(self) -> None:
+        self.write_hypr_state(ignore_workspace_rules=True)
+        session = self.begin()
+        output, _ = self.stage_names(session)
+
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "stage", "--session", session],
+            env=self.environment,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("workspace", result.stderr)
+        self.assertNotIn(output, self.hypr_monitors())
+        self.assertIn(["hyprctl", "output", "remove", output], self.commands())
+        self.assertFalse(self.cli("status", "--session", session)["stage"])
+        self.assertNotIn("stage", json.loads(self.session_file(session).read_text()))
+
+    def test_stage_waits_for_an_output_that_appears_a_poll_later(self) -> None:
+        # `output create` returns before the monitor exists, so the first
+        # `monitors` query legitimately does not see it yet.
+        self.write_hypr_state(create_hidden_polls=2)
+        session = self.begin()
+        output, workspace = self.stage_names(session)
+
+        result = self.cli("stage", "--session", session)
+
+        self.assertEqual(result["output"], output)
+        self.assertEqual(result["workspace"], workspace)
+        self.assertIn(output, self.hypr_monitors())
+        creation = self.call_index(["hyprctl", "output", "create", "headless", output])
+        sizing = self.call_index(["hyprctl", "keyword", "monitor"])
+        polls = [
+            index
+            for index, command in enumerate(self.hyprctl_calls())
+            if command[:2] == ["hyprctl", "monitors"] and creation < index < sizing
+        ]
+        self.assertGreater(
+            len(polls), 1, "the missing output was never asked about again"
+        )
+
+    def test_stage_creation_fails_when_the_output_never_appears(self) -> None:
+        # A compositor that accepts `output create` and produces nothing must
+        # not leave a recorded stage, a stolen focus, or a phantom name behind.
+        self.write_hypr_state(create_hidden_polls=10_000)
+        session = self.begin()
+        output, _ = self.stage_names(session)
+
+        result = self.run_cli("stage", "--session", session)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("did not create the staging output", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertIn(["hyprctl", "output", "remove", output], self.commands())
+        self.assertNotIn(output, self.hypr_monitors())
+        self.assertIn(["hyprctl", "dispatch", "focusmonitor", "DP-1"], self.commands())
+        self.assertFalse(self.cli("status", "--session", session)["stage"])
+        self.assertNotIn("stage", json.loads(self.session_file(session).read_text()))
+
+    def test_stage_waits_for_a_workspace_adopted_a_poll_later(self) -> None:
+        # A brand new output reports an ordinary workspace until the rule
+        # takes, so adoption has to be waited for rather than sampled once.
+        self.write_hypr_state(create_workspace_polls=3)
+        session = self.begin()
+        output, workspace = self.stage_names(session)
+
+        result = self.cli("stage", "--session", session)
+
+        self.assertEqual(result["workspace"], workspace)
+        sizing = self.call_index(["hyprctl", "keyword", "monitor"])
+        polls = [
+            index
+            for index, command in enumerate(self.hyprctl_calls())
+            if command[:2] == ["hyprctl", "monitors"] and index > sizing
+        ]
+        self.assertGreater(
+            len(polls), 1, "the unadopted workspace was never asked about again"
+        )
+        self.assertEqual(self.cli("capture", "--session", session)["target"], "stage")
+        self.assertIn(output, self.hypr_monitors())
+
+    def test_stage_launch_dispatches_through_hyprland(self) -> None:
+        session = self.begin()
+        output, workspace = self.stage_names(session)
+        pid_file = self.root / "staged-pid"
+        helper = self.sleeper("staged-app", pid_file)
+
+        launch = self.cli(
+            "launch",
+            "--session",
+            session,
+            "--wait-seconds",
+            "0",
+            "--",
+            str(helper),
+        )
+        try:
+            self.assertEqual(launch["spawn"], "stage")
+            self.assertEqual(launch["stage"], output)
+            dispatch = next(
+                command
+                for command in self.hyprctl_calls()
+                if command[:3] == ["hyprctl", "dispatch", "exec"]
+            )
+            self.assertTrue(
+                dispatch[3].startswith(f"[workspace name:{workspace} silent"),
+                dispatch[3],
+            )
+            self.assertIn("noinitialfocus", dispatch[3])
+            recorded = self.eventually(
+                lambda: pid_file.read_text() if pid_file.exists() else "",
+                "the staged process never reported its pid",
+            )
+            self.assertEqual(int(recorded), launch["pid"])
+        finally:
+            self.cli("end", "--session", session)
+
+    def test_stage_launch_arguments_are_never_shell_evaluated(self) -> None:
+        session = self.begin()
+        pid_file = self.root / "argv-pid"
+        argv_file = self.root / "argv"
+        marker = self.root / "pwned"
+        helper = self.sleeper("argv-app", pid_file, argv_file)
+        arguments = [
+            "hello world",
+            "$HOME",
+            "a;b",
+            "*",
+            "`id`",
+            f"$(touch {marker})",
+            # A single quote is the only character `shlex.quote` genuinely has
+            # to escape. Without one of these, quoting an argument as
+            # "'" + argument + "'" would pass every assertion below while
+            # letting an apostrophe close the quote and start a new command --
+            # so this one really does run `touch` under naive quoting.
+            f"x' & touch {marker} & echo '",
+            "it's",
+            # Hyprland ends the exec rule block at the first "]", so an
+            # argument carrying one must never be read as that boundary.
+            "]",
+            "] /bin/sh -c 'x' #",
+            # argparse's REMAINDER has to hand these through untouched.
+            "--",
+            "",
+            # Only representable because the helper records NUL-separated.
+            "first line\nsecond line",
+        ]
+
+        self.cli(
+            "launch",
+            "--session",
+            session,
+            "--wait-seconds",
+            "0",
+            "--",
+            str(helper),
+            *arguments,
+        )
+        try:
+            self.eventually(
+                lambda: pid_file.exists(),
+                "the staged process never reported its pid",
+            )
+            self.assertFalse(marker.exists(), "an argument reached a shell")
+            self.assertEqual(self.recorded_argv(argv_file), arguments)
+        finally:
+            self.cli("end", "--session", session)
+
+    def test_launch_waits_for_a_window_that_maps_a_poll_later(self) -> None:
+        session = self.begin()
+        _, workspace = self.stage_names(session)
+        pid_file = self.root / "staged-pid"
+        helper = self.sleeper("staged-app", pid_file)
+        self.set_clients(
+            [
+                {
+                    "address": "0xlate",
+                    "pid_file": str(pid_file),
+                    "at": [0, 0],
+                    "size": [100, 100],
+                    "workspace": {"id": -13, "name": workspace},
+                }
+            ]
+        )
+        # A window is never mapped at the instant its process starts, so the
+        # first `clients` query legitimately reports nothing.
+        self.patch_hypr_state(client_hidden_polls=3)
+
+        launch = self.cli(
+            "launch", "--session", session, "--wait-seconds", "10", "--", str(helper)
+        )
+        try:
+            self.assertIsNotNone(launch["window"], "the window was never seen")
+            self.assertEqual(launch["window"]["address"], "0xlate")
+            self.assertNotIn("warning", launch)
+            queries = [
+                command
+                for command in self.hyprctl_calls()
+                if command[:2] == ["hyprctl", "clients"]
+            ]
+            self.assertGreater(
+                len(queries), 1, "the unmapped window was never asked about again"
+            )
+        finally:
+            self.cli("end", "--session", session)
+
+    def test_stage_launch_is_terminated_with_its_children_on_end(self) -> None:
+        session = self.begin()
+        pid_file = self.root / "staged-pid"
+        helper = self.sleeper("staged-app", pid_file)
+
+        launch = self.cli(
+            "launch",
+            "--session",
+            session,
+            "--wait-seconds",
+            "0",
+            "--",
+            str(helper),
+        )
+        self.eventually(
+            lambda: pid_file.exists(), "the staged process never reported its pid"
+        )
+        child = int(self.child_pid_file(pid_file).read_text())
+        # Hyprland leaves staged processes inside the compositor's process
+        # group, so the pid must never be treated as a group of its own.
+        self.assertNotEqual(os.getpgid(launch["pid"]), launch["pid"])
+
+        result = self.cli("end", "--session", session)
+
+        self.assertEqual(result["terminated"], 1)
+        self.assertTrue(result["stage_removed"])
+        self.eventually(
+            lambda: self.reaped(launch["pid"]),
+            "the staged process survived cleanup",
+        )
+        self.eventually(
+            lambda: self.reaped(child),
+            "the staged process left a child behind",
+        )
+
+    def test_stage_launch_survives_a_recycled_pid_guard(self) -> None:
+        session = self.begin()
+        pid_file = self.root / "staged-pid"
+        helper = self.sleeper("staged-app", pid_file)
+        launch = self.cli(
+            "launch",
+            "--session",
+            session,
+            "--wait-seconds",
+            "0",
+            "--",
+            str(helper),
+        )
+        self.eventually(
+            lambda: pid_file.exists(), "the staged process never reported its pid"
+        )
+        path = self.runtime / "screen-verify" / session / "session.json"
+        data = json.loads(path.read_text())
+        data["processes"][0]["start_time"] = "1"
+        path.write_text(json.dumps(data))
+
+        result = self.cli("end", "--session", session)
+
+        self.assertEqual(result["terminated"], 0)
+        self.assertFalse(self.reaped(launch["pid"]))
+        os.kill(launch["pid"], 15)
+        os.kill(int(self.child_pid_file(pid_file).read_text()), 15)
+
+    def test_a_process_named_with_a_space_records_its_real_start_time(self) -> None:
+        session = self.begin()
+        pid_file = self.root / "spaced-pid"
+        # /proc/<pid>/stat carries the process name in parentheses, and a space
+        # inside it shifts every field that follows.
+        helper = self.sleeper("staged app", pid_file)
+
+        launch = self.cli(
+            "launch",
+            "--session",
+            session,
+            "--no-stage",
+            "--wait-seconds",
+            "0",
+            "--",
+            str(helper),
+        )
+        try:
+            stat = Path(f"/proc/{launch['pid']}/stat").read_text(encoding="utf-8")
+            self.assertIn("(staged app)", stat)
+            recorded = json.loads(self.session_file(session).read_text())["processes"]
+            self.assertEqual(
+                recorded[0]["start_time"], stat.rsplit(")", 1)[1].split()[19]
+            )
+            self.assertNotEqual(recorded[0]["start_time"], "0")
+        finally:
+            self.cli("end", "--session", session)
+
+    def test_a_stale_start_time_of_zero_never_kills_a_staged_tree(self) -> None:
+        session = self.begin()
+        pid_file = self.root / "staged-pid"
+        # A name with a space used to make every start time read as "0", so a
+        # recycled pid matched its record and `end` signalled the whole tree.
+        helper = self.sleeper("staged app", pid_file)
+        launch = self.cli(
+            "launch",
+            "--session",
+            session,
+            "--wait-seconds",
+            "0",
+            "--",
+            str(helper),
+        )
+        self.eventually(
+            lambda: pid_file.exists(), "the staged process never reported its pid"
+        )
+        child = int(self.child_pid_file(pid_file).read_text())
+        path = self.session_file(session)
+        data = json.loads(path.read_text())
+        data["processes"][0]["start_time"] = "0"
+        path.write_text(json.dumps(data))
+
+        result = self.cli("end", "--session", session)
+
+        self.assertEqual(result["terminated"], 0)
+        self.assertFalse(self.reaped(launch["pid"]))
+        self.assertFalse(self.reaped(child))
+        os.kill(launch["pid"], 15)
+        os.kill(child, 15)
+
+    def test_capture_defaults_to_the_stage_output_when_one_exists(self) -> None:
+        session = self.begin()
+        output, _ = self.stage_names(session)
+        self.cli("stage", "--session", session)
+
+        result = self.cli("capture", "--session", session)
+
+        self.assertEqual(result["target"], "stage")
+        grim = next(
+            command for command in reversed(self.commands()) if command[0] == "grim"
+        )
+        self.assertEqual(grim[1:-1], ["-o", output])
+
+    def test_capture_defaults_to_the_focused_monitor_without_a_stage(self) -> None:
+        session = self.begin()
+
+        result = self.cli("capture", "--session", session)
+
+        self.assertEqual(result["target"], "focused")
+        grim = next(
+            command for command in reversed(self.commands()) if command[0] == "grim"
+        )
+        self.assertEqual(grim[1:-1], ["-o", "DP-1"])
+
+    def test_window_target_under_a_stage_uses_the_owned_window(self) -> None:
+        session = self.begin()
+        _, workspace = self.stage_names(session)
+        pid_file = self.root / "staged-pid"
+        helper = self.sleeper("staged-app", pid_file)
+        self.set_clients(
+            [
+                {
+                    "address": "0xstaged",
+                    "pid_file": str(pid_file),
+                    "at": [100, 200],
+                    "size": [640, 480],
+                    "workspace": {"id": -13, "name": workspace},
+                }
+            ]
+        )
+
+        launch = self.cli(
+            "launch",
+            "--session",
+            session,
+            "--wait-seconds",
+            "10",
+            "--",
+            str(helper),
+        )
+        try:
+            self.assertEqual(launch["window"]["address"], "0xstaged")
+            self.assertNotIn("warning", launch)
+
+            self.cli("capture", "--session", session, "--target", "window")
+
+            grim = next(
+                command for command in reversed(self.commands()) if command[0] == "grim"
+            )
+            self.assertEqual(grim[1:-1], ["-g", "100,200 640x480"])
+        finally:
+            self.cli("end", "--session", session)
+
+    def test_window_target_skips_owned_windows_that_have_closed(self) -> None:
+        session = self.begin()
+        first_pid = self.root / "first-pid"
+        second_pid = self.root / "second-pid"
+        first = self.sleeper("first-app", first_pid)
+        second = self.sleeper("second-app", second_pid)
+        older = {
+            "address": "0xfirst",
+            "pid_file": str(first_pid),
+            "at": [11, 12],
+            "size": [300, 400],
+        }
+        newer = {
+            "address": "0xsecond",
+            "pid_file": str(second_pid),
+            "at": [21, 22],
+            "size": [500, 600],
+        }
+        self.set_clients([older])
+        self.cli(
+            "launch", "--session", session, "--wait-seconds", "10", "--", str(first)
+        )
+        self.set_clients([older, newer])
+        launch = self.cli(
+            "launch", "--session", session, "--wait-seconds", "10", "--", str(second)
+        )
+        self.assertEqual(launch["window"]["address"], "0xsecond")
+        try:
+            # The newest owned window closes; the older one is still open.
+            self.set_clients([older])
+
+            self.cli("capture", "--session", session, "--target", "window")
+
+            grim = next(
+                command for command in reversed(self.commands()) if command[0] == "grim"
+            )
+            self.assertEqual(grim[1:-1], ["-g", "11,12 300x400"])
+        finally:
+            self.cli("end", "--session", session)
+
+    def test_window_target_never_falls_back_to_the_user_window(self) -> None:
+        session = self.begin()
+        pid_file = self.root / "staged-pid"
+        helper = self.sleeper("staged-app", pid_file)
+        self.set_clients(
+            [
+                {
+                    "address": "0xstaged",
+                    "pid_file": str(pid_file),
+                    "at": [100, 200],
+                    "size": [640, 480],
+                }
+            ]
+        )
+        self.cli(
+            "launch", "--session", session, "--wait-seconds", "10", "--", str(helper)
+        )
+        try:
+            self.set_clients([])
+
+            result = self.run_cli(
+                "capture", "--session", session, "--target", "window"
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("still open", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+            geometries = [
+                command
+                for command in self.commands()
+                if command[0] == "grim" and "10,20 800x600" in command
+            ]
+            self.assertEqual(geometries, [])
+        finally:
+            self.cli("end", "--session", session)
+
+    def test_window_target_refuses_when_the_stage_owns_no_window(self) -> None:
+        session = self.begin()
+        self.cli("stage", "--session", session)
+
+        result = self.run_cli("capture", "--session", session, "--target", "window")
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("still open", result.stderr)
+        self.assertEqual(
+            [
+                command
+                for command in self.commands()
+                if command[0] == "grim" and "10,20 800x600" in command
+            ],
+            [],
+        )
+
+    def test_window_target_refuses_after_a_layer_adapter(self) -> None:
+        session = self.begin()
+        self.sleeper("rofi", self.root / "rofi-pid")
+        self.cli("adapter", "--session", session, "--wait-seconds", "0", "rofi")
+        try:
+            result = self.run_cli(
+                "capture", "--session", session, "--target", "window"
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("still open", result.stderr)
+            self.assertEqual(
+                [
+                    command
+                    for command in self.commands()
+                    if command[0] == "grim" and "10,20 800x600" in command
+                ],
+                [],
+            )
+        finally:
+            self.cli("end", "--session", session)
+
+    def test_capture_falls_back_to_focused_when_the_stage_output_vanished(self) -> None:
+        session = self.begin()
+        output, _ = self.stage_names(session)
+        self.cli("stage", "--session", session)
+        self.drop_fake_monitor(output)
+
+        result = self.cli("capture", "--session", session)
+
+        self.assertEqual(result["target"], "focused")
+        grim = next(
+            command for command in reversed(self.commands()) if command[0] == "grim"
+        )
+        self.assertEqual(grim[1:-1], ["-o", "DP-1"])
+        # An explicit request for the stage must still fail loudly.
+        explicit = self.run_cli(
+            "capture", "--session", session, "--target", "stage"
+        )
+        self.assertEqual(explicit.returncode, 1)
+
+    def test_end_reports_kept_windows_it_could_not_rescue(self) -> None:
+        session = self.begin()
+        output, workspace = self.stage_names(session)
+        pid_file = self.root / "kept-pid"
+        helper = self.sleeper("kept-app", pid_file)
+        self.set_clients(
+            [
+                {
+                    "address": "0xkept",
+                    "pid_file": str(pid_file),
+                    "at": [0, 0],
+                    "size": [100, 100],
+                    "workspace": {"id": -13, "name": workspace},
+                }
+            ]
+        )
+        launch = self.cli(
+            "launch",
+            "--keep-open",
+            "--session",
+            session,
+            "--wait-seconds",
+            "10",
+            "--",
+            str(helper),
+        )
+        try:
+            # No real monitor is left to hand the window back to.
+            self.drop_fake_monitor("DP-1")
+
+            result = self.cli("end", "--session", session)
+
+            self.assertIn("could not be moved", result["warning"])
+            self.assertEqual(
+                [
+                    command
+                    for command in self.hyprctl_calls()
+                    if command[1:3] == ["dispatch", "movetoworkspacesilent"]
+                ],
+                [],
+            )
+        finally:
+            os.kill(launch["pid"], 15)
+            os.kill(int(self.child_pid_file(pid_file).read_text()), 15)
+
+    def test_end_reports_kept_windows_it_could_not_ask_about(self) -> None:
+        session = self.begin()
+        _, workspace = self.stage_names(session)
+        pid_file = self.root / "kept-pid"
+        helper = self.sleeper("kept-app", pid_file)
+        self.set_clients(
+            [
+                {
+                    "address": "0xkept",
+                    "pid_file": str(pid_file),
+                    "at": [0, 0],
+                    "size": [100, 100],
+                    "workspace": {"id": -13, "name": workspace},
+                }
+            ]
+        )
+        launch = self.cli(
+            "launch",
+            "--keep-open",
+            "--session",
+            session,
+            "--wait-seconds",
+            "10",
+            "--",
+            str(helper),
+        )
+        try:
+            # The window is already recorded, so only `end` is left unable to
+            # ask. "No kept window is on the stage" and "that query failed" are
+            # different answers, and the output is removed either way.
+            self.environment["FAKE_HYPRCTL_FAIL"] = "clients"
+
+            result = self.cli("end", "--session", session)
+
+            self.assertIn("could not be moved", result["warning"])
+            self.assertEqual(
+                [
+                    command
+                    for command in self.hyprctl_calls()
+                    if command[1:3] == ["dispatch", "movetoworkspacesilent"]
+                ],
+                [],
+            )
+        finally:
+            os.kill(launch["pid"], 15)
+            os.kill(int(self.child_pid_file(pid_file).read_text()), 15)
+
+    def test_a_negative_rescue_workspace_is_never_dispatched(self) -> None:
+        session = self.begin()
+        _, workspace = self.stage_names(session)
+        # Hyprland reads a leading "-" as a relative shift, so the negative id
+        # of a special workspace would move the window somewhere unintended.
+        self.write_hypr_state(
+            monitors=[
+                {
+                    "name": "DP-1",
+                    "focused": True,
+                    "width": 2560,
+                    "height": 1440,
+                    "scale": 1.25,
+                    "activeWorkspace": {"id": -13, "name": "special:magic"},
+                }
+            ]
+        )
+        pid_file = self.root / "kept-pid"
+        helper = self.sleeper("kept-app", pid_file)
+        self.set_clients(
+            [
+                {
+                    "address": "0xkept",
+                    "pid_file": str(pid_file),
+                    "at": [0, 0],
+                    "size": [100, 100],
+                    "workspace": {"id": -13, "name": workspace},
+                }
+            ]
+        )
+        launch = self.cli(
+            "launch",
+            "--keep-open",
+            "--session",
+            session,
+            "--wait-seconds",
+            "10",
+            "--",
+            str(helper),
+        )
+        try:
+            result = self.cli("end", "--session", session)
+
+            self.assertIn("could not be moved", result["warning"])
+            self.assertEqual(
+                [
+                    command
+                    for command in self.hyprctl_calls()
+                    if command[1:3] == ["dispatch", "movetoworkspacesilent"]
+                ],
+                [],
+            )
+        finally:
+            os.kill(launch["pid"], 15)
+            os.kill(int(self.child_pid_file(pid_file).read_text()), 15)
+
+    def test_end_leaves_kept_windows_that_never_reached_the_stage(self) -> None:
+        session = self.begin()
+        pid_file = self.root / "stray-pid"
+        helper = self.sleeper("stray-app", pid_file)
+        self.set_clients(
+            [
+                {
+                    "address": "0xstray",
+                    "pid_file": str(pid_file),
+                    "at": [0, 0],
+                    "size": [100, 100],
+                    "workspace": {"id": 1, "name": "1"},
+                }
+            ]
+        )
+        launch = self.cli(
+            "launch",
+            "--keep-open",
+            "--session",
+            session,
+            "--wait-seconds",
+            "10",
+            "--",
+            str(helper),
+        )
+        try:
+            result = self.cli("end", "--session", session)
+
+            self.assertNotIn("warning", result)
+            self.assertEqual(
+                [
+                    command
+                    for command in self.hyprctl_calls()
+                    if command[1:3] == ["dispatch", "movetoworkspacesilent"]
+                ],
+                [],
+            )
+        finally:
+            os.kill(launch["pid"], 15)
+            os.kill(int(self.child_pid_file(pid_file).read_text()), 15)
+
+    def test_a_tampered_stage_output_never_reaches_a_real_monitor(self) -> None:
+        session = self.begin()
+        output, workspace = self.stage_names(session)
+        self.cli("stage", "--session", session)
+        self.tamper(session, output="DP-1", workspace=workspace)
+
+        capture = self.run_cli("capture", "--session", session)
+        status = self.run_cli("status", "--session", session)
+
+        self.assertEqual(capture.returncode, 1)
+        self.assertIn("foreign stage record", capture.stderr)
+        self.assertEqual(status.returncode, 1)
+        self.assertEqual(
+            [
+                command
+                for command in self.commands()
+                if command[0] == "grim" and "DP-1" in command
+            ],
+            [],
+        )
+
+        result = self.cli("end", "--session", session)
+
+        self.assertTrue(result["stage_removed"])
+        self.assertNotIn(["hyprctl", "output", "remove", "DP-1"], self.commands())
+        self.assertIn(["hyprctl", "output", "remove", output], self.commands())
+        self.assertEqual(self.hypr_monitors(), ["DP-1"])
+
+    def test_end_reclaims_the_derived_output_after_the_record_is_lost(self) -> None:
+        session = self.begin()
+        output, _ = self.stage_names(session)
+        self.cli("stage", "--session", session)
+        # A stage whose record never survived its creation still owns a real
+        # monitor, and the derived name is the only one it can ever have used.
+        path = self.session_file(session)
+        data = json.loads(path.read_text())
+        data.pop("stage")
+        path.write_text(json.dumps(data))
+
+        result = self.cli("end", "--session", session)
+
+        self.assertFalse(result["stage_removed"])
+        self.assertIn(["hyprctl", "output", "remove", output], self.commands())
+        self.assertEqual(self.hypr_monitors(), ["DP-1"])
+
+    def test_end_rescues_a_kept_window_whose_workspace_is_unreported(self) -> None:
+        session = self.begin()
+        pid_file = self.root / "kept-pid"
+        helper = self.sleeper("kept-app", pid_file)
+        self.set_clients(
+            [
+                {
+                    "address": "0xkept",
+                    "pid_file": str(pid_file),
+                    "at": [0, 0],
+                    "size": [100, 100],
+                }
+            ]
+        )
+        launch = self.cli(
+            "launch",
+            "--keep-open",
+            "--session",
+            session,
+            "--wait-seconds",
+            "10",
+            "--",
+            str(helper),
+        )
+        try:
+            result = self.cli("end", "--session", session)
+
+            self.assertIn("kept window", result["warning"])
+            self.assertIn(
+                ["hyprctl", "dispatch", "movetoworkspacesilent", "1,address:0xkept"],
+                self.commands(),
+            )
+        finally:
+            os.kill(launch["pid"], 15)
+            os.kill(int(self.child_pid_file(pid_file).read_text()), 15)
+
+    def test_end_hands_kept_stage_windows_back_before_removing_the_output(self) -> None:
+        session = self.begin()
+        output, workspace = self.stage_names(session)
+        pid_file = self.root / "kept-pid"
+        helper = self.sleeper("kept-app", pid_file)
+        self.set_clients(
+            [
+                {
+                    "address": "0xkept",
+                    "pid_file": str(pid_file),
+                    "at": [0, 0],
+                    "size": [100, 100],
+                    "workspace": {"id": -13, "name": workspace},
+                }
+            ]
+        )
+        launch = self.cli(
+            "launch",
+            "--keep-open",
+            "--session",
+            session,
+            "--wait-seconds",
+            "10",
+            "--",
+            str(helper),
+        )
+        try:
+            result = self.cli("end", "--session", session)
+
+            self.assertEqual(result["terminated"], 0)
+            self.assertIn("kept window", result["warning"])
+            moved = self.call_index(
+                [
+                    "hyprctl",
+                    "dispatch",
+                    "movetoworkspacesilent",
+                    "1,address:0xkept",
+                ]
+            )
+            removed = self.call_index(["hyprctl", "output", "remove", output])
+            self.assertLess(moved, removed)
+            self.assertFalse(self.reaped(launch["pid"]))
+        finally:
+            os.kill(launch["pid"], 15)
+            os.kill(int(self.child_pid_file(pid_file).read_text()), 15)
+
+    def test_purge_reclaims_the_output_of_an_unreadable_session(self) -> None:
+        session = self.begin()
+        output, _ = self.stage_names(session)
+        self.cli("stage", "--session", session)
+        path = self.runtime / "screen-verify" / session
+        self.session_file(session).write_text("{ not json")
+        old_time = time.time() - 25 * 60 * 60
+        os.utime(path, (old_time, old_time))
+
+        self.begin()
+
+        self.assertFalse(path.exists())
+        self.assertNotIn(output, self.hypr_monitors())
+        audit = (self.state / "screen-verify/audit.jsonl").read_text()
+        self.assertIn('"outcome":"unreadable"', audit)
+
+    def test_purge_leaves_a_directory_that_is_not_a_session(self) -> None:
+        self.begin()
+        # Only a session-shaped name can name an output of ours, and nothing
+        # else under the runtime root is ours to delete either.
+        stray = self.runtime / "screen-verify" / "not-a-session"
+        stray.mkdir(mode=0o700)
+        (stray / "keep").write_text("private")
+        # A parseable session file does not make a foreign directory ours
+        # either: the name is what decides, on both paths.
+        readable = self.runtime / "screen-verify" / "also-not-a-session"
+        readable.mkdir(mode=0o700)
+        (readable / "session.json").write_text(
+            json.dumps(
+                {
+                    "session": "also-not-a-session",
+                    "started_at": "2020-01-01T00:00:00+00:00",
+                    "mode": "dark",
+                    "captures": 0,
+                    "processes": [],
+                }
+            )
+        )
+        old_time = time.time() - 25 * 60 * 60
+        os.utime(stray, (old_time, old_time))
+        os.utime(readable, (old_time, old_time))
+
+        self.begin()
+
+        self.assertTrue(stray.is_dir())
+        self.assertEqual((stray / "keep").read_text(), "private")
+        self.assertTrue(readable.is_dir())
+        self.assertEqual(
+            json.loads((readable / "session.json").read_text())["session"],
+            "also-not-a-session",
+        )
+        self.assertEqual(
+            [
+                command
+                for command in self.commands()
+                if command[:3] == ["hyprctl", "output", "remove"]
+            ],
+            [],
+        )
+        audit = (self.state / "screen-verify/audit.jsonl").read_text()
+        self.assertIn('"outcome":"skipped"', audit)
+
+    def test_purge_reclaims_the_output_even_when_previews_cannot_restore(self) -> None:
+        session = self.begin()
+        output, _ = self.stage_names(session)
+        self.cli("stage", "--session", session)
+        self.quiet_gsettings()
+        self.cli(
+            "preview",
+            "gsettings",
+            "--session",
+            session,
+            "--schema",
+            "org.example",
+            "--key",
+            "theme",
+            "--value",
+            "'preview'",
+        )
+        self.failing_gsettings()
+        path = self.runtime / "screen-verify" / session
+        old_time = time.time() - 25 * 60 * 60
+        os.utime(path, (old_time, old_time))
+
+        self.begin()
+
+        self.assertTrue(path.exists())
+        self.assertNotIn(output, self.hypr_monitors())
+        self.assertNotIn("stage", json.loads(self.session_file(session).read_text()))
+        audit = (self.state / "screen-verify/audit.jsonl").read_text()
+        self.assertIn('"outcome":"restore-failed"', audit)
+
+        os.utime(path, (old_time, old_time))
+        self.begin()
+
+        # The derived name is reclaimed on every purge, so retrying it is
+        # harmless; what must never happen is a removal aimed anywhere else.
+        removals = [
+            command
+            for command in self.commands()
+            if command[:3] == ["hyprctl", "output", "remove"]
+        ]
+        self.assertEqual({command[3] for command in removals}, {output})
+        self.assertEqual(self.hypr_monitors(), ["DP-1"])
+
+    def test_a_tampered_stage_workspace_is_rejected_before_any_dispatch(self) -> None:
+        session = self.begin()
+        output, _ = self.stage_names(session)
+        marker = self.root / "pwned"
+        helper = self.sleeper("staged-app", self.root / "staged-pid")
+        self.cli("stage", "--session", session)
+        self.tamper(
+            session,
+            output=output,
+            workspace=f"x] /bin/sh -c 'touch {marker}' #",
+        )
+
+        result = self.run_cli(
+            "launch", "--session", session, "--wait-seconds", "0", "--", str(helper)
+        )
+
+        self.assertFalse(marker.exists(), "the tampered rule reached a shell")
+        self.assertEqual(
+            [
+                command
+                for command in self.hyprctl_calls()
+                if command[:3] == ["hyprctl", "dispatch", "exec"]
+            ],
+            [],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("foreign stage record", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+
+    def test_an_incomplete_stage_record_fails_cleanly(self) -> None:
+        session = self.begin()
+        output, _ = self.stage_names(session)
+        helper = self.sleeper("staged-app", self.root / "staged-pid")
+        self.cli("stage", "--session", session)
+        self.tamper(session, output=output)
+
+        result = self.run_cli(
+            "launch", "--session", session, "--wait-seconds", "0", "--", str(helper)
+        )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, "")
+        self.assertEqual(
+            result.stderr.strip(),
+            "screen-verify: The session holds an unusable stage record",
+        )
+
+    def test_launch_warns_when_the_window_misses_the_staging_workspace(self) -> None:
+        session = self.begin()
+        pid_file = self.root / "stray-pid"
+        helper = self.sleeper("stray-app", pid_file)
+        self.set_clients(
+            [
+                {
+                    "address": "0xstray",
+                    "pid_file": str(pid_file),
+                    "at": [0, 0],
+                    "size": [10, 10],
+                    "workspace": {"id": 1, "name": "1"},
+                }
+            ]
+        )
+
+        launch = self.cli(
+            "launch", "--session", session, "--wait-seconds", "10", "--", str(helper)
+        )
+        try:
+            self.assertIn("staging workspace", launch["warning"])
+        finally:
+            self.cli("end", "--session", session)
+
+    def test_end_removes_the_stage_output_and_reports_it(self) -> None:
+        session = self.begin()
+        output, _ = self.stage_names(session)
+        self.cli("stage", "--session", session)
+        status = self.cli("status", "--session", session)
+        self.assertTrue(status["stage"])
+        self.assertEqual(status["stage_output"], output)
+
+        result = self.cli("end", "--session", session)
+
+        self.assertTrue(result["stage_removed"])
+        self.assertNotIn(output, self.hypr_monitors())
+        self.assertIn(["hyprctl", "output", "remove", output], self.commands())
+
+    def test_purge_removes_the_stage_output_of_an_abandoned_session(self) -> None:
+        session = self.begin()
+        output, _ = self.stage_names(session)
+        self.cli("stage", "--session", session)
+        path = self.runtime / "screen-verify" / session
+        old_time = time.time() - 25 * 60 * 60
+        os.utime(path, (old_time, old_time))
+
+        self.begin()
+
+        self.assertFalse(path.exists())
+        self.assertNotIn(output, self.hypr_monitors())
+        self.assertIn(["hyprctl", "output", "remove", output], self.commands())
+
+    def test_window_adapter_launches_onto_the_stage(self) -> None:
+        session = self.begin()
+        output, workspace = self.stage_names(session)
+        pid_file = self.root / "alacritty-pid"
+        argv_file = self.root / "alacritty-argv"
+        self.sleeper("alacritty", pid_file, argv_file)
+
+        result = self.cli(
+            "adapter", "--session", session, "--wait-seconds", "0", "alacritty"
+        )
+        try:
+            self.assertEqual(result["spawn"], "stage")
+            self.assertEqual(result["stage"], output)
+            self.assertNotIn("warning", result)
+            dispatch = next(
+                command
+                for command in self.hyprctl_calls()
+                if command[:3] == ["hyprctl", "dispatch", "exec"]
+            )
+            self.assertIn(f"[workspace name:{workspace} silent", dispatch[3])
+            self.eventually(
+                lambda: pid_file.exists(), "the alacritty adapter never started"
+            )
+            self.assertEqual(
+                self.recorded_argv(argv_file),
+                ["--class", "screen-verify-alacritty"],
+            )
+        finally:
+            self.cli("end", "--session", session)
+
+    def test_desktop_and_notification_adapters_never_create_a_stage(self) -> None:
+        session = self.begin()
+
+        self.cli("adapter", "--session", session, "desktop")
+        self.cli("adapter", "--session", session, "notification")
+
+        self.assertEqual(
+            [command for command in self.hyprctl_calls() if command[1] == "output"], []
+        )
+        self.assertFalse(self.cli("status", "--session", session)["stage"])
+
+    def test_layer_adapter_opens_on_the_stage_output_with_a_warning(self) -> None:
+        session = self.begin()
+        output, _ = self.stage_names(session)
+        pid_file = self.root / "rofi-pid"
+        argv_file = self.root / "rofi-argv"
+        self.sleeper("rofi", pid_file, argv_file)
+
+        result = self.cli(
+            "adapter", "--session", session, "--wait-seconds", "0", "rofi"
+        )
+        try:
+            self.assertEqual(result["adapter"], "rofi")
+            self.assertEqual(result["spawn"], "direct")
+            self.assertIn("keyboard", result["warning"])
+            self.eventually(
+                lambda: pid_file.exists(), "the rofi adapter never started"
+            )
+            self.assertEqual(
+                self.recorded_argv(argv_file),
+                ["-show", "drun", "-m", output],
+            )
+            self.assertEqual(
+                [
+                    command
+                    for command in self.hyprctl_calls()
+                    if command[:3] == ["hyprctl", "dispatch", "exec"]
+                ],
+                [],
+            )
+        finally:
+            self.cli("end", "--session", session)
+
+    def test_end_reclaims_the_output_even_when_previews_cannot_restore(self) -> None:
+        session = self.begin()
+        output, _ = self.stage_names(session)
+        path = self.runtime / "screen-verify" / session
+        self.cli("stage", "--session", session)
+        self.quiet_gsettings()
+        self.cli(
+            "preview",
+            "gsettings",
+            "--session",
+            session,
+            "--schema",
+            "org.example",
+            "--key",
+            "theme",
+            "--value",
+            "'preview'",
+        )
+        self.failing_gsettings()
+
+        result = self.run_cli("end", "--session", session)
+
+        # The session is retained so the restore can be retried, but a preview
+        # that refuses to come back must never strand a headless monitor on the
+        # user's compositor for the rest of the day.
+        self.assertEqual(result.returncode, 1)
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertTrue(path.exists())
+        self.assertIn(["hyprctl", "output", "remove", output], self.commands())
+        self.assertNotIn(output, self.hypr_monitors())
+
+    def test_end_reports_no_removal_when_the_output_survives(self) -> None:
+        session = self.begin()
+        output, _ = self.stage_names(session)
+        self.cli("stage", "--session", session)
+        # `output remove` is fire-and-forget, so a compositor that ignores it
+        # must not be reported as a successful removal.
+        self.patch_hypr_state(ignore_output_removals=True)
+
+        result = self.cli("end", "--session", session)
+
+        self.assertFalse(result["stage_removed"])
+        self.assertIn(["hyprctl", "output", "remove", output], self.commands())
+        self.assertIn(output, self.hypr_monitors())
+
+    def test_window_target_refuses_a_recycled_window_address(self) -> None:
+        session = self.begin()
+        _, workspace = self.stage_names(session)
+        pid_file = self.root / "staged-pid"
+        helper = self.sleeper("staged-app", pid_file)
+        self.set_clients(
+            [
+                {
+                    "address": "0xabc",
+                    "pid_file": str(pid_file),
+                    "at": [100, 200],
+                    "size": [640, 480],
+                    "workspace": {"id": -13, "name": workspace},
+                }
+            ]
+        )
+        launch = self.cli(
+            "launch", "--session", session, "--wait-seconds", "10", "--", str(helper)
+        )
+        try:
+            self.assertEqual(launch["window"]["address"], "0xabc")
+            # Hyprland addresses are object pointers and get reused. The same
+            # address now belongs to the user's own window, which reports no
+            # workspace — so only the recorded pid can tell them apart.
+            self.set_clients(
+                [
+                    {
+                        "address": "0xabc",
+                        "pid": 1,
+                        "at": [0, 0],
+                        "size": [2560, 1440],
+                    }
+                ]
+            )
+
+            result = self.run_cli(
+                "capture", "--session", session, "--target", "window"
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("still open", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+            self.assertEqual(
+                [
+                    command
+                    for command in self.commands()
+                    if command[0] == "grim" and "0,0 2560x1440" in command
+                ],
+                [],
+            )
+        finally:
+            self.cli("end", "--session", session)
+
+    def test_window_target_ignores_a_window_launched_off_the_stage(self) -> None:
+        session = self.begin()
+        desktop_pid = self.root / "desktop-pid"
+        desktop = self.sleeper("desktop-app", desktop_pid)
+        self.set_clients(
+            [
+                {
+                    "address": "0xdesktop",
+                    "pid_file": str(desktop_pid),
+                    "at": [5, 6],
+                    "size": [700, 800],
+                    "workspace": {"id": 1, "name": "1"},
+                }
+            ]
+        )
+        self.cli(
+            "launch",
+            "--session",
+            session,
+            "--no-stage",
+            "--wait-seconds",
+            "10",
+            "--",
+            str(desktop),
+        )
+        # A later staged launch records no window of its own, so walking back
+        # through the session's history would reach the desktop window.
+        staged = self.sleeper("staged-app", self.root / "staged-pid")
+        self.cli(
+            "launch", "--session", session, "--wait-seconds", "0", "--", str(staged)
+        )
+        try:
+            result = self.run_cli(
+                "capture", "--session", session, "--target", "window"
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("still open", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+            self.assertEqual(
+                [
+                    command
+                    for command in self.commands()
+                    if command[0] == "grim" and "5,6 700x800" in command
+                ],
+                [],
+            )
+        finally:
+            self.cli("end", "--session", session)
+
+    def test_capture_refuses_a_stage_that_left_its_workspace(self) -> None:
+        session = self.begin()
+        output, _ = self.stage_names(session)
+        self.cli("stage", "--session", session)
+        # The output still exists but now shows an ordinary workspace, so
+        # `grim -o` would come back blank and report success.
+        self.set_active_workspace(output, {"id": 9, "name": "9"})
+        self.patch_hypr_state(ignore_workspace_moves=True)
+
+        default = self.run_cli("capture", "--session", session)
+        explicit = self.run_cli("capture", "--session", session, "--target", "stage")
+
+        self.assertEqual(default.returncode, 1)
+        self.assertEqual(explicit.returncode, 1)
+        self.assertIn("blank", default.stderr)
+        self.assertNotIn("Traceback", default.stderr)
+        # Neither a blank stage capture nor a silent fallback onto the user's
+        # own monitor is an acceptable outcome.
+        self.assertEqual([c for c in self.commands() if c[0] == "grim"], [])
+
+    def test_reentering_a_stage_that_left_its_workspace_fails(self) -> None:
+        session = self.begin()
+        output, _ = self.stage_names(session)
+        self.cli("stage", "--session", session)
+        # An output that exists is not a working stage; re-entry must not hand
+        # back a record for a stage every capture would find empty.
+        self.set_active_workspace(output, {"id": 9, "name": "9"})
+        self.patch_hypr_state(ignore_workspace_moves=True)
+
+        result = self.run_cli("stage", "--session", session)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("blank", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+
+    def test_capture_reasserts_a_stage_that_drifted_off_its_workspace(self) -> None:
+        session = self.begin()
+        output, workspace = self.stage_names(session)
+        self.cli("stage", "--session", session)
+        self.set_active_workspace(output, {"id": 9, "name": "9"})
+
+        result = self.cli("capture", "--session", session)
+
+        self.assertEqual(result["target"], "stage")
+        self.assertIn(
+            [
+                "hyprctl",
+                "dispatch",
+                "moveworkspacetomonitor",
+                f"name:{workspace} {output}",
+            ],
+            self.commands(),
+        )
+        grim = next(
+            command for command in reversed(self.commands()) if command[0] == "grim"
+        )
+        self.assertEqual(grim[1:-1], ["-o", output])
+
+    def test_default_capture_refuses_an_unanswerable_stage_query(self) -> None:
+        session = self.begin()
+        self.cli("stage", "--session", session)
+        # "the output is gone" and "that query failed" are different answers:
+        # only the first may degrade to the user's own focused monitor.
+        self.environment["FAKE_HYPRCTL_FAIL"] = "monitors"
+
+        default = self.run_cli("capture", "--session", session)
+        explicit = self.run_cli("capture", "--session", session, "--target", "stage")
+
+        self.assertEqual(default.returncode, 1)
+        self.assertEqual(explicit.returncode, 1)
+        self.assertNotIn("Traceback", default.stderr)
+        self.assertEqual(
+            [command for command in self.commands() if command[0] == "grim"], []
+        )
 
     def test_every_command_purges_abandoned_sessions(self) -> None:
         old_session = self.begin()
