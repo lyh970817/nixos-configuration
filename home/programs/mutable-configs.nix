@@ -85,6 +85,22 @@ in
     '') claudeProfiles}
   '';
 
+  # pi rewrites ~/.pi/agent/settings.json at runtime (settings edits, model
+  # switches), so it must be an ordinary mutable file rather than a link.
+  # Same materialize-from-tracked-baseline treatment as Claude above.
+  # auth.json stays machine-local and unmanaged.
+  home.activation.piSettings = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    pi_settings_dir="$HOME/.pi/agent"
+    pi_settings="$pi_settings_dir/settings.json"
+    run ${pkgs.coreutils}/bin/install -d -m 0700 "$pi_settings_dir"
+    pi_settings_tmp="$(${pkgs.coreutils}/bin/mktemp "$pi_settings.XXXXXX")"
+
+    run ${pkgs.coreutils}/bin/cp ${lib.escapeShellArg (toString ../../dotfiles/pi/settings.json)} "$pi_settings_tmp"
+
+    run ${pkgs.coreutils}/bin/chmod 0600 "$pi_settings_tmp"
+    run ${pkgs.coreutils}/bin/mv -f "$pi_settings_tmp" "$pi_settings"
+  '';
+
   home.file = codexProfileLinks // {
     # Codex CLI (~/.codex) — portable authored files only. The base
     # config.toml remains machine-local and unmanaged (it holds absolute

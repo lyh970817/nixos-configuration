@@ -48,6 +48,7 @@
       customOverlay = final: prev: {
         "115browser" = final.callPackage ./pkgs/115browser.nix { };
         claude-code = final.callPackage ./pkgs/claude-code.nix { };
+        claude-science = final.callPackage ./pkgs/claude-science.nix { };
         cli-proxy-api = final.callPackage ./pkgs/cli-proxy-api.nix { };
         codex = final.callPackage ./pkgs/codex.nix { };
         codex-desktop-isolated = final.callPackage ./pkgs/codex-desktop-isolated.nix {
@@ -58,6 +59,8 @@
         # Upstream flake ships the package directly; take it from the pinned input.
         herdr = herdr.packages.${system}.default;
         hyprwhspr = final.callPackage ./pkgs/hyprwhspr.nix { };
+        pi-coding-agent = final.callPackage ./pkgs/pi-coding-agent.nix { };
+        pi-openai-server-compaction = final.callPackage ./pkgs/pi-openai-server-compaction.nix { };
         quicktui = final.callPackage ./pkgs/quicktui.nix { };
         # DECSCUSR cursor-shape support (unmerged upstream PR #1355) — needed on
         # both roles: mosh-server parses the escape, mosh-client renders it.

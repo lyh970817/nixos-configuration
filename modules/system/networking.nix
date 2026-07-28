@@ -42,9 +42,20 @@ in
   services.tailscale.enable = true;
   # Declarative best-effort hook for Tailscale SSH: this only takes effect
   # when a `tailscale up` invocation uses an auth key (e.g. non-interactive
-  # provisioning). The primary way SSH gets enabled is the manual first-boot
-  # `tailscale up --ssh` the user runs on the home machine.
-  services.tailscale.extraUpFlags = lib.mkIf (config.portable.role == "home") [ "--ssh" ];
+  # provisioning). On an already-running node use `tailscale set --ssh=true`.
+  #
+  # Both roles accept inbound SSH now: home so the laptop can reach it, and
+  # the laptop so home can push an image window back when Yazi opens a file
+  # from inside a mosh session. This stays tailnet-only -- port 22 is never
+  # added to allowedTCPPorts; "tailscale0" being a trusted interface below is
+  # what lets it through, so nothing is reachable on the physical NIC.
+  services.tailscale.extraUpFlags = [ "--ssh" ];
+  # Tailscale DNS is left disabled so mihomo keeps ownership of resolv.conf
+  # (its domain rules need to see queries). That costs the search domain
+  # --accept-dns would normally install, so set it explicitly: bare peer names
+  # then expand to MagicDNS FQDNs, which mihomo resolves via tailscaled's
+  # resolver. Without this, bare names only work from static hosts entries.
+  networking.search = [ "tail9abb26.ts.net" ];
   networking.networkmanager.settings = {
     connectivity = {
       enabled = true;

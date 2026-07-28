@@ -42,3 +42,8 @@ dotfiles/**/.ruff_cache/
 dotfiles/**/*.egg-info/
 dotfiles/**/.git/
 dotfiles/**/.DS_Store
+
+# Python bytecode caches anywhere in the tree: keeps `git add -A` from ever
+# tracking .pyc, which would reach the Nix store via `src = ./.` once tracked.
+__pycache__/
+*.pyc

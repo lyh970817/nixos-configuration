@@ -22,7 +22,15 @@ class OwnedProcess(TypedDict):
     pid: int
     start_time: str
     keep_open: bool
+    spawn: NotRequired[str]
     window: NotRequired[dict[str, Any]]
+
+
+class Stage(TypedDict):
+    output: str
+    workspace: str
+    focus: NotRequired[dict[str, Any]]
+    watcher: NotRequired[dict[str, Any]]
 
 
 class SessionData(TypedDict):
@@ -33,6 +41,7 @@ class SessionData(TypedDict):
     processes: list[OwnedProcess]
     previews: NotRequired[list[dict[str, Any]]]
     restore_mode: NotRequired[str]
+    stage: NotRequired[Stage]
 
 
 def now() -> datetime:

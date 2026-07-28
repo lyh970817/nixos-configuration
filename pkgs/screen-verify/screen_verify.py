@@ -21,10 +21,12 @@ from screen_verify_lib.desktop import (
     active_window_geometry,
     associated_window,
     current_mode,
+    descendant_pids,
     expected_mode,
     focused_monitor,
     notify,
-    run_json,
+    process_start_time,
+    window_geometry,
 )
 from screen_verify_lib.preview import (
     command_preview_gsettings,
@@ -32,6 +34,23 @@ from screen_verify_lib.preview import (
     command_preview_mako_mode,
     command_preview_symlink,
     restore_previews,
+)
+from screen_verify_lib.stage import (
+    POLL_SECONDS,
+    client_workspace,
+    ensure_stage,
+    ensure_stage_workspace,
+    monitor_presence,
+    owned_stage_addresses,
+    release_stage_windows,
+    remove_stage,
+    remove_stage_output,
+    staged_windows,
+    stage_output_name,
+    stage_record,
+    stage_spawn,
+    stop_watcher,
+    sweep_stage_windows,
 )
 from screen_verify_lib.state import (
     ScreenError,
@@ -43,9 +62,14 @@ from screen_verify_lib.state import (
     runtime_root,
     session_dir,
 )
+from screen_verify_lib.watch import watch_stage
 
 
 SESSION_TTL_SECONDS = 24 * 60 * 60
+# SIGTERM is asynchronous, so without a short wait the staging output would be
+# removed out from under windows that are still closing. Cleanup must never
+# hang on a process that ignores the signal, so this is a hard bound.
+TERMINATION_TIMEOUT_SECONDS = 0.5
 
 
 def purge_abandoned() -> None:
@@ -58,7 +82,28 @@ def purge_abandoned() -> None:
         if child.stat().st_mtime >= cutoff:
             continue
         session = child.name
+        # An output name only ever derives from the session identifier, and
+        # every session of ours is named by `secrets.token_hex`. A directory
+        # that cannot be named after a session of ours is neither ours to
+        # reclaim an output for nor ours to delete — whatever it holds, and
+        # whether or not that happens to parse as a session file.
+        if not all(character in "0123456789abcdef" for character in session):
+            audit("purge", session=session, outcome="skipped")
+            continue
         terminate_owned_processes(child)
+        # The output is reclaimed first, and unrecorded as it goes, so a
+        # session that cannot be cleaned up for any other reason still never
+        # leaves a phantom monitor behind for every later purge to retry.
+        try:
+            read_json(child / "session.json")
+        except ScreenError:
+            # Nothing is restorable from an unreadable session, but the derived
+            # output name still is, so it is reclaimed before the directory goes.
+            remove_stage_output(stage_output_name(session))
+            shutil.rmtree(child)
+            audit("purge", session=session, outcome="unreadable")
+            continue
+        remove_stage(child)
         try:
             restore_previews(child)
         except ScreenError:
@@ -84,10 +129,59 @@ def command_begin(_: argparse.Namespace) -> dict[str, Any]:
     return {"session": session, "mode": data["mode"]}
 
 
+def owned_window_geometry(data: dict[str, Any], stage: dict[str, Any]) -> str | None:
+    """Geometry of the newest still-open window this session put on the stage.
+
+    `grim -g` captures a region, not a window, so a client that only looks
+    owned resolves to whatever happens to be stacked at those coordinates —
+    the user's own screen. Ownership is therefore decided by the same filter
+    `release_stage_windows` uses. Unlike that one, `keep_open` is irrelevant
+    here: a staged window that `end` will close is still capturable.
+    """
+    owned = owned_stage_addresses(data, keep_open_only=False)
+    if not owned:
+        return None
+    # An unanswerable clients query owns nothing here: with no live client to
+    # read geometry from, capture refuses rather than aiming `grim -g` at
+    # coordinates nobody confirmed.
+    matched = staged_windows(owned, stage["workspace"]) or {}
+    for process in reversed(data.get("processes", [])):
+        window = process.get("window")
+        if not isinstance(window, dict):
+            continue
+        client = matched.get(window.get("address"))
+        geometry = window_geometry(client) if client is not None else None
+        if geometry is not None:
+            return geometry
+    return None
+
+
 def capture_command(
-    args: argparse.Namespace, output: Path
+    args: argparse.Namespace, output: Path, data: dict[str, Any]
 ) -> tuple[list[str], str, str | None]:
+    stage = stage_record(data, args.session)
     target = args.target
+    presence = None
+    if stage is not None and target in {None, "stage"}:
+        presence = monitor_presence(stage["output"])
+        if presence == "unknown":
+            # Only a confirmed-absent output may soften the default target
+            # below. Degrading on a query that merely failed would write the
+            # user's own monitor into a session capture, which is exactly what
+            # the stage exists to prevent.
+            raise ScreenError("Hyprland could not be asked about the staging output")
+    if target is None:
+        # A recorded stage whose output never appeared, or has since gone, must
+        # not turn the default capture into a hard failure; desktop
+        # verification still has to work. An explicit request still fails.
+        target = "stage" if presence == "present" else "focused"
+    if target == "stage":
+        if not stage:
+            raise ScreenError("This session has no staging output")
+        if presence != "present":
+            raise ScreenError("The staging output is no longer present")
+        ensure_stage_workspace(stage["output"], stage["workspace"])
+        return ["grim", "-o", stage["output"], str(output)], target, stage["output"]
     if target == "focused":
         monitor = focused_monitor()
         return ["grim", "-o", monitor, str(output)], target, monitor
@@ -98,6 +192,17 @@ def capture_command(
     if target == "all":
         return ["grim", str(output)], target, None
     if target == "window":
+        # Under a stage the active window is the user's own. Falling back to it
+        # would write the user's private screen into the session, so once a
+        # stage exists the only capturable window is one this session launched
+        # — whether none was ever recorded or they have all since closed.
+        if stage:
+            geometry = owned_window_geometry(data, stage)
+            if geometry is None:
+                raise ScreenError(
+                    "No window launched by this session is still open on the stage"
+                )
+            return ["grim", "-g", geometry, str(output)], target, None
         return ["grim", "-g", active_window_geometry(), str(output)], target, None
     if target == "region":
         geometry = args.geometry
@@ -119,7 +224,7 @@ def command_capture(args: argparse.Namespace) -> dict[str, Any]:
     data = read_json(path / "session.json")
     capture_number = int(data.get("captures", 0)) + 1
     output = path / f"capture-{capture_number:03d}.png"
-    command, audit_target, audit_monitor = capture_command(args, output)
+    command, audit_target, audit_monitor = capture_command(args, output, data)
     try:
         subprocess.run(command, check=True)
         output.chmod(0o600)
@@ -145,16 +250,7 @@ def command_capture(args: argparse.Namespace) -> dict[str, Any]:
     return {"path": str(output), "target": audit_target, "mode": data["mode"]}
 
 
-def process_start_time(pid: int) -> str:
-    fields = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").split()
-    return fields[21]
-
-
-def command_launch(args: argparse.Namespace) -> dict[str, Any]:
-    path = session_dir(args.session)
-    command = args.command[1:] if args.command[:1] == ["--"] else args.command
-    if not command:
-        raise ScreenError("A command is required after --")
+def direct_spawn(command: list[str], session: str) -> int:
     try:
         process = subprocess.Popen(
             command,
@@ -164,26 +260,62 @@ def command_launch(args: argparse.Namespace) -> dict[str, Any]:
             start_new_session=True,
         )
     except OSError as error:
-        audit("launch", session=args.session, outcome="failed")
+        audit("launch", session=session, outcome="failed")
         raise ScreenError("Application launch failed") from error
+    return process.pid
+
+
+def command_launch(args: argparse.Namespace) -> dict[str, Any]:
+    path = session_dir(args.session)
+    command = args.command[1:] if args.command[:1] == ["--"] else args.command
+    if not command:
+        raise ScreenError("A command is required after --")
+    stage = None if args.no_stage else ensure_stage(path, args.session)
+    if stage:
+        pid = stage_spawn(path, args.session, command)
+        spawn = "stage"
+    else:
+        pid = direct_spawn(command, args.session)
+        spawn = "direct"
+    try:
+        start_time = process_start_time(pid)
+    except OSError as error:
+        audit("launch", session=args.session, outcome="failed")
+        raise ScreenError("The launched process exited before it was owned") from error
     owned_process = {
-        "pid": process.pid,
-        "start_time": process_start_time(process.pid),
+        "pid": pid,
+        "start_time": start_time,
         "keep_open": args.keep_open,
+        "spawn": spawn,
     }
-    window = associated_window(process.pid, args.wait_seconds)
+    window = associated_window(pid, args.wait_seconds)
     if window:
         owned_process["window"] = window
     data = read_json(path / "session.json")
     data.setdefault("processes", []).append(owned_process)
     atomic_json(path / "session.json", data)
     audit("launch", session=args.session)
-    return {
-        "pid": process.pid,
+    if stage:
+        # Windows that mapped before the watcher could act are recovered here,
+        # and the warning below then describes what the sweep could not fix
+        # rather than what it never tried to.
+        sweep_stage_windows(args.session, pid, stage["workspace"])
+    result = {
+        "pid": pid,
         "owned": True,
         "keep_open": args.keep_open,
         "window": window,
+        "spawn": spawn,
+        "stage": stage["output"] if stage else None,
     }
+    if stage and window:
+        placed = client_workspace(window["address"])
+        if placed is not None and placed != stage["workspace"]:
+            result["warning"] = (
+                "The window did not land on the staging workspace; "
+                "it is visible on the desktop"
+            )
+    return result
 
 
 def command_adapter(args: argparse.Namespace) -> dict[str, Any]:
@@ -195,23 +327,58 @@ def command_adapter(args: argparse.Namespace) -> dict[str, Any]:
         notify("Visual verification", "Mako notification palette and typography")
         audit("adapter", session=args.session)
         return {"adapter": args.name, "owned": False}
+    adapter = ADAPTER_COMMANDS[args.name]
+    command = list(adapter["command"])
+    no_stage = args.no_stage
+    extra: dict[str, Any] = {}
+    if adapter.get("surface") == "layer":
+        # Workspace rules never match a layer surface, so the surface is aimed
+        # at the staging output directly and spawned without the stage rule.
+        if not no_stage:
+            stage = ensure_stage(session_dir(args.session), args.session)
+            command += [adapter["monitor_flag"], stage["output"]]
+        no_stage = True
+        if adapter.get("warning"):
+            extra["warning"] = adapter["warning"]
     launch_args = argparse.Namespace(
         session=args.session,
-        command=ADAPTER_COMMANDS[args.name],
+        command=command,
         keep_open=args.keep_open,
         wait_seconds=args.wait_seconds,
+        no_stage=no_stage,
     )
     result = command_launch(launch_args)
     result["adapter"] = args.name
+    result.update(extra)
     return result
 
 
-def terminate_owned_processes(path: Path) -> int:
+def command_stage_watch(args: argparse.Namespace) -> dict[str, Any]:
+    # Internal: the detached per-session helper `ensure_stage` spawns. It runs
+    # until the session's stage record disappears or socket2 closes, moving
+    # escaped staged windows back onto the staging workspace as they open.
+    path = session_dir(args.session)
+    watch_stage(path, args.session)
+    return {"watching": False}
+
+
+def command_stage(args: argparse.Namespace) -> dict[str, Any]:
+    path = session_dir(args.session)
+    stage = ensure_stage(path, args.session)
+    return {
+        "stage": True,
+        "output": stage["output"],
+        "workspace": stage["workspace"],
+    }
+
+
+def terminate_owned_processes(path: Path) -> list[int]:
+    """SIGTERM every process this session owns; returns the signalled pids."""
     try:
         data = read_json(path / "session.json")
     except ScreenError:
-        return 0
-    terminated = 0
+        return []
+    terminated = []
     for process in data.get("processes", []):
         if process.get("keep_open"):
             continue
@@ -222,11 +389,46 @@ def terminate_owned_processes(path: Path) -> int:
         try:
             if process_start_time(pid) != start_time:
                 continue
-            os.killpg(pid, signal.SIGTERM)
-            terminated += 1
+            if process.get("spawn") == "stage":
+                # Hyprland spawned it, so it shares the compositor's process
+                # group; only the tracked pid and its children may be signalled.
+                terminate_tree(pid)
+            else:
+                os.killpg(pid, signal.SIGTERM)
+            terminated.append(pid)
         except (FileNotFoundError, ProcessLookupError, PermissionError):
             continue
     return terminated
+
+
+def terminate_tree(pid: int) -> None:
+    for target in sorted(descendant_pids(pid), reverse=True):
+        try:
+            os.kill(target, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):
+            continue
+
+
+def has_exited(pid: int) -> bool:
+    """True once a pid is gone, or is a zombie its parent has yet to reap."""
+    try:
+        raw = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8")
+    except OSError:
+        return True
+    return raw.rsplit(")", 1)[1].split()[0] == "Z"
+
+
+def wait_for_exit(pids: list[int]) -> None:
+    """Wait, briefly, for terminated windows to leave before the stage does."""
+    # Nothing terminated means nothing to wait for, so keep-open sessions and
+    # sessions that launched nothing never pay for this at all.
+    if not pids:
+        return
+    deadline = time.monotonic() + TERMINATION_TIMEOUT_SECONDS
+    while not all(has_exited(pid) for pid in pids):
+        if time.monotonic() >= deadline:
+            return
+        time.sleep(POLL_SECONDS)
 
 
 def command_ensure_mode(args: argparse.Namespace) -> dict[str, Any]:
@@ -249,6 +451,20 @@ def command_end(args: argparse.Namespace) -> dict[str, Any]:
     path = session_dir(args.session)
     data = read_json(path / "session.json")
     terminated = terminate_owned_processes(path)
+    wait_for_exit(terminated)
+    # The watcher goes before the stage does: it would exit on its own once
+    # the record disappears, but only after its next recheck, and a watcher
+    # racing the teardown could move a window `end` is about to hand back.
+    stop_watcher(path)
+    # The stage is reclaimed before anything that can fail, exactly as `purge`
+    # does it: a preview that refuses to restore must not leave a phantom
+    # headless monitor on the user's compositor for the rest of the day.
+    # Windows the caller asked to keep outlive the stage, so they are handed
+    # back to the user's own workspace before the output disappears.
+    released, stranded = release_stage_windows(path)
+    stage_removed = remove_stage(path)
+    # A failed restore still retains the session directory and still fails the
+    # command, so the user can retry it once the cause is fixed.
     restored_previews = restore_previews(path)
     desired_mode = expected_mode()
     if desired_mode == "unknown":
@@ -261,22 +477,37 @@ def command_end(args: argparse.Namespace) -> dict[str, Any]:
     shutil.rmtree(path)
     audit("end", session=args.session)
     notify("Visual verification finished", f"Cleaned session {args.session[-6:]}")
-    return {
+    result = {
         "cleaned": True,
-        "terminated": terminated,
+        "terminated": len(terminated),
         "restored_previews": restored_previews,
         "restored_mode": desired_mode,
+        "stage_removed": stage_removed,
     }
+    if stranded:
+        result["warning"] = (
+            f"{stranded} kept window(s) could not be moved off the staging "
+            "output before it was removed"
+        )
+    elif released:
+        result["warning"] = (
+            f"{released} kept window(s) were moved off the staging output "
+            "onto the active workspace"
+        )
+    return result
 
 
 def command_status(args: argparse.Namespace) -> dict[str, Any]:
     path = session_dir(args.session)
     data = read_json(path / "session.json")
+    stage = stage_record(data, args.session)
     return {
         "session": args.session,
         "mode": data.get("mode"),
         "captures": data.get("captures", 0),
         "processes": len(data.get("processes", [])),
+        "stage": bool(stage),
+        "stage_output": stage["output"] if stage else None,
     }
 
 
@@ -291,8 +522,9 @@ def parser() -> argparse.ArgumentParser:
     capture.add_argument("--session", required=True)
     capture.add_argument(
         "--target",
-        choices=["focused", "monitor", "all", "window", "region"],
-        default="focused",
+        choices=["focused", "monitor", "all", "window", "region", "stage"],
+        default=None,
+        help="default: stage when the session has one, otherwise focused",
     )
     capture.add_argument("--monitor")
     capture.add_argument("--geometry")
@@ -302,6 +534,11 @@ def parser() -> argparse.ArgumentParser:
     launch.add_argument("--session", required=True)
     launch.add_argument("--keep-open", action="store_true")
     launch.add_argument("--wait-seconds", type=float, default=5.0)
+    launch.add_argument(
+        "--no-stage",
+        action="store_true",
+        help="spawn on the current workspace instead of the staging output",
+    )
     launch.add_argument("command", nargs=argparse.REMAINDER)
     launch.set_defaults(handler=command_launch)
 
@@ -309,8 +546,24 @@ def parser() -> argparse.ArgumentParser:
     adapter.add_argument("--session", required=True)
     adapter.add_argument("--keep-open", action="store_true")
     adapter.add_argument("--wait-seconds", type=float, default=5.0)
+    adapter.add_argument(
+        "--no-stage",
+        action="store_true",
+        help="spawn on the current workspace instead of the staging output",
+    )
     adapter.add_argument("name", choices=ADAPTER_NAMES)
     adapter.set_defaults(handler=command_adapter)
+
+    stage = commands.add_parser(
+        "stage", help="create the hidden headless output used for test windows"
+    )
+    stage.add_argument("--session", required=True)
+    stage.set_defaults(handler=command_stage)
+
+    # No help text: this is the internal watcher process, not a user command.
+    stage_watch = commands.add_parser("stage-watch")
+    stage_watch.add_argument("--session", required=True)
+    stage_watch.set_defaults(handler=command_stage_watch)
 
     preview = commands.add_parser(
         "preview", help="apply a session-managed reversible visual preview"
@@ -368,7 +621,10 @@ def parser() -> argparse.ArgumentParser:
 def main() -> int:
     try:
         arguments = parser().parse_args()
-        purge_abandoned()
+        # The watcher is a long-lived background helper, not a user command;
+        # purging from it would race the very sessions it exists to watch.
+        if arguments.subcommand != "stage-watch":
+            purge_abandoned()
         result = arguments.handler(arguments)
         print(json.dumps(result, separators=(",", ":")))
         return 0
