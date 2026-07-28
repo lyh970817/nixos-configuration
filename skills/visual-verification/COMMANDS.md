@@ -66,7 +66,12 @@ real screen and cannot be relocated. A staged launch crosses Hyprland's `exec`
 shell and a screen-verify trampoline, every argument shell-quoted so none is
 evaluated; `--no-stage` uses no shell. It inherits Hyprland's cwd, environment,
 and PATH, not screen-verify's, so `./result/bin/...` and `nix-shell`/direnv
-PATH bite. Generic launch records the process start time and associated
+PATH bite. Hyprland's exec workspace rule only places the first window of the
+tree, so the trampoline marks the whole tree with a session environment
+variable, a detached per-session watcher moves owned windows that open off the
+stage back onto it, and `launch` sweeps stragglers after the primary window
+resolves; the launch `warning` field reports a primary window still off the
+stage after that. Generic launch records the process start time and associated
 Hyprland window so cleanup does not act on a reused PID or pre-existing window.
 
 ## Reversible previews

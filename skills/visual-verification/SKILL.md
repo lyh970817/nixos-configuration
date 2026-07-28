@@ -27,10 +27,12 @@ preview does not exist.
 
 Launch test surfaces through `screen-verify adapter` or `screen-verify launch` so
 the session owns them; by default they spawn on the session's staging output,
-away from the user's real workspace. Isolation is not guaranteed — a layer
-surface such as `rofi` grabs the keyboard wherever it opens, and a window can
-miss the staging workspace — so check the launch result's `warning` field. Pass
-`--no-stage` only when the real desktop itself is under test. Read
+away from the user's real workspace. Staged trees are marked, and a per-session
+watcher plus a post-launch sweep pull late child windows — image-preview
+overlays, dialogs — back onto the stage. Isolation is still not guaranteed — a
+layer surface such as `rofi` grabs the keyboard wherever it opens, and a window
+can stay off the staging workspace — so check the launch result's `warning`
+field. Pass `--no-stage` only when the real desktop itself is under test. Read
 [COMMANDS.md](COMMANDS.md) when choosing targets, adapters, or cleanup flags.
 
 Completion criterion: the preview can be restored, and pre-existing processes

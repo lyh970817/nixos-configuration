@@ -1,6 +1,6 @@
 # screen-verify bug: ueberzugpp overlay windows escape the staging output
 
-Status: observed and reproduced, cause NOT investigated (deferred to a separate session).
+Status: root-caused and fixed; see "Root cause and fix" at the end.
 
 ## Symptom
 
@@ -77,3 +77,49 @@ windowrule targeting its class.
 No root-cause investigation (Hyprland windowrule application order, ueberzugpp's
 own window-placement logic, or screen-verify's stage/focus-switch sequencing)
 was performed — left for a follow-up session per instruction.
+
+## Root cause and fix
+
+### Root cause
+
+`stage_spawn` places windows via `hyprctl dispatch exec "[workspace
+name:svws<id> silent; noinitialfocus] <command>"`. In Hyprland 0.53.1 that
+exec rule block is matched to the spawned tree through an inherited
+environment token (`HL_EXEC_RULE_TOKEN`), but it is **one-shot**: the rule is
+unregistered as soon as the first window of the tree maps, and it expires 60
+seconds after the spawn regardless. So the staged Alacritty consumes the rule
+when it maps, and when Yazi later spawns `ueberzugpp` — seconds later, or
+whenever the user navigates onto an image — that window maps with no rule in
+force and lands on the user's real focused workspace. This also explains the
+inconsistency between sessions: whether an overlay leaks depends only on
+whether it maps before or after the first window of its tree.
+
+The `windowrulev2` mitigation could never have worked, twice over:
+`windowrulev2` no longer exists in 0.53.1 (the v3 syntax is `windowrule ...
+match:class ...`), and `hyprctl keyword` exits 0 and prints `ok` even for a
+rejected keyword, which is why the attempt looked accepted. Even a correct v3
+workspace rule would not have helped: workspace window rules act at map time
+only and cannot move an already-open window, and Hyprland has no pid- or
+tree-based matching that would catch a future child's window.
+
+### Fix
+
+Three cooperating parts, none of which can move a window the session does not
+positively own:
+
+1. **Session marker.** The staged trampoline exports
+   `SCREEN_VERIFY_STAGE=<session>` before its `exec`, so every descendant —
+   including double-forked, reparented ones — carries the session identity in
+   `/proc/<pid>/environ`, where it survives any break in the pid tree.
+2. **Per-session stage watcher.** `ensure_stage` starts a detached
+   `stage-watch` helper (recorded in `session.json` with pid and start time)
+   the moment the stage exists. It reads `openwindow` events from Hyprland's
+   socket2 and, for each window that is off the staging workspace and owned —
+   marker in `/proc/<pid>/environ`, or descendant of a recorded staged spawn —
+   dispatches `movetoworkspacesilent name:<workspace>,address:0x<address>`.
+   It exits on its own when the stage record or session disappears; `end`
+   also SIGTERMs it behind the usual start-time guard.
+3. **Post-launch sweep.** `launch` sweeps `hyprctl clients -j` after the
+   primary window resolves and moves any owned, off-stage window back,
+   covering windows that mapped before the watcher could act. The launch
+   `warning` field now describes what the sweep could not fix.
