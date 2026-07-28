@@ -1076,6 +1076,49 @@ def _flat_session_update():
     }
 
 
+class _Backoff:
+    """Exponential backoff shared across one translator's upstream-connect
+    attempts, so a sustained outage (e.g. exhausted API credits) can't be
+    hammered by prewarm, on-demand reconnect, and mid-utterance reconnect
+    all firing independently."""
+
+    def __init__(self, base=1.0, cap=60.0):
+        self.base = base
+        self.cap = cap
+        self.failures = 0
+        self.next_ok = 0.0
+
+    def ready(self):
+        return time.monotonic() >= self.next_ok
+
+    def wait_s(self):
+        return max(0.0, self.next_ok - time.monotonic())
+
+    def on_failure(self):
+        delay = min(self.cap, self.base * (2 ** self.failures))
+        self.failures += 1
+        self.next_ok = time.monotonic() + delay
+        return delay
+
+    def on_success(self):
+        self.failures = 0
+        self.next_ok = 0.0
+
+
+class _Session:
+    """Live per-client connection state, exposed on the translator instance
+    as `active_session` so warm_upstream_slot() can inject a warm upstream
+    directly into the running session instead of a slot for a 'next client'
+    that never arrives (the hyprwhspr client is long-lived)."""
+
+    __slots__ = ("conn", "lock", "ready")
+
+    def __init__(self, conn, lock, ready):
+        self.conn = conn
+        self.lock = lock
+        self.ready = ready
+
+
 class RealtimeTranslator:
     """One loopback WS server bridging hyprwhspr's converse client to one
     persistent DashScope realtime-omni-family upstream connection. Each
@@ -1091,23 +1134,65 @@ class RealtimeTranslator:
         # Created on the shared translator loop once it's running (see
         # translator_thread._serve), same as the old module-level _WARM_LOCK.
         self.lock = None
+        self.backoff = _Backoff()
+        # Set once the first client's handle_client() session is up, so
+        # prewarm can target it directly (see warm_upstream_slot()).
+        self.active_session = None
 
     async def open_upstream(self):
-        """Open a fresh upstream connection and send session.update."""
-        api_key = get_api_key()
-        ws = await websockets.connect(
-            self.ws_url,
-            additional_headers={"Authorization": f"Bearer {api_key}"},
-            open_timeout=QWEN_WARM_TIMEOUT,
-            max_size=None,
-            ping_interval=20,
-            ping_timeout=20,
-        )
-        await ws.send(json.dumps(_flat_session_update()))
+        """Open a fresh upstream connection and send session.update.
+
+        Raises immediately without attempting a network connect if still
+        inside a backoff window from a recent failure -- see _Backoff.
+        """
+        if not self.backoff.ready():
+            raise RuntimeError(
+                f"upstream connect suppressed, backing off {self.backoff.wait_s():.1f}s"
+            )
+        try:
+            api_key = get_api_key()
+            ws = await websockets.connect(
+                self.ws_url,
+                additional_headers={"Authorization": f"Bearer {api_key}"},
+                open_timeout=QWEN_WARM_TIMEOUT,
+                max_size=None,
+                ping_interval=20,
+                ping_timeout=20,
+            )
+            await ws.send(json.dumps(_flat_session_update()))
+        except Exception:
+            delay = self.backoff.on_failure()
+            log(f"translator[{self.name}]: upstream connect failed, backing off {delay:.1f}s")
+            raise
+        self.backoff.on_success()
         return ws
 
     async def warm_upstream_slot(self):
-        """Best-effort: pre-establish one warm upstream for the next client."""
+        """Best-effort: ensure a warm upstream is ready for the next demand.
+
+        If a client session is already connected and currently idle (no live
+        upstream), hand the warm connection directly to it. The self.warm_ws
+        slot only matters before the very first client ever connects.
+        """
+        session = self.active_session
+        if session is not None:
+            async with session.lock:
+                if session.conn["ws"] is not None:
+                    return  # already live, nothing to warm
+            try:
+                ws = await self.open_upstream()
+            except Exception as e:
+                log(f"translator[{self.name}] prewarm: upstream connect failed (ignored): {e}")
+                return
+            async with session.lock:
+                if session.conn["ws"] is None:
+                    session.conn["ws"] = ws
+                    session.ready.set()
+                    log(f"translator[{self.name}] prewarm: handed warm upstream to active session")
+                    return
+            await ws.close()
+            return
+
         async with self.lock:
             if self.warm_ws is not None:
                 return
@@ -1137,11 +1222,20 @@ class RealtimeTranslator:
         """Bridge one hyprwhspr converse client to a persistent upstream."""
         conn = {"ws": None}
         reconnect_lock = asyncio.Lock()
+        conn_ready = asyncio.Event()
         # Per-utterance counters; reset on input_audio_buffer.clear (recording
         # start). raw_asr holds the upstream's raw transcription for the
         # current utterance so the output guard can fall back to it if the
-        # cleaned text looks like a reply.
-        state = {"frames": 0, "abytes": 0, "commit_t": None, "raw_asr": ""}
+        # cleaned text looks like a reply. in_flight marks an utterance in
+        # progress so a mid-utterance upstream drop still reconnects instantly
+        # (only an idle drop between utterances defers to on-demand).
+        state = {
+            "frames": 0,
+            "abytes": 0,
+            "commit_t": None,
+            "raw_asr": "",
+            "in_flight": False,
+        }
         stop = asyncio.Event()
 
         try:
@@ -1155,6 +1249,8 @@ class RealtimeTranslator:
             except Exception:
                 pass
             return
+        conn_ready.set()
+        self.active_session = _Session(conn, reconnect_lock, conn_ready)
         log(f"translator[{self.name}]: upstream session established")
 
         async def reconnect(old):
@@ -1165,8 +1261,19 @@ class RealtimeTranslator:
                     await old.close()
                 except Exception:
                     pass
+                conn["ws"] = None  # dead until open_upstream() below succeeds
                 conn["ws"] = await self.open_upstream()
+                conn_ready.set()
                 log(f"translator[{self.name}]: upstream reconnected; session re-sent")
+
+        async def ensure_upstream():
+            """Lazily open the upstream on demand if it's currently dead (idle-closed)."""
+            async with reconnect_lock:
+                if conn["ws"] is not None:
+                    return
+                conn["ws"] = await self.open_upstream()
+                conn_ready.set()
+                log(f"translator[{self.name}]: upstream reconnected on demand")
 
         async def client_to_upstream():
             try:
@@ -1189,6 +1296,7 @@ class RealtimeTranslator:
                         }
                     elif t == "input_audio_buffer.append":
                         state["frames"] += 1
+                        state["in_flight"] = True
                         audio = msg.get("audio") or ""
                         state["abytes"] += (len(audio) * 3) // 4
                     elif t == "input_audio_buffer.commit":
@@ -1198,6 +1306,14 @@ class RealtimeTranslator:
                         state["abytes"] = 0
                         state["commit_t"] = None
                         state["raw_asr"] = ""
+                        state["in_flight"] = True
+                    if conn["ws"] is None:
+                        try:
+                            await ensure_upstream()
+                        except Exception as e:
+                            log(f"translator[{self.name}]: on-demand upstream connect failed, closing client ({e})")
+                            stop.set()
+                            break
                     payload = json.dumps(msg)
                     try:
                         await conn["ws"].send(payload)
@@ -1212,6 +1328,13 @@ class RealtimeTranslator:
         async def upstream_to_client():
             while not stop.is_set():
                 ws = conn["ws"]
+                if ws is None:
+                    # No await between the conn["ws"] read above and this
+                    # wait: asyncio is cooperative, so no other task can flip
+                    # conn["ws"] in between -- no lost-wakeup race.
+                    await conn_ready.wait()
+                    conn_ready.clear()
+                    continue
                 try:
                     async for raw in ws:
                         try:
@@ -1268,6 +1391,7 @@ class RealtimeTranslator:
                                 f"commit->final={ms:.0f}ms"
                             )
                             state["commit_t"] = None
+                            state["in_flight"] = False
                         try:
                             await client_ws.send(json.dumps(ev))
                         except websockets.exceptions.ConnectionClosed:
@@ -1277,18 +1401,26 @@ class RealtimeTranslator:
                     pass
                 if stop.is_set():
                     break
-                # Upstream dropped mid-session (not a client stop): reconnect
-                # so the persistent session survives, then resume reading.
-                try:
-                    await reconnect(ws)
-                except Exception as e:
-                    log(f"translator[{self.name}]: upstream reconnect failed, closing client ({e})")
-                    stop.set()
+                if state["in_flight"]:
+                    # Mid-utterance drop: reconnect immediately, same as before.
                     try:
-                        await client_ws.close(code=1011)
-                    except Exception:
-                        pass
-                    break
+                        await reconnect(ws)
+                    except Exception as e:
+                        log(f"translator[{self.name}]: upstream reconnect failed, closing client ({e})")
+                        stop.set()
+                        try:
+                            await client_ws.close(code=1011)
+                        except Exception:
+                            pass
+                        break
+                else:
+                    # Idle drop (DashScope's own 180s inactivity close): go dead
+                    # and wait for the next demand instead of reconnecting
+                    # immediately.
+                    async with reconnect_lock:
+                        if conn["ws"] is ws:
+                            conn["ws"] = None
+                    log(f"translator[{self.name}]: upstream closed idle; deferring reconnect to next demand")
 
         reader = asyncio.create_task(upstream_to_client())
         try:
@@ -1303,10 +1435,12 @@ class RealtimeTranslator:
                 await reader
             except asyncio.CancelledError:
                 pass
-            try:
-                await conn["ws"].close()
-            except Exception:
-                pass
+            if conn["ws"] is not None:
+                try:
+                    await conn["ws"].close()
+                except Exception:
+                    pass
+            self.active_session = None
             log(f"translator[{self.name}]: upstream session closed")
 
 
