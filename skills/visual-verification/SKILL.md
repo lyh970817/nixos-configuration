@@ -26,19 +26,25 @@ and restores them. Use the normal commit-and-rebuild path when a supported safe
 preview does not exist.
 
 Launch test surfaces through `screen-verify adapter` or `screen-verify launch` so
-the session owns them. Read [COMMANDS.md](COMMANDS.md) when choosing targets,
-adapters, or cleanup flags.
+the session owns them; by default they spawn on the session's staging output,
+away from the user's real workspace. Isolation is not guaranteed — a layer
+surface such as `rofi` grabs the keyboard wherever it opens, and a window can
+miss the staging workspace — so check the launch result's `warning` field. Pass
+`--no-stage` only when the real desktop itself is under test. Read
+[COMMANDS.md](COMMANDS.md) when choosing targets, adapters, or cleanup flags.
 
 Completion criterion: the preview can be restored, and pre-existing processes
 and windows remain outside session ownership.
 
 ## 3. Capture and inspect
 
-Use `screen-verify capture --session ID`; focused-monitor capture is the default.
-Inspect the returned image path with the local image viewer. Iterate on
-objective defects: theme loading, fallback colors, contrast, legibility,
-clipping, geometry, and current-mode consistency. Put subjective aesthetic
-choices to the user.
+Use `screen-verify capture --session ID`; the default target is the session's
+stage when one exists, otherwise the focused monitor. To verify the real
+desktop itself — wallpaper, bars, notifications — use `--target focused` or
+launch with `--no-stage`. Inspect the returned image path with the local image
+viewer. Iterate on objective defects: theme loading, fallback colors,
+contrast, legibility, clipping, geometry, and current-mode consistency. Put
+subjective aesthetic choices to the user.
 
 Completion criterion: the rendered result, rather than screenshot creation
 alone, satisfies the visual request in the starting mode.
