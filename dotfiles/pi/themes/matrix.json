@@ -1,0 +1,71 @@
+{
+  "$schema": "https://raw.githubusercontent.com/earendil-works/pi/main/packages/coding-agent/src/modes/interactive/theme/theme-schema.json",
+  "name": "matrix",
+  "vars": {
+    "userMsgBg": "#045C07"
+  },
+  "colors": {
+    "accent": 5,
+    "border": 4,
+    "borderAccent": 10,
+    "borderMuted": 8,
+    "success": 10,
+    "error": 12,
+    "warning": 3,
+    "muted": 2,
+    "dim": 8,
+    "text": "",
+    "thinkingText": 2,
+
+    "selectedBg": 3,
+    "userMessageBg": "userMsgBg",
+    "userMessageText": "",
+    "customMessageBg": 0,
+    "customMessageText": "",
+    "customMessageLabel": 10,
+    "toolPendingBg": 0,
+    "toolSuccessBg": 0,
+    "toolErrorBg": 0,
+    "toolTitle": "",
+    "toolOutput": 2,
+
+    "mdHeading": 5,
+    "mdLink": 4,
+    "mdLinkUrl": 8,
+    "mdCode": 5,
+    "mdCodeBlock": 2,
+    "mdCodeBlockBorder": 8,
+    "mdQuote": 2,
+    "mdQuoteBorder": 8,
+    "mdHr": 8,
+    "mdListBullet": 5,
+
+    "toolDiffAdded": 10,
+    "toolDiffRemoved": 12,
+    "toolDiffContext": 2,
+
+    "syntaxComment": 2,
+    "syntaxKeyword": 5,
+    "syntaxFunction": 5,
+    "syntaxVariable": "",
+    "syntaxString": 4,
+    "syntaxNumber": 4,
+    "syntaxType": 4,
+    "syntaxOperator": 5,
+    "syntaxPunctuation": "",
+
+    "thinkingOff": 8,
+    "thinkingMinimal": 2,
+    "thinkingLow": 3,
+    "thinkingMedium": 4,
+    "thinkingHigh": 5,
+    "thinkingXhigh": 10,
+
+    "bashMode": 10
+  },
+  "export": {
+    "pageBg": "#000000",
+    "cardBg": "#045C07",
+    "infoBg": "#126D15"
+  }
+}

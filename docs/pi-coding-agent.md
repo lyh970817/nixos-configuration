@@ -10,9 +10,9 @@ Pieces:
 
 - `pkgs/pi-coding-agent.nix` — the CLI (`buildNpmPackage`, prebuilt `dist/`).
 - `pkgs/pi-openai-server-compaction.nix` — the extension, plus a vendored `ws`.
-- `home/programs/pi.nix` — launcher, extension link, extension config link.
+- `home/programs/pi.nix` — launcher, extension link, extension config link, theme link.
 - `home/programs/mutable-configs.nix` — materializes `~/.pi/agent/settings.json`.
-- `dotfiles/pi/` — the tracked baselines for both JSON files.
+- `dotfiles/pi/` — the tracked baselines for both JSON files, plus `themes/`.
 
 ## One-time manual bootstrap
 
@@ -87,10 +87,26 @@ So `dotfiles/pi/settings.json` just lists the stable path
 | `~/.pi/agent/auth.json` | yes | machine-local, unmanaged, never tracked |
 | `~/.pi/agent/openai-server-compaction.json` | no | out-of-store symlink to `dotfiles/pi/` |
 | `~/.pi/agent/extensions/openai-server-compaction` | no | symlink to the store |
+| `~/.pi/agent/themes/matrix.json` | no | out-of-store symlink to `dotfiles/pi/themes/` |
 
 Because `settings.json` is replaced on every activation, model switches made
 inside pi with `/model` do not survive a `rebuild`. Change the default in
 `dotfiles/pi/settings.json` (`defaultProvider` + `defaultModel`) instead.
+
+## Theme
+
+`dotfiles/pi/themes/matrix.json` is set as the active theme via `"theme":
+"matrix"` in `dotfiles/pi/settings.json`. Its `colors` values are plain
+integers (0-15), not hex — pi's theme schema accepts a 256-color palette index
+as an alternative to a hex string, and indices 0-15 resolve through whatever
+the terminal has bound those ANSI slots to. Since `home/programs/alacritty.nix`
+defines the dark palette (background/foreground plus the Matrix Green
+normal/bright rows, including the lifted `bright.green` emphasis color), this
+theme tracks that palette automatically — retuning `alacritty.nix` changes
+pi's colors too, with no edit needed here. The one exception is
+`userMessageBg`, which uses a literal hex (`#045C07`, "Deep Green") because
+that shade lives in Alacritty's `colors.dim` row, which has no addressable
+ANSI index.
 
 ## Model selection
 
