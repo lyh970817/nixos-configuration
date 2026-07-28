@@ -8,7 +8,6 @@
 {
   # X11 configuration
   services.xserver.enable = false;
-  services.xserver.xkb.options = "caps:escape";
 
   # Seatd for seat management
   services.seatd.enable = true;
