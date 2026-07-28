@@ -98,7 +98,7 @@ Use two-space indentation in Nix files. Keep modules focused on one concern and 
 
 ## Commit & Pull Request Guidelines
 
-Recent history uses short imperative subjects such as `Add 115 Browser launcher` and `Fix tmux copy-mode paging keys`. Follow that style: start with a verb, keep the subject specific, and avoid unrelated changes in one commit. Pull requests should summarize changes, list validation commands, call out host-specific effects, and include screenshots only for UI changes. Do not open pull requests for worktree branches unless explicitly asked — leave completed worktree work on its local branch and merge it directly when requested.
+Recent history uses short imperative subjects such as `Add 115 Browser launcher` and `Fix tmux copy-mode paging keys`. Follow that style: start with a verb, keep the subject specific, and avoid unrelated changes in one commit. Never push branches and never open pull requests, even from an isolated worktree — leave completed work committed on its local branch and let the user push and merge it themselves.
 
 Commit configuration changes before rebuilding. Treat the pre-commit hooks as the verification gate before `rebuild`; if the rebuild fails, make a follow-up fix commit and rebuild again.
 
