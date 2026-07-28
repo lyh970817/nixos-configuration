@@ -1,30 +1,35 @@
-{ pkgs, ... }:
+{
+  config,
+  osConfig,
+  pkgs,
+  ...
+}:
 
+let
+  link = subpath: config.lib.file.mkOutOfStoreSymlink "${osConfig.portable.configDir}/${subpath}";
+in
 {
   # Terminal agent multiplexer; useful on both roles, so it is not gated on
   # `portable.role`. The package comes from the pinned upstream flake input
   # via the overlay in flake.nix.
   home.packages = [ pkgs.herdr ];
 
-  # "Zero chrome" layout: sidebar hidden, tab bar hidden while a single tab is
-  # open, no pane borders or gaps.
+  # herdr rewrites its own config.toml at runtime: `mark_onboarding_complete`
+  # clears the first-run wizard and the in-app Settings screen saves through the
+  # same path. A read-only /nix/store copy makes the wizard reappear on every
+  # launch and makes Settings fail silently, so the authored config is an
+  # out-of-store symlink into this repo — writes go through to
+  # dotfiles/herdr/config.toml and stay in version control. Safe because the
+  # writer is a plain in-place `fs::write` (src/app/config_io.rs), not
+  # temp-file+rename, so it follows the link instead of replacing it.
   #
-  # `theme.name = "terminal"` selects the one built-in palette that emits plain
-  # ANSI slots instead of hardcoded RGB, so herdr inherits whatever palette
-  # Alacritty is currently importing and follows `theme-toggle` between dark and
-  # light for free. This repo has no shared palette to reference; see
-  # home/programs/alacritty.nix for the two ANSI palettes and
-  # home/desktop/theming.nix for the switch.
-  xdg.configFile."herdr/config.toml".text = ''
-    [theme]
-    name = "terminal"
-
-    [ui]
-    sidebar_start_collapsed = true
-    sidebar_collapsed_mode = "hidden"
-    hide_tab_bar_when_single_tab = true
-    pane_borders = false
-    pane_gaps = false
-    accent = "green"
-  '';
+  # Only config.toml is linked, never the whole directory: herdr resolves its
+  # data dir from `config_dir()` independently of the config file's location and
+  # drops herdr.log, herdr-client.log, herdr-server.log, plugins.json,
+  # session.json and its sockets in there. Home Manager materializes
+  # ~/.config/herdr as a real directory when only a nested path is managed, so
+  # that runtime state stays writable and out of the repo.
+  #
+  # See dotfiles/herdr/config.toml for the layout and theme rationale.
+  xdg.configFile."herdr/config.toml".source = link "dotfiles/herdr/config.toml";
 }
