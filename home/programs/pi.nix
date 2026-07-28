@@ -61,5 +61,10 @@ in
     # safe. settings.json is materialized instead (pi rewrites it at runtime)
     # — see home/programs/mutable-configs.nix.
     ".pi/agent/openai-server-compaction.json".source = link "dotfiles/pi/openai-server-compaction.json";
+
+    # pi never writes into its custom themes directory, so a live symlink is
+    # safe here too. Colors are ANSI palette indices (0-15), not hex, so this
+    # theme tracks whatever dark.toml in home/programs/alacritty.nix defines.
+    ".pi/agent/themes/matrix.json".source = link "dotfiles/pi/themes/matrix.json";
   };
 }
