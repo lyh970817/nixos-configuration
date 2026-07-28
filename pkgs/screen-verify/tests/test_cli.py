@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -11,6 +12,14 @@ from pathlib import Path
 
 
 SCRIPT = Path(__file__).parents[1] / "screen_verify.py"
+
+# `stage_position`'s fallbacks are only reachable from a compositor that answers
+# badly, which the CLI-level fake cannot express, so the module is imported for
+# those cases as well as driven through the CLI for everything else.
+sys.path.insert(0, str(SCRIPT.parent))
+
+from screen_verify_lib import stage as stage_module  # noqa: E402
+from screen_verify_lib.state import ScreenError  # noqa: E402
 
 # A small stateful Hyprland stand-in: it models monitor creation and removal,
 # workspace rules, focus, and window spawning, and logs every invocation so
@@ -40,6 +49,39 @@ def focused():
 
 def emit(value):
     print(json.dumps(value))
+
+
+def rule_geometry(rule):
+    # The rectangle a `monitor` keyword asks for, or None for `auto`/nonsense.
+    if not rule:
+        return None
+    resolution, _, _ = rule["resolution"].partition("@")
+    width, _, height = resolution.partition("x")
+    x, _, y = rule["position"].partition("x")
+    if not (width.isdigit() and height.isdigit()):
+        return None
+    if not (x.lstrip("-").isdigit() and y.lstrip("-").isdigit()):
+        # `auto` lands here: Hyprland places the output itself.
+        return None
+    return {
+        "x": int(x),
+        "y": int(y),
+        "width": int(width),
+        "height": int(height),
+        "scale": float(rule["scale"]),
+    }
+
+
+def apply_monitor_rule(name):
+    # Hyprland keys monitor rules by output name and applies one whenever an
+    # output of that name appears -- including an output created after the rule
+    # was installed, which is what lets a rule place a stage from birth.
+    geometry = rule_geometry(state.get("monitor_rules", {}).get(name))
+    if geometry is None:
+        return
+    for monitor in state["monitors"]:
+        if monitor.get("name") == name:
+            monitor.update(geometry)
 
 
 command = arguments[0] if arguments else ""
@@ -107,6 +149,18 @@ elif command == "keyword":
         if rule.get("name") and rule.get("monitor"):
             state.setdefault("workspace_rules", {})[rule["monitor"]] = rule["name"]
             save()
+    elif arguments[1:2] == ["monitor"]:
+        fields = arguments[2].split(",")
+        if len(fields) == 4:
+            state.setdefault("monitor_rules", {})[fields[0]] = {
+                "resolution": fields[1],
+                "position": fields[2],
+                "scale": fields[3],
+            }
+            # A rule for an output that already exists takes effect at once; one
+            # for an output that does not is remembered until it appears.
+            apply_monitor_rule(fields[0])
+            save()
     print("ok")
 elif command == "output":
     if arguments[1:2] == ["create"]:
@@ -125,13 +179,34 @@ elif command == "output":
             workspace = {"id": 7, "name": "7"}
         for monitor in state["monitors"]:
             monitor["focused"] = False
+        # Hyprland places a new output automatically, scanning rightward from
+        # the origin, so it lands flush against the right edge of the layout --
+        # which is exactly the placement screen-verify has to move it off.
+        # `output create` takes no position, so this is where an output with no
+        # rule of its own is born, and it stays there until a rule arrives.
+        edge = 0
+        for monitor in state["monitors"]:
+            if isinstance(monitor.get("x"), int) and isinstance(
+                monitor.get("width"), int
+            ):
+                edge = max(edge, monitor["x"] + monitor["width"])
         created = {
             "name": name,
             "focused": True,
+            "x": edge,
+            "y": 0,
             "width": 1920,
             "height": 1080,
             "scale": 1.0,
             "activeWorkspace": workspace,
+        }
+        # A rule installed before creation is applied by name as the output
+        # appears, so an output created under one is never auto-placed at all.
+        created.update(rule_geometry(state.get("monitor_rules", {}).get(name)) or {})
+        # The rectangle the output was born with, kept so tests can ask where it
+        # sat during the interval before any later rule could move it.
+        state.setdefault("created_at", {})[name] = {
+            key: created[key] for key in ("x", "y", "width", "height")
         }
         if state.get("create_hidden_polls"):
             created["hidden_polls"] = state["create_hidden_polls"]
@@ -248,6 +323,10 @@ PY
                 {
                     "name": "DP-1",
                     "focused": True,
+                    # Real Hyprland always reports a position; without one the
+                    # placement tests would only ever exercise the fallback.
+                    "x": 0,
+                    "y": 0,
                     "width": 2560,
                     "height": 1440,
                     "scale": 1.25,
@@ -340,6 +419,41 @@ PY
 
     def stage_names(self, session: str) -> tuple[str, str]:
         return f"svstage{session[:8]}", f"svws{session[:8]}"
+
+    def stage_keyword(self) -> str:
+        """The `monitor` keyword argument that sized and placed the stage."""
+        command = next(
+            command
+            for command in self.hyprctl_calls()
+            if command[:3] == ["hyprctl", "keyword", "monitor"]
+        )
+        return command[3]
+
+    def stage_rectangle(self, session: str) -> tuple[int, int, int, int]:
+        """(x, y, width, height) the stage was asked to occupy."""
+        output, _ = self.stage_names(session)
+        name, resolution, position, _ = self.stage_keyword().split(",")
+        self.assertEqual(name, output)
+        self.assertNotEqual(
+            position,
+            "auto",
+            "the stage was placed automatically, flush against the user's screen",
+        )
+        size = re.fullmatch(r"(\d+)x(\d+)@\d+", resolution)
+        corner = re.fullmatch(r"(-?\d+)x(-?\d+)", position)
+        self.assertIsNotNone(size, resolution)
+        self.assertIsNotNone(corner, position)
+        return int(corner[1]), int(corner[2]), int(size[1]), int(size[2])
+
+    def real_monitor_rectangles(self, session: str) -> list[tuple[int, int, int, int]]:
+        """(x, y, width, height) of every monitor that is not the stage."""
+        output, _ = self.stage_names(session)
+        state = json.loads(self.hypr_state.read_text())
+        return [
+            (monitor["x"], monitor["y"], monitor["width"], monitor["height"])
+            for monitor in state["monitors"]
+            if monitor["name"] != output
+        ]
 
     def eventually(self, predicate, message: str, timeout: float = 10.0):
         deadline = time.monotonic() + timeout
@@ -724,7 +838,13 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
         self.assertFalse((outside / "theme").exists())
         self.cli("end", "--session", session)
 
-    def test_stage_installs_the_workspace_rule_before_creating_the_output(self) -> None:
+    def test_stage_installs_both_rules_before_creating_the_output(self) -> None:
+        # Hyprland applies a rule by output name as the output appears, and
+        # both rules depend on that. Without the workspace rule first the
+        # output adopts a numeric workspace and every capture comes back blank;
+        # without the monitor rule first the output is auto-placed flush
+        # against the user's screen and stays there, reachable by the pointer,
+        # until the rule lands -- `output create` takes no position of its own.
         session = self.begin()
         output, workspace = self.stage_names(session)
 
@@ -732,7 +852,7 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
 
         self.assertEqual(result["output"], output)
         self.assertEqual(result["workspace"], workspace)
-        rule = self.call_index(
+        workspace_rule = self.call_index(
             [
                 "hyprctl",
                 "keyword",
@@ -740,24 +860,214 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
                 f"name:{workspace},monitor:{output},default:true",
             ]
         )
+        monitor_rule = self.call_index(["hyprctl", "keyword", "monitor"])
         creation = self.call_index(["hyprctl", "output", "create", "headless", output])
-        self.assertLess(rule, creation)
+        self.assertLess(workspace_rule, creation)
+        self.assertLess(
+            monitor_rule,
+            creation,
+            "the stage was created before it had a position to be created at",
+        )
         self.assertIn(output, self.hypr_monitors())
 
-    def test_stage_sizes_the_output_with_automatic_placement(self) -> None:
+    def test_the_stage_is_off_screen_from_the_moment_it_is_created(self) -> None:
+        # The ordering above exists for this, and only this: the rectangle the
+        # output is born with -- not the one it is moved to afterwards -- has
+        # to already clear every real monitor. A stage repositioned after
+        # creation passes every other placement test here while still leaving a
+        # window in which the pointer can walk onto it.
         session = self.begin()
         output, _ = self.stage_names(session)
 
         self.cli("stage", "--session", session)
 
-        keyword = next(
-            command
-            for command in self.hyprctl_calls()
-            if command[:3] == ["hyprctl", "keyword", "monitor"]
+        state = json.loads(self.hypr_state.read_text())
+        birth = state["created_at"][output]
+        for monitor_x, monitor_y, _, _ in self.real_monitor_rectangles(session):
+            self.assertLessEqual(
+                birth["x"] + birth["width"] + stage_module.STAGE_GAP, monitor_x
+            )
+            self.assertLessEqual(
+                birth["y"] + birth["height"] + stage_module.STAGE_GAP, monitor_y
+            )
+
+    def test_the_size_and_the_position_come_from_one_layout_query(self) -> None:
+        # The rule carries a size and a position, and both are read out of the
+        # same `monitors` answer. Two queries can disagree: the second one
+        # failing on a layout whose true origin is negative would put the
+        # position on its 0,0 fallback while the size still describes a real
+        # monitor, and the stage would land on top of one.
+        session = self.begin()
+
+        self.cli("stage", "--session", session)
+
+        calls = self.hyprctl_calls()
+        window = self.call_index(["hyprctl", "activewindow"])
+        # The focus snapshot reads the layout too, and that read is its own;
+        # the decision under test is everything between it and the first rule.
+        focus_query = next(
+            index
+            for index, command in enumerate(calls)
+            if command[:2] == ["hyprctl", "monitors"] and index > window
         )
-        # "auto" rather than an explicit position: an explicit one shoves the
-        # user's real monitors around in the global layout.
-        self.assertEqual(keyword[3], f"{output},2560x1440@60,auto,1.25")
+        first_rule = self.call_index(["hyprctl", "keyword"])
+        self.assertLess(focus_query, first_rule)
+        queries = [
+            index
+            for index, command in enumerate(calls)
+            if command[:2] == ["hyprctl", "monitors"]
+            and focus_query < index < first_rule
+        ]
+        self.assertEqual(
+            len(queries),
+            1,
+            "the reference geometry and the placement did not share one snapshot",
+        )
+
+    def test_stage_sizes_the_output_from_the_reference_monitor(self) -> None:
+        session = self.begin()
+        output, _ = self.stage_names(session)
+
+        self.cli("stage", "--session", session)
+
+        name, resolution, _, scale = self.stage_keyword().split(",")
+        self.assertEqual([name, resolution, scale], [output, "2560x1440@60", "1.25"])
+
+    def test_stage_is_placed_up_and_left_of_the_users_monitor(self) -> None:
+        session = self.begin()
+
+        self.cli("stage", "--session", session)
+
+        x, y, width, height = self.stage_rectangle(session)
+        rectangles = self.real_monitor_rectangles(session)
+        self.assertEqual(len(rectangles), 1)
+        # "auto" would put the stage flush against the right edge of the user's
+        # screen, where the pointer walks straight onto it. The gap is what
+        # makes it unreachable, so the clearance is what gets asserted -- never
+        # a hardcoded corner, which would stop meaning anything the moment the
+        # reference monitor changes size.
+        for monitor_x, monitor_y, _, _ in rectangles:
+            self.assertLessEqual(x + width + stage_module.STAGE_GAP, monitor_x)
+            self.assertLessEqual(y + height + stage_module.STAGE_GAP, monitor_y)
+
+    def test_stage_is_placed_up_and_left_of_every_monitor(self) -> None:
+        # Clearing the focused monitor is not enough: the position has to come
+        # from the minimum x and the minimum y of the whole layout. Both are
+        # negative and they come from different monitors, so the exact corner
+        # asserted below pins each axis on its own: a placement blind to either
+        # minimum would land somewhere this cannot accept. It also has to be
+        # negative on both axes for the geometric check to mean anything --
+        # clearance on one axis alone already separates two rectangles, so the
+        # overlap test that follows can never catch a single-axis mistake.
+        self.write_hypr_state(
+            monitors=[
+                {
+                    "name": "DP-1",
+                    "focused": True,
+                    "x": 0,
+                    "y": 0,
+                    "width": 2560,
+                    "height": 1440,
+                    "scale": 1.25,
+                    "activeWorkspace": {"id": 1, "name": "1"},
+                },
+                {
+                    "name": "HDMI-A-1",
+                    "focused": False,
+                    "x": -1920,
+                    "y": 400,
+                    "width": 1920,
+                    "height": 1080,
+                    "scale": 1.0,
+                    "activeWorkspace": {"id": 2, "name": "2"},
+                },
+                {
+                    "name": "DP-2",
+                    "focused": False,
+                    "x": 2560,
+                    "y": -300,
+                    "width": 1920,
+                    "height": 1080,
+                    "scale": 1.0,
+                    "activeWorkspace": {"id": 3, "name": "3"},
+                },
+            ]
+        )
+        session = self.begin()
+
+        self.cli("stage", "--session", session)
+
+        x, y, width, height = self.stage_rectangle(session)
+        rectangles = self.real_monitor_rectangles(session)
+        self.assertEqual(len(rectangles), 3)
+        origin_x = min(rectangle[0] for rectangle in rectangles)
+        origin_y = min(rectangle[1] for rectangle in rectangles)
+        # Guards the layout above against being edited back into one where
+        # either minimum happens to be the zero the fallback would also give.
+        self.assertLess(origin_x, 0)
+        self.assertLess(origin_y, 0)
+        self.assertEqual(
+            (x, y),
+            (
+                origin_x - width - stage_module.STAGE_GAP,
+                origin_y - height - stage_module.STAGE_GAP,
+            ),
+        )
+        for monitor_x, monitor_y, _, _ in rectangles:
+            self.assertLessEqual(x + width + stage_module.STAGE_GAP, monitor_x)
+            self.assertLessEqual(y + height + stage_module.STAGE_GAP, monitor_y)
+
+    def test_the_stage_rectangle_touches_no_real_monitor(self) -> None:
+        # Overlap and adjacency are the properties the whole placement exists
+        # to avoid, so they are checked as geometry rather than inferred from
+        # the corner. HDMI-A-1 is up and left of the focused monitor, so a
+        # stage that cleared only the focused one would sit on top of it.
+        self.write_hypr_state(
+            monitors=[
+                {
+                    "name": "DP-1",
+                    "focused": True,
+                    "x": 0,
+                    "y": 0,
+                    "width": 2560,
+                    "height": 1440,
+                    "scale": 1.25,
+                    "activeWorkspace": {"id": 1, "name": "1"},
+                },
+                {
+                    "name": "HDMI-A-1",
+                    "focused": False,
+                    "x": -1920,
+                    "y": -1080,
+                    "width": 1920,
+                    "height": 1080,
+                    "scale": 1.0,
+                    "activeWorkspace": {"id": 2, "name": "2"},
+                },
+            ]
+        )
+        session = self.begin()
+
+        self.cli("stage", "--session", session)
+
+        x, y, width, height = self.stage_rectangle(session)
+        rectangles = self.real_monitor_rectangles(session)
+        self.assertEqual(len(rectangles), 2)
+        for monitor_x, monitor_y, monitor_width, monitor_height in rectangles:
+            # Strict, so a shared edge counts as a failure: the pointer moves
+            # through one continuous coordinate space, and an output the user's
+            # screen merely touches is one the cursor can walk onto.
+            separated = (
+                x + width < monitor_x
+                or monitor_x + monitor_width < x
+                or y + height < monitor_y
+                or monitor_y + monitor_height < y
+            )
+            self.assertTrue(
+                separated,
+                f"stage {(x, y, width, height)} touches monitor "
+                f"{(monitor_x, monitor_y, monitor_width, monitor_height)}",
+            )
 
     def test_stage_restores_the_focus_it_steals(self) -> None:
         session = self.begin()
@@ -859,11 +1169,13 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
         self.assertEqual(result["workspace"], workspace)
         self.assertIn(output, self.hypr_monitors())
         creation = self.call_index(["hyprctl", "output", "create", "headless", output])
-        sizing = self.call_index(["hyprctl", "keyword", "monitor"])
+        # The wait ends where focus is handed back, so the polls that belong to
+        # it are the `monitors` queries between creation and that restore.
+        restore = self.call_index(["hyprctl", "dispatch", "focusmonitor", "DP-1"])
         polls = [
             index
             for index, command in enumerate(self.hyprctl_calls())
-            if command[:2] == ["hyprctl", "monitors"] and creation < index < sizing
+            if command[:2] == ["hyprctl", "monitors"] and creation < index < restore
         ]
         self.assertGreater(
             len(polls), 1, "the missing output was never asked about again"
@@ -897,11 +1209,13 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
         result = self.cli("stage", "--session", session)
 
         self.assertEqual(result["workspace"], workspace)
-        sizing = self.call_index(["hyprctl", "keyword", "monitor"])
+        # The workspace wait is everything after focus is handed back, which is
+        # the last thing the output wait does.
+        restore = self.call_index(["hyprctl", "dispatch", "focusmonitor", "DP-1"])
         polls = [
             index
             for index, command in enumerate(self.hyprctl_calls())
-            if command[:2] == ["hyprctl", "monitors"] and index > sizing
+            if command[:2] == ["hyprctl", "monitors"] and index > restore
         ]
         self.assertGreater(
             len(polls), 1, "the unadopted workspace was never asked about again"
@@ -2179,6 +2493,95 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
         self.cli("status", "--session", old_session, check=False)
 
         self.assertFalse(old_path.exists())
+
+
+class StagePlacementFallbackTests(unittest.TestCase):
+    """The placement snapshot when the compositor answers badly, or not at all.
+
+    A stage that cannot be placed is worse than useless -- it is placed by
+    Hyprland instead, flush against the user's screen -- so no reading of the
+    layout may turn into an exception. The CLI-level fake cannot express a
+    `monitors` query that fails only at this moment, so this drives the
+    functions directly, through the same one-snapshot path the stage uses.
+    """
+
+    def snapshot(self, answer: object) -> list[dict]:
+        def monitors() -> list[dict]:
+            if isinstance(answer, BaseException):
+                raise answer
+            return answer
+
+        original = stage_module.monitors
+        stage_module.monitors = monitors
+        try:
+            return stage_module.placement_snapshot()
+        finally:
+            stage_module.monitors = original
+
+    def place(self, answer: object) -> tuple[int, int]:
+        position = stage_module.stage_position(self.snapshot(answer), 2560, 1440)
+        x, _, y = position.partition("x")
+        return int(x), int(y)
+
+    def assert_off_screen(self, corner: tuple[int, int]) -> None:
+        self.assertEqual(
+            corner,
+            (-2560 - stage_module.STAGE_GAP, -1440 - stage_module.STAGE_GAP),
+        )
+        self.assertLess(corner[0], 0)
+        self.assertLess(corner[1], 0)
+
+    def test_a_failed_monitors_query_still_places_the_stage_off_screen(self) -> None:
+        self.assert_off_screen(self.place(ScreenError("Command failed: hyprctl")))
+
+    def test_an_unexpected_monitors_failure_never_reaches_the_caller(self) -> None:
+        self.assert_off_screen(self.place(TypeError("hyprctl answered nonsense")))
+
+    def test_monitors_without_a_usable_position_are_not_measured_from(self) -> None:
+        # A bool is an int in Python, and half a position is no position, so
+        # neither entry may be allowed to pull the origin to zero-ish by
+        # accident -- the fallback origin has to be reached deliberately.
+        self.assert_off_screen(
+            self.place(
+                [
+                    {"name": "DP-1"},
+                    {"name": "HDMI-A-1", "x": True, "y": True},
+                    {"name": "DP-2", "x": 4000, "y": None},
+                ]
+            )
+        )
+
+    def test_a_failed_query_puts_the_size_and_the_position_on_one_fallback(
+        self,
+    ) -> None:
+        # Size and position come out of the same snapshot, so a layout that
+        # could not be read cannot leave one of them measured and the other
+        # guessed -- the case where a real origin is negative but the position
+        # falls back to 0,0 and parks the stage on a real monitor.
+        entries = self.snapshot(ScreenError("Command failed: hyprctl"))
+        reference = stage_module.reference_monitor(entries)
+        self.assertEqual(reference, stage_module.FALLBACK_MONITOR)
+        position = stage_module.stage_position(
+            entries, reference["width"], reference["height"]
+        )
+        gap = stage_module.STAGE_GAP
+        self.assertEqual(
+            position,
+            f"{-reference['width'] - gap}x{-reference['height'] - gap}",
+        )
+
+    def test_the_lowest_corner_of_the_layout_is_measured_from(self) -> None:
+        # The two axes are minimised independently: no single monitor sits at
+        # the corner the stage is measured from.
+        corner = self.place(
+            [
+                {"name": "DP-1", "x": 0, "y": 0},
+                {"name": "HDMI-A-1", "x": -1920, "y": 600},
+                {"name": "DP-2", "x": 2560, "y": -300},
+            ]
+        )
+        gap = stage_module.STAGE_GAP
+        self.assertEqual(corner, (-1920 - 2560 - gap, -300 - 1440 - gap))
 
 
 if __name__ == "__main__":

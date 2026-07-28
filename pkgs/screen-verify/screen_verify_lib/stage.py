@@ -18,6 +18,11 @@ from .state import ScreenError, atomic_json, audit, read_json
 STAGE_TIMEOUT_SECONDS = 3.0
 PID_TIMEOUT_SECONDS = 5.0
 POLL_SECONDS = 0.1
+# Empty space kept between the stage and the nearest real monitor, on both
+# axes. Any positive gap is enough to make the stage unreachable; this one is
+# wide enough that a monitor appearing at a slightly different origin than the
+# one we read cannot close it.
+STAGE_GAP = 2000
 FALLBACK_MONITOR = {"width": 1920, "height": 1080, "scale": 1.0}
 
 
@@ -146,11 +151,22 @@ def restore_focus(snapshot: Any) -> None:
         hyprctl_quiet("dispatch", "focuswindow", f"address:{window}")
 
 
-def reference_monitor() -> dict[str, Any]:
+def placement_snapshot() -> list[dict[str, Any]]:
+    """The single layout reading that both sizes and places the stage.
+
+    Never raises: this decides where the user's pointer can go, so a layout
+    that cannot be read still has to yield a position rather than a failure,
+    and an empty snapshot is what puts both callers on their fallbacks.
+    """
     try:
-        entries = monitors()
-    except ScreenError:
-        entries = []
+        return monitors()
+    except Exception:
+        # Deliberately wider than `ScreenError`: no reading of the layout is
+        # worth failing a stage over, and every failure lands on the fallback.
+        return []
+
+
+def reference_monitor(entries: list[dict[str, Any]]) -> dict[str, Any]:
     for entry in entries:
         if entry.get("focused"):
             return monitor_geometry(entry)
@@ -169,6 +185,29 @@ def monitor_geometry(entry: dict[str, Any]) -> dict[str, Any]:
     if isinstance(scale, (int, float)) and float(scale) > 0:
         geometry["scale"] = float(scale)
     return geometry
+
+
+def stage_position(entries: list[dict[str, Any]], width: int, height: int) -> str:
+    """The `<x>x<y>` that parks a width x height stage clear of every monitor.
+
+    Never raises, whatever the snapshot holds: this decides where the user's
+    pointer can go, so a layout that could not be read still has to yield a
+    position rather than a failure, and the origin is the safest thing to
+    measure from when nothing answered.
+    """
+    corners = []
+    for entry in entries:
+        x = entry.get("x")
+        y = entry.get("y")
+        # A bool is an int in Python, and a monitor with only one axis placed
+        # is no more usable than one with neither.
+        if isinstance(x, bool) or isinstance(y, bool):
+            continue
+        if isinstance(x, int) and isinstance(y, int):
+            corners.append((x, y))
+    origin_x = min((x for x, _ in corners), default=0)
+    origin_y = min((y for _, y in corners), default=0)
+    return f"{origin_x - width - STAGE_GAP}x{origin_y - height - STAGE_GAP}"
 
 
 def stage_info(data: Any) -> dict[str, Any] | None:
@@ -303,13 +342,43 @@ def ensure_stage(path: Path, session: str) -> dict[str, Any]:
             return existing
 
     focus = focus_snapshot(output)
-    reference = reference_monitor()
-    # The workspace rule must exist before the output does; a rule installed
-    # afterwards leaves the output on a free numeric workspace and every
-    # capture of the staging workspace silently comes back blank. The rule
-    # itself cannot be removed at runtime, so one inert rule leaks per session;
-    # session-unique names keep that harmless.
+    # One reading of the layout answers both questions asked of it: how big the
+    # stage should be, and where it may sit. Two queries can disagree, and a
+    # second one that failed on a layout whose true origin is negative would
+    # fall back to 0,0 and park the stage on top of a real monitor. The stage's
+    # own output cannot appear in this snapshot -- it does not exist yet -- so
+    # what is measured here is exactly the user's own screens.
+    layout = placement_snapshot()
+    reference = reference_monitor(layout)
+    # Up and left of the whole layout, sharing an edge with nothing. A position
+    # at or right of the real monitors makes Hyprland re-place the auto-placed
+    # ones and shifts the coordinates of the user's own screen; `auto` itself
+    # lands flush against its right edge. Adjacency is just as bad as overlap:
+    # the pointer moves through one continuous space, so from a touching output
+    # it walks off the real screen onto the invisible one and takes keyboard
+    # focus with it under follow_mouse. A corner nothing touches cannot be
+    # reached by a mouse at all.
+    position = stage_position(layout, reference["width"], reference["height"])
+    # Both rules must exist before the output does, because Hyprland applies a
+    # rule by output name the moment an output of that name appears.
+    #
+    # A workspace rule installed afterwards leaves the output on a free numeric
+    # workspace and every capture of the staging workspace silently comes back
+    # blank. A monitor rule installed afterwards is worse: `output create`
+    # takes no position, so Hyprland auto-places the new output flush against
+    # the user's screen and it stays there until the rule lands -- a window of
+    # a fraction of a second in which the pointer can walk onto the invisible
+    # stage. Installed first, the output is placed correctly from birth.
+    #
+    # Neither rule can be removed at runtime, so two inert rules leak per
+    # session; session-unique names keep that harmless.
     hyprctl("keyword", "workspace", workspace_rule(output, workspace))
+    hyprctl(
+        "keyword",
+        "monitor",
+        f"{output},{reference['width']}x{reference['height']}@60,"
+        f"{position},{reference['scale']:g}",
+    )
     # The record is persisted before the output exists so that a crash between
     # creating the output and finishing the stage still leaves `end` and
     # `purge` a stage to report and a focus snapshot to restore. Reclaiming the
@@ -321,14 +390,6 @@ def ensure_stage(path: Path, session: str) -> dict[str, Any]:
         hyprctl("output", "create", "headless", output)
         if wait_for_monitor(output) is None:
             raise ScreenError("Hyprland did not create the staging output")
-        # Placement is always automatic; an explicit position shoves the real
-        # monitors around in the global layout.
-        hyprctl(
-            "keyword",
-            "monitor",
-            f"{output},{reference['width']}x{reference['height']}@60,auto,"
-            f"{reference['scale']:g}",
-        )
         # Creating the output steals keyboard focus, so give it straight back.
         restore_focus(focus)
         if not wait_for_workspace(output, workspace):
