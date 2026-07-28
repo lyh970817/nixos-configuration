@@ -2,14 +2,23 @@
 
 from __future__ import annotations
 
+import os
 import secrets
 import shlex
+import signal
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any
 
-from .desktop import run_json
+from .desktop import (
+    STAGE_MARKER,
+    descendant_pids,
+    has_stage_marker,
+    process_start_time,
+    run_json,
+)
 from .state import ScreenError, atomic_json, audit, read_json
 
 
@@ -24,6 +33,10 @@ POLL_SECONDS = 0.1
 # one we read cannot close it.
 STAGE_GAP = 2000
 FALLBACK_MONITOR = {"width": 1920, "height": 1080, "scale": 1.0}
+# The CLI entry point, reachable from both layouts this package runs in: the
+# source checkout and the installed libexec tree both keep screen_verify.py one
+# directory above this module.
+CLI_SCRIPT = Path(__file__).resolve().parent.parent / "screen_verify.py"
 
 
 def stage_output_name(session: str) -> str:
@@ -326,6 +339,98 @@ def ensure_stage_workspace(output: str, workspace: str) -> None:
         )
 
 
+def watcher_alive(watcher: Any) -> bool:
+    """True when the recorded watcher pid still names the recorded process."""
+    if not isinstance(watcher, dict):
+        return False
+    pid = watcher.get("pid")
+    start_time = watcher.get("start_time")
+    if not isinstance(pid, int) or not isinstance(start_time, str):
+        return False
+    try:
+        return process_start_time(pid) == start_time
+    except OSError:
+        return False
+
+
+def start_watcher(path: Path, session: str) -> None:
+    """Keep one detached socket2 watcher running for this session's stage.
+
+    The workspace rule a staged spawn carries is one-shot: Hyprland consumes it
+    when the first window of the tree maps, so any later child window maps on
+    the user's focused workspace instead. The watcher is the only tree-wide
+    net — it moves those windows back as they open — so it is started the
+    moment the stage exists, before anything can be spawned onto it.
+
+    Best effort throughout: a stage without its watcher still stages, exactly
+    as it did before the watcher existed, and the launch-time sweep remains.
+    """
+    try:
+        data = read_json(path / "session.json")
+    except ScreenError:
+        return
+    stage = data.get("stage")
+    if not isinstance(stage, dict):
+        return
+    # Check-then-spawn is not atomic, and sessions are driven by concurrent
+    # CLI invocations: two of them can both find no live watcher and spawn one
+    # each, with only one recorded. That race is benign — the duplicate makes
+    # the same idempotent moves and leaves on its own once the stage record
+    # disappears — so it is tolerated rather than locked against.
+    if watcher_alive(stage.get("watcher")):
+        return
+    log = path / "watch.log"
+    try:
+        with log.open("ab") as handle:
+            log.chmod(0o600)
+            process = subprocess.Popen(
+                [sys.executable, str(CLI_SCRIPT), "stage-watch", "--session", session],
+                stdin=subprocess.DEVNULL,
+                stdout=handle,
+                stderr=handle,
+                start_new_session=True,
+            )
+        # The pid alone would match a recycled process; the start time is what
+        # `stop_watcher` compares before it may signal anything.
+        stage["watcher"] = {
+            "pid": process.pid,
+            "start_time": process_start_time(process.pid),
+        }
+        # Inside the same net as the spawn: a session directory torn down
+        # between the read above and this write must not fail the stage. The
+        # watcher the record misses self-exits with the vanished session.
+        atomic_json(path / "session.json", data)
+    except OSError:
+        return
+
+
+def stop_watcher(path: Path) -> None:
+    """SIGTERM this session's watcher, if the recorded pid is still it.
+
+    The watcher also leaves on its own once the stage record disappears, so a
+    watcher that is already dead — or whose pid now names another process —
+    is simply left alone.
+    """
+    try:
+        data = read_json(path / "session.json")
+    except ScreenError:
+        return
+    stage = data.get("stage")
+    watcher = stage.get("watcher") if isinstance(stage, dict) else None
+    if not isinstance(watcher, dict):
+        return
+    pid = watcher.get("pid")
+    start_time = watcher.get("start_time")
+    if not isinstance(pid, int) or not isinstance(start_time, str):
+        return
+    try:
+        if process_start_time(pid) != start_time:
+            return
+        os.kill(pid, signal.SIGTERM)
+    except (OSError, ProcessLookupError, PermissionError):
+        return
+
+
 def ensure_stage(path: Path, session: str) -> dict[str, Any]:
     data = read_json(path / "session.json")
     existing = stage_record(data, session)
@@ -339,6 +444,9 @@ def ensure_stage(path: Path, session: str) -> dict[str, Any]:
             # Existing is not enough: an output that has drifted off its
             # workspace would hand every later capture a blank image.
             ensure_stage_workspace(output, workspace)
+            # A watcher that died with a crash or a logout is revived here, so
+            # re-entry restores the same guarantees creation gives.
+            start_watcher(path, session)
             return existing
 
     focus = focus_snapshot(output)
@@ -405,6 +513,9 @@ def ensure_stage(path: Path, session: str) -> dict[str, Any]:
         atomic_json(path / "session.json", data)
         raise
     audit("stage", session=session, monitor=output)
+    # Started only once the stage verifiably exists, and before `ensure_stage`
+    # returns, so the watcher is listening before anything can be spawned.
+    start_watcher(path, session)
     return stage
 
 
@@ -568,10 +679,14 @@ def stage_spawn(path: Path, session: str, command: list[str]) -> int:
     pidfile = path / f"launch-{secrets.token_hex(4)}.pid"
     # Hyprland hands the whole exec string to /bin/sh, so every caller-supplied
     # argument is shell-quoted here: the shell never evaluates any of it. The
-    # trampoline records its own pid and then execs in place, so the pid we own
-    # is the application itself.
-    inner = f"echo $$ > {shlex.quote(str(pidfile))}; exec " + " ".join(
-        shlex.quote(argument) for argument in command
+    # marker is exported before the exec so the whole tree inherits it — the
+    # ownership test the watcher and the sweep rely on when a staged child
+    # double-forks out of the pid tree. The trampoline records its own pid and
+    # then execs in place, so the pid we own is the application itself.
+    inner = (
+        f"export {STAGE_MARKER}={shlex.quote(session)}; "
+        f"echo $$ > {shlex.quote(str(pidfile))}; exec "
+        + " ".join(shlex.quote(argument) for argument in command)
     )
     rules = f"[workspace name:{workspace} silent; noinitialfocus]"
     spawn = f"{rules} /bin/sh -c {shlex.quote(inner)}"
@@ -605,3 +720,36 @@ def stage_spawn(path: Path, session: str, command: list[str]) -> int:
                 "The staging launch never reported a process id; retry with --no-stage"
             )
         time.sleep(POLL_SECONDS)
+
+
+def sweep_stage_windows(session: str, pid: int, workspace: str) -> None:
+    """Pull every window of one staged spawn back onto the stage. Best effort.
+
+    The exec rule that placed the primary window is one-shot, so a window that
+    mapped before the watcher could act — or while no watcher was running —
+    sits on the user's own workspace. Ownership is decided the same way the
+    watcher decides it: a descendant of the spawn, or a process carrying this
+    session's marker. A client that reports no workspace at all is left alone:
+    an unreported workspace is evidence of nothing, and a move is only ever
+    justified by a confirmed miss.
+    """
+    live = lookup_clients() or []
+    owned = descendant_pids(pid)
+    for client in live:
+        address = client.get("address")
+        if not (isinstance(address, str) and address):
+            continue
+        placed = client.get("workspace")
+        name = placed.get("name") if isinstance(placed, dict) else None
+        if name is None or name == workspace:
+            continue
+        client_pid = client.get("pid")
+        if not isinstance(client_pid, int):
+            continue
+        if client_pid not in owned and not has_stage_marker(client_pid, session):
+            continue
+        hyprctl_quiet(
+            "dispatch",
+            "movetoworkspacesilent",
+            f"name:{workspace},address:{address}",
+        )

@@ -30,6 +30,7 @@ class Stage(TypedDict):
     output: str
     workspace: str
     focus: NotRequired[dict[str, Any]]
+    watcher: NotRequired[dict[str, Any]]
 
 
 class SessionData(TypedDict):

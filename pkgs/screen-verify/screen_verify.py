@@ -25,6 +25,7 @@ from screen_verify_lib.desktop import (
     expected_mode,
     focused_monitor,
     notify,
+    process_start_time,
     window_geometry,
 )
 from screen_verify_lib.preview import (
@@ -48,6 +49,8 @@ from screen_verify_lib.stage import (
     stage_output_name,
     stage_record,
     stage_spawn,
+    stop_watcher,
+    sweep_stage_windows,
 )
 from screen_verify_lib.state import (
     ScreenError,
@@ -59,6 +62,7 @@ from screen_verify_lib.state import (
     runtime_root,
     session_dir,
 )
+from screen_verify_lib.watch import watch_stage
 
 
 SESSION_TTL_SECONDS = 24 * 60 * 60
@@ -246,15 +250,6 @@ def command_capture(args: argparse.Namespace) -> dict[str, Any]:
     return {"path": str(output), "target": audit_target, "mode": data["mode"]}
 
 
-def process_start_time(pid: int) -> str:
-    # The second field is the executable name in parentheses and may itself
-    # contain spaces, so the numeric fields only line up after the final ")".
-    # Splitting the whole line shifts them and yields a constant 0, which would
-    # make the recycled-pid guard match every such process.
-    raw = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8")
-    return raw.rsplit(")", 1)[1].split()[19]
-
-
 def direct_spawn(command: list[str], session: str) -> int:
     try:
         process = subprocess.Popen(
@@ -300,6 +295,11 @@ def command_launch(args: argparse.Namespace) -> dict[str, Any]:
     data.setdefault("processes", []).append(owned_process)
     atomic_json(path / "session.json", data)
     audit("launch", session=args.session)
+    if stage:
+        # Windows that mapped before the watcher could act are recovered here,
+        # and the warning below then describes what the sweep could not fix
+        # rather than what it never tried to.
+        sweep_stage_windows(args.session, pid, stage["workspace"])
     result = {
         "pid": pid,
         "owned": True,
@@ -351,6 +351,15 @@ def command_adapter(args: argparse.Namespace) -> dict[str, Any]:
     result["adapter"] = args.name
     result.update(extra)
     return result
+
+
+def command_stage_watch(args: argparse.Namespace) -> dict[str, Any]:
+    # Internal: the detached per-session helper `ensure_stage` spawns. It runs
+    # until the session's stage record disappears or socket2 closes, moving
+    # escaped staged windows back onto the staging workspace as they open.
+    path = session_dir(args.session)
+    watch_stage(path, args.session)
+    return {"watching": False}
 
 
 def command_stage(args: argparse.Namespace) -> dict[str, Any]:
@@ -443,6 +452,10 @@ def command_end(args: argparse.Namespace) -> dict[str, Any]:
     data = read_json(path / "session.json")
     terminated = terminate_owned_processes(path)
     wait_for_exit(terminated)
+    # The watcher goes before the stage does: it would exit on its own once
+    # the record disappears, but only after its next recheck, and a watcher
+    # racing the teardown could move a window `end` is about to hand back.
+    stop_watcher(path)
     # The stage is reclaimed before anything that can fail, exactly as `purge`
     # does it: a preview that refuses to restore must not leave a phantom
     # headless monitor on the user's compositor for the rest of the day.
@@ -547,6 +560,11 @@ def parser() -> argparse.ArgumentParser:
     stage.add_argument("--session", required=True)
     stage.set_defaults(handler=command_stage)
 
+    # No help text: this is the internal watcher process, not a user command.
+    stage_watch = commands.add_parser("stage-watch")
+    stage_watch.add_argument("--session", required=True)
+    stage_watch.set_defaults(handler=command_stage_watch)
+
     preview = commands.add_parser(
         "preview", help="apply a session-managed reversible visual preview"
     )
@@ -603,7 +621,10 @@ def parser() -> argparse.ArgumentParser:
 def main() -> int:
     try:
         arguments = parser().parse_args()
-        purge_abandoned()
+        # The watcher is a long-lived background helper, not a user command;
+        # purging from it would race the very sessions it exists to watch.
+        if arguments.subcommand != "stage-watch":
+            purge_abandoned()
         result = arguments.handler(arguments)
         print(json.dumps(result, separators=(",", ":")))
         return 0

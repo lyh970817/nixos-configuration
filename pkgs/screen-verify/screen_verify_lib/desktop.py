@@ -104,6 +104,31 @@ def active_window_geometry() -> str:
     return geometry
 
 
+def process_start_time(pid: int) -> str:
+    # The second field is the executable name in parentheses and may itself
+    # contain spaces, so the numeric fields only line up after the final ")".
+    # Splitting the whole line shifts them and yields a constant 0, which would
+    # make the recycled-pid guard match every such process.
+    raw = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8")
+    return raw.rsplit(")", 1)[1].split()[19]
+
+
+# Exported into every staged tree by the launch trampoline, so membership in a
+# session is testable from /proc alone — the pid tree breaks the moment a
+# staged child double-forks, but an inherited environment survives reparenting.
+STAGE_MARKER = "SCREEN_VERIFY_STAGE"
+
+
+def has_stage_marker(pid: int, session: str) -> bool:
+    try:
+        raw = Path(f"/proc/{pid}/environ").read_bytes()
+    except OSError:
+        # Unreadable is not evidence of membership; a window this cannot
+        # vouch for is simply not owned through the marker.
+        return False
+    return f"{STAGE_MARKER}={session}".encode() in raw.split(b"\0")
+
+
 def descendant_pids(parent: int) -> set[int]:
     descendants = {parent}
     changed = True

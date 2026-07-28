@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -19,6 +21,7 @@ SCRIPT = Path(__file__).parents[1] / "screen_verify.py"
 sys.path.insert(0, str(SCRIPT.parent))
 
 from screen_verify_lib import stage as stage_module  # noqa: E402
+from screen_verify_lib import watch as watch_module  # noqa: E402
 from screen_verify_lib.state import ScreenError  # noqa: E402
 
 # A small stateful Hyprland stand-in: it models monitor creation and removal,
@@ -277,6 +280,13 @@ class ScreenVerifyCliTests(unittest.TestCase):
                 "FAKE_HYPR_STATE": str(self.hypr_state),
             }
         )
+        # The stage watcher derives its socket from this; a signature leaking
+        # in from a real Hyprland session would leave every test's watcher
+        # reading real compositor events instead of exiting at once. Tests
+        # that want a watcher install their own socket via `enable_socket2`.
+        self.environment.pop("HYPRLAND_INSTANCE_SIGNATURE", None)
+        self.socket2 = None
+        self.connections: list[socket.socket] = []
         self.write_hypr_state()
         self.fake(
             "hyprctl",
@@ -309,7 +319,31 @@ PY
         self.fake("darkman", "#!/bin/sh\nprintf 'dark\\n'\n")
 
     def tearDown(self) -> None:
+        for connection in self.connections:
+            connection.close()
+        if self.socket2 is not None:
+            self.socket2.close()
         self.temporary.cleanup()
+
+    def enable_socket2(self) -> None:
+        """A listening socket2 stand-in at the path the watcher derives."""
+        signature = "fakesig"
+        hypr_dir = self.runtime / "hypr" / signature
+        hypr_dir.mkdir(parents=True, exist_ok=True)
+        self.socket2 = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.socket2.bind(str(hypr_dir / ".socket2.sock"))
+        self.socket2.listen(4)
+        self.socket2.settimeout(10.0)
+        self.environment["HYPRLAND_INSTANCE_SIGNATURE"] = signature
+
+    def accept_watcher(self) -> socket.socket:
+        connection, _ = self.socket2.accept()
+        self.connections.append(connection)
+        return connection
+
+    def watcher_record(self, session: str) -> dict:
+        data = json.loads(self.session_file(session).read_text())
+        return data["stage"]["watcher"]
 
     def fake(self, name: str, contents: str) -> Path:
         path = self.bin / name
@@ -1842,13 +1876,18 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
             str(helper),
         )
         try:
+            # The launch-time sweep may already have tried to pull the stray
+            # onto the stage; what `end` itself dispatches is the property
+            # under test, so only the commands it issues are inspected.
+            before = len(self.commands())
+
             result = self.cli("end", "--session", session)
 
             self.assertNotIn("warning", result)
             self.assertEqual(
                 [
                     command
-                    for command in self.hyprctl_calls()
+                    for command in self.commands()[before:]
                     if command[1:3] == ["dispatch", "movetoworkspacesilent"]
                 ],
                 [],
@@ -2157,8 +2196,319 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
         )
         try:
             self.assertIn("staging workspace", launch["warning"])
+            # The warning describes what the sweep could not fix, never what
+            # it did not try: the fake ignores the move, so the window is
+            # still off the stage after a real recovery attempt.
+            _, workspace = self.stage_names(session)
+            self.assertIn(
+                [
+                    "hyprctl",
+                    "dispatch",
+                    "movetoworkspacesilent",
+                    f"name:{workspace},address:0xstray",
+                ],
+                self.commands(),
+            )
         finally:
             self.cli("end", "--session", session)
+
+    def test_stage_launch_exports_the_session_marker_to_the_tree(self) -> None:
+        session = self.begin()
+        pid_file = self.root / "marked-pid"
+        helper = self.sleeper("marked-app", pid_file)
+
+        launch = self.cli(
+            "launch", "--session", session, "--wait-seconds", "0", "--", str(helper)
+        )
+        try:
+            dispatch = next(
+                command
+                for command in self.hyprctl_calls()
+                if command[:3] == ["hyprctl", "dispatch", "exec"]
+            )
+            self.assertIn(f"export SCREEN_VERIFY_STAGE={session}; ", dispatch[3])
+            self.eventually(
+                lambda: pid_file.exists(), "the staged process never reported its pid"
+            )
+            marker = f"SCREEN_VERIFY_STAGE={session}".encode()
+            # The exec'd application itself carries the marker...
+            environ = Path(f"/proc/{launch['pid']}/environ").read_bytes()
+            self.assertIn(marker, environ.split(b"\0"))
+            # ...and so does its child, which is what makes ownership testable
+            # after a descendant double-forks out of the pid tree.
+            child = int(self.child_pid_file(pid_file).read_text())
+            child_environ = Path(f"/proc/{child}/environ").read_bytes()
+            self.assertIn(marker, child_environ.split(b"\0"))
+        finally:
+            self.cli("end", "--session", session)
+
+    def test_launch_sweeps_a_leaked_child_window_onto_the_stage(self) -> None:
+        session = self.begin()
+        _, workspace = self.stage_names(session)
+        pid_file = self.root / "staged-pid"
+        helper = self.sleeper("staged-app", pid_file)
+        # The primary window landed on the stage; a child's window mapped on
+        # the user's own workspace after the one-shot exec rule was consumed.
+        self.set_clients(
+            [
+                {
+                    "address": "0xmain",
+                    "pid_file": str(pid_file),
+                    "at": [0, 0],
+                    "size": [100, 100],
+                    "workspace": {"id": -13, "name": workspace},
+                },
+                {
+                    "address": "0xleak",
+                    "pid_file": str(self.child_pid_file(pid_file)),
+                    "at": [840, 65],
+                    "size": [950, 950],
+                    "workspace": {"id": 4, "name": "4"},
+                },
+                # The user's own window shares that workspace; being off the
+                # stage is never enough to move a window nobody here owns.
+                {
+                    "address": "0xbystander",
+                    "pid": 1,
+                    "at": [0, 0],
+                    "size": [200, 200],
+                    "workspace": {"id": 4, "name": "4"},
+                },
+            ]
+        )
+
+        launch = self.cli(
+            "launch", "--session", session, "--wait-seconds", "10", "--", str(helper)
+        )
+        try:
+            self.assertEqual(launch["window"]["address"], "0xmain")
+            # The primary window sits on the stage, so the leaked child must
+            # not surface as a warning about the launch itself.
+            self.assertNotIn("warning", launch)
+            moves = [
+                command
+                for command in self.hyprctl_calls()
+                if command[1:3] == ["dispatch", "movetoworkspacesilent"]
+            ]
+            self.assertIn(
+                [
+                    "hyprctl",
+                    "dispatch",
+                    "movetoworkspacesilent",
+                    f"name:{workspace},address:0xleak",
+                ],
+                moves,
+            )
+            # A window already on the stage is never re-dispatched, and an
+            # unowned window is never swept however far off the stage it is.
+            self.assertEqual(
+                [
+                    command
+                    for command in moves
+                    if "0xmain" in command[3] or "0xbystander" in command[3]
+                ],
+                [],
+            )
+        finally:
+            self.cli("end", "--session", session)
+
+    def test_ensure_stage_starts_and_records_one_watcher(self) -> None:
+        self.enable_socket2()
+        session = self.begin()
+
+        self.cli("stage", "--session", session)
+
+        watcher = self.watcher_record(session)
+        self.assertIsInstance(watcher["pid"], int)
+        self.assertIsInstance(watcher["start_time"], str)
+        self.accept_watcher()
+        self.assertFalse(self.reaped(watcher["pid"]))
+        # Re-entering the stage keeps the live watcher instead of stacking a
+        # second one next to it.
+        self.cli("stage", "--session", session)
+        self.assertEqual(self.watcher_record(session), watcher)
+        self.socket2.settimeout(1.0)
+        with self.assertRaises(socket.timeout):
+            self.socket2.accept()
+
+        self.cli("end", "--session", session)
+
+        self.eventually(
+            lambda: self.reaped(watcher["pid"]), "the watcher survived end"
+        )
+
+    def test_the_watcher_moves_an_escaped_owned_window(self) -> None:
+        self.enable_socket2()
+        session = self.begin()
+        _, workspace = self.stage_names(session)
+        pid_file = self.root / "staged-pid"
+        helper = self.sleeper("staged-app", pid_file)
+
+        self.cli(
+            "launch", "--session", session, "--wait-seconds", "0", "--", str(helper)
+        )
+        try:
+            connection = self.accept_watcher()
+            self.eventually(
+                lambda: pid_file.exists(), "the staged process never reported its pid"
+            )
+            # Two owned windows and one belonging to another process open on
+            # the user's workspace after launch. socket2 emits addresses
+            # without the 0x prefix that `clients` and `dispatch` carry.
+            self.set_clients(
+                [
+                    {
+                        "address": "0xaaa1",
+                        "pid_file": str(pid_file),
+                        "at": [0, 0],
+                        "size": [10, 10],
+                        "workspace": {"id": 4, "name": "4"},
+                    },
+                    {
+                        "address": "0xbbb2",
+                        "pid": 1,
+                        "at": [0, 0],
+                        "size": [10, 10],
+                        "workspace": {"id": 4, "name": "4"},
+                    },
+                    {
+                        "address": "0xccc3",
+                        "pid_file": str(self.child_pid_file(pid_file)),
+                        "at": [0, 0],
+                        "size": [10, 10],
+                        "workspace": {"id": 4, "name": "4"},
+                    },
+                ]
+            )
+            connection.sendall(
+                b"openwindow>>aaa1,4,ueberzugpp_x,preview\n"
+                b"openwindow>>bbb2,4,SecretApp,Secret Document\n"
+                b"openwindow>>ccc3,4,ueberzugpp_y,preview\n"
+            )
+            expected = [
+                "hyprctl",
+                "dispatch",
+                "movetoworkspacesilent",
+                f"name:{workspace},address:0xccc3",
+            ]
+            # The events are handled in order, so once the last one has been
+            # acted on the middle one has provably been decided too.
+            self.eventually(
+                lambda: expected in self.commands(),
+                "the watcher never moved the escaped window",
+            )
+            self.assertIn(
+                [
+                    "hyprctl",
+                    "dispatch",
+                    "movetoworkspacesilent",
+                    f"name:{workspace},address:0xaaa1",
+                ],
+                self.commands(),
+            )
+            # The unowned window between them was left exactly where it was.
+            self.assertEqual(
+                [
+                    command
+                    for command in self.hyprctl_calls()
+                    if command[1:3] == ["dispatch", "movetoworkspacesilent"]
+                    and "0xbbb2" in command[3]
+                ],
+                [],
+            )
+            # A stream read owes nothing to line boundaries: an event split
+            # across two sends — and, with the pause, almost certainly two
+            # recvs — must be reassembled, not acted on early or dropped.
+            self.set_clients(
+                [
+                    {
+                        "address": "0xddd4",
+                        "pid_file": str(pid_file),
+                        "at": [0, 0],
+                        "size": [10, 10],
+                        "workspace": {"id": 4, "name": "4"},
+                    }
+                ]
+            )
+            connection.sendall(b"openwindow>>ddd4,4,ueber")
+            time.sleep(0.3)
+            connection.sendall(b"zugpp_z,preview\n")
+            split = [
+                "hyprctl",
+                "dispatch",
+                "movetoworkspacesilent",
+                f"name:{workspace},address:0xddd4",
+            ]
+            self.eventually(
+                lambda: split in self.commands(),
+                "the split event was never reassembled",
+            )
+        finally:
+            self.cli("end", "--session", session)
+
+    def test_the_watcher_exits_when_the_session_disappears(self) -> None:
+        self.enable_socket2()
+        session = self.begin()
+        self.cli("stage", "--session", session)
+        watcher = self.watcher_record(session)
+        self.accept_watcher()
+        self.assertFalse(self.reaped(watcher["pid"]))
+
+        # Nothing signals it: the session directory is simply gone, as after
+        # a crash, and the watcher has to notice that by itself.
+        shutil.rmtree(self.runtime / "screen-verify" / session)
+
+        self.eventually(
+            lambda: self.reaped(watcher["pid"]),
+            "the watcher outlived its session",
+        )
+
+    def test_end_terminates_the_recorded_watcher(self) -> None:
+        session = self.begin()
+        self.cli("stage", "--session", session)
+        # Without a socket the real watcher exits at once; a stand-in process
+        # recorded in its place proves `end` signals what the record names.
+        decoy = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+        try:
+            stat = Path(f"/proc/{decoy.pid}/stat").read_text(encoding="utf-8")
+            path = self.session_file(session)
+            data = json.loads(path.read_text())
+            data["stage"]["watcher"] = {
+                "pid": decoy.pid,
+                "start_time": stat.rsplit(")", 1)[1].split()[19],
+            }
+            path.write_text(json.dumps(data))
+
+            self.cli("end", "--session", session)
+
+            self.eventually(
+                lambda: decoy.poll() is not None, "the watcher was never signalled"
+            )
+        finally:
+            decoy.kill()
+            decoy.wait()
+
+    def test_end_never_signals_a_recycled_watcher_pid(self) -> None:
+        session = self.begin()
+        self.cli("stage", "--session", session)
+        # The recorded pid now names a process that was never the watcher, so
+        # the start-time guard must keep `end`'s SIGTERM away from it.
+        bystander = subprocess.Popen(
+            [sys.executable, "-c", "import time; time.sleep(30)"]
+        )
+        try:
+            path = self.session_file(session)
+            data = json.loads(path.read_text())
+            data["stage"]["watcher"] = {"pid": bystander.pid, "start_time": "1"}
+            path.write_text(json.dumps(data))
+
+            self.cli("end", "--session", session)
+
+            time.sleep(0.3)
+            self.assertIsNone(bystander.poll(), "a recycled pid was signalled")
+        finally:
+            bystander.kill()
+            bystander.wait()
 
     def test_end_removes_the_stage_output_and_reports_it(self) -> None:
         session = self.begin()
@@ -2582,6 +2932,91 @@ class StagePlacementFallbackTests(unittest.TestCase):
         )
         gap = stage_module.STAGE_GAP
         self.assertEqual(corner, (-1920 - 2560 - gap, -300 - 1440 - gap))
+
+
+class StageWatchDecisionTests(unittest.TestCase):
+    """The watcher's per-event decision, with every collaborator injected.
+
+    The CLI-level fake drives the full loop elsewhere; these pin the decision
+    itself: a window is moved only on positive ownership, and the address the
+    dispatch names carries the 0x prefix socket2 leaves off.
+    """
+
+    SESSION = "feeba2a005d6558bfffb8c35"
+    WORKSPACE = "svwsfeeba2a0"
+
+    def decide(
+        self,
+        line: str,
+        resolve=lambda address: 4242,
+        marker=lambda pid, session: True,
+        roots=lambda: [],
+        descendants=lambda root: set(),
+    ) -> str | None:
+        return watch_module.event_dispatch(
+            line, self.SESSION, self.WORKSPACE, resolve, marker, roots, descendants
+        )
+
+    def test_an_owned_window_off_the_stage_is_moved(self) -> None:
+        self.assertEqual(
+            self.decide("openwindow>>5601ab,4,ueberzugpp_x,preview"),
+            f"name:{self.WORKSPACE},address:0x5601ab",
+        )
+
+    def test_an_unowned_window_is_left_alone(self) -> None:
+        self.assertIsNone(
+            self.decide(
+                "openwindow>>5601ab,4,App,Doc",
+                marker=lambda pid, session: False,
+            )
+        )
+
+    def test_a_descendant_is_owned_without_the_marker(self) -> None:
+        # A staged child that scrubbed its environment is still caught through
+        # the recorded spawn's pid tree.
+        self.assertEqual(
+            self.decide(
+                "openwindow>>5601ab,4,App,Doc",
+                marker=lambda pid, session: False,
+                roots=lambda: [10],
+                descendants=lambda root: {10, 4242},
+            ),
+            f"name:{self.WORKSPACE},address:0x5601ab",
+        )
+
+    def test_a_window_already_on_the_stage_is_not_even_resolved(self) -> None:
+        def resolve(address: str) -> int:
+            raise AssertionError("a window on the stage was looked up")
+
+        self.assertIsNone(
+            self.decide(
+                f"openwindow>>5601ab,{self.WORKSPACE},ueberzugpp_x,preview",
+                resolve=resolve,
+            )
+        )
+
+    def test_an_unresolvable_window_is_never_moved(self) -> None:
+        # "the clients query failed" and "nothing owns it" both read as an
+        # address without a pid, and neither may justify a move.
+        self.assertIsNone(
+            self.decide("openwindow>>5601ab,4,App,Doc", resolve=lambda address: None)
+        )
+
+    def test_other_events_and_malformed_lines_are_ignored(self) -> None:
+        for line in [
+            "closewindow>>5601ab",
+            "workspacev2>>4,4",
+            "openwindow>>5601ab",
+            "openwindow",
+            "",
+        ]:
+            self.assertIsNone(self.decide(line), line)
+
+    def test_commas_in_the_title_never_shift_the_workspace_field(self) -> None:
+        self.assertEqual(
+            self.decide("openwindow>>5601ab,4,App,a title, with, commas"),
+            f"name:{self.WORKSPACE},address:0x5601ab",
+        )
 
 
 if __name__ == "__main__":
