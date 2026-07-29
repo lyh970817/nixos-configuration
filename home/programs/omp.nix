@@ -17,13 +17,14 @@ in
   home.activation.ompTheme = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     omp_config_dir="$HOME/.omp/agent"
     omp_config="$omp_config_dir/config.yml"
-    run ${pkgs.coreutils}/bin/mkdir -p "$omp_config_dir"
+    run ${pkgs.coreutils}/bin/install -d -m 0700 "$omp_config_dir"
 
     if [ -e "$omp_config" ]; then
       run ${pkgs.yq-go}/bin/yq -i '.theme.dark = "matrix"' "$omp_config"
     else
       run ${pkgs.yq-go}/bin/yq -n '.theme.dark = "matrix"' > "$omp_config"
-      run ${pkgs.coreutils}/bin/chmod 0600 "$omp_config"
     fi
+
+    run ${pkgs.coreutils}/bin/chmod 0600 "$omp_config"
   '';
 }
