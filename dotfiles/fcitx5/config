@@ -61,7 +61,7 @@ showInputMethodInformationWhenFocusIn=False
 # Show compact input method information
 CompactInputMethodInformation=True
 # Show first input method information
-ShowFirstInputMethodInformation=True
+ShowFirstInputMethodInformation=False
 # Default page size
 DefaultPageSize=5
 # Override XKB Option
