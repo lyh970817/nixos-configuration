@@ -20,7 +20,7 @@ let
         local expected_class="$2"
         local inspect associated media_class name volume volume_level percentage muted
 
-        if ! inspect=$(wpctl inspect "$selector" 2>/dev/null); then
+        if ! inspect=$(timeout 0.5s wpctl inspect "$selector" 2>/dev/null); then
           printf 'Unknown\t\t\t\n'
           return
         fi
@@ -35,7 +35,7 @@ let
           return
         fi
 
-        if ! associated=$(wpctl inspect --associated "$selector" 2>/dev/null); then
+        if ! associated=$(timeout 0.5s wpctl inspect --associated "$selector" 2>/dev/null); then
           printf 'Unknown\t\t\t\n'
           return
         fi
@@ -50,7 +50,7 @@ let
         # Keep only the first space-separated token (drop generic profile suffix).
         name="''${name%% *}"
 
-        if ! volume=$(wpctl get-volume "$selector" 2>/dev/null); then
+        if ! volume=$(timeout 0.5s wpctl get-volume "$selector" 2>/dev/null); then
           printf 'Unknown\t\t\t\n'
           return
         fi
