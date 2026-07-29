@@ -14,6 +14,8 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     hash = "sha256-05+w1WP/SHKp97JTGsvO3csI123U7py+fVSKnAWiUNY=";
   };
 
+  dontBuild = true;
+
   installPhase = ''
     runHook preInstall
     mkdir -p "$out/share/zeno.zsh"
