@@ -16,6 +16,13 @@ stdenvNoCC.mkDerivation (finalAttrs: {
 
   dontBuild = true;
 
+  postPatch = ''
+    while IFS= read -r -d "" file; do
+      substituteInPlace "$file" \
+        --replace-fail --node-modules-dir=auto --node-modules-dir=none
+    done < <(grep -rlZ -- --node-modules-dir=auto .)
+  '';
+
   installPhase = ''
     runHook preInstall
     mkdir -p "$out/share/zeno.zsh"

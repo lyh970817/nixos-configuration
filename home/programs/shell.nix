@@ -169,6 +169,10 @@ in
       # zeno provides fuzzy completion, including changed-file completion for
       # git diff. Source it after fzf so its fallback can use fzf completion.
       # Do not call zeno-bind-default-keys: existing widgets keep their bindings.
+      if [[ -z "''${DENO_DIR+x}" ]]; then
+        export DENO_DIR="''${XDG_CACHE_HOME:-$HOME/.cache}/deno"
+      fi
+      export ZENO_ROOT=${pkgs.zeno-zsh}/share/zeno.zsh
       source ${pkgs.zeno-zsh}/share/zeno.zsh/zeno.zsh
 
       # Yazi wrapper function - cd to directory on exit
