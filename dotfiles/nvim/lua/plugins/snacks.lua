@@ -35,7 +35,37 @@ return {
       },
       quickfile = { enabled = true },
       scope = { enabled = true },
-      scroll = { enabled = false },
+      -- Smooth scrolling (Option A of the scroll flag in plugins/scroll.lua).
+      -- NOTE: scroll.lua cannot toggle this table for you -- it is a separate
+      -- plugin spec (folke/snacks.nvim is already required here). If you flip
+      -- the SCROLL_BACKEND flag in plugins/scroll.lua to "neoscroll", you MUST
+      -- also flip `enabled` below to `false` (and vice versa) to keep the two
+      -- backends from fighting over <C-f>/<C-b>/<C-d>/<C-u>/zz/zt/zb/gg/G.
+      scroll = {
+        enabled = true,
+        -- Full-page feel: duration scales with the distance scrolled (step
+        -- ms per line, capped by total), eased in/out.
+        -- snacks/scroll.lua:28-38 (defaults) confirms these are the only
+        -- two sub-tables read by the module: `animate` and `animate_repeat`.
+        animate = {
+          duration = { step = 15, total = 250 },
+          easing = "quadratic",
+        },
+        -- Faster/snappier animation when repeating scroll before the previous
+        -- one settles (e.g. holding <C-d>), so rapid presses don't feel laggy.
+        animate_repeat = {
+          delay = 100,
+          duration = { step = 5, total = 100 },
+          easing = "linear",
+        },
+        -- Exclude terminal buffers (matches upstream default) and very large
+        -- files. snacks.bigfile (enabled above) tags detected big files with
+        -- filetype = "bigfile" (snacks/bigfile.lua:53), so we can key off that
+        -- instead of re-implementing a size check.
+        filter = function(buf)
+          return vim.bo[buf].buftype ~= "terminal" and vim.bo[buf].filetype ~= "bigfile"
+        end,
+      },
       words = { enabled = true },
       zen = { enabled = true },
     },
