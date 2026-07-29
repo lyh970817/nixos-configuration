@@ -31,6 +31,7 @@ When stopping, tell the user exactly:
 5. Prefer existing programs over custom replacement code. If a packaged program solves the gap, add it to `shell.nix`.
 6. Edit the project-local files:
    - Preserve existing `shell.nix` entries; create `shell.nix` with `pkgs.mkShell` if missing.
+   - Every managed `shell.nix` must include `pkgs.bash` and a `shellHook` that runs `exec bash`, so entering the development shell always uses Bash rather than the invoking shell.
    - Preserve unrelated valid `.envrc` lines; create `.envrc` if missing.
    - Ensure `.envrc` contains `use nix` whenever `shell.nix` exists.
 7. Reuse only safe patterns from example `shell.nix` or `.envrc` files. Never copy secrets or machine-specific values.
@@ -50,8 +51,12 @@ Use this template when creating a new file:
 { pkgs ? import <nixpkgs> {} }:
 pkgs.mkShell {
   packages = with pkgs; [
+    bash
     # add required packages here
   ];
+  shellHook = ''
+    exec bash
+  '';
 }
 ```
 
