@@ -17,10 +17,30 @@
 [theme]
 name = "terminal"
 
+# herdr has no `on_accent` token: text drawn on an accent background is
+# `panel_contrast_fg` (src/ui/widgets.rs), which is `panel_bg`, or `surface_dim`
+# when `panel_bg` is `Color::Reset` — which is exactly the `terminal` theme's
+# case. So the accent pair that matters is (accent, surface_dim).
+#
+# `accent = "lightgreen"` is ANSI slot 10, the deliberately lifted bright green
+# (#7CDC7F dark / #808080 light); slot 2 (`"green"`, #207F23) sits *below* the
+# #4AB34D foreground and left on-accent labels at 1.28:1. `surface_dim = "black"`
+# is slot 0 (#0C3A0E dark / #000000 light), the only slot dark enough in the
+# Matrix palette to knock out of the accent. Together: 7.62:1 dark, 5.32:1 light.
+#
+# Both values are ANSI names, so this still follows `theme-toggle`. herdr's
+# `parse_color` (src/config/theme.rs) lowercases but does NOT strip spaces or
+# dashes, and falls back to *cyan* silently on an unknown name — `"light green"`
+# and `"bright green"` are wrong and `config check` will not tell you.
+# `[theme.custom] accent` also supersedes the legacy `[ui] accent`, which herdr
+# ignores outright once this table sets it.
+[theme.custom]
+accent = "lightgreen"
+surface_dim = "black"
+
 [ui]
 sidebar_start_collapsed = true
 sidebar_collapsed_mode = "hidden"
 hide_tab_bar_when_single_tab = true
 pane_borders = false
 pane_gaps = false
-accent = "green"
