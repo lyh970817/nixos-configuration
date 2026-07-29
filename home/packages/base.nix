@@ -28,5 +28,7 @@
     gcc
     nil
     nixfmt
+    # First Mate's bootstrap and pi's npm tooling require a user-space Node.js.
+    nodejs_22
   ];
 }

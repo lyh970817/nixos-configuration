@@ -38,6 +38,19 @@ let
       exec ${pkgs.pi-coding-agent}/bin/pi "$@"
     '';
   };
+
+  # First Mate is a project-local pi distribution, not a global pi plugin. Its
+  # tracked .pi/extensions are loaded when pi starts from this checkout.
+  firstmateLauncher = pkgs.writeShellApplication {
+    name = "firstmate";
+    text = ''
+      ${piHostEnvironment}
+
+      export FM_HOME="/home/andongni/firstmate"
+      cd "$FM_HOME"
+      exec ${piLauncher}/bin/pi "$@"
+    '';
+  };
 in
 {
   # pi coding agent, driven by GPT models from the ChatGPT/Codex subscription
@@ -49,7 +62,10 @@ in
   # authorize the OAuth session. pi keeps its own ~/.pi/agent/auth.json and
   # never reads ~/.codex/auth.json. See docs/pi-coding-agent.md, which also
   # explains why the 0.80.9 pin and the extension must be bumped together.
-  home.packages = [ piLauncher ];
+  home.packages = [
+    piLauncher
+    firstmateLauncher
+  ];
 
   home.file = {
     # Registered declaratively by absolute path in settings.json's `packages`
