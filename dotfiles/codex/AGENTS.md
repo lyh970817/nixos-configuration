@@ -4,6 +4,10 @@
 
 `/home/andongni/.nixos-config` is the source of truth for this machine's NixOS, Home Manager, and AI-agent configuration. System, host, and agent-config changes and installs belong there, not the current project.
 
+## Tailnet SSH
+
+Both the `linglong` home desktop and the remote portable laptop are on the Tailnet. SSH currently works from the remote laptop to `linglong`; home-to-remote SSH is unfinished and untested. Do not assume SSH works bidirectionally.
+
 ## Subagents
 
 Act only as an orchestrator: plan, route, and synthesize — delegate the actual
