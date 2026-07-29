@@ -59,6 +59,7 @@
         # Upstream flake ships the package directly; take it from the pinned input.
         herdr = herdr.packages.${system}.default;
         hyprwhspr = final.callPackage ./pkgs/hyprwhspr.nix { };
+        oh-my-pi = final.callPackage ./pkgs/oh-my-pi.nix { };
         pi-coding-agent = final.callPackage ./pkgs/pi-coding-agent.nix { };
         pi-openai-server-compaction = final.callPackage ./pkgs/pi-openai-server-compaction.nix { };
         quicktui = final.callPackage ./pkgs/quicktui.nix { };

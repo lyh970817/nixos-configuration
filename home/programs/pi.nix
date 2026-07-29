@@ -8,8 +8,9 @@
 let
   link = subpath: config.lib.file.mkOutOfStoreSymlink "${osConfig.portable.configDir}/${subpath}";
 
-  # Same host environment as the Claude launcher: pi has to reach chatgpt.com
-  # through the local mihomo proxy, and the TUI wants a stable locale/timezone.
+  # Same host environment as the Claude launcher: pi and OMP have to reach
+  # their providers through the local mihomo proxy, and their TUIs want a
+  # stable locale/timezone.
   piHostEnvironment = ''
     export TZ="Europe/London"
     export TZDIR="${pkgs.tzdata}/share/zoneinfo"
@@ -39,6 +40,15 @@ let
     '';
   };
 
+  ompLauncher = pkgs.writeShellApplication {
+    name = "omp";
+    text = ''
+      ${piHostEnvironment}
+
+      exec ${pkgs.oh-my-pi}/bin/omp "$@"
+    '';
+  };
+
   # First Mate is a project-local pi distribution, not a global pi plugin. Its
   # tracked .pi/extensions are loaded when pi starts from this checkout.
   firstmateLauncher = pkgs.writeShellApplication {
@@ -63,6 +73,7 @@ in
   # never reads ~/.codex/auth.json. See docs/pi-coding-agent.md, which also
   # explains why the 0.80.9 pin and the extension must be bumped together.
   home.packages = [
+    ompLauncher
     piLauncher
     firstmateLauncher
   ];
