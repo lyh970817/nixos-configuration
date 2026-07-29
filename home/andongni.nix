@@ -30,6 +30,7 @@
     ./programs/gemini.nix
     ./programs/herdr.nix
     ./programs/pi.nix
+    ./programs/omp.nix
     ./programs/hyprwhspr.nix
     ./programs/quicktui.nix
     ./programs/launchers.nix
