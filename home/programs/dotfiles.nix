@@ -23,10 +23,6 @@ let
         exec "''${SHELL:-${pkgs.bash}/bin/bash}"
       fi
 
-      # theme-mode resolves from the HM profile PATH at runtime (deliberately
-      # not a runtimeInput here); theme-hold below runs on the peer.
-      mode="$(theme-mode 2>/dev/null || echo dark)"
-
       for _ in 1 2 3; do
         # Adaptive prediction disables local echo on fast links; force it on.
         # mosh-server never times out by default and nothing else reaps it,
@@ -35,7 +31,7 @@ let
         # need it: mosh-client does a real shutdown handshake on
         # SIGHUP/SIGTERM and mosh-server exits in well under a second. 24h is
         # long enough that a suspended laptop reconnects fine.
-        if mosh --server 'MOSH_SERVER_NETWORK_TMOUT=86400 mosh-server' --predict=always --predict-overwrite "$PEER" -- theme-hold "$mode" tmux new-session -A -s remote; then
+        if mosh --server 'MOSH_SERVER_NETWORK_TMOUT=86400 mosh-server' --predict=always --predict-overwrite "$PEER" -- theme-hold dark tmux new-session -A -d -s remote -e THEME_MODE=dark ';' attach -t remote; then
           exit 0
         fi
         sleep 2
@@ -52,21 +48,15 @@ let
   # separate, deliberate action for the rare occasion of walking over to the
   # home desk and wanting to see what the laptop session was doing.
   #
-  # Seeds THEME_MODE from this machine's own desktop mode (Layer A), not the
-  # laptop's, because this launcher is a local client on the home box and the
-  # panes it spawns should use home's colours. Uses the verified set-then-attach
-  # idiom rather than `new-session -A -e`: whenever -A takes the attach path it
-  # delegates to attach-session, which has no -e, so -e is silently dropped —
-  # a launcher built on that works once and then silently stops working.
+  # This is an independent dark session, regardless of the light home desktop
+  # or the laptop's current desktop mode. `-e` seeds its first pane when the
+  # session is created; on a later `-A` attach it is intentionally ignored,
+  # leaving the existing remote session unchanged.
   attachRemote = pkgs.writeShellApplication {
     name = "attach-remote";
     runtimeInputs = [ pkgs.tmux ];
     text = ''
-      # theme-mode resolves from the HM profile PATH at runtime (deliberately
-      # not a runtimeInput here); see homeTerminal above for the same pattern.
-      mode="$(theme-mode 2>/dev/null || echo dark)"
-
-      exec tmux new-session -A -d -s remote ';' set-environment -t remote THEME_MODE "$mode" ';' attach -t remote
+      exec tmux new-session -A -d -s remote -e THEME_MODE=dark ';' attach -t remote
     '';
   };
 

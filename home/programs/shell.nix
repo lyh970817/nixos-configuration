@@ -78,22 +78,14 @@ in
         fi
       }
 
-      # Runs before every prompt: reload the theme vars (cheap, forkless),
-      # and when inside tmux, re-assert this pane's THEME_MODE into the
-      # session's environment store. tmux's update-environment only copies
-      # the attaching client's THEME_MODE into that store on a fresh attach,
-      # and a resumed mosh session never re-attaches — so without this, a
-      # session left running through a machine switch would keep seeding new
-      # panes with a stale mode. Since every prompt draw re-asserts, whichever
-      # pane was most recently used wins the store for new panes. Flagless
-      # `set-environment` (no -t) auto-resolves to this pane's own session in
-      # a single fork; `-t "$(tmux display -p ...)"` would cost a second fork
-      # for no benefit. Capture/restore $? around this so it doesn't clobber
-      # the exit status starship's own precmd reads.
+      # Runs before every prompt to reload the theme vars (cheap, forkless).
+      # Do not write THEME_MODE back to tmux: the dedicated remote session has
+      # a fixed dark policy, independent of whichever pane was used last.
+      # Capture/restore $? so this hook does not clobber the exit status
+      # starship's own precmd reads.
       theme_precmd() {
         local ret=$?
         load_shell_themes
-        [ -n "$TMUX" ] && tmux set-environment THEME_MODE "$THEME_MODE"
         return $ret
       }
       add-zsh-hook precmd theme_precmd
