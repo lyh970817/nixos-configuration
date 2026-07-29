@@ -49,7 +49,7 @@ return {
         -- two sub-tables read by the module: `animate` and `animate_repeat`.
         animate = {
           duration = { step = 15, total = 250 },
-          easing = "quadratic",
+          easing = "inOutQuad",
         },
         -- Faster/snappier animation when repeating scroll before the previous
         -- one settles (e.g. holding <C-d>), so rapid presses don't feel laggy.
@@ -58,12 +58,12 @@ return {
           duration = { step = 5, total = 100 },
           easing = "linear",
         },
-        -- Exclude terminal buffers (matches upstream default) and very large
-        -- files. snacks.bigfile (enabled above) tags detected big files with
-        -- filetype = "bigfile" (snacks/bigfile.lua:53), so we can key off that
-        -- instead of re-implementing a size check.
+        -- Preserve Snacks' global/buffer opt-outs and skip terminals and big files.
         filter = function(buf)
-          return vim.bo[buf].buftype ~= "terminal" and vim.bo[buf].filetype ~= "bigfile"
+          return vim.g.snacks_scroll ~= false
+            and vim.b[buf].snacks_scroll ~= false
+            and vim.bo[buf].buftype ~= "terminal"
+            and vim.bo[buf].filetype ~= "bigfile"
         end,
       },
       words = { enabled = true },
