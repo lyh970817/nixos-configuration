@@ -166,6 +166,11 @@ in
         fi
       fi
 
+      # zeno provides fuzzy completion, including changed-file completion for
+      # git diff. Source it after fzf so its fallback can use fzf completion.
+      # Do not call zeno-bind-default-keys: existing widgets keep their bindings.
+      source ${pkgs.zeno-zsh}/share/zeno.zsh/zeno.zsh
+
       # Yazi wrapper function - cd to directory on exit
       function y() {
         local tmp="$(mktemp -t "yazi-cwd.XXXXXX")" cwd
@@ -194,6 +199,8 @@ in
       function zvm_after_init() {
         # Bind for Insert Mode
         zvm_bindkey viins '^o' silent-y
+        # zeno completion only; retain the existing bindings for all other widgets.
+        zvm_bindkey viins '^I' zeno-completion
         # Bind for Normal Mode
         zvm_bindkey vicmd '^o' silent-y
         # Restore Ctrl+r for fzf history search

@@ -16,6 +16,7 @@
     fd
     bat
     fzf
+    deno
     jq
     lsd
     tealdeer

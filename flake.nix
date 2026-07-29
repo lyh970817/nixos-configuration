@@ -68,6 +68,7 @@
         pi-coding-agent = final.callPackage ./pkgs/pi-coding-agent.nix { };
         pi-openai-server-compaction = final.callPackage ./pkgs/pi-openai-server-compaction.nix { };
         quicktui = final.callPackage ./pkgs/quicktui.nix { };
+        zeno-zsh = final.callPackage ./pkgs/zeno-zsh.nix { };
         # DECSCUSR cursor-shape support (unmerged upstream PR #1355) — needed on
         # both roles: mosh-server parses the escape, mosh-client renders it.
         mosh = prev.mosh.overrideAttrs (old: {
