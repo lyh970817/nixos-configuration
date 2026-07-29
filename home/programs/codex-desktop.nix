@@ -11,6 +11,7 @@
   programs.codexDesktopLinux = {
     enable = true;
     package = pkgs.codex-desktop-isolated;
-    cliPackage = pkgs.codex-desktop-cli;
+    # Desktop keeps Apps available in its own isolated Codex environment.
+    cliPackage = pkgs.codex.override { disableApps = false; };
   };
 }
