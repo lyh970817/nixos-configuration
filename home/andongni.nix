@@ -61,6 +61,7 @@
 
   home.sessionPath = [
     "$HOME/.npm-global/bin"
+    "$HOME/.local/bin"
   ];
 
   # Let Home Manager manage itself
