@@ -2,6 +2,8 @@
   lib,
   stdenv,
   fetchzip,
+  makeWrapper,
+  disableApps ? true,
 }:
 
 stdenv.mkDerivation (finalAttrs: {
@@ -16,6 +18,8 @@ stdenv.mkDerivation (finalAttrs: {
   dontBuild = true;
   dontStrip = true;
 
+  nativeBuildInputs = [ makeWrapper ];
+
   installPhase = ''
     runHook preInstall
 
@@ -28,7 +32,9 @@ stdenv.mkDerivation (finalAttrs: {
       "$out/lib/codex/vendor/x86_64-unknown-linux-musl/codex-resources/zsh/bin/zsh"
 
     mkdir -p "$out/bin"
-    ln -s "$out/lib/codex/vendor/x86_64-unknown-linux-musl/bin/codex" "$out/bin/codex"
+    makeWrapper "$out/lib/codex/vendor/x86_64-unknown-linux-musl/bin/codex" "$out/bin/codex" ${
+      lib.optionalString disableApps ''--add-flags "--disable apps"''
+    }
 
     install -Dm644 README.md "$out/share/doc/codex/README.md"
     install -Dm644 package.json "$out/share/doc/codex/package.json"
