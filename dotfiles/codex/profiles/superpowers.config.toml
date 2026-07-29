@@ -10,6 +10,9 @@ enabled = true
 [plugins."kami@kami"]
 enabled = false
 
+[plugins."google-drive@openai-curated-remote"]
+enabled = false
+
 [marketplaces.superpowers-dev]
 source_type = "git"
 source = "https://github.com/obra/superpowers.git"

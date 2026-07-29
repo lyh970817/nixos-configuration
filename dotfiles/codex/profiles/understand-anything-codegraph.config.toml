@@ -12,6 +12,9 @@ trusted_hash = "sha256:51f9f37fba6701f908ff2ad08c6bd11d9719c7172742124467e3ff560
 [plugins."understand-anything@understand-anything"]
 enabled = true
 
+[plugins."google-drive@openai-curated-remote"]
+enabled = false
+
 [mcp_servers.codegraph]
 command = "codegraph"
 args = ["serve", "--mcp"]

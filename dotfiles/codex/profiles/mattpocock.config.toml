@@ -5,6 +5,9 @@ model_reasoning_effort = "medium"
 [plugins."browser@openai-bundled"]
 enabled = false
 
+[plugins."google-drive@openai-curated-remote"]
+enabled = false
+
 # Skill group dotfiles/codex/skills/mattpocock/ (symlinks into the pool);
 # disabled in base config.toml, enabled here. Only name selectors work in
 # Codex 0.144.5.

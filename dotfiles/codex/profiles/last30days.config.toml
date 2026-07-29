@@ -3,6 +3,9 @@ model_reasoning_effort = "high"
 # Profile for the last30days research skill.
 # Select it with: codex --profile last30days
 
+[plugins."google-drive@openai-curated-remote"]
+enabled = false
+
 # Skill group dotfiles/codex/skills/last30days (symlink into the pool);
 # disabled in base config.toml, enabled here. Only name selectors work in
 # Codex 0.144.5.

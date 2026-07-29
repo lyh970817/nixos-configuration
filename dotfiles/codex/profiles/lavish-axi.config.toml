@@ -1,6 +1,9 @@
 # Profile for the Lavish Editor skill powered by lavish-axi.
 # Select it with: codex --profile lavish-axi
 
+[plugins."google-drive@openai-curated-remote"]
+enabled = false
+
 # Only name selectors work in Codex 0.144.5; path selectors silently no-op.
 [[skills.config]]
 name = "lavish"
