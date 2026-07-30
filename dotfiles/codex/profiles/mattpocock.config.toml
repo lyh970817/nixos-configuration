@@ -8,6 +8,26 @@ enabled = false
 [plugins."google-drive@openai-curated-remote"]
 enabled = false
 
+[[skills.config]]
+name = "google-drive:google-docs"
+enabled = false
+
+[[skills.config]]
+name = "google-drive:google-drive"
+enabled = false
+
+[[skills.config]]
+name = "google-drive:google-drive-comments"
+enabled = false
+
+[[skills.config]]
+name = "google-drive:google-sheets"
+enabled = false
+
+[[skills.config]]
+name = "google-drive:google-slides"
+enabled = false
+
 # Skill group dotfiles/codex/skills/mattpocock/ (symlinks into the pool);
 # disabled in base config.toml, enabled here. Only name selectors work in
 # Codex 0.144.5.
