@@ -12,26 +12,7 @@
     keyboards = {
       default = {
         ids = [ "*" ];
-        settings = {
-          main = {
-            # Maps CapsLock to 'nav' layer when held, Esc when tapped
-            capslock = "overload(nav, esc)";
-          };
-          nav = {
-            # Vim-style navigation
-            h = "left";
-            j = "down";
-            k = "up";
-            l = "right";
-
-            # Optional: other useful shortcuts on this layer
-            u = "pageup";
-            d = "pagedown";
-            w = "C-right";
-            b = "C-left";
-            v = "S-right";
-          };
-        };
+        settings = { };
       };
     };
   };
