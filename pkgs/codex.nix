@@ -32,9 +32,10 @@ stdenv.mkDerivation (finalAttrs: {
       "$out/lib/codex/vendor/x86_64-unknown-linux-musl/codex-resources/zsh/bin/zsh"
 
     mkdir -p "$out/bin"
-    makeWrapper "$out/lib/codex/vendor/x86_64-unknown-linux-musl/bin/codex" "$out/bin/codex" ${
-      lib.optionalString disableApps ''--add-flags "--disable apps"''
-    }
+    makeWrapper "$out/lib/codex/vendor/x86_64-unknown-linux-musl/bin/codex" "$out/bin/codex" \
+      --unset COLORTERM ${
+        lib.optionalString disableApps ''--add-flags "--disable apps"''
+      }
 
     install -Dm644 README.md "$out/share/doc/codex/README.md"
     install -Dm644 package.json "$out/share/doc/codex/package.json"
