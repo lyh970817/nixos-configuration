@@ -32,4 +32,20 @@ in
 
     run ${pkgs.coreutils}/bin/chmod 0600 "$omp_config"
   '';
+
+  # Keep the Matt Pocock profile isolated from the Codex user-skill source.
+  # Marketplace state and installed plugin contents stay OMP-managed.
+  home.activation.ompMattPocockProfile = lib.hm.dag.entryAfter [ "ompTheme" ] ''
+    omp_config_dir="$HOME/.omp/profiles/mattpocock/agent"
+    omp_config="$omp_config_dir/config.yml"
+    run ${pkgs.coreutils}/bin/install -d -m 0700 "$omp_config_dir"
+
+    if [ -e "$omp_config" ]; then
+      run ${pkgs.yq-go}/bin/yq -i '.skills.enableCodexUser = false | .skills.enablePiUser = true' "$omp_config"
+    else
+      run ${pkgs.yq-go}/bin/yq -n '.skills.enableCodexUser = false | .skills.enablePiUser = true' > "$omp_config"
+    fi
+
+    run ${pkgs.coreutils}/bin/chmod 0600 "$omp_config"
+  '';
 }
