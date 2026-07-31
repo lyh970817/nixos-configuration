@@ -67,19 +67,29 @@ let
   };
 in
 {
-  # pi coding agent, driven by GPT models from the ChatGPT/Codex subscription
-  # through pi's own native `openai-codex` provider — not the CLIProxyAPI
-  # gateway and not an OPENAI_API_KEY. Context compaction is offloaded to the
-  # OpenAI server by the openai-server-compaction extension.
+  # Pi uses its native `openai-codex` provider, independently of the
+  # CLIProxyAPI gateway and OPENAI_API_KEY. Context compaction is offloaded to
+  # the OpenAI server by the openai-server-compaction extension.
   #
   # One imperative bootstrap step remains: run `pi` once and use `/login` to
-  # authorize the OAuth session. pi keeps its own ~/.pi/agent/auth.json and
+  # authorize the OAuth session. Pi keeps its own ~/.pi/agent/auth.json and
   # never reads ~/.codex/auth.json. See docs/pi-coding-agent.md, which also
   # explains why the 0.80.9 pin and the extension must be bumped together.
   home.packages = [
     ompLauncher
     piLauncher
     firstmateLauncher
+
+    # First Mate's bootstrap remains detection-only. Nix owns these pinned
+    # executables, while optional AXI hook integrations remain disabled: do not
+    # run their imperative `setup hooks` commands.
+    pkgs.treehouse
+    pkgs."no-mistakes"
+    pkgs.gh-axi
+    pkgs.chrome-devtools-axi
+    pkgs.lavish-axi
+    pkgs.tasks-axi
+    pkgs.quota-axi
   ];
 
   home.file = {

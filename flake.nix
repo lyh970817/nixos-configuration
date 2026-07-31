@@ -45,36 +45,48 @@
         inherit system;
         config.allowUnfree = true;
       };
-      customOverlay = final: prev: {
-        "115browser" = final.callPackage ./pkgs/115browser.nix { };
-        claude-code = final.callPackage ./pkgs/claude-code.nix { };
-        claude-science = final.callPackage ./pkgs/claude-science.nix { };
-        cli-proxy-api = final.callPackage ./pkgs/cli-proxy-api.nix { };
-        codex = final.callPackage ./pkgs/codex.nix { };
-        # Desktop needs a current, unmodified CLI of its own. The terminal
-        # package above disables Apps, but Desktop's CODEX_CLI_PATH must not.
-        codex-desktop-cli = final.callPackage ./pkgs/codex.nix {
-          disableApps = false;
+      customOverlay =
+        final: prev:
+        let
+          firstmateTools = final.callPackage ./pkgs/firstmate-tools.nix { };
+        in
+        {
+          "115browser" = final.callPackage ./pkgs/115browser.nix { };
+          claude-code = final.callPackage ./pkgs/claude-code.nix { };
+          claude-science = final.callPackage ./pkgs/claude-science.nix { };
+          cli-proxy-api = final.callPackage ./pkgs/cli-proxy-api.nix { };
+          codex = final.callPackage ./pkgs/codex.nix { };
+          # Desktop needs a current, unmodified CLI of its own. The terminal
+          # package above disables Apps, but Desktop's CODEX_CLI_PATH must not.
+          codex-desktop-cli = final.callPackage ./pkgs/codex.nix {
+            disableApps = false;
+          };
+          codex-desktop-isolated = final.callPackage ./pkgs/codex-desktop-isolated.nix {
+            codexDesktopPackage = codex-desktop-linux.packages.${system}.codex-desktop;
+          };
+          kreuzberg-cli = final.callPackage ./pkgs/kreuzberg-cli.nix { };
+          digg-pp-cli = final.callPackage ./pkgs/digg-pp-cli.nix { };
+          # Upstream flake ships the package directly; take it from the pinned input.
+          herdr = herdr.packages.${system}.default;
+          hyprwhspr = final.callPackage ./pkgs/hyprwhspr.nix { };
+          oh-my-pi = final.callPackage ./pkgs/oh-my-pi.nix { };
+          pi-coding-agent = final.callPackage ./pkgs/pi-coding-agent.nix { };
+          pi-openai-server-compaction = final.callPackage ./pkgs/pi-openai-server-compaction.nix { };
+          quicktui = final.callPackage ./pkgs/quicktui.nix { };
+          treehouse = firstmateTools.treehouse;
+          "no-mistakes" = firstmateTools.no-mistakes;
+          gh-axi = firstmateTools.gh-axi;
+          chrome-devtools-axi = firstmateTools.chrome-devtools-axi;
+          lavish-axi = firstmateTools.lavish-axi;
+          tasks-axi = firstmateTools.tasks-axi;
+          quota-axi = firstmateTools.quota-axi;
+          zeno-zsh = final.callPackage ./pkgs/zeno-zsh.nix { };
+          # DECSCUSR cursor-shape support (unmerged upstream PR #1355) — needed on
+          # both roles: mosh-server parses the escape, mosh-client renders it.
+          mosh = prev.mosh.overrideAttrs (old: {
+            patches = (old.patches or [ ]) ++ [ ./pkgs/patches/mosh-cursor-shape.patch ];
+          });
         };
-        codex-desktop-isolated = final.callPackage ./pkgs/codex-desktop-isolated.nix {
-          codexDesktopPackage = codex-desktop-linux.packages.${system}.codex-desktop;
-        };
-        kreuzberg-cli = final.callPackage ./pkgs/kreuzberg-cli.nix { };
-        digg-pp-cli = final.callPackage ./pkgs/digg-pp-cli.nix { };
-        # Upstream flake ships the package directly; take it from the pinned input.
-        herdr = herdr.packages.${system}.default;
-        hyprwhspr = final.callPackage ./pkgs/hyprwhspr.nix { };
-        oh-my-pi = final.callPackage ./pkgs/oh-my-pi.nix { };
-        pi-coding-agent = final.callPackage ./pkgs/pi-coding-agent.nix { };
-        pi-openai-server-compaction = final.callPackage ./pkgs/pi-openai-server-compaction.nix { };
-        quicktui = final.callPackage ./pkgs/quicktui.nix { };
-        zeno-zsh = final.callPackage ./pkgs/zeno-zsh.nix { };
-        # DECSCUSR cursor-shape support (unmerged upstream PR #1355) — needed on
-        # both roles: mosh-server parses the escape, mosh-client renders it.
-        mosh = prev.mosh.overrideAttrs (old: {
-          patches = (old.patches or [ ]) ++ [ ./pkgs/patches/mosh-cursor-shape.patch ];
-        });
-      };
       preCommitCheck = pre-commit-hooks.lib.${system}.run {
         src = ./.;
         hooks.nixfmt.enable = true;
