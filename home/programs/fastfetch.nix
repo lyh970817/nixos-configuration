@@ -163,7 +163,7 @@ let
             fi
           fi
         fi
-        printf '  %s %-''${name_width}s %s\n' "$symbol" "$name" "$detail"
+        printf "  %s %-''${name_width}s %s\n" "$symbol" "$name" "$detail"
       done <<< "$device_rows"
     '';
   };
