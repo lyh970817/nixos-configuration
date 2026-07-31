@@ -133,6 +133,7 @@ let
         exit 0
       fi
 
+      printf '\n'
       indent='                     '
       name_width=0
       while IFS=$'\t' read -r _online name _self _active _last_seen; do
