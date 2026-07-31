@@ -19,6 +19,9 @@ enabled = false
 [plugins."visualize@openai-bundled"]
 enabled = false
 
+[plugins."deep-research@openai-bundled"]
+enabled = false
+
 [plugins."google-drive@openai-curated-remote"]
 enabled = false
 

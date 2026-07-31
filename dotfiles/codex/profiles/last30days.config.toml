@@ -15,6 +15,9 @@ enabled = false
 [plugins."visualize@openai-bundled"]
 enabled = false
 
+[plugins."deep-research@openai-bundled"]
+enabled = false
+
 # Skill group dotfiles/codex/skills/last30days (symlink into the pool);
 # disabled in base config.toml, enabled here. Only name selectors work in
 # Codex 0.144.5.

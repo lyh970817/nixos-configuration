@@ -13,6 +13,9 @@ enabled = false
 [plugins."visualize@openai-bundled"]
 enabled = false
 
+[plugins."deep-research@openai-bundled"]
+enabled = false
+
 # Only name selectors work in Codex 0.144.5; path selectors silently no-op.
 [[skills.config]]
 name = "lavish"
