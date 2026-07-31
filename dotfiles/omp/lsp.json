@@ -1,7 +1,7 @@
 {
   "servers": {
     "yamlls": {
-      "command": "yaml-language-server",
+      "command": "/etc/profiles/per-user/andongni/bin/yaml-language-server",
       "args": ["--stdio"],
       "fileTypes": [".yaml", ".yml"],
       "rootMarkers": [".git"]
