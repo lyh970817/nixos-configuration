@@ -137,6 +137,7 @@ let
       online=$(printf '%s\n' "$device_rows" | awk -F '\t' '$1 == "true" { count++ } END { print count + 0 }')
       printf '%s/%s online\n' "$online" "$total"
 
+      indent='                     '
       name_width=0
       while IFS=$'\t' read -r _online name _self _active _last_seen; do
         if (( ''${#name} > name_width )); then
@@ -163,7 +164,7 @@ let
             fi
           fi
         fi
-        printf "  %s %-''${name_width}s %s\n" "$symbol" "$name" "$detail"
+        printf "%s%s %-''${name_width}s %s\n" "$indent" "$symbol" "$name" "$detail"
       done <<< "$device_rows"
     '';
   };
