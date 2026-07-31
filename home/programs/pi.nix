@@ -49,16 +49,20 @@ let
     '';
   };
 
-  # First Mate is a project-local pi distribution, not a global pi plugin. Its
-  # tracked .pi/extensions are loaded when pi starts from this checkout.
+  # First Mate is a project-local Pi distribution, not a global plugin. OMP is
+  # Pi-compatible: its native discovery loads the tracked .pi/extensions from
+  # this checkout. The markers let First Mate use its verified Pi adapter while
+  # keeping OMP as the only agent executable.
   firstmateLauncher = pkgs.writeShellApplication {
     name = "firstmate";
     text = ''
       ${piHostEnvironment}
 
       export FM_HOME="/home/andongni/firstmate"
+      export PI_CODING_AGENT=true
+      export FM_PI_HARNESS=pi
       cd "$FM_HOME"
-      exec ${piLauncher}/bin/pi "$@"
+      exec ${ompLauncher}/bin/omp "$@"
     '';
   };
 in
