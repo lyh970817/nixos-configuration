@@ -100,10 +100,80 @@ let
       fi
     '';
   };
+
+  fastfetchTailnet = pkgs.writeShellApplication {
+    name = "fastfetch-tailnet";
+    runtimeInputs = with pkgs; [
+      coreutils
+      gawk
+      jq
+      tailscale
+    ];
+    text = ''
+      status_json=$(timeout 1s tailscale status --json 2>/dev/null || true)
+      if [[ -z "$status_json" ]]; then
+        printf 'unavailable\n'
+        exit 0
+      fi
+
+      device_rows=$(printf '%s\n' "$status_json" | jq -r '
+        (.Self | . + {_self: true}) as $self |
+        ([.Peer // {} | to_entries[] | .value + {_self: false}]) as $peers |
+        ([$self] + $peers)[] |
+        [
+          (.Online // false),
+          (.DNSName | rtrimstr(".") | split(".")[0]),
+          (._self // false),
+          (.Active // false),
+          (.LastSeen // "")
+        ] | @tsv
+      ' 2>/dev/null || true)
+      if [[ -z "$device_rows" ]]; then
+        printf 'unavailable\n'
+        exit 0
+      fi
+
+      total=$(printf '%s\n' "$device_rows" | awk 'NF { count++ } END { print count + 0 }')
+      online=$(printf '%s\n' "$device_rows" | awk -F '\t' '$1 == "true" { count++ } END { print count + 0 }')
+      printf '%s/%s online\n' "$online" "$total"
+
+      name_width=0
+      while IFS=$'\t' read -r _online name _self _active _last_seen; do
+        if (( ''${#name} > name_width )); then
+          name_width=''${#name}
+        fi
+      done <<< "$device_rows"
+
+      while IFS=$'\t' read -r online_state name is_self active last_seen; do
+        symbol='○'
+        detail='offline'
+        if [[ "$online_state" == true ]]; then
+          symbol='●'
+          detail='online'
+          [[ "$is_self" == true ]] && detail='online · self'
+          [[ "$is_self" != true && "$active" == true ]] && detail='online · active'
+        elif [[ "$last_seen" != 0001-* && -n "$last_seen" ]]; then
+          seen_epoch=$(date -d "$last_seen" +%s 2>/dev/null || true)
+          if [[ -n "$seen_epoch" ]]; then
+            age_days=$(( ($(date +%s) - seen_epoch) / 86400 ))
+            if (( age_days < 1 )); then
+              detail='offline · <1d ago'
+            else
+              detail="offline · ''${age_days}d ago"
+            fi
+          fi
+        fi
+        printf '  %s %-''${name_width}s %s\n' "$symbol" "$name" "$detail"
+      done <<< "$device_rows"
+    '';
+  };
 in
 
 {
-  home.packages = [ fastfetchAudio ];
+  home.packages = [
+    fastfetchAudio
+    fastfetchTailnet
+  ];
 
   programs.fastfetch = {
     enable = true;
@@ -136,8 +206,13 @@ in
         "Bluetooth"
         {
           type = "command";
-          key = "Audio Device";
+          key = "Audio";
           text = "fastfetch-audio";
+        }
+        {
+          type = "command";
+          key = "Tailnet";
+          text = "fastfetch-tailnet";
         }
         {
           type = "command";
