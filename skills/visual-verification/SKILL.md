@@ -1,11 +1,29 @@
 ---
 name: visual-verification
-description: Visually verify themes, colorschemes, fonts, wallpaper, bars, notifications, terminal appearance, and other rendered desktop changes. Use automatically for any visual change request.
+description: Use only when correctness depends on inspecting rendered pixels or live GUI behavior that CLI checks cannot establish, such as actual layout, typography, contrast, clipping, composition, or visual interaction. Do not use for changes whose correctness is established by tests, config evaluation, logs, command output, or machine-readable desktop state.
 ---
 
 # Visual verification
 
-Treat visual verification as part of done for every visual change.
+Use this skill only when a CLI-only check cannot establish the acceptance
+criterion. The fact that a change affects something visible is not sufficient.
+
+Before starting a session, apply this gate:
+
+1. Identify what must be proven for the task to be correct.
+2. Decide whether tests, config evaluation, logs, command output, or
+   machine-readable desktop state can prove it. A CLI command that captures a
+   screenshot does not make pixel inspection CLI-only; use this skill when the
+   captured result still needs visual inspection.
+3. If those checks are sufficient, do not invoke `screen-verify`; use the
+   normal CLI verification for the change.
+4. If the acceptance criterion requires inspecting rendered pixels or live GUI
+   behavior, continue with this skill and treat visual inspection as part of
+   done.
+
+Do not use this skill solely for configuration presence, package availability,
+service status, launcher definitions, keybindings, numeric options, or other
+behavior with an authoritative CLI, test, log, or state inspection.
 
 ## 1. Lock the task mode
 
