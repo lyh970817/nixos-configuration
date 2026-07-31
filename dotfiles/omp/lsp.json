@@ -1,0 +1,10 @@
+{
+  "servers": {
+    "yamlls": {
+      "command": "yaml-language-server",
+      "args": ["--stdio"],
+      "fileTypes": [".yaml", ".yml"],
+      "rootMarkers": [".git"]
+    }
+  }
+}
