@@ -10,6 +10,18 @@ enabled = true
 [plugins."kami@kami"]
 enabled = false
 
+[plugins."browser@openai-bundled"]
+enabled = false
+
+[plugins."computer-use@openai-bundled"]
+enabled = false
+
+[plugins."visualize@openai-bundled"]
+enabled = false
+
+[plugins."deep-research@openai-bundled"]
+enabled = false
+
 [plugins."google-drive@openai-curated-remote"]
 enabled = false
 
@@ -35,3 +47,4 @@ enabled = false
 
 [tui]
 status_line = ["model", "current-dir", "git-branch", "context-used", "branch-changes"]
+vim_mode_default = true
