@@ -49,33 +49,47 @@ let
     '';
   };
 
-  # First Mate is a project-local pi distribution, not a global pi plugin. Its
-  # tracked .pi/extensions are loaded when pi starts from this checkout.
+  # First Mate is a project-local Pi distribution, not a global plugin. OMP is
+  # Pi-compatible: its native discovery loads the tracked .pi/extensions from
+  # this checkout. The markers let First Mate use its verified Pi adapter while
+  # keeping OMP as the only agent executable.
   firstmateLauncher = pkgs.writeShellApplication {
     name = "firstmate";
     text = ''
       ${piHostEnvironment}
 
       export FM_HOME="/home/andongni/firstmate"
+      export PI_CODING_AGENT=true
+      export FM_PI_HARNESS=pi
       cd "$FM_HOME"
-      exec ${piLauncher}/bin/pi "$@"
+      exec ${ompLauncher}/bin/omp "$@"
     '';
   };
 in
 {
-  # pi coding agent, driven by GPT models from the ChatGPT/Codex subscription
-  # through pi's own native `openai-codex` provider — not the CLIProxyAPI
-  # gateway and not an OPENAI_API_KEY. Context compaction is offloaded to the
-  # OpenAI server by the openai-server-compaction extension.
+  # Pi uses its native `openai-codex` provider, independently of the
+  # CLIProxyAPI gateway and OPENAI_API_KEY. Context compaction is offloaded to
+  # the OpenAI server by the openai-server-compaction extension.
   #
   # One imperative bootstrap step remains: run `pi` once and use `/login` to
-  # authorize the OAuth session. pi keeps its own ~/.pi/agent/auth.json and
+  # authorize the OAuth session. Pi keeps its own ~/.pi/agent/auth.json and
   # never reads ~/.codex/auth.json. See docs/pi-coding-agent.md, which also
   # explains why the 0.80.9 pin and the extension must be bumped together.
   home.packages = [
     ompLauncher
     piLauncher
     firstmateLauncher
+
+    # First Mate's bootstrap remains detection-only. Nix owns these pinned
+    # executables, while optional AXI hook integrations remain disabled: do not
+    # run their imperative `setup hooks` commands.
+    pkgs.treehouse
+    pkgs."no-mistakes"
+    pkgs.gh-axi
+    pkgs.chrome-devtools-axi
+    pkgs.lavish-axi
+    pkgs.tasks-axi
+    pkgs.quota-axi
   ];
 
   home.file = {

@@ -61,6 +61,7 @@
         lua
         luarocks
         nodePackages.vscode-langservers-extracted
+        yaml-language-server
         hunspell
         hunspellDicts.en_GB-large
         gemini-cli

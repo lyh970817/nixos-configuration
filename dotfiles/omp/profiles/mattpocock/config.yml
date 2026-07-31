@@ -1,0 +1,11 @@
+skills:
+  enableCodexUser: false
+  enablePiUser: true
+providers:
+  webSearchOrder: []
+modelRoles:
+  default: openai-codex/gpt-5.6-sol:low
+symbolPreset: nerd
+theme:
+  dark: matrix
+setupVersion: 1
