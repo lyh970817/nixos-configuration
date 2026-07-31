@@ -14,6 +14,17 @@
 # line-based upserts, so they keep these comments but may prepend a top-level
 # `onboarding = false` above them.
 
+# Herdr shares the terminal's modifier layer: Alt controls fast navigation,
+# while the Ctrl-a prefix keeps the complete keymap available.
+[keys]
+prefix = "ctrl+a"
+
+# The hidden sidebar is the agent explorer: reveal it directly, then move
+# through attention-ordered agent rows without leaving the keyboard.
+toggle_sidebar = ["prefix+b", "alt+e"]
+previous_agent = "alt+up"
+next_agent = "alt+down"
+
 [theme]
 name = "terminal"
 
