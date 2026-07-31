@@ -6,9 +6,20 @@ model_reasoning_effort = "high"
 [plugins."google-drive@openai-curated-remote"]
 enabled = false
 
+[plugins."browser@openai-bundled"]
+enabled = false
+
+[plugins."computer-use@openai-bundled"]
+enabled = false
+
+[plugins."visualize@openai-bundled"]
+enabled = false
+
 # Skill group dotfiles/codex/skills/last30days (symlink into the pool);
 # disabled in base config.toml, enabled here. Only name selectors work in
 # Codex 0.144.5.
 [[skills.config]]
 name = "last30days"
 enabled = true
+[tui]
+vim_mode_default = true

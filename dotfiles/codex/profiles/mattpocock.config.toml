@@ -5,6 +5,12 @@ model_reasoning_effort = "medium"
 [plugins."browser@openai-bundled"]
 enabled = false
 
+[plugins."computer-use@openai-bundled"]
+enabled = false
+
+[plugins."visualize@openai-bundled"]
+enabled = false
+
 [plugins."google-drive@openai-curated-remote"]
 enabled = false
 
@@ -127,3 +133,4 @@ enabled = true
 [tui]
 status_line = ["model-with-reasoning", "current-dir", "git-branch", "five-hour-limit", "context-used", "weekly-limit"]
 status_line_use_colors = true
+vim_mode_default = true
