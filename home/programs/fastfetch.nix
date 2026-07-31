@@ -133,10 +133,6 @@ let
         exit 0
       fi
 
-      total=$(printf '%s\n' "$device_rows" | awk 'NF { count++ } END { print count + 0 }')
-      online=$(printf '%s\n' "$device_rows" | awk -F '\t' '$1 == "true" { count++ } END { print count + 0 }')
-      printf '%s/%s online\n' "$online" "$total"
-
       indent='                     '
       name_width=0
       while IFS=$'\t' read -r _online name _self _active _last_seen; do
