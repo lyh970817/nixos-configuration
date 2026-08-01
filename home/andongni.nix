@@ -23,6 +23,7 @@
     ./programs/newt.nix
     ./programs/r.nix
     ./programs/fastfetch.nix
+    ./programs/codexbar.nix
     ./programs/claude.nix
     ./programs/cli-proxy-api.nix
     ./programs/codex-desktop.nix

@@ -56,6 +56,7 @@
           claude-science = final.callPackage ./pkgs/claude-science.nix { };
           cli-proxy-api = final.callPackage ./pkgs/cli-proxy-api.nix { };
           codex = final.callPackage ./pkgs/codex.nix { };
+          codexbar = final.callPackage ./pkgs/codexbar.nix { };
           # Desktop needs a current, unmodified CLI of its own. The terminal
           # package above disables Apps, but Desktop's CODEX_CLI_PATH must not.
           codex-desktop-cli = final.callPackage ./pkgs/codex.nix {

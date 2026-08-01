@@ -165,12 +165,60 @@ let
       done <<< "$device_rows"
     '';
   };
-in
+  fastfetchCodexbar = pkgs.writeShellApplication {
+    name = "fastfetch-codexbar";
+    runtimeInputs = with pkgs; [
+      curl
+      jq
+    ];
+    text = ''
+      response=$(curl \
+        --fail \
+        --silent \
+        --show-error \
+        --connect-timeout 0.2 \
+        --max-time 0.35 \
+        'http://127.0.0.1:8080/usage?provider=both' \
+        2>/dev/null || true)
 
+      if [[ -z "$response" ]]; then
+        printf 'unavailable\n'
+        exit 0
+      fi
+
+      rendered=$(jq -r '
+        def remaining($window):
+          if ($window == null or $window.usedPercent == null) then "?"
+          else ((100 - $window.usedPercent) | round | tostring) + "%"
+          end;
+
+        (if type == "array" then . else [.] end)
+        | map(
+            select(.provider == "codex" or .provider == "claude")
+            | (if .provider == "codex" then "Codex" else "Claude" end) as $name
+            | if .usage == null then
+                "\($name): unavailable"
+              else
+                "\($name): 5h \(remaining(.usage.primary)) | 7d \(remaining(.usage.secondary))"
+              end
+          )
+        | join(" · ")
+      ' <<< "$response" 2>/dev/null || true)
+
+      if [[ -n "$rendered" ]]; then
+        printf '%s\n' "$rendered"
+      else
+        printf 'unavailable\n'
+      fi
+    '';
+  };
+
+in
 {
   home.packages = [
     fastfetchAudio
     fastfetchTailnet
+    fastfetchCodexbar
   ];
 
   programs.fastfetch = {
@@ -211,6 +259,11 @@ in
           type = "command";
           key = "Mihomo";
           text = "status=$(systemctl is-active mihomo 2>/dev/null); if [ \"$status\" = \"active\" ]; then config=$(curl -s http://127.0.0.1:9090/configs 2>/dev/null); mode=$(echo \"$config\" | jq -r '.mode' 2>/dev/null); tun=$(echo \"$config\" | jq -r 'if .tun.enable then \"TUN\" else \"noTUN\" end' 2>/dev/null); proxy=$(curl -s http://127.0.0.1:9090/proxies 2>/dev/null | jq -r '[.proxies | to_entries[] | select(.value.type == \"Selector\" and .key != \"GLOBAL\")] | .[0].value.now' 2>/dev/null); echo \"$mode | $proxy | $tun\"; else echo \"inactive\"; fi";
+        }
+        {
+          type = "command";
+          key = "AI quota";
+          text = "fastfetch-codexbar";
         }
         {
           type = "command";
