@@ -533,8 +533,10 @@ in
       claude_settings="$claude_settings_dir/settings.json"
       run ${pkgs.coreutils}/bin/install -d -m 0700 "$claude_settings_dir"
       claude_bootstrap_profile=1
+      claude_reconcile_profile=1
       if [ -e "$claude_settings" ]; then
         if [ ! -r "$claude_settings" ] || ! "$claude_jq" -e 'type == "object"' "$claude_settings" >/dev/null 2>&1; then
+          claude_reconcile_profile=0
           echo "warning: leaving unreadable or malformed Claude settings untouched: $claude_settings" >&2
         else
           claude_settings_tmp="$(${pkgs.coreutils}/bin/mktemp "$claude_settings.XXXXXX")"
@@ -560,6 +562,17 @@ in
       fi
       if [ "$claude_bootstrap_profile" -eq 1 ]; then
         claude_bootstrap ${lib.escapeShellArg profile.name} ${lib.escapeShellArg profile.configDir}
+      fi
+      if [ "$claude_reconcile_profile" -eq 1 ]; then
+        claude_settings_tmp="$(${pkgs.coreutils}/bin/mktemp "$claude_settings.XXXXXX")"
+        if ! claude_reconcile "$claude_settings" "$claude_settings_tmp" \
+          ${lib.escapeShellArg (toString profile.settings)} ${lib.escapeShellArg profile.name}; then
+          ${pkgs.coreutils}/bin/rm -f "$claude_settings_tmp"
+          echo "error: failed to finalize Claude settings: $claude_settings" >&2
+          exit 1
+        fi
+        run ${pkgs.coreutils}/bin/chmod 0600 "$claude_settings_tmp"
+        run ${pkgs.coreutils}/bin/mv -f "$claude_settings_tmp" "$claude_settings"
       fi
     '') claudeProfiles}
   '';
