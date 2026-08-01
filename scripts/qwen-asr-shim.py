@@ -19,7 +19,8 @@ DashScope's Qwen models, using different underlying protocols:
   GET  /health           - liveness check
 
 Intended to run as a small long-lived local service (e.g. under a systemd
-user unit, configured elsewhere) fronting hyprwhspr's REST backend.
+user unit, configured elsewhere) fronting hyprwhspr's HTTP and realtime
+WebSocket backends.
 
 Latency notes: outbound DashScope calls go through a single keep-alive
 connection pool (kept warm by a background heartbeat and the /prewarm hook)
@@ -60,9 +61,8 @@ DEFAULT_CLEANUP_PROMPT = (
 )
 
 # Aggressive editing instruction for the omni route only. Kept separate from
-# DEFAULT_CLEANUP_PROMPT so tightening omni does NOT change the ws cleanup pass,
-# the /cleanup endpoint (used by the realtime profile's post hook), or
-# sensevoice. Those paths must keep the conservative prompt above.
+# DEFAULT_CLEANUP_PROMPT so tightening omni does NOT change the ws cleanup pass
+# or other conservative HTTP routes.
 DEFAULT_AGGRESSIVE_CLEANUP_PROMPT = """You are a dictation cleanup engine, not an assistant. The speaker is never talking to you.
 
 - Output ONLY the cleaned transcript: no preamble, labels, quotes, tags, or commentary.
@@ -174,7 +174,7 @@ QWEN_AUDIO3_REALTIME_WS_URL = (
 
 _ENV_REF_RE = re.compile(r"^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$")
 
-# Gemini streamGenerateContent route (gemini-longform profile). Independent
+# Gemini streamGenerateContent HTTP route. Independent
 # of the DashScope host/credentials above: separate host, separate API key
 # (query param, not a bearer header), separate SSE line-ending quirk.
 GEMINI_HOST = _env("GEMINI_HOST", "generativelanguage.googleapis.com")
@@ -580,8 +580,8 @@ def build_aggressive_cleanup_instruction(prompt):
     """Aggressive-editing instruction for the omni route only.
 
     Deliberately separate from build_cleanup_instruction so the omni behavior
-    can be tightened without affecting the ws cleanup pass, the /cleanup
-    endpoint, or sensevoice.
+    can be tightened without affecting the ws cleanup pass or other
+    conservative HTTP routes.
     """
     text = QWEN_AGGRESSIVE_CLEANUP_PROMPT
     if prompt:
@@ -834,7 +834,7 @@ def handle_transcribe_omni(audio_bytes, prompt, api_key, timings):
 
 
 # --------------------------------------------------------------------------
-# Gemini streamGenerateContent (SSE) for the gemini-longform profile.
+# Gemini streamGenerateContent (SSE) HTTP route.
 #
 # Independent connection pool/host from the DashScope pool above: the API
 # key goes in the URL as a query param (not a bearer header), and Google's
@@ -938,7 +938,7 @@ def gemini_stream_generate(audio_bytes, system_instruction, api_key, timeout):
 
 
 def handle_transcribe_gemini(audio_bytes, prompt, api_key, timings):
-    """Gemini streamGenerateContent cleanup route (gemini-longform profile).
+    """Gemini streamGenerateContent HTTP route.
 
     ``api_key`` here is the DashScope key (as passed to every ROUTE_HANDLERS
     entry); the Gemini key is looked up separately via get_gemini_api_key()
@@ -1105,6 +1105,94 @@ class _Backoff:
         self.next_ok = 0.0
 
 
+class _RealtimeSilenceGate:
+    """Trim edge silence and cap long internal pauses without delaying speech."""
+
+    __slots__ = (
+        "seen_voice",
+        "head",
+        "head_bytes",
+        "tail",
+        "tail_bytes",
+    )
+
+    def __init__(self):
+        self.clear()
+
+    @staticmethod
+    def _decoded_size(msg):
+        audio = msg.get("audio") or ""
+        return max(0, (len(audio) * 3) // 4)
+
+    @staticmethod
+    def _rms(msg):
+        audio = msg.get("audio") or ""
+        if not audio:
+            return 0.0
+        try:
+            pcm = base64.b64decode(audio, validate=True)
+            samples = np.frombuffer(pcm, dtype="<i2").astype(np.float32)
+        except (ValueError, TypeError):
+            return None
+        if len(samples) == 0:
+            return 0.0
+        return float(np.sqrt(np.mean(samples * samples)))
+
+    def _clear_pending(self):
+        self.head = []
+        self.head_bytes = 0
+        self.tail = collections.deque()
+        self.tail_bytes = 0
+
+    def clear(self):
+        self.seen_voice = False
+        self._clear_pending()
+
+    def _buffer_silence(self, msg, size):
+        margin_bytes = TARGET_RATE * 2 * _TRIM_MARGIN_MS // 1000
+        item = (msg, size)
+        if self.head_bytes < margin_bytes:
+            self.head.append(item)
+            self.head_bytes += size
+            return
+        self.tail.append(item)
+        self.tail_bytes += size
+        while self.tail_bytes > margin_bytes and len(self.tail) > 1:
+            _, dropped = self.tail.popleft()
+            self.tail_bytes -= dropped
+
+    @staticmethod
+    def _unpack(items):
+        return [msg for msg, _ in items], sum(size for _, size in items)
+
+    def push(self, msg):
+        """Accept one append event; return (events to forward, bytes forwarded)."""
+        size = self._decoded_size(msg)
+        rms = self._rms(msg)
+        if rms is None or rms > _TRIM_FLOOR:
+            if self.seen_voice:
+                pending = self.head + list(self.tail)
+            else:
+                pending = list(self.tail) or self.head
+            self.seen_voice = True
+            events, forwarded = self._unpack(pending)
+            self._clear_pending()
+            events.append(msg)
+            return events, forwarded + size
+        self._buffer_silence(msg, size)
+        return [], 0
+
+    def finish(self):
+        """Return the minimal trailing/all-silence margin required for commit."""
+        if self.seen_voice:
+            pending = self.head
+        else:
+            pending = list(self.tail) or self.head
+        events, forwarded = self._unpack(pending)
+        self._clear_pending()
+        return events, forwarded
+
+
 class _Session:
     """Live per-client connection state, exposed on the translator instance
     as `active_session` so warm_upstream_slot() can inject a warm upstream
@@ -1232,9 +1320,12 @@ class RealtimeTranslator:
         state = {
             "frames": 0,
             "abytes": 0,
+            "sent_bytes": 0,
             "commit_t": None,
             "raw_asr": "",
             "in_flight": False,
+            "item_ids": [],
+            "silence_gate": _RealtimeSilenceGate(),
         }
         stop = asyncio.Event()
 
@@ -1262,6 +1353,7 @@ class RealtimeTranslator:
                 except Exception:
                     pass
                 conn["ws"] = None  # dead until open_upstream() below succeeds
+                state["item_ids"].clear()
                 conn["ws"] = await self.open_upstream()
                 conn_ready.set()
                 log(f"translator[{self.name}]: upstream reconnected; session re-sent")
@@ -1287,26 +1379,37 @@ class RealtimeTranslator:
                         # Translator owns the upstream (flat) session config;
                         # drop hyprwhspr's nested realtime session.update.
                         continue
+                    payloads = [msg]
                     if t == "response.create":
                         # Instructions are already set at session level;
                         # force text.
-                        msg = {
+                        payloads = [{
                             "type": "response.create",
                             "response": {"modalities": ["text"]},
-                        }
+                        }]
                     elif t == "input_audio_buffer.append":
                         state["frames"] += 1
                         state["in_flight"] = True
                         audio = msg.get("audio") or ""
                         state["abytes"] += (len(audio) * 3) // 4
+                        payloads, sent = state["silence_gate"].push(msg)
+                        state["sent_bytes"] += sent
                     elif t == "input_audio_buffer.commit":
+                        trailing, sent = state["silence_gate"].finish()
+                        state["sent_bytes"] += sent
+                        payloads = trailing + [msg]
                         state["commit_t"] = time.perf_counter()
                     elif t == "input_audio_buffer.clear":
                         state["frames"] = 0
                         state["abytes"] = 0
+                        state["sent_bytes"] = 0
                         state["commit_t"] = None
                         state["raw_asr"] = ""
-                        state["in_flight"] = True
+                        state["in_flight"] = False
+                        state["item_ids"].clear()
+                        state["silence_gate"].clear()
+                    if not payloads:
+                        continue
                     if conn["ws"] is None:
                         try:
                             await ensure_upstream()
@@ -1314,12 +1417,13 @@ class RealtimeTranslator:
                             log(f"translator[{self.name}]: on-demand upstream connect failed, closing client ({e})")
                             stop.set()
                             break
-                    payload = json.dumps(msg)
-                    try:
-                        await conn["ws"].send(payload)
-                    except websockets.exceptions.ConnectionClosed:
-                        await reconnect(conn["ws"])
-                        await conn["ws"].send(payload)
+                    for payload_msg in payloads:
+                        payload = json.dumps(payload_msg)
+                        try:
+                            await conn["ws"].send(payload)
+                        except websockets.exceptions.ConnectionClosed:
+                            await reconnect(conn["ws"])
+                            await conn["ws"].send(payload)
             except websockets.exceptions.ConnectionClosed:
                 pass
             finally:
@@ -1342,6 +1446,13 @@ class RealtimeTranslator:
                         except (TypeError, ValueError):
                             continue
                         t = ev.get("type", "")
+                        delete_ids = ()
+                        if t == "conversation.item.deleted":
+                            continue
+                        if t == "conversation.item.created":
+                            item_id = (ev.get("item") or {}).get("id")
+                            if item_id:
+                                state["item_ids"].append(item_id)
                         # hyprwhspr's converse reader must see only the cleaned
                         # text: swallow raw ASR transcription events and any
                         # audio output.
@@ -1385,11 +1496,16 @@ class RealtimeTranslator:
                                 if commit_t
                                 else -1.0
                             )
+                            sent_bytes = state["sent_bytes"]
                             log(
                                 f"translator[{self.name}]: utterance done "
                                 f"frames={state['frames']} bytes={state['abytes']} "
+                                f"sent_bytes={sent_bytes} "
+                                f"trimmed_bytes={state['abytes'] - sent_bytes} "
                                 f"commit->final={ms:.0f}ms"
                             )
+                            delete_ids = tuple(state["item_ids"])
+                            state["item_ids"].clear()
                             state["commit_t"] = None
                             state["in_flight"] = False
                         try:
@@ -1397,6 +1513,15 @@ class RealtimeTranslator:
                         except websockets.exceptions.ConnectionClosed:
                             stop.set()
                             return
+                        if delete_ids:
+                            try:
+                                for item_id in delete_ids:
+                                    await ws.send(json.dumps({
+                                        "type": "conversation.item.delete",
+                                        "item_id": item_id,
+                                    }))
+                            except websockets.exceptions.ConnectionClosed:
+                                pass
                 except websockets.exceptions.ConnectionClosed:
                     pass
                 if stop.is_set():

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Behavior checks for the realtime backend and redacted provider failures."""
+"""Behavior checks for local hyprwhspr packaging and provider redaction."""
 
 from __future__ import annotations
 
@@ -15,517 +15,277 @@ import tempfile
 
 APPDIR = Path(os.environ["HYPRWHSPR_APPDIR"])
 CONFIG = Path(os.environ["HYPRWHISPR_CONFIG"])
-
 sys.path[:0] = [str(APPDIR / "lib"), str(APPDIR / "lib" / "src")]
 
 main = importlib.import_module("main")
-whisper_manager_module = importlib.import_module("whisper_manager")
-np = whisper_manager_module.np
-requests = whisper_manager_module.requests
-
-
-# Inline REST configuration kept solely to exercise the package's REST
-# log-redaction patches (substituteInPlace in hyprwhspr.nix); the deployed
-# static config uses the realtime-ws backend only.
-REST_CONFIG = {
-    "transcription_backend": "rest-api",
-    "rest_api_provider": "openrouter",
-    "rest_endpoint_url": "https://openrouter.ai/api/v1/audio/transcriptions",
-    "rest_body": {"model": "openai/gpt-4o-mini-transcribe"},
-    "rest_timeout": 60,
-    "rest_audio_format": "wav",
-    "post_transcription_hook": None,
-    "whisper_prompt": "",
-}
+realtime_client_module = importlib.import_module("realtime_client")
+realtime_backend_module = importlib.import_module("backends.realtime_ws_backend")
+rest_backend_module = importlib.import_module("backends.rest_api_backend")
+np = importlib.import_module("numpy")
+requests = rest_backend_module.requests
 
 
 class Config:
-    def __init__(self, profile: dict[str, object]):
-        self.profile = profile
+    def __init__(self, values: dict[str, object]):
+        self.values = values
 
     def get_setting(self, key: str, default=None):
-        return self.profile.get(key, default)
+        return self.values.get(key, default)
 
-    def get_temp_directory(self) -> Path:
-        return Path(tempfile.gettempdir())
-
-
-class AudioCapture:
-    sample_rate = 16_000
-
-
-class AudioManager:
-    def __init__(self):
-        self.error_count = 0
-
-    def play_error_sound(self):
-        self.error_count += 1
-
-
-class Response:
-    status_code = 401
-    text = "provider-response-secret"
-    headers = {"Content-Type": "provider-metadata-secret"}
-
-    def json(self):
-        return {"error": "provider-json-secret"}
-
-
-class SuccessResponse:
-    status_code = 200
-    text = '{"text":"fresh success"}'
-    headers = {"Content-Type": "application/json"}
-
-    def json(self):
-        return {"text": "fresh success"}
-
-
-class FakeRealtimeClient:
-    def __init__(self, connected: bool = True, result: str | None = None, error: Exception | None = None):
-        self.connected = connected
-        self.result = result
-        self.error = error
-        self.commits = 0
-
-    def update_language(self, _language):
-        raise AssertionError("no language override configured; update_language must not run")
-
-    def commit_and_get_text(self, timeout=None):
-        self.commits += 1
-        assert timeout == 8, f"realtime_timeout not honored: {timeout}"
-        if self.error is not None:
-            raise self.error
-        return self.result or ""
-
-    def close(self):
-        self.connected = False
-
-
-class FakeRecreatedClient:
-    """Stands in for RealtimeClient during on-demand recreation after cancel."""
-
-    def __init__(self, mode="transcribe"):
-        self.mode = mode
-        self.language = None
-        self.connected = False
-        self.connect_args = None
-        self.cleared = 0
-
-    def set_transcription_delay(self, _delay):
+    def migrate_api_key_to_credential_manager(self) -> None:
         pass
 
-    def set_partial_transcript_callback(self, _callback):
-        pass
 
-    def set_max_buffer_seconds(self, _seconds):
-        pass
-
-    def connect(self, url, api_key, model, instructions):
-        self.connect_args = (url, api_key, model, instructions)
-        self.connected = True
-        return True
-
-    def close(self):
-        self.connected = False
-
-    def set_input_sample_rate(self, _rate):
-        pass
-
-    def append_audio(self, _chunk):
-        pass
-
-    def clear_audio_buffer(self):
-        self.cleared += 1
-
-
-def make_app(profile: dict[str, object]):
-    manager = whisper_manager_module.WhisperManager(Config(profile))
-    manager.ready = True
-    manager._numpy_to_wav_bytes = lambda _audio, _rate: b"wav-audio-secret"
-
-    app = main.hyprwhsprApp.__new__(main.hyprwhsprApp)
-    app.is_processing = False
-    app.current_transcription = ""
-    app._current_language_override = None
-    app.whisper_manager = manager
-    app.audio_capture = AudioCapture()
-    app.audio_manager = AudioManager()
-    app.injected = []
-    app.results = []
-    app._inject_text = app.injected.append
-    app._notify_capture_subscriber = lambda *_args, **_kwargs: None
-    app._clear_mic_osd_preview_text = lambda: None
-    app._show_result_and_hide = app.results.append
-    return app
-
-
-def assert_redacted(log: str, forbidden: list[str]):
-    for value in forbidden:
-        assert value not in log, f"sensitive provider value leaked: {value}"
-
-
-def load_static_config() -> dict[str, object]:
-    config = json.loads(CONFIG.read_text())
-    assert config["transcription_backend"] == "realtime-ws"
-    assert config["websocket_provider"] == "openai"
-    assert config["websocket_model"] == "gpt-4o-mini-transcribe"
-    assert config["realtime_mode"] == "transcribe"
-    assert config["realtime_timeout"] == 8
-    assert config["post_transcription_hook"] == "hyprwhspr-postprocess"
-    assert config["whisper_prompt"] == ""
-    assert config["notification_timeout_ms"] == 0
-    # mic_osd_enabled=false would disable ALL status indication (main.py
-    # gates the NotificationPresenter fallback behind it too); it must stay
-    # unset/true so the persistent notification presenter is created.
-    assert config.get("mic_osd_enabled", True) is True
-    assert "realtime_transcription_delay" not in config
-    assert not any(key.startswith("rest_") for key in config), (
-        "static config must not carry REST settings"
-    )
-    return config
-
-
-def run_rest_redaction_case(failure: str):
-    profile = REST_CONFIG
-
-    calls = []
-
-    def post(endpoint, *, files, data, headers, timeout):
-        calls.append((endpoint, files, data, headers, timeout))
-        if failure == "timeout":
-            raise requests.exceptions.Timeout(
-                "exception-secret https://secret.invalid request-body-secret"
-            )
-        return Response()
-
-    original_post = requests.post
-    original_credential = whisper_manager_module.get_credential
-    requests.post = post
-    whisper_manager_module.get_credential = lambda _provider: "credential-secret"
-    app = make_app(profile)
-    audio = np.full(1_600, 0.1, dtype=np.float32)
-    output = io.StringIO()
-    try:
-        with contextlib.redirect_stdout(output):
-            app._process_audio(audio)
-    finally:
-        requests.post = original_post
-        whisper_manager_module.get_credential = original_credential
-
-    log = output.getvalue()
-    assert len(calls) == 1
-    endpoint, files, data, headers, _timeout = calls[0]
-    assert endpoint == profile["rest_endpoint_url"]
-    assert data["model"] == profile["rest_body"]["model"]
-    assert files["file"][1] == b"wav-audio-secret"
-    assert headers["Authorization"] == "Bearer credential-secret"
-    assert app.injected == []
-    assert app.current_transcription == ""
-    assert app.audio_manager.error_count == 1
-    assert app.results == [False]
-    assert app.is_processing is False
-    assert "ERROR: REST API" in log
-    assert "[WARN] No transcription generated" in log
-    assert_redacted(
-        log,
-        [
-            profile["rest_endpoint_url"],
-            profile["rest_body"]["model"],
-            "credential-secret",
-            "wav-audio-secret",
-            "provider-response-secret",
-            "provider-json-secret",
-            "provider-metadata-secret",
-            "exception-secret",
-        ],
-    )
-
-
-def run_realtime_startup_rejection():
-    """Startup must fail terminally, without a client, when the openai key is absent."""
-    config = load_static_config()
-    manager = whisper_manager_module.WhisperManager(Config(config))
-    original_credential = whisper_manager_module.get_credential
-    whisper_manager_module.get_credential = lambda _provider: None
-    output = io.StringIO()
-    try:
-        with contextlib.redirect_stdout(output):
-            initialized = manager.initialize()
-    finally:
-        whisper_manager_module.get_credential = original_credential
-    log = output.getvalue()
-    assert initialized is False
-    assert manager.ready is False
-    assert manager._realtime_client is None
-    assert "API key not found in credential store" in log
-    assert_redacted(log, ["credential-secret", "wav-audio-secret", "exception-secret"])
-
-
-def run_realtime_case(failure: str):
-    config = load_static_config()
-
-    def forbidden_post(*_args, **_kwargs):
-        raise AssertionError("realtime backend must not fall back to REST")
-
-    original_post = requests.post
-    original_credential = whisper_manager_module.get_credential
-    requests.post = forbidden_post
-    whisper_manager_module.get_credential = lambda _provider: "credential-secret"
-    app = make_app(config)
-    if failure == "disconnected":
-        client = FakeRealtimeClient(connected=False)
-    else:
-        client = FakeRealtimeClient(error=RuntimeError("simulated websocket commit failure"))
-    app.whisper_manager._realtime_client = client
-    audio = np.full(1_600, 0.1, dtype=np.float32)
-    output = io.StringIO()
-    try:
-        with contextlib.redirect_stdout(output):
-            app._process_audio(audio)
-    finally:
-        requests.post = original_post
-        whisper_manager_module.get_credential = original_credential
-
-    log = output.getvalue()
-    if failure == "disconnected":
-        assert client.commits == 0
-        assert "[REALTIME] Client not connected" in log
-    else:
-        assert client.commits == 1
-        assert "[REALTIME] Transcription failed" in log
-    assert app.injected == []
-    assert app.current_transcription == ""
-    assert app.audio_manager.error_count == 1
-    assert app.results == [False]
-    assert app.is_processing is False
-    assert "[WARN] No transcription generated" in log
-    assert_redacted(log, ["credential-secret", "wav-audio-secret", "exception-secret"])
-
-    app.whisper_manager._realtime_client = FakeRealtimeClient(result="fresh success")
-    requests.post = forbidden_post
-    try:
-        with contextlib.redirect_stdout(io.StringIO()):
-            app._process_audio(audio)
-    finally:
-        requests.post = original_post
-
-    assert app.injected == ["fresh success"]
-    assert app.results == [False, True]
-    assert app.is_processing is False
+class Manager:
+    def __init__(self, values: dict[str, object]):
+        self.config = Config(values)
+        self.temp_dir = None
+        self.ready = False
+        self.current_model = None
+        self._last_use_time = 0
+        self._realtime_partial_callback = None
 
 
 class FakeWebSocket:
     def __init__(self):
-        self.sent = []
+        self.sent: list[dict[str, object]] = []
 
-    def send(self, payload):
-        self.sent.append(payload)
+    def send(self, payload: str) -> None:
+        self.sent.append(json.loads(payload))
 
 
-def run_realtime_commit_error_cases():
-    """Genuine buffer-too-small must fail fast; the VAD race must keep the transcript."""
-    import threading
-    import time as time_module
+class FakeResponse:
+    def __init__(
+        self,
+        status_code: int = 200,
+        payload: object | None = None,
+        text: str = "",
+        json_error: Exception | None = None,
+    ):
+        self.status_code = status_code
+        self.payload = payload
+        self.text = text
+        self.json_error = json_error
+        self.headers = {"Content-Type": "response-metadata-secret"}
 
-    rc_mod = importlib.import_module("realtime_client")
-    buffer_too_small = {
-        "type": "error",
-        "error": {
-            "message": (
-                "Error committing input audio buffer: buffer too small. "
-                "Expected at least 100.00ms of audio, but buffer only has 0.00ms of audio."
-            )
-        },
-    }
-    output = io.StringIO()
+    def json(self):
+        if self.json_error is not None:
+            raise self.json_error
+        return self.payload
 
-    with contextlib.redirect_stdout(output):
-        # Too-short recording: no VAD commit ever happened, so the error is
-        # genuine and must unblock the waiter promptly, not after the 30s timeout.
-        client = rc_mod.RealtimeClient(mode="transcribe")
+
+def load_profile() -> dict[str, object]:
+    profile = json.loads(CONFIG.read_text())
+    assert profile["transcription_backend"] == "realtime-ws"
+    assert profile["websocket_provider"] == "custom"
+    assert profile["websocket_model"] == "qwen-audio-3.0-realtime-plus"
+    assert profile["realtime_mode"] == "converse"
+    assert profile["realtime_sample_rate"] == 16000
+    assert profile["realtime_timeout"] == 8
+    return profile
+
+
+def run_realtime_sample_rate_checks(profile: dict[str, object]) -> None:
+    original_credential = realtime_backend_module.get_credential
+    original_connect = realtime_client_module.RealtimeClient.connect
+
+    def fake_connect(client, url, api_key, model_id, instructions):
+        client.url = url
+        client.api_key = api_key
+        client.model = model_id
+        client.instructions = instructions
         client.connected = True
-        client.ws = FakeWebSocket()
-        results = {}
-        worker = threading.Thread(
-            target=lambda: results.__setitem__("short", client.commit_and_get_text(timeout=30)),
-            daemon=True,
-        )
-        started = time_module.monotonic()
-        worker.start()
-        time_module.sleep(0.5)
-        client._handle_event(buffer_too_small)
-        worker.join(timeout=8)
-        elapsed = time_module.monotonic() - started
-        assert not worker.is_alive(), "genuine buffer-too-small left the waiter hanging"
-        assert results["short"] == ""
-        assert elapsed < 8, f"fail-fast took {elapsed:.1f}s"
-        assert any("input_audio_buffer.commit" in payload for payload in client.ws.sent)
+        return True
 
-        # VAD race: committed event precedes the error, so the error is benign;
-        # the waiter must NOT wake early and the transcript must still arrive.
-        client = rc_mod.RealtimeClient(mode="transcribe")
-        client.connected = True
-        client.ws = FakeWebSocket()
-        worker = threading.Thread(
-            target=lambda: results.__setitem__("race", client.commit_and_get_text(timeout=30)),
-            daemon=True,
-        )
-        worker.start()
-        time_module.sleep(0.5)
-        client._handle_event({"type": "input_audio_buffer.committed"})
-        client._handle_event(buffer_too_small)
-        # Longer than the waiter's settle window: an early (wrong) wake would
-        # return an empty transcript before the real one arrives.
-        time_module.sleep(1.0)
-        client._handle_event(
-            {
-                "type": "conversation.item.input_audio_transcription.completed",
-                "transcript": "fresh success",
-            }
-        )
-        worker.join(timeout=8)
-        assert not worker.is_alive(), "race case left the waiter hanging"
-        assert results["race"] == "fresh success"
+    realtime_backend_module.get_credential = lambda _provider: "credential-secret"
+    realtime_client_module.RealtimeClient.connect = fake_connect
+    try:
+        backend = realtime_backend_module.RealtimeWsBackend(Manager(profile))
+        assert backend.initialize() is True
+    finally:
+        realtime_client_module.RealtimeClient.connect = original_connect
+        realtime_backend_module.get_credential = original_credential
 
-    log = output.getvalue()
-    assert "Server error" in log
-    assert "Ignoring commit race on already-flushed buffer" in log
-
-
-def run_realtime_cancel_keepalive():
-    """Cancel keeps the websocket alive; stale events are discarded; dead connections fall back."""
-    rc_mod = importlib.import_module("realtime_client")
-    config = load_static_config()
-
-    client = rc_mod.RealtimeClient(mode="transcribe")
-    client.connected = True
-    client.ws = FakeWebSocket()
-    previews = []
-    client.set_partial_transcript_callback(previews.append)
-
-    manager = whisper_manager_module.WhisperManager(Config(config))
-    manager.ready = True
-    manager._realtime_client = client
-
-    def streaming_callback(_chunk):
-        pass
-
-    manager._realtime_streaming_callback = streaming_callback
-
-    with contextlib.redirect_stdout(io.StringIO()):
-        manager.cancel_realtime_utterance()
-    assert manager._realtime_client is client, "cancel destroyed a live client"
-    assert client.connected
-    assert any("input_audio_buffer.clear" in payload for payload in client.ws.sent)
-
-    # Late events for the cancelled utterance must be dropped entirely.
-    with contextlib.redirect_stdout(io.StringIO()):
-        client._handle_event({"type": "input_audio_buffer.committed"})
-        client._handle_event(
-            {"type": "conversation.item.input_audio_transcription.delta", "delta": "stale"}
-        )
-        client._handle_event(
-            {
-                "type": "conversation.item.input_audio_transcription.completed",
-                "transcript": "stale text",
-            }
-        )
-    assert client._committed_segments == []
-    assert client._transcript_generation == 0
-    assert client._buffer_committed is False
-    assert not client.response_event.is_set(), "stale event satisfied the next waiter"
-    assert "stale" not in "".join(previews)
-
-    # The next record press must reuse the same client without recreation.
-    with contextlib.redirect_stdout(io.StringIO()):
-        callback = manager.get_realtime_streaming_callback()
-    assert callback is streaming_callback, "next press rebuilt the streaming callback"
-    assert manager._realtime_client is client
-    assert client._discard_events is False, "discard window must end at recording start"
-
-    # And the next utterance's transcript flows normally again.
-    with contextlib.redirect_stdout(io.StringIO()):
-        client._handle_event(
-            {
-                "type": "conversation.item.input_audio_transcription.completed",
-                "transcript": "fresh success",
-            }
-        )
-    assert client._committed_segments == ["fresh success"]
-    assert client.response_event.is_set()
-
-    # Dead connection: cancel falls back to the destroy path; the recreate
-    # case (run_realtime_cancel_recovery) covers the revival half.
-    dead = rc_mod.RealtimeClient(mode="transcribe")
-    dead.connected = False
-    bare_manager = whisper_manager_module.WhisperManager(Config(config))
-    bare_manager.ready = True
-    bare_manager._realtime_client = dead
-    bare_manager._realtime_streaming_callback = streaming_callback
-    with contextlib.redirect_stdout(io.StringIO()):
-        bare_manager.cancel_realtime_utterance()
-    assert bare_manager._realtime_client is None
-    assert bare_manager._realtime_streaming_callback is None
-
-
-def run_realtime_cancel_recovery():
-    """After a cancel cleans up the client, the next record press must recreate it."""
-    config = load_static_config()
-    manager = whisper_manager_module.WhisperManager(Config(config))
-    manager.ready = True
-    manager._realtime_client = FakeRealtimeClient()
-    manager._realtime_streaming_callback = lambda _chunk: None
-    manager._realtime_connect_params = {
-        "websocket_url": "wss://api.openai.com/v1/realtime",
+    client = backend._realtime_client
+    assert isinstance(client, realtime_client_module.RealtimeClient)
+    assert client.sample_rate == 16000
+    assert backend._realtime_connect_params == {
+        "websocket_url": profile["websocket_url"],
         "api_key": "credential-secret",
-        "model_id": config["websocket_model"],
+        "model_id": profile["websocket_model"],
         "instructions": None,
     }
 
-    with contextlib.redirect_stdout(io.StringIO()):
-        manager._cleanup_realtime_client()
-    assert manager._realtime_client is None
-    assert manager._realtime_streaming_callback is None
+    client.ws = FakeWebSocket()
+    client._send_session_update()
+    audio_format = client.ws.sent[-1]["session"]["audio"]["input"]["format"]
+    assert audio_format == {"type": "audio/pcm", "rate": 16000}
 
-    realtime_client_module = importlib.import_module("realtime_client")
-    original_class = realtime_client_module.RealtimeClient
-    realtime_client_module.RealtimeClient = FakeRecreatedClient
+    client.set_input_sample_rate(44100)
+    resampled = client._resample_for_output(np.zeros(4410, dtype=np.float32))
+    assert len(resampled) == 1600
+    assert resampled.dtype == np.float32
+
+    schema = json.loads((APPDIR / "share" / "config.schema.json").read_text())
+    rate_schema = schema["properties"]["realtime_sample_rate"]
+    assert rate_schema == {
+        "type": "integer",
+        "minimum": 8000,
+        "maximum": 48000,
+        "default": 24000,
+        "description": "PCM sample rate required by the selected realtime provider",
+    }
+
+
+REST_CONFIG = {
+    "rest_endpoint_url": "https://endpoint-secret.invalid/v1/audio/transcriptions",
+    "rest_api_provider": "openrouter",
+    "rest_headers": {"X-Private": "header-secret"},
+    "rest_body": {
+        "model": "model-secret",
+        "prompt": "prompt-secret-that-must-not-be-logged",
+    },
+    "rest_timeout": 12,
+}
+
+FORBIDDEN_LOG_VALUES = [
+    "endpoint-secret",
+    "credential-secret",
+    "header-secret",
+    "model-secret",
+    "prompt-secret",
+    "provider-json-secret",
+    "provider-text-secret",
+    "response-metadata-secret",
+    "exception-secret",
+]
+
+
+def assert_redacted(log: str) -> None:
+    for value in FORBIDDEN_LOG_VALUES:
+        assert value not in log, f"provider log leaked {value!r}: {log}"
+
+
+def run_rest_case(post):
+    manager = Manager(REST_CONFIG)
+    backend = rest_backend_module.RestApiBackend(manager)
+    original_credential = rest_backend_module.get_credential
+    original_post = rest_backend_module.requests.post
+    rest_backend_module.get_credential = lambda _provider: "credential-secret"
+    rest_backend_module.requests.post = post
     output = io.StringIO()
     try:
         with contextlib.redirect_stdout(output):
-            callback = manager.get_realtime_streaming_callback()
+            assert backend.initialize() is True
+            result = backend.transcribe(np.zeros(1600, dtype=np.float32), 16000)
     finally:
-        realtime_client_module.RealtimeClient = original_class
-
+        rest_backend_module.requests.post = original_post
+        rest_backend_module.get_credential = original_credential
     log = output.getvalue()
-    assert callable(callback), "cancel wedged the realtime backend: no streaming callback"
-    client = manager._realtime_client
-    assert isinstance(client, FakeRecreatedClient)
-    assert client.connect_args == (
-        "wss://api.openai.com/v1/realtime",
-        "credential-secret",
-        config["websocket_model"],
-        None,
-    )
-    assert client.cleared == 1, "server buffer not cleared before the new recording"
-    assert "Recreated realtime client after cleanup" in log
-    assert_redacted(log, ["credential-secret", "wav-audio-secret", "exception-secret"])
-
-    # Without stored connect params the record press must fail cleanly, not crash.
-    bare_manager = whisper_manager_module.WhisperManager(Config(config))
-    bare_manager.ready = True
-    with contextlib.redirect_stdout(io.StringIO()):
-        assert bare_manager.get_realtime_streaming_callback() is None
+    assert_redacted(log)
+    return result, log
 
 
-for failure_kind in ("timeout", "http-error"):
-    run_rest_redaction_case(failure_kind)
+def run_rest_redaction_checks() -> None:
+    calls = []
 
-run_realtime_startup_rejection()
-for failure_kind in ("disconnected", "commit-error"):
-    run_realtime_case(failure_kind)
-run_realtime_commit_error_cases()
-run_realtime_cancel_keepalive()
-run_realtime_cancel_recovery()
+    def success_post(url, **kwargs):
+        calls.append((url, kwargs))
+        return FakeResponse(payload={"text": "transcribed"})
 
-print("hyprwhspr provider-failure tests passed")
+    result, log = run_rest_case(success_post)
+    assert result == "transcribed"
+    assert "[REST API] configured endpoint" in log
+    assert "[REST] Audio prepared in memory" in log
+    assert "[REST] Request fields: model, prompt" in log
+    assert calls[0][0] == REST_CONFIG["rest_endpoint_url"]
+    assert calls[0][1]["headers"]["Authorization"] == "Bearer credential-secret"
+    assert calls[0][1]["headers"]["X-Private"] == "header-secret"
+    assert calls[0][1]["data"] == REST_CONFIG["rest_body"]
+
+    cases = [
+        lambda *_args, **_kwargs: FakeResponse(
+            status_code=429, payload={"error": "provider-json-secret"}
+        ),
+        lambda *_args, **_kwargs: FakeResponse(
+            status_code=502,
+            text="provider-text-secret",
+            json_error=ValueError("exception-secret"),
+        ),
+        lambda *_args, **_kwargs: FakeResponse(
+            text="provider-text-secret",
+            json_error=ValueError("exception-secret"),
+        ),
+        lambda *_args, **_kwargs: FakeResponse(
+            payload={"unexpected": "provider-json-secret"}
+        ),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            requests.exceptions.Timeout("exception-secret")
+        ),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            requests.exceptions.ConnectionError("exception-secret")
+        ),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            requests.exceptions.RequestException("exception-secret")
+        ),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("exception-secret")
+        ),
+    ]
+    for post in cases:
+        result, _log = run_rest_case(post)
+        assert result == ""
+
+
+def run_archive_check() -> None:
+    class AudioCapture:
+        def __init__(self):
+            self.path = None
+
+        def save_audio_to_wav(self, audio, path):
+            assert len(audio) == 160
+            self.path = Path(path)
+            self.path.write_bytes(b"wav")
+
+    app = main.hyprwhsprApp.__new__(main.hyprwhsprApp)
+    app.audio_capture = AudioCapture()
+    original_timestamp = main.time.strftime
+    previous_data_home = os.environ.get("XDG_DATA_HOME")
+    previous_dictation_ts = os.environ.get("HYPRWHSPR_DICTATION_TS")
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            os.environ["XDG_DATA_HOME"] = temp_dir
+            main.time.strftime = lambda *_args, **_kwargs: "20260731T120000Z"
+            app._archive_short_dictation_audio(np.zeros(160, dtype=np.float32))
+            expected = (
+                Path(temp_dir)
+                / "hyprwhspr"
+                / "short"
+                / "audio"
+                / "20260731T120000Z.wav"
+            )
+            assert app.audio_capture.path == expected
+            assert expected.read_bytes() == b"wav"
+            assert os.environ["HYPRWHSPR_DICTATION_TS"] == "20260731T120000Z"
+    finally:
+        main.time.strftime = original_timestamp
+        if previous_data_home is None:
+            os.environ.pop("XDG_DATA_HOME", None)
+        else:
+            os.environ["XDG_DATA_HOME"] = previous_data_home
+        if previous_dictation_ts is None:
+            os.environ.pop("HYPRWHSPR_DICTATION_TS", None)
+        else:
+            os.environ["HYPRWHSPR_DICTATION_TS"] = previous_dictation_ts
+
+
+def main_check() -> None:
+    profile = load_profile()
+    run_realtime_sample_rate_checks(profile)
+    run_rest_redaction_checks()
+    run_archive_check()
+    print("hyprwhspr package behavior checks passed")
+
+
+if __name__ == "__main__":
+    main_check()

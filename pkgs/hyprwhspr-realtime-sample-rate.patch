@@ -1,0 +1,71 @@
+--- a/lib/src/realtime_client.py
++++ b/lib/src/realtime_client.py
+@@ -19,17 +19,18 @@
+     LOG_TAG = '[REALTIME]'
+     VALID_TRANSCRIPTION_DELAYS = {'minimal', 'low', 'medium', 'high', 'xhigh'}
+ 
+-    def __init__(self, mode: str = 'transcribe'):
++    def __init__(self, mode: str = 'transcribe', sample_rate: int = 24000):
+         """
+         Realtime client for transcription or conversation.
+ 
+         Args:
+             mode: 'transcribe' for speech-to-text, 'converse' for voice-to-AI
++            sample_rate: PCM sample rate required by the selected provider
+         """
+         super().__init__(mode=mode)
+         self.transcription_delay = 'low'
+         self.partial_transcript_callback = None
+-        self.sample_rate = 24000  # OpenAI Realtime API requires 24kHz
++        self.sample_rate = int(sample_rate)
+ 
+         # Track if buffer was committed (by VAD or manual)
+         # Prevents double-commit error when VAD auto-commits on speech end
+@@ -205,7 +206,7 @@
+                     'input': {
+                         'format': {
+                             'type': 'audio/pcm',
+-                            'rate': 24000
++                            'rate': self.sample_rate
+                         },
+                         'transcription': transcription_config,
+                         'turn_detection': None if is_realtime_whisper else {
+@@ -226,7 +227,7 @@
+                     'input': {
+                         'format': {
+                             'type': 'audio/pcm',
+-                            'rate': 24000
++                            'rate': self.sample_rate
+                         },
+                         'turn_detection': None  # Manual commit on stop
+                     }
+--- a/lib/src/backends/realtime_ws_backend.py
++++ b/lib/src/backends/realtime_ws_backend.py
+@@ -198,7 +198,10 @@
+             if provider_id == 'openai' and model_id == 'gpt-realtime-whisper' and realtime_mode != 'transcribe':
+                 print('ERROR: gpt-realtime-whisper is supported only with realtime_mode="transcribe"', flush=True)
+                 return False
+-            self._realtime_client = RealtimeClient(mode=realtime_mode)
++            self._realtime_client = RealtimeClient(
++                mode=realtime_mode,
++                sample_rate=self.config.get_setting('realtime_sample_rate', 24000),
++            )
+ 
+             # Get WebSocket URL
+             websocket_url = self.config.get_setting('websocket_url')
+--- a/share/config.schema.json
++++ b/share/config.schema.json
+@@ -299,6 +299,13 @@
+       "default": 30,
+       "description": "Completion timeout in seconds for WebSocket transcription"
+     },
++    "realtime_sample_rate": {
++      "type": "integer",
++      "minimum": 8000,
++      "maximum": 48000,
++      "default": 24000,
++      "description": "PCM sample rate required by the selected realtime provider"
++    },
+     "realtime_buffer_max_seconds": {
+       "type": "integer",
+       "minimum": 1,

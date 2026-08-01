@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly modes=(qwen-http qwen-ws qwen-omni qwen-realtime qwen-omni-realtime qwen-audio3 gemini-longform sensevoice realtime)
+readonly modes=(qwen-omni-realtime qwen-audio3)
 readonly default_mode=qwen-omni-realtime
 readonly profiles_dir="${HYPRWHISPR_PROFILE_PROFILES_DIR:?HYPRWHISPR_PROFILE_PROFILES_DIR is required}"
 readonly state_home="${HYPRWHISPR_PROFILE_STATE_HOME:-${XDG_STATE_HOME:-$HOME/.local/state}}"
@@ -10,10 +10,9 @@ readonly state_dir="$state_home/hyprwhispr-profile"
 readonly state_file="$state_dir/mode"
 readonly active_config="$runtime_dir/config.json"
 readonly normal_service_name="${HYPRWHISPR_PROFILE_SERVICE:-hyprwhspr.service}"
-readonly longform_service_name="${HYPRWHISPR_PROFILE_LONGFORM_SERVICE:-meeting-recorder.service}"
 
 usage() {
-  printf '%s\n' 'usage: hyprwhispr-profile {toggle|set qwen-http|set qwen-ws|set qwen-omni|set qwen-realtime|set qwen-omni-realtime|set qwen-audio3|set gemini-longform|set sensevoice|set realtime|status}' >&2
+  printf '%s\n' 'usage: hyprwhispr-profile {toggle|set qwen-omni-realtime|set qwen-audio3|status}' >&2
 }
 
 is_mode() {
@@ -92,27 +91,12 @@ normal_activity() {
   fi
 }
 
-longform_activity() {
-  local response status_rc
-  if ! systemctl --user is-active --quiet "$longform_service_name"; then
-    return
-  fi
-  response="$(curl --fail --silent --show-error --max-time 1 http://127.0.0.1:"${HYPRWHISPR_PROFILE_LONGFORM_PORT:-8765}"/status 2>/dev/null)" || status_rc=$?
-  if [[ -n "${status_rc:-}" ]]; then
-    printf '%s\n' longform-processing
-    return
-  fi
-  if [[ "$response" =~ \"recording\"[[:space:]]*:[[:space:]]*true ]]; then
-    printf '%s\n' longform-recording
-  fi
-}
 
 activity() {
   if [[ -n "${HYPRWHISPR_PROFILE_ACTIVITY_ADAPTER:-}" ]]; then
     "$HYPRWHISPR_PROFILE_ACTIVITY_ADAPTER"
   else
     normal_activity
-    longform_activity
   fi
 }
 
@@ -128,28 +112,23 @@ busy_reason() {
 
 service() {
   local action="$1"
-  local service_name="$2"
-  local mode="$3"
+  local mode="$2"
   if [[ -n "${HYPRWHISPR_PROFILE_SERVICE_ADAPTER:-}" ]]; then
-    "$HYPRWHISPR_PROFILE_SERVICE_ADAPTER" "$action" "$service_name" "$mode"
+    "$HYPRWHISPR_PROFILE_SERVICE_ADAPTER" "$action" "$normal_service_name" "$mode"
   elif [[ "$action" == restart ]]; then
-    systemctl --user restart "$service_name"
+    systemctl --user restart "$normal_service_name"
   elif [[ "$action" == active ]]; then
-    systemctl --user is-active --quiet "$service_name"
-  elif [[ "$service_name" == "$normal_service_name" ]]; then
-    daemon_ready "$mode"
+    systemctl --user is-active --quiet "$normal_service_name"
   else
-    longform_ready
+    daemon_ready "$mode"
   fi
 }
 
 daemon_ready() {
   local mode="$1"
-  local profile attempts=40
-  # Realtime websocket startup can take ~20s, including one daemon crash
-  # plus systemd restart; give it a wider readiness window than the
-  # rest-api-backed qwen-* profiles, which come up quickly.
-  [[ "$mode" == realtime || "$mode" == qwen-realtime || "$mode" == qwen-omni-realtime || "$mode" == qwen-audio3 ]] && attempts=120
+  local profile attempts=120
+  # Both retained profiles use realtime backends whose startup may include one
+  # daemon crash plus a systemd restart, so allow the full readiness window.
   profile="$(readlink -f "$(profile_path "$mode")")"
   for _ in $(seq 1 "$attempts"); do
     if systemctl --user is-active --quiet "$normal_service_name" \
@@ -163,28 +142,11 @@ daemon_ready() {
   return 1
 }
 
-longform_ready() {
-  for _ in $(seq 1 40); do
-    if systemctl --user is-active --quiet "$longform_service_name" \
-      && curl --fail --silent --show-error --max-time 1 http://127.0.0.1:"${HYPRWHISPR_PROFILE_LONGFORM_PORT:-8765}"/status >/dev/null 2>&1; then
-      return 0
-    fi
-    sleep 0.25
-  done
-  return 1
-}
 
-restart_services() {
+restart_service() {
   local mode="$1"
-  local longform_was_active="$2"
-  service restart "$normal_service_name" "$mode" \
-    && service health "$normal_service_name" "$mode" \
-    || return 1
-  if [[ "$longform_was_active" == true ]]; then
-    service restart "$longform_service_name" "$mode" \
-      && service health "$longform_service_name" "$mode" \
-      || return 1
-  fi
+  service restart "$mode" \
+    && service health "$mode"
 }
 
 notify() {
@@ -226,7 +188,7 @@ refuse_if_busy() {
 }
 
 status_profile() {
-  local mode longform_was_active=false
+  local mode
   mode="$(stored_mode)"
   if profile_is_current "$mode"; then
     printf '%s\n' "$mode"
@@ -236,21 +198,16 @@ status_profile() {
     return 3
   fi
   mode="$(ensure_current_profile)" || return 1
-  if service active "$normal_service_name" "$mode"; then
-    if service active "$longform_service_name" "$mode"; then
-      longform_was_active=true
-    fi
-    if ! restart_services "$mode" "$longform_was_active"; then
-      printf '%s\n' 'hyprwhispr-profile: repaired profile activation but could not reload the running service' >&2
-      return 1
-    fi
+  if service active "$mode" && ! restart_service "$mode"; then
+    printf '%s\n' 'hyprwhispr-profile: repaired profile activation but could not reload the running service' >&2
+    return 1
   fi
   printf '%s\n' "$mode"
 }
 
 change_profile() {
   local requested="$1"
-  local previous longform_was_active=false restored=true
+  local previous restored=true
   is_mode "$requested" || {
     printf '%s\n' "hyprwhispr-profile: unknown profile '$requested'; expected one of: ${modes[*]}" >&2
     return 2
@@ -267,27 +224,23 @@ change_profile() {
     printf '%s\n' 'hyprwhispr-profile: unable to prepare the current profile' >&2
     return 1
   fi
-  if service active "$longform_service_name" "$previous"; then
-    longform_was_active=true
-  fi
   if refuse_if_busy "$previous"; then
     return 3
   fi
   write_mode "$requested"
-  if activate_profile "$requested" && restart_services "$requested" "$longform_was_active"; then
+  if activate_profile "$requested" && restart_service "$requested"; then
     notify 'Hyprwhispr profile active' "$requested" || true
     printf '%s\n' "$requested"
     return 0
   fi
-  # Fail loudly: the user wants a failed backend visible, not silently
-  # masked. Roll back to the previously active profile so dictation keeps
-  # working while the failure is investigated.
+  # Fail loudly and roll back so dictation keeps working while the failed
+  # realtime backend is investigated.
   notify 'Hyprwhispr profile change failed' "$requested backend failed to come up; rolling back to $previous." || true
   printf '%s\n' "hyprwhispr-profile: $requested backend failed to come up; rolling back to $previous" >&2
   write_mode "$previous" || restored=false
   activate_profile "$previous" || restored=false
   if [[ "$restored" == true ]]; then
-    restart_services "$previous" "$longform_was_active" || restored=false
+    restart_service "$previous" || restored=false
   fi
   if [[ "$restored" == true ]]; then
     notify 'Hyprwhispr profile change failed' "Restored $previous" || true

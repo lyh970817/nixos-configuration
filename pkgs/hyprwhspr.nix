@@ -36,8 +36,8 @@ let
       pyudev
       requests
       rich
-      scipy
       sounddevice
+      soxr
       websocket-client
     ]
   );
@@ -62,42 +62,28 @@ let
 in
 stdenvNoCC.mkDerivation rec {
   pname = "hyprwhspr";
-  version = "1.34.1";
+  version = "1.39.0";
 
   src = fetchFromGitHub {
     owner = "goodroot";
     repo = "hyprwhspr";
     rev = "v${version}";
-    sha256 = "0rawmq2lvlkz11pj0fk7xmar52ia2mjrzxnx3i4wpb5pg4h0a9n2";
+    sha256 = "1dhyivh55njrmq1pga4m99qd34gaxv607dpf30klrhi1ifr7zasb";
   };
 
-  # Realtime websocket fixes:
-  # - a record press during the handshake used to tear the handshake down and
-  #   fail the recording; wait for the in-flight connect instead, and never
-  #   close a socket another connect attempt owns;
-  # - the stop-time buffer commit raced the server-VAD auto-commit, sending a
-  #   redundant commit against an already-flushed buffer; re-check the commit
-  #   flag after the drain wait and treat the residual "buffer too small"
-  #   server error as benign instead of waking the transcript waiter;
-  # - cancelling a dictation destroyed the realtime client and nothing ever
-  #   recreated it, wedging the backend until daemon restart; cancel now keeps
-  #   the websocket alive (server buffer cleared, in-flight events for the
-  #   cancelled utterance discarded until the next recording start), falling
-  #   back to the old destroy path on a dead connection, and the client is
-  #   rebuilt from the stored connect params on the next record press.
-  # - realtime-ws never wrote the captured mic audio to disk (it only streams
-  #   to the provider); short dictation archives it as
-  #   ~/.local/share/hyprwhspr/short/audio/<UTC timestamp>.wav from the same
-  #   local buffer AudioCapture already keeps for silence detection, and sets
-  #   HYPRWHSPR_DICTATION_TS so post_transcription_hook can archive matching
-  #   raw/cleaned text under the same timestamp (see home/programs/hyprwhspr.nix).
+  # Local realtime behavior not provided by upstream:
+  # - custom OpenAI-compatible providers can select their required PCM rate;
+  #   the rate controls both resampling and the session.update declaration;
+  # - realtime short dictation archives the local mic capture under
+  #   ~/.local/share/hyprwhspr/short/audio/<UTC timestamp>.wav and exports
+  #   HYPRWHSPR_DICTATION_TS for matching downstream artifacts.
   #
-  # Status-notification text: show only the state (e.g. "● Recording…",
-  # "Transcribing…") as the notification summary instead of a "hyprwhspr" title
-  # with the state in the body, and swap the microphone emoji for the monochrome
-  # record glyph that matches the other status symbols (⏸ ✓ ✗).
+  # Status-notification text shows only the state (e.g. "● Recording…",
+  # "Transcribing…") as the notification summary instead of a "hyprwhspr"
+  # title with the state in the body, and uses a monochrome recording glyph.
   patches = [
-    ./hyprwhspr-realtime-fixes.patch
+    ./hyprwhspr-realtime-sample-rate.patch
+    ./hyprwhspr-short-audio-archive.patch
     ./hyprwhspr-notification-text.patch
   ];
 
@@ -109,7 +95,7 @@ stdenvNoCC.mkDerivation rec {
     appdir="$out/lib/hyprwhspr"
     docdir="$out/share/doc/hyprwhspr"
     mkdir -p "$appdir" "$out/bin" "$docdir"
-    cp -R bin config lib share scripts utils requirements.txt requirements-visualizer.txt "$appdir/"
+    cp -R bin config lib share scripts utils requirements*.txt "$appdir/"
     cp -R README.md LICENSE contrib docs "$docdir/"
 
     makeWrapper ${bash}/bin/bash "$out/bin/hyprwhspr" \
@@ -137,7 +123,7 @@ stdenvNoCC.mkDerivation rec {
         'VENV_PYTHON="${pythonEnv}/bin/python"'
 
     # Nixpkgs ydotoold reports "unknown" for --version; trust the pinned package version.
-    substituteInPlace "$appdir/lib/src/cli_commands.py" \
+    substituteInPlace "$appdir/lib/src/cli/_shared.py" \
       --replace-fail '        version = "0.1.0"' '        version = "${ydotool.version}"'
 
     substituteInPlace "$appdir/lib/src/text_injector.py" \
@@ -148,7 +134,7 @@ stdenvNoCC.mkDerivation rec {
 
     # Keep remote failure diagnostics useful without logging request values,
     # endpoint URLs, response bodies, or exception strings.
-    substituteInPlace "$appdir/lib/src/whisper_manager.py" \
+    substituteInPlace "$appdir/lib/src/backends/rest_api_backend.py" \
       --replace-fail "print(f'WARNING: REST endpoint URL should start with https:// or http://: {endpoint_url}')" \
         "print('WARNING: REST endpoint URL must use HTTP or HTTPS')" \
       --replace-fail "print(f'[BACKEND] Using REST API: {endpoint_url}')" \
@@ -159,10 +145,10 @@ stdenvNoCC.mkDerivation rec {
         "print('WARNING: Skipping REST body entry with invalid key')" \
       --replace-fail "print(f'WARNING: rest_body values must be scalar (key: {key_str}); skipping entry')" \
         "print('WARNING: Skipping non-scalar REST body entry')" \
-      --replace-fail "backend_name = endpoint_url" \
-        "backend_name = 'configured endpoint'" \
-      --replace-fail "log_msg = f'[REST API] {backend_name} - model: {model_info}'" \
-        "log_msg = f'[REST API] {backend_name}'" \
+      --replace-fail "log_msg = f'[REST API] {endpoint_url} - model: {model_info}'" \
+        "log_msg = '[REST API] configured endpoint'" \
+      --replace-fail "log_msg = f'[REST API] {endpoint_url}'" \
+        "log_msg = '[REST API] configured endpoint'" \
       --replace-fail "f'[REST] Audio: {audio_duration:.2f}s @ {sample_rate}Hz, {len(wav_bytes)} bytes'," \
         "'[REST] Audio prepared in memory'," \
       --replace-fail "param_summary = ', '.join(f'{k}={v[:20] + \"...\" if isinstance(v, str) and len(v) > 20 else v}' for k, v in data.items())" \
@@ -203,7 +189,7 @@ stdenvNoCC.mkDerivation rec {
   installCheckPhase = ''
     runHook preInstallCheck
     HYPRWHSPR_APPDIR="$out/lib/hyprwhspr" \
-      HYPRWHISPR_CONFIG=${../config/hyprwhspr/config.json} \
+      HYPRWHISPR_CONFIG=${../config/hyprwhspr/profiles/qwen-audio3.json} \
       ${pythonEnv}/bin/python ${./hyprwhspr-provider-failure-test.py}
     runHook postInstallCheck
   '';

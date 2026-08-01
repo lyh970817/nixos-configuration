@@ -5,6 +5,7 @@
   "websocket_url": "ws://127.0.0.1:8771",
   "websocket_model": "qwen3.5-omni-plus-realtime",
   "realtime_mode": "converse",
+  "realtime_sample_rate": 16000,
   "realtime_timeout": 8,
   "recording_mode": "toggle",
   "use_hypr_bindings": true,

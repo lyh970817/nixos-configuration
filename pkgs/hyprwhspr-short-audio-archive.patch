@@ -1,0 +1,39 @@
+--- a/lib/main.py
++++ b/lib/main.py
+@@ -1392,6 +1392,23 @@
+             except Exception:
+                 pass  # Best effort cleanup
+ 
++    def _archive_short_dictation_audio(self, audio_data) -> None:
++        """Best-effort archive of a realtime short-dictation mic capture."""
++        try:
++            data_home = Path(
++                os.environ.get('XDG_DATA_HOME')
++                or (Path.home() / '.local' / 'share')
++            )
++            audio_dir = data_home / 'hyprwhspr' / 'short' / 'audio'
++            audio_dir.mkdir(parents=True, exist_ok=True)
++            timestamp = time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())
++            os.environ['HYPRWHSPR_DICTATION_TS'] = timestamp
++            self.audio_capture.save_audio_to_wav(
++                audio_data, str(audio_dir / (timestamp + '.wav'))
++            )
++        except Exception as e:
++            print(f"[ARCHIVE] Failed to save short dictation audio: {e}", flush=True)
++
+     def _process_audio(self, audio_data):
+         """Process captured audio through Whisper"""
+         if self.is_processing:
+@@ -1400,6 +1417,12 @@
+         success = False
+         try:
+             self.is_processing = True
++
++            backend = normalize_backend(
++                self.config.get_setting('transcription_backend', 'pywhispercpp')
++            )
++            if backend == 'realtime-ws':
++                self._archive_short_dictation_audio(audio_data)
+ 
+             # Transcribe audio with language override if set
+             transcription = self.whisper_manager.transcribe_audio(

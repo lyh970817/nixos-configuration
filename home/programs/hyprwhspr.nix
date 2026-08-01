@@ -17,8 +17,6 @@ let
   chatEndpoint = "https://api.siliconflow.cn/v1/chat/completions";
   chatModel = "deepseek-ai/DeepSeek-V4-Flash";
 
-  postprocessEndpoint = "https://api.siliconflow.cn/v1/chat/completions";
-  postprocessModel = "Qwen/Qwen3.5-35B-A3B";
 
   recorderPort = 8765;
   recorderChunkSecs = 120;
@@ -35,158 +33,6 @@ let
     alacritty-main = "ctrl+shift+v";
   };
 
-  # Wired as post_transcription_hook in config/hyprwhspr/config.json. hyprwhspr
-  # pipes the raw transcript to this command's stdin and, on a zero exit with
-  # non-empty stdout, replaces the transcript with that output (see upstream
-  # text_injector.py:_run_post_transcription_hook). It must never make a
-  # dictation disappear, so any failure prints the original text unchanged.
-  hyprwhsprPostprocess = pkgs.writeTextFile {
-    name = "hyprwhspr-postprocess";
-    destination = "/bin/hyprwhspr-postprocess";
-    executable = true;
-    text = ''
-      #!${pkgs.python3}/bin/python3
-      import json
-      import os
-      import re
-      import sys
-      import urllib.request
-      from datetime import datetime, timezone
-      from pathlib import Path
-
-
-      MODEL = ${builtins.toJSON postprocessModel}
-      ENDPOINT = ${builtins.toJSON postprocessEndpoint}
-      CREDENTIALS_PATH = Path(${builtins.toJSON credentialsRuntimePath})
-      ENV_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
-
-      SHORT_ARCHIVE_DIR = Path(${builtins.toJSON shortArchiveDir})
-      SHORT_RAW_DIR = SHORT_ARCHIVE_DIR / "raw"
-      SHORT_CLEANED_DIR = SHORT_ARCHIVE_DIR / "cleaned"
-
-      SYSTEM_PROMPT = (
-          "You clean up raw dictation transcripts. Remove hesitation sounds and "
-          "discourse fillers (um, uh, you know, like -- only when used as fillers). "
-          "When the speaker restarts or corrects themselves, keep only the final "
-          "wording. Fix capitalization and punctuation; merge fragments into "
-          "complete sentences. Preserve the speaker's meaning and wording; add "
-          "nothing that was not spoken. Output only the cleaned transcript with no "
-          "quotes or commentary."
-      )
-
-
-      def expand_env(value: str) -> str:
-          return ENV_PATTERN.sub(lambda m: os.environ.get(m.group(1), m.group(0)), value)
-
-
-      def archive_timestamp() -> str:
-          # main.py's realtime-ws audio archiving sets this so the wav file and
-          # this hook's raw/cleaned text share one timestamp; fall back to a
-          # fresh UTC stamp when it is absent (e.g. hook run outside hyprwhspr).
-          env_ts = os.environ.get("HYPRWHSPR_DICTATION_TS", "").strip()
-          if env_ts:
-              return env_ts
-          return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-
-
-      def archive_text(directory: Path, timestamp: str, text: str) -> None:
-          # Archiving is diagnostic-only; it must never take down the hook or
-          # eat a dictation, so every failure here is swallowed (and logged).
-          try:
-              os.makedirs(directory, exist_ok=True)
-              (directory / (timestamp + ".txt")).write_text(
-                  text.rstrip() + "\n", encoding="utf-8"
-              )
-          except Exception as exc:
-              print("hyprwhspr-postprocess: archive failed: " + str(exc), file=sys.stderr)
-
-
-      def load_api_key() -> str:
-          try:
-              credentials = json.loads(CREDENTIALS_PATH.read_text(encoding="utf-8"))
-          except Exception:
-              return ""
-
-          value = credentials.get("custom", "")
-          return expand_env(value) if isinstance(value, str) else ""
-
-
-      def postprocess(text: str, api_key: str) -> str:
-          # Cleanup generation scales ~1s per ~200 chars of transcript; cap at
-          # 10s so this stays below the 12s subprocess ceiling text_injector
-          # enforces on the whole hook (see pkgs/hyprwhspr.nix).
-          timeout_seconds = min(3.0 + len(text) / 200.0, 10.0)
-
-          payload = {
-              "model": MODEL,
-              "messages": [
-                  {"role": "system", "content": SYSTEM_PROMPT},
-                  {"role": "user", "content": text},
-              ],
-              "temperature": 0,
-              "enable_thinking": False,
-          }
-
-          request = urllib.request.Request(
-              ENDPOINT,
-              data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-              headers={
-                  "Authorization": "Bearer " + api_key,
-                  "Content-Type": "application/json",
-                  "Accept": "application/json",
-              },
-              method="POST",
-          )
-
-          with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
-              data = json.loads(response.read().decode("utf-8"))
-
-          choices = data.get("choices") or []
-          if not choices:
-              return text
-
-          message = choices[0].get("message") or {}
-          content = message.get("content")
-          if not isinstance(content, str):
-              return text
-
-          cleaned = content.strip()
-          return cleaned or text
-
-
-      def main() -> int:
-          original = sys.stdin.read().strip()
-          if not original:
-              return 0
-
-          timestamp = archive_timestamp()
-          archive_text(SHORT_RAW_DIR, timestamp, original)
-
-          api_key = load_api_key()
-          if not api_key:
-              archive_text(SHORT_CLEANED_DIR, timestamp, original)
-              print(original)
-              print("hyprwhspr-postprocess: missing SiliconFlow custom credential", file=sys.stderr)
-              return 0
-
-          cleaned = original
-          try:
-              cleaned = postprocess(original, api_key)
-          except Exception as exc:
-              # Any failure (network error, non-200, malformed response, ...)
-              # must fall back to the raw transcript rather than eat it.
-              print("hyprwhspr-postprocess: " + str(exc), file=sys.stderr)
-
-          archive_text(SHORT_CLEANED_DIR, timestamp, cleaned)
-          print(cleaned)
-
-          return 0
-
-
-      if __name__ == "__main__":
-          raise SystemExit(main())
-    '';
-  };
 
   hyprwhsprLongform = pkgs.writeTextFile {
     name = "hyprwhspr-longform";
@@ -667,17 +513,13 @@ let
     pkgs.wl-clipboard
     pkgs.wtype
     pkgs.ydotool
-    hyprwhsprPostprocess
-    hyprwhsprCleanupShim
   ];
 
   hyprwhisprProfile = pkgs.writeShellApplication {
     name = "hyprwhispr-profile";
     runtimeInputs = [
       pkgs.coreutils
-      pkgs.curl
       pkgs.diffutils
-      pkgs.gnugrep
       pkgs.hyprwhspr
       pkgs.libnotify
       pkgs.systemd
@@ -722,17 +564,6 @@ let
     text = builtins.readFile ../../scripts/hyprwhispr-record;
   };
 
-  # post_transcription_hook for the qwen-realtime profile: pipe the raw
-  # realtime transcript to the local shim's /cleanup endpoint and emit the
-  # cleaned text. `curl -sf` exits non-zero on any HTTP 5xx/failure, so
-  # hyprwhspr falls back to the raw transcript instead of losing a dictation.
-  hyprwhsprCleanupShim = pkgs.writeShellApplication {
-    name = "hyprwhspr-cleanup-shim";
-    runtimeInputs = [ pkgs.curl ];
-    text = ''
-      exec curl -sf --max-time 11 --data-binary @- http://127.0.0.1:8770/cleanup
-    '';
-  };
 
   # Best-effort dismissal of stale "hyprwhspr" notifications (e.g. an
   # orphaned "transcribing" status bubble left behind when the daemon exits
@@ -778,8 +609,6 @@ in
     hyprwhisprProfileEnsure
     hyprwhisprRecord
     hyprwhsprLongform
-    hyprwhsprPostprocess
-    hyprwhsprCleanupShim
     hyprwhsprDismissNotifications
   ];
 
@@ -793,28 +622,16 @@ in
     fi
   '';
 
-  # Short-dictation raw/cleaned transcripts and mic audio are archived by
-  # hyprwhsprPostprocess and the realtime-ws audio patch (pkgs/hyprwhspr.nix)
-  # under short/{raw,cleaned,audio}; age them out after 30 days the same way
-  # other user-managed state directories are declared in this config.
+  # Short-dictation mic audio is archived by the realtime-ws audio patch
+  # (pkgs/hyprwhspr.nix); age it out after 30 days.
   systemd.user.tmpfiles.rules = [
-    "d ${shortArchiveDir}/raw 0700 - - ${shortArchiveRetentionDays}"
-    "d ${shortArchiveDir}/cleaned 0700 - - ${shortArchiveRetentionDays}"
     "d ${shortArchiveDir}/audio 0700 - - ${shortArchiveRetentionDays}"
   ];
 
   xdg.configFile = {
-    "hyprwhspr/profiles/realtime.json".source = ../../config/hyprwhspr/profiles/realtime.json;
-    "hyprwhspr/profiles/qwen-http.json".source = ../../config/hyprwhspr/profiles/qwen-http.json;
-    "hyprwhspr/profiles/qwen-ws.json".source = ../../config/hyprwhspr/profiles/qwen-ws.json;
-    "hyprwhspr/profiles/qwen-omni.json".source = ../../config/hyprwhspr/profiles/qwen-omni.json;
-    "hyprwhspr/profiles/qwen-realtime.json".source = ../../config/hyprwhspr/profiles/qwen-realtime.json;
     "hyprwhspr/profiles/qwen-omni-realtime.json".source =
       ../../config/hyprwhspr/profiles/qwen-omni-realtime.json;
     "hyprwhspr/profiles/qwen-audio3.json".source = ../../config/hyprwhspr/profiles/qwen-audio3.json;
-    "hyprwhspr/profiles/gemini-longform.json".source =
-      ../../config/hyprwhspr/profiles/gemini-longform.json;
-    "hyprwhspr/profiles/sensevoice.json".source = ../../config/hyprwhspr/profiles/sensevoice.json;
 
     "hyprwhspr/README-nixos.md".text = ''
       # hyprwhspr setup
@@ -823,8 +640,8 @@ in
 
       Managed files:
 
-      - `~/.config/hyprwhspr/config.json`: the static realtime websocket
-        configuration (streamed transcription via OpenAI)
+      - `~/.config/hyprwhspr/profiles/qwen-omni-realtime.json`
+      - `~/.config/hyprwhspr/profiles/qwen-audio3.json`
       - `~/.local/share/hyprwhspr/credentials`, copied at Home Manager
         activation from the source credential in the config repo
 
@@ -838,36 +655,23 @@ in
 
       It should contain:
 
-      ```sh
+      ```json
       {
-        "openai": "YOUR_OPENAI_API_KEY",
+        "dashscope": "YOUR_DASHSCOPE_API_KEY",
         "custom": "YOUR_SILICONFLOW_API_KEY"
       }
       ```
 
-      The `openai` key must be a direct OpenAI API key; dictation streams
-      over OpenAI's realtime websocket endpoint. The `custom` key is the
-      SiliconFlow key used for long-form polishing and drives the
-      `post_transcription_hook` cleanup pass (`hyprwhspr-postprocess`, model
-      Qwen/Qwen2.5-7B-Instruct). Other legacy keys (for example `openrouter`)
-      may remain in the file; nothing reads them anymore.
-
-      The `qwen-*` profiles read a `dashscope` key from this same file, via
-      `qwen-asr-shim.service`. The `gemini-longform` profile additionally
-      needs a `gemini` key (or a `GEMINI_API_KEY` environment variable) for
-      that service's `/transcribe/gemini` route; without one, that route
-      logs the failure and falls back to the `qwen-omni` cleanup path
-      automatically, so dictation still works, just not via Gemini. Google's
-      free tier is roughly 20 requests/day; expect 429s past that until
-      billing is enabled on the Gemini API key.
+      Both managed profiles read the `dashscope` key from this file via
+      `qwen-asr-shim.service`. The `custom` key is used for independent
+      long-form polishing.
 
       Short dictation uses `Super+O`. The daemon runs with
       `XDG_CONFIG_HOME` pointed at `$XDG_RUNTIME_DIR`, where a service
-      pre-start step links `config.json` to the managed static config.
-      Each short dictation archives its mic audio, raw transcript, and
-      cleaned transcript under
-      `~/.local/share/hyprwhspr/short/{audio,raw,cleaned}/`, aged out after
-      30 days by a user tmpfiles rule.
+      pre-start step links `config.json` to the selected managed profile.
+      Each short dictation archives its mic audio under
+      `~/.local/share/hyprwhspr/short/audio/`, aged out after 30 days by a
+      user tmpfiles rule.
 
       Long-form prose dictation uses
       `Ctrl+Shift+L`, archives raw/polished text under
@@ -890,7 +694,7 @@ in
       Description = "hyprwhspr speech-to-text";
       Documentation = "https://github.com/goodroot/hyprwhspr";
       ConditionPathExists = [
-        "${config.xdg.configHome}/hyprwhspr/profiles/qwen-http.json"
+        "${config.xdg.configHome}/hyprwhspr/profiles/qwen-omni-realtime.json"
         "%h/.local/share/hyprwhspr/credentials"
       ];
       PartOf = [ "graphical-session.target" ];
@@ -938,7 +742,7 @@ in
       Description = "hyprwhspr long-form recorder";
       Documentation = "https://github.com/goodroot/hyprwhspr";
       ConditionPathExists = [
-        "${config.xdg.configHome}/hyprwhspr/profiles/qwen-http.json"
+        "${config.xdg.configHome}/hyprwhspr/profiles/qwen-omni-realtime.json"
         "%h/.local/share/hyprwhspr/credentials"
       ];
       After = [
@@ -972,7 +776,7 @@ in
 
   systemd.user.services."qwen-asr-shim" = {
     Unit = {
-      Description = "Qwen ASR local HTTP shim for hyprwhspr REST backend";
+      Description = "Qwen ASR local HTTP and realtime WebSocket bridge";
       Documentation = "https://github.com/goodroot/hyprwhspr";
       PartOf = [ "graphical-session.target" ];
       After = [ "graphical-session.target" ];
