@@ -387,6 +387,22 @@ in
   # field-by-field and atomically replaced only when valid.
   # Claude settings are ordinary mutable files. Missing files are seeded from
   # the tracked policy; existing parseable files receive only owned leaves.
+  # Migrate away from the old directory-level links before Home Manager
+  # creates the individual authored-resource links below. Otherwise the
+  # activation can follow a legacy link into the repository and rewrite the
+  # source tree with links back to the new generation.
+  home.activation.removeLegacyAgentDirectoryLinks =
+    lib.hm.dag.entryBefore [ "linkGeneration" ] ''
+      for legacy_link in \
+        "$HOME/.codex/rules" \
+        "$HOME/.codex/skills" \
+        "$HOME/.config/claude/skills"; do
+        if [ -L "$legacy_link" ]; then
+          run ${pkgs.coreutils}/bin/rm -f "$legacy_link"
+        fi
+      done
+    '';
+
   home.activation.claudeSettings = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
     claude_jq=${pkgs.jq}/bin/jq
     claude_environment=${lib.escapeShellArg (toString claudeEnvironment)}

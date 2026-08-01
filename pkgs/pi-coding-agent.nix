@@ -27,7 +27,7 @@ buildNpmPackage (finalAttrs: {
   postPatch = ''
     ${lib.getExe jq} --sort-keys \
       '.packages["node_modules/@earendil-works/pi-agent-core"].integrity = "sha512-tObjeOLiw1kYUciBi9R+rRyc4QGK+1akbLLQHvzsn2JrrV2btUdDncJ7jMIR5TKvOYKzKxAwQSl/5k7h3Tjrrg=="
-       | .packages["node_modules/@earendil-works/pi-ai"].integrity = "sha512-kHsH5nO4FU7mbKnskK0BVPVuWzNb2DrZtiNfb6LamP+6BMI8xEZiAOw2fqs4VudvlMQgOLjtbgErv+kNJRPIg=="
+       | .packages["node_modules/@earendil-works/pi-ai"].integrity = "sha512-kHsH5nO4FU7mbKnskK0BVPVuWzNb2DrZtiN1fb6LamP+6BMI8xEZiAOw2fqs4VudvlMQgOLjtbgErv+kNJRPIg=="
        | .packages["node_modules/@earendil-works/pi-tui"].integrity = "sha512-unPTW8hRgIHEGjV8mJJ2jqm+fzgnRubes6V2FPk9ay1W9ZLofcpYQ3NDfrODXSci+oKbBpX9JyYUMfQV6jCA/A=="' \
       npm-shrinkwrap.json > npm-shrinkwrap.json.patched
     mv npm-shrinkwrap.json.patched npm-shrinkwrap.json
