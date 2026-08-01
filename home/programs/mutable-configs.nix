@@ -461,7 +461,7 @@ in
       failure_status="$2"
       if printf '%s\n' "$failure_output" \
         | ${pkgs.gnugrep}/bin/grep -Eiq \
-          'network|dns|resolve|github|remote|timed[ -]?out|timeout|connection|fetch|tls|temporar|unavailable|clone|premature|out[ -]?of[ -]?date|local copy|502|503|429'; then
+          'network|dns|resolve|github|remote|timed[ -]?out|timeout|connection|fetch|tls|temporar|unavailable|clone|premature|out[ -]?of[ -]?date|already (enabled|installed|exists)|502|503|429'; then
         echo "warning: transient Claude marketplace failure (status $failure_status); will retry on next activation: $failure_output" >&2
         return 0
       fi
