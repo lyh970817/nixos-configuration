@@ -153,12 +153,6 @@ in
       bind -n M-K swap-pane -t '{up-of}'   \; select-pane -t '{up-of}'
       bind -n M-L swap-pane -t '{right-of}' \; select-pane -t '{right-of}'
 
-      # Resize panes with Alt + Arrow keys
-      bind -n M-Left  resize-pane -L 2
-      bind -n M-Right resize-pane -R 2
-      bind -n M-Up    resize-pane -U 2
-      bind -n M-Down  resize-pane -D 2
-
       bind -n M-v copy-mode
 
       # 2. Enable Vi-style keys for copy mode
