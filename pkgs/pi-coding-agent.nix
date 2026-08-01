@@ -8,9 +8,9 @@
 
 buildNpmPackage (finalAttrs: {
   pname = "pi-coding-agent";
-  # Pinned deliberately: the openai-server-compaction extension declares a
-  # peer range of >=0.80.9 <0.81.0. Bump both together — see
-  # docs/pi-coding-agent.md.
+  # Pi 0.83.0 is current. The local openai-server-compaction extension still
+  # advertises >=0.80.9 <0.81.0; managed local packages disable peer
+  # resolution, but extension runtime compatibility must be rechecked on bumps.
   version = "0.83.0";
 
   src = fetchzip {
