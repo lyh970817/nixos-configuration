@@ -331,9 +331,14 @@ let
             for key, setting in settings.items():
                 changed = table_key(lines, "mcp_servers.%s" % server, key, value(setting)) or changed
         desired = policy.get("skills", {}).get("config", [])
+        desired_names = {entry.get("name") for entry in desired}
         existing = set()
+        stale_blocks = []
         for start, end in skill_blocks(lines):
             _, name = quoted_field(lines, start, end, "name")
+            if name == "last30days" and name not in desired_names:
+                stale_blocks.append((start, end))
+                continue
             if name is None:
                 continue
             for entry in desired:
@@ -342,6 +347,17 @@ let
                     if "enabled" in entry:
                         changed = set_enabled(lines, start, end, bool(entry["enabled"])) or changed
                     break
+        if stale_blocks:
+            stale_lines = {
+                index
+                for start, end in stale_blocks
+                for index in range(start, end)
+            }
+            lines = [
+                line for index, line in enumerate(lines)
+                if index not in stale_lines
+            ]
+            changed = True
         for entry in desired:
             if entry.get("name") not in existing:
                 append_block(lines, [
@@ -371,7 +387,7 @@ in
   # field-by-field and atomically replaced only when valid.
   # Claude settings are ordinary mutable files. Missing files are seeded from
   # the tracked policy; existing parseable files receive only owned leaves.
-  home.activation.claudeSettings = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+  home.activation.claudeSettings = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
     claude_jq=${pkgs.jq}/bin/jq
     claude_environment=${lib.escapeShellArg (toString claudeEnvironment)}
     claude_marketplaces=${lib.escapeShellArg (toString claudeMarketplaces)}
@@ -581,7 +597,11 @@ in
     codex_home="$HOME/.codex"
     run ${pkgs.coreutils}/bin/install -d -m 0700 "$codex_home"
     export CODEX_HOME="$codex_home"
-
+    codex_legacy_last30days_skill="$codex_home/skills/last30days"
+    if [ -L "$codex_legacy_last30days_skill" ] \
+      && [ "$(${pkgs.coreutils}/bin/readlink "$codex_legacy_last30days_skill")" = "../../agents/skills/last30days" ]; then
+      run ${pkgs.coreutils}/bin/rm -f "$codex_legacy_last30days_skill"
+    fi
     codex_handle_failure() {
       codex_failure_output="$1"
       codex_failure_status="$2"

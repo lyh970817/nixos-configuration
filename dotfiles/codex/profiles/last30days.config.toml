@@ -18,6 +18,5 @@ enabled = false
 [plugins."deep-research@openai-bundled"]
 enabled = false
 
-[[skills.config]]
-name = "last30days"
+[plugins."last30days@last30days-skill"]
 enabled = true
