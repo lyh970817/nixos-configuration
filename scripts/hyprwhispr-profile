@@ -5,10 +5,12 @@ readonly modes=(qwen-omni-realtime qwen-audio3)
 readonly default_mode=qwen-omni-realtime
 readonly profiles_dir="${HYPRWHISPR_PROFILE_PROFILES_DIR:?HYPRWHISPR_PROFILE_PROFILES_DIR is required}"
 readonly state_home="${HYPRWHISPR_PROFILE_STATE_HOME:-${XDG_STATE_HOME:-$HOME/.local/state}}"
-readonly runtime_dir="${HYPRWHISPR_PROFILE_RUNTIME_DIR:-${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}/hyprwhspr}"
+readonly runtime_home="${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}"
+readonly runtime_dir="${HYPRWHISPR_PROFILE_RUNTIME_DIR:-$runtime_home/hyprwhspr}"
+readonly config_home="${HYPRWHISPR_CONFIG_HOME:-$runtime_home/hyprwhspr-config}"
 readonly state_dir="$state_home/hyprwhispr-profile"
 readonly state_file="$state_dir/mode"
-readonly active_config="$runtime_dir/config.json"
+readonly active_config="$config_home/hyprwhspr/config.json"
 readonly normal_service_name="${HYPRWHISPR_PROFILE_SERVICE:-hyprwhspr.service}"
 
 usage() {
@@ -64,14 +66,15 @@ write_mode() {
 
 activate_profile() {
   local mode="$1"
-  local profile temporary
+  local profile config_dir temporary
   profile="$(profile_path "$mode")"
   [[ -f "$profile" ]] || {
     printf '%s\n' "hyprwhispr-profile: immutable profile is unavailable" >&2
     return 1
   }
-  mkdir -p "$runtime_dir"
-  temporary="$(mktemp -u "$runtime_dir/.config.json.XXXXXX")"
+  config_dir="${active_config%/*}"
+  mkdir -p "$runtime_dir" "$config_dir"
+  temporary="$(mktemp -u "$config_dir/.config.json.XXXXXX")"
   ln -sfn "$profile" "$temporary"
   mv -Tf "$temporary" "$active_config"
 }
@@ -133,7 +136,7 @@ daemon_ready() {
   for _ in $(seq 1 "$attempts"); do
     if systemctl --user is-active --quiet "$normal_service_name" \
       && [[ "$(readlink -f "$active_config")" == "$profile" ]] \
-      && XDG_CONFIG_HOME="${runtime_dir%/hyprwhspr}" hyprwhspr status >/dev/null 2>&1 \
+      && XDG_CONFIG_HOME="$config_home" hyprwhspr status >/dev/null 2>&1 \
       && [[ -p "$runtime_dir/recording_control" ]]; then
       return 0
     fi

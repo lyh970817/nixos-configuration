@@ -3,6 +3,7 @@ set -euo pipefail
 
 runtime_home="${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}"
 runtime_dir="$runtime_home/hyprwhspr"
+config_home="${HYPRWHISPR_CONFIG_HOME:-$runtime_home/hyprwhspr-config}"
 record_command="${HYPRWHISPR_RECORD_COMMAND:-hyprwhspr}"
 
 # Warm the ASR shim's upstream DashScope connection as early as possible.
@@ -25,7 +26,7 @@ elif [[ -r "$runtime_dir/visualizer_state" ]] && [[ "$(<"$runtime_dir/visualizer
   was_recording=true
 fi
 
-env XDG_CONFIG_HOME="$runtime_home" "$record_command" record "$@"
+env XDG_CONFIG_HOME="$config_home" "$record_command" record "$@"
 
 if [[ "${1:-}" == toggle && "$was_recording" == false ]]; then
   for _ in $(seq 1 40); do
@@ -38,6 +39,6 @@ if [[ "${1:-}" == toggle && "$was_recording" == false ]]; then
     sleep 0.05
   done
   printf '%s\n' 'hyprwhispr-record: recording start was not acknowledged' >&2
-  env XDG_CONFIG_HOME="$runtime_home" "$record_command" record cancel >/dev/null 2>&1 || true
+  env XDG_CONFIG_HOME="$config_home" "$record_command" record cancel >/dev/null 2>&1 || true
   exit 1
 fi

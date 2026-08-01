@@ -666,9 +666,9 @@ in
       `qwen-asr-shim.service`. The `custom` key is used for independent
       long-form polishing.
 
-      Short dictation uses `Super+O`. The daemon runs with
-      `XDG_CONFIG_HOME` pointed at `$XDG_RUNTIME_DIR`, where a service
-      pre-start step links `config.json` to the selected managed profile.
+      Short dictation uses `Super+O`. The daemon keeps transient profile
+      selection under `$XDG_RUNTIME_DIR/hyprwhspr-config`, separate from the
+      `$XDG_RUNTIME_DIR/hyprwhspr` IPC directory used by the control FIFO.
       Each short dictation archives its mic audio under
       `~/.local/share/hyprwhspr/short/audio/`, aged out after 30 days by a
       user tmpfiles rule.
@@ -714,6 +714,7 @@ in
     Service = {
       Type = "simple";
       ExecStartPre = [
+        "${pkgs.coreutils}/bin/rm -f %t/hyprwhspr/recording_control"
         "${pkgs.bash}/bin/bash -lc 'for i in $(${pkgs.coreutils}/bin/seq 1 60); do ${pkgs.coreutils}/bin/ls \"$XDG_RUNTIME_DIR\"/wayland-* >/dev/null 2>&1 && exit 0; ${pkgs.coreutils}/bin/sleep 0.25; done; echo \"Wayland socket not found\"; exit 1'"
         "${hyprwhisprProfileEnsure}/bin/hyprwhispr-profile-ensure"
         "-${hyprwhsprDismissNotifications}/bin/hyprwhspr-dismiss-notifications"
@@ -722,7 +723,7 @@ in
       ExecStopPost = "${pkgs.bash}/bin/bash -c '(${pkgs.procps}/bin/pkill -9 -f \"hyprwhspr-virtual-keyboard\" 2>/dev/null; ${pkgs.procps}/bin/pkill -9 -f \"hyprwhspr-ydotool.sock\" 2>/dev/null) || true'";
       Environment = [
         "HYPRWHSPR_ROOT=${pkgs.hyprwhspr}/lib/hyprwhspr"
-        "XDG_CONFIG_HOME=%t"
+        "XDG_CONFIG_HOME=%t/hyprwhspr-config"
         "PATH=${runtimePath}"
         "PYTHONUNBUFFERED=1"
       ];
@@ -761,7 +762,7 @@ in
       ExecStart = "${pkgs.hyprwhspr}/bin/meeting-recorder";
       Environment = [
         "HYPRWHSPR_ROOT=${pkgs.hyprwhspr}/lib/hyprwhspr"
-        "XDG_CONFIG_HOME=%t"
+        "XDG_CONFIG_HOME=%t/hyprwhspr-config"
         "MEETING_PORT=${toString recorderPort}"
         "MEETING_CHUNK_SECS=${toString recorderChunkSecs}"
         "MEETING_TRANSCRIPT_DIR=${recorderTranscriptDir}"
