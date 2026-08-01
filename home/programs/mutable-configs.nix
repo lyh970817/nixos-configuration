@@ -21,32 +21,30 @@ let
   # land in the repo. Single-file links (AGENTS.md, CLAUDE.md, statusline.sh)
   # can be replaced by a real file if the owning app rewrites
   # them via a temp-file+rename; if that happens, re-run `nixos-rebuild switch`
-  # to restore the link. Claude settings are materialized below instead: each
-  # profile's runtime JSON is atomically replaced with its tracked baseline on
-  # every switch. Theme is no longer derived here — it comes from the
-  # launcher's `--settings` flag, per session (see home/programs/claude.nix).
+  # to restore the link. Claude settings are ordinary mutable files: activation
+  # seeds missing files and reconciles only the explicitly owned JSON leaves.
+  # Theme is supplied per session by the launcher (see home/programs/claude.nix).
   link = subpath: config.lib.file.mkOutOfStoreSymlink "${osConfig.portable.configDir}/${subpath}";
-
+  claudeEnvironment = ../../dotfiles/claude/environment.json;
+  claudeMarketplaces = ../../dotfiles/claude/marketplaces.json;
   claudeProfiles = [
     {
+      name = "standard";
       configDir = ".config/claude";
       settings = ../../dotfiles/claude/settings.json;
     }
     {
+      name = "mattpocock";
       configDir = ".config/claude-mattpocock";
       settings = ../../dotfiles/claude-mattpocock/settings.json;
     }
     {
+      name = "gpt56";
       configDir = ".config/claude-gpt56";
       settings = ../../dotfiles/claude-gpt56/settings.json;
     }
   ];
 
-  # Codex canonicalizes skill paths at scan time, so a symlinked profile
-  # behaves identically to a materialized copy (verified with
-  # `codex debug prompt-input`). Link profiles like everything else: edits are
-  # live without a rebuild and Home Manager removes dropped ones on switch.
-  # Force because pre-symlink generations left plain-file copies behind.
   codexProfileNames = [
     "last30days"
     "lavish-axi"
@@ -54,35 +52,539 @@ let
     "superpowers"
     "understand-anything-codegraph"
   ];
-  codexProfileLinks = lib.listToAttrs (
-    map (name: {
-      name = ".codex/${name}.config.toml";
+
+  codexSkillNames = [
+    "nix-environment-setup"
+    "bro"
+    "agent-config-setup"
+    "sync-mattpocock-skills"
+    "codex-dynamic-workflows"
+    "commit-guidelines"
+    "domain-context"
+    "lavish"
+    "r-dev-shell"
+    "root-browser-control"
+    "superpowers-domain-context"
+    "visual-verification"
+  ];
+
+  codexMattpocockSkillNames = [
+    "ask-matt"
+    "code-review"
+    "codebase-design"
+    "diagnosing-bugs"
+    "grill-me"
+    "grill-with-docs"
+    "grilling"
+    "handoff"
+    "implement"
+    "improve-codebase-architecture"
+    "loop-me"
+    "prototype"
+    "research"
+    "resolving-merge-conflicts"
+    "setup-matt-pocock-skills"
+    "setup-pre-commit"
+    "tdd"
+    "to-spec"
+    "to-tickets"
+    "triage"
+    "wayfinder"
+    "wizard"
+    "writing-great-skills"
+  ];
+
+  codexSkillLinks = lib.listToAttrs (
+    (map (name: {
+      name = ".codex/skills/${name}";
       value = {
-        source = link "dotfiles/codex/profiles/${name}.config.toml";
+        source = link "dotfiles/codex/skills/${name}";
         force = true;
       };
-    }) codexProfileNames
+    }) codexSkillNames)
+    ++ (map (name: {
+      name = ".codex/skills/mattpocock/${name}";
+      value = {
+        source = link "dotfiles/codex/skills/mattpocock/${name}";
+        force = true;
+      };
+    }) codexMattpocockSkillNames)
   );
+  codexReconcile = pkgs.writeText "codex-reconcile.py" ''
+    import argparse
+    import json
+    import os
+    import re
+    import stat
+    import tempfile
+    import tomllib
+
+    HEADER = re.compile(r"^\s*(\[\[?)([^\]]+)(\]\]?)\s*(?:#.*)?$")
+    PLUGINS = [
+        "browser@openai-bundled",
+        "computer-use@openai-bundled",
+        "sites@openai-bundled",
+        "visualize@openai-bundled",
+        "deep-research@openai-bundled",
+    ]
+    SKILLS = [
+        "control-in-app-browser",
+        "visualize",
+        "sites-hosting",
+        "sites-building",
+        "deep-research",
+        "openai-templates",
+        "google-drive",
+        "google-drive:google-drive",
+        "google-drive:google-drive-comments",
+        "google-drive:google-docs",
+        "google-drive:google-sheets",
+        "google-drive:google-slides",
+    ]
+    PATH_SKILLS = {
+        "control-in-app-browser": "control-in-app-browser",
+        "sites-hosting": "sites-hosting",
+        "sites-building": "sites-building",
+        "deep-research": "deep-research",
+        "openai-templates": "openai-templates",
+        "google-drive": "google-drive",
+    }
+
+    def value(item):
+        return json.dumps(item, separators=(",", ":"))
+
+    def headers(lines):
+        for index, line in enumerate(lines):
+            match = HEADER.match(line.rstrip("\n"))
+            if match:
+                yield index, match.group(1), match.group(2).strip()
+
+    def bounds(lines, index):
+        end = len(lines)
+        for candidate, _, _ in headers(lines):
+            if candidate > index:
+                end = candidate
+                break
+        return index, end
+
+    def append_block(lines, rows):
+        if lines and not lines[-1].endswith("\n"):
+            lines[-1] += "\n"
+        if lines and lines[-1].strip():
+            lines.append("\n")
+        lines.extend(row + "\n" for row in rows)
+
+    def table_key(lines, table, key, rendered):
+        pattern = re.compile(r"^\s*%s\s*=" % re.escape(key))
+        if not table:
+            for index, line in enumerate(lines):
+                if HEADER.match(line.rstrip("\n")):
+                    break
+                if pattern.match(line):
+                    replacement = "%s = %s\n" % (key, rendered)
+                    if line == replacement:
+                        return False
+                    lines[index] = replacement
+                    return True
+            lines.insert(0, "%s = %s\n" % (key, rendered))
+            return True
+        table_index = None
+        for index, opening, name in headers(lines):
+            if opening == "[" and name == table:
+                table_index = index
+                break
+        if table_index is None:
+            append_block(lines, ["[%s]" % table, "%s = %s" % (key, rendered)])
+            return True
+        start, end = bounds(lines, table_index)
+        pattern = re.compile(r"^\s*%s\s*=" % re.escape(key))
+        for index in range(start + 1, end):
+            if pattern.match(lines[index]):
+                replacement = "%s = %s\n" % (key, rendered)
+                if lines[index] == replacement:
+                    return False
+                lines[index] = replacement
+                return True
+        lines.insert(start + 1, "%s = %s\n" % (key, rendered))
+        return True
+
+    def skill_blocks(lines):
+        starts = [
+            index for index, opening, name in headers(lines)
+            if opening == "[[" and name == "skills.config"
+        ]
+        for offset, start in enumerate(starts):
+            yield start, starts[offset + 1] if offset + 1 < len(starts) else len(lines)
+
+    def quoted_field(lines, start, end, field):
+        pattern = re.compile(r"^\s*%s\s*=\s*([\"'])(.*?)\1" % field)
+        for index in range(start + 1, end):
+            match = pattern.match(lines[index])
+            if match:
+                return index, match.group(2)
+        return None, None
+
+    def set_enabled(lines, start, end, enabled):
+        rendered = "true" if enabled else "false"
+        pattern = re.compile(r"^\s*enabled\s*=")
+        for index in range(start + 1, end):
+            if pattern.match(lines[index]):
+                replacement = "enabled = %s\n" % rendered
+                if lines[index] == replacement:
+                    return False
+                lines[index] = replacement
+                return True
+        lines.insert(start + 1, "enabled = %s\n" % rendered)
+        return True
+
+    def atomic_write(path, content):
+        directory = os.path.dirname(path) or "."
+        os.makedirs(directory, mode=0o700, exist_ok=True)
+        mode = stat.S_IMODE(os.stat(path).st_mode) if os.path.exists(path) else 0o600
+        fd, temporary = tempfile.mkstemp(prefix=".%s." % os.path.basename(path), dir=directory)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(content)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.chmod(temporary, mode)
+            os.replace(temporary, path)
+        finally:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
+
+    def reconcile_base(path):
+        try:
+            old = open(path, encoding="utf-8").read() if os.path.exists(path) else ""
+        except OSError as error:
+            print("warning: cannot read Codex config %s: %s" % (path, error))
+            return
+        if old:
+            try:
+                tomllib.loads(old)
+            except tomllib.TOMLDecodeError as error:
+                print("warning: leaving malformed Codex config untouched: %s: %s" % (path, error))
+                return
+        lines = old.splitlines(True)
+        changed = table_key(lines, "features", "remote_plugin", "false")
+        for plugin in PLUGINS:
+            changed = table_key(lines, 'plugins."%s"' % plugin, "enabled", "false") or changed
+        present = set()
+        for start, end in skill_blocks(lines):
+            name_index, name = quoted_field(lines, start, end, "name")
+            path_index, skill_path = quoted_field(lines, start, end, "path")
+            selected = name if name in SKILLS else None
+            if selected is None and skill_path:
+                for marker, stable in PATH_SKILLS.items():
+                    if "/" + marker + "/" in skill_path or skill_path.endswith("/" + marker + "/SKILL.md"):
+                        selected = stable
+                        break
+            if selected is None:
+                continue
+            present.add(selected)
+            if path_index is not None:
+                lines[path_index] = 'name = "%s"\n' % selected
+                changed = True
+            changed = set_enabled(lines, start, end, False) or changed
+        for skill in SKILLS:
+            if skill not in present:
+                append_block(lines, [
+                    "[[skills.config]]",
+                    'name = "%s"' % skill,
+                    "enabled = false",
+                ])
+                changed = True
+        new = "".join(lines)
+        if changed and new != old:
+            try:
+                tomllib.loads(new)
+            except tomllib.TOMLDecodeError as error:
+                raise SystemExit("Codex policy reconciliation produced invalid TOML: %s" % error)
+            atomic_write(path, new)
+
+    def reconcile_profile(template_path, path):
+        with open(template_path, encoding="utf-8") as handle:
+            policy_text = handle.read()
+        policy = tomllib.loads(policy_text)
+        if os.path.exists(path):
+            try:
+                with open(path, encoding="utf-8") as handle:
+                    old = handle.read()
+                tomllib.loads(old)
+            except (OSError, tomllib.TOMLDecodeError) as error:
+                print("warning: leaving malformed Codex profile untouched: %s: %s" % (path, error))
+                return
+        else:
+            old = ""
+        if not old:
+            atomic_write(path, policy_text)
+            return
+        lines = old.splitlines(True)
+        changed = False
+        for key in ("model", "model_reasoning_effort"):
+            if key in policy:
+                changed = table_key(lines, "", key, value(policy[key])) or changed
+        for plugin, settings in policy.get("plugins", {}).items():
+            for key, setting in settings.items():
+                changed = table_key(lines, 'plugins."%s"' % plugin, key, value(setting)) or changed
+        for server, settings in policy.get("mcp_servers", {}).items():
+            for key, setting in settings.items():
+                changed = table_key(lines, "mcp_servers.%s" % server, key, value(setting)) or changed
+        desired = policy.get("skills", {}).get("config", [])
+        existing = set()
+        for start, end in skill_blocks(lines):
+            _, name = quoted_field(lines, start, end, "name")
+            if name is None:
+                continue
+            for entry in desired:
+                if entry.get("name") == name:
+                    existing.add(name)
+                    if "enabled" in entry:
+                        changed = set_enabled(lines, start, end, bool(entry["enabled"])) or changed
+                    break
+        for entry in desired:
+            if entry.get("name") not in existing:
+                append_block(lines, [
+                    "[[skills.config]]",
+                    'name = "%s"' % entry["name"],
+                    "enabled = %s" % ("true" if entry.get("enabled") else "false"),
+                ])
+                changed = True
+        new = "".join(lines)
+        if changed and new != old:
+            tomllib.loads(new)
+            atomic_write(path, new)
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--base")
+    parser.add_argument("--profile", nargs=2, action="append", default=[])
+    args = parser.parse_args()
+    if args.base:
+        reconcile_base(args.base)
+    for template, target in args.profile:
+        reconcile_profile(template, target)
+  '';
 in
 {
-  # Keep a tracked, non-secret Claude baseline while leaving each profile's
-  # runtime file as an ordinary mutable file. Every activation replaces the
-  # shared settings with that baseline verbatim — theme is no longer derived
-  # here; it's supplied per session by the launcher's `--settings` flag (see
-  # home/programs/claude.nix). The files must be ordinary files because this
-  # replaces them atomically.
+  # Keep tracked Claude policy separate from ordinary mutable per-profile
+  # settings files. Missing files are seeded; existing files are reconciled
+  # field-by-field and atomically replaced only when valid.
+  # Claude settings are ordinary mutable files. Missing files are seeded from
+  # the tracked policy; existing parseable files receive only owned leaves.
   home.activation.claudeSettings = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    claude_jq=${pkgs.jq}/bin/jq
+    claude_environment=${lib.escapeShellArg (toString claudeEnvironment)}
+    claude_marketplaces=${lib.escapeShellArg (toString claudeMarketplaces)}
+
+    claude_reconcile() {
+      input="$1"
+      output="$2"
+      profile_template="$3"
+      profile_name="$4"
+      "$claude_jq" \
+        --slurpfile environment "$claude_environment" \
+        --slurpfile template "$profile_template" \
+        --slurpfile manifest "$claude_marketplaces" \
+        --arg profile "$profile_name" \
+        '
+          ($template[0]) as $template |
+          ($environment[0]) as $environment |
+          ($manifest[0][$profile]) as $profile_policy |
+          if ($environment | type) != "object"
+             or ($template | type) != "object"
+             or ($profile_policy | type) != "object"
+          then error("Claude policy must contain JSON objects")
+          else
+            .env = $environment |
+            .permissions = if (.permissions | type) == "object" then .permissions else {} end |
+            .permissions.allow = $template.permissions.allow |
+            .permissions.deny = $template.permissions.deny |
+            .skipDangerousModePermissionPrompt = $template.skipDangerousModePermissionPrompt |
+            .statusLine = $template.statusLine |
+            .extraKnownMarketplaces =
+              if (.extraKnownMarketplaces | type) == "object"
+              then .extraKnownMarketplaces
+              else {}
+              end |
+            reduce (($profile_policy.marketplaces // {}) | to_entries[]) as $marketplace
+              (.extraKnownMarketplaces;
+                .[$marketplace.key] = {
+                  source: {
+                    source: "github",
+                    repo: $marketplace.value.repo
+                  }
+                }) |
+            .enabledPlugins =
+              if (.enabledPlugins | type) == "object"
+              then .enabledPlugins
+              else {}
+              end |
+            reduce (($profile_policy.plugins // {}) | to_entries[]) as $plugin
+              (.enabledPlugins; .[$plugin.key] = $plugin.value) |
+            if ($profile == "mattpocock" or $profile == "gpt56") then
+              del(.enabledPlugins["last30days@last30days-skill"]) |
+              del(.extraKnownMarketplaces["last30days-skill"])
+            else .
+            end |
+            if ($profile == "gpt56") then
+              .availableModels = $template.availableModels |
+              .modelOverrides = $template.modelOverrides
+            else .
+            end
+          end
+        ' "$input" > "$output"
+    }
+
+    claude_handle_failure() {
+      failure_output="$1"
+      failure_status="$2"
+      if printf '%s\n' "$failure_output" \
+        | ${pkgs.gnugrep}/bin/grep -Eiq \
+          'network|dns|resolve|github|remote|timed[ -]?out|timeout|connection|fetch|tls|temporar|unavailable|502|503|429'; then
+        echo "warning: transient Claude marketplace failure (status $failure_status); will retry on next activation: $failure_output" >&2
+        return 0
+      fi
+      echo "error: Claude marketplace/plugin command failed (status $failure_status): $failure_output" >&2
+      return 1
+    }
+
+    claude_bootstrap() {
+      claude_profile_name="$1"
+      claude_config_dir="$2"
+      export CLAUDE_CONFIG_DIR="$HOME/$claude_config_dir"
+
+      while IFS="$(printf '\t')" read -r marketplace_name marketplace_source; do
+        [ -n "$marketplace_name" ] || continue
+        if marketplace_list="$(${pkgs.claude-code}/bin/claude plugin marketplace list 2>&1)"; then
+          :
+        else
+          marketplace_status="$?"
+          claude_handle_failure "$marketplace_list" "$marketplace_status" || return 1
+          marketplace_list=""
+        fi
+        if ! printf '%s\n' "$marketplace_list" | ${pkgs.gnugrep}/bin/grep -Fq "$marketplace_name"; then
+          if marketplace_add="$(${pkgs.claude-code}/bin/claude plugin marketplace add "$marketplace_source" 2>&1)"; then
+            :
+          else
+            marketplace_status="$?"
+            claude_handle_failure "$marketplace_add" "$marketplace_status" || return 1
+          fi
+        fi
+      done < <("$claude_jq" -r --arg profile "$claude_profile_name" \
+        '.[$profile].marketplaces // {} | to_entries[] | [.key, .value.repo] | @tsv' \
+        "$claude_marketplaces")
+
+      while IFS="$(printf '\t')" read -r plugin_name plugin_enabled; do
+        [ -n "$plugin_name" ] || continue
+        if plugin_list="$(${pkgs.claude-code}/bin/claude plugin list --json 2>&1)"; then
+          :
+        else
+          plugin_status="$?"
+          if claude_handle_failure "$plugin_list" "$plugin_status"; then
+            continue
+          else
+            return 1
+          fi
+        fi
+        if ! printf '%s\n' "$plugin_list" \
+          | "$claude_jq" -e 'type == "array"' >/dev/null 2>&1; then
+          echo "error: Claude plugin list returned invalid JSON: $plugin_list" >&2
+          return 1
+        fi
+        if ! printf '%s\n' "$plugin_list" \
+          | "$claude_jq" -e --arg plugin "$plugin_name" \
+            'any(.[]; .id == $plugin)' >/dev/null 2>&1; then
+          if plugin_install="$(${pkgs.claude-code}/bin/claude plugin install "$plugin_name" 2>&1)"; then
+            :
+          else
+            plugin_status="$?"
+            claude_handle_failure "$plugin_install" "$plugin_status" || return 1
+            continue
+          fi
+        fi
+        if plugin_enable="$(${pkgs.claude-code}/bin/claude plugin enable "$plugin_name" 2>&1)"; then
+          :
+        else
+          plugin_status="$?"
+          claude_handle_failure "$plugin_enable" "$plugin_status" || return 1
+        fi
+      done < <("$claude_jq" -r --arg profile "$claude_profile_name" \
+        '.[$profile].plugins // {} | to_entries[] | [.key, (.value | tostring)] | @tsv' \
+        "$claude_marketplaces")
+    }
+
+    run "$claude_jq" -e 'type == "object" and all(to_entries[]; .value | type == "string")' "$claude_environment" >/dev/null
+    run "$claude_jq" -e 'type == "object" and (keys | sort) == ["gpt56", "mattpocock", "standard"] and all(to_entries[]; (.value | type) == "object" and ((.value.marketplaces | type) == "object") and all(.value.marketplaces | to_entries[]; .value.source == "github" and (.value.repo | type) == "string") and ((.value.plugins | type) == "object") and all(.value.plugins | to_entries[]; (.value | type) == "boolean"))' "$claude_marketplaces" >/dev/null
     ${lib.concatMapStringsSep "\n" (profile: ''
       claude_settings_dir="$HOME/${profile.configDir}"
       claude_settings="$claude_settings_dir/settings.json"
       run ${pkgs.coreutils}/bin/install -d -m 0700 "$claude_settings_dir"
-      claude_settings_tmp="$(${pkgs.coreutils}/bin/mktemp "$claude_settings.XXXXXX")"
-
-      run ${pkgs.coreutils}/bin/cp ${lib.escapeShellArg (toString profile.settings)} "$claude_settings_tmp"
-
-      run ${pkgs.coreutils}/bin/chmod 0600 "$claude_settings_tmp"
-      run ${pkgs.coreutils}/bin/mv -f "$claude_settings_tmp" "$claude_settings"
+      claude_bootstrap_profile=1
+      if [ -e "$claude_settings" ]; then
+        if [ ! -r "$claude_settings" ] || ! "$claude_jq" -e 'type == "object"' "$claude_settings" >/dev/null 2>&1; then
+          echo "warning: leaving unreadable or malformed Claude settings untouched: $claude_settings" >&2
+        else
+          claude_settings_tmp="$(${pkgs.coreutils}/bin/mktemp "$claude_settings.XXXXXX")"
+          if ! claude_reconcile "$claude_settings" "$claude_settings_tmp" \
+            ${lib.escapeShellArg (toString profile.settings)} ${lib.escapeShellArg profile.name}; then
+            ${pkgs.coreutils}/bin/rm -f "$claude_settings_tmp"
+            echo "error: failed to reconcile Claude settings: $claude_settings" >&2
+            exit 1
+          fi
+          run ${pkgs.coreutils}/bin/chmod 0600 "$claude_settings_tmp"
+          run ${pkgs.coreutils}/bin/mv -f "$claude_settings_tmp" "$claude_settings"
+        fi
+      else
+        claude_settings_tmp="$(${pkgs.coreutils}/bin/mktemp "$claude_settings.XXXXXX")"
+        if ! claude_reconcile ${lib.escapeShellArg (toString profile.settings)} "$claude_settings_tmp" \
+          ${lib.escapeShellArg (toString profile.settings)} ${lib.escapeShellArg profile.name}; then
+          ${pkgs.coreutils}/bin/rm -f "$claude_settings_tmp"
+          echo "error: failed to seed Claude settings: $claude_settings" >&2
+          exit 1
+        fi
+        run ${pkgs.coreutils}/bin/chmod 0600 "$claude_settings_tmp"
+        run ${pkgs.coreutils}/bin/mv -f "$claude_settings_tmp" "$claude_settings"
+      fi
+      if [ "$claude_bootstrap_profile" -eq 1 ]; then
+        claude_bootstrap ${lib.escapeShellArg profile.name} ${lib.escapeShellArg profile.configDir}
+      fi
     '') claudeProfiles}
+  '';
+
+  home.activation.codexPolicy = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    codex_home="$HOME/.codex"
+    run ${pkgs.coreutils}/bin/install -d -m 0700 "$codex_home"
+    export CODEX_HOME="$codex_home"
+
+    if codex_marketplaces="$(${pkgs.codex}/bin/codex plugin marketplace list 2>&1)"; then
+      :
+    else
+      codex_status="$?"
+      echo "error: Codex marketplace check failed (status $codex_status): $codex_marketplaces" >&2
+      exit "$codex_status"
+    fi
+    if ! printf '%s\n' "$codex_marketplaces" | ${pkgs.gnugrep}/bin/grep -Eq '(^|[[:space:]])last30days-skill([[:space:]]|$)'; then
+      run ${pkgs.codex}/bin/codex plugin marketplace add mvanhorn/last30days-skill
+    fi
+
+    if codex_plugins="$(${pkgs.codex}/bin/codex plugin list --json 2>&1)"; then
+      :
+    else
+      codex_status="$?"
+      echo "error: Codex plugin check failed (status $codex_status): $codex_plugins" >&2
+      exit "$codex_status"
+    fi
+    if ! printf '%s\n' "$codex_plugins" | ${pkgs.gnugrep}/bin/grep -Fq '"pluginId": "last30days@last30days-skill"'; then
+      run ${pkgs.codex}/bin/codex plugin add last30days@last30days-skill
+    fi
+
+    run ${pkgs.python3}/bin/python3 ${codexReconcile} \
+      --base "$codex_home/config.toml"
+    ${lib.concatMapStringsSep "\n" (name: ''
+      run ${pkgs.python3}/bin/python3 ${codexReconcile} \
+        --profile ${lib.escapeShellArg (toString ../../dotfiles/codex/profiles/${name}.config.toml)} \
+        "$codex_home/${name}.config.toml"
+    '') codexProfileNames}
   '';
 
   # pi rewrites ~/.pi/agent/settings.json at runtime (settings edits, model
@@ -101,13 +603,11 @@ in
     run ${pkgs.coreutils}/bin/mv -f "$pi_settings_tmp" "$pi_settings"
   '';
 
-  home.file = codexProfileLinks // {
-    # Codex CLI (~/.codex) — portable authored files only. The base
-    # config.toml remains machine-local and unmanaged (it holds absolute
-    # project trust paths and Codex rewrites it at runtime).
+  home.file = codexSkillLinks // {
+    # Codex CLI authored resources. The base config.toml, profiles, auth,
+    # sessions, caches, marketplaces, and installed payloads stay mutable.
     ".codex/AGENTS.md".source = link "dotfiles/codex/AGENTS.md";
-    ".codex/rules".source = link "dotfiles/codex/rules";
-    ".codex/skills".source = link "dotfiles/codex/skills";
+    ".codex/rules/default.rules".source = link "dotfiles/codex/rules/default.rules";
 
     # Curated agent skill pool, shared with Codex profiles via relative
     # shared-skills/<name> paths. Force because a manually created bridge
@@ -127,7 +627,10 @@ in
     # Claude Code (CLAUDE_CONFIG_DIR=~/.config/claude) — stable authored config.
     "claude/CLAUDE.md".source = link "dotfiles/claude/CLAUDE.md";
     "claude/statusline.sh".source = link "dotfiles/claude/statusline.sh";
-    "claude/skills".source = link "dotfiles/claude/skills";
+    "claude/skills/nix-environment-setup".source = link "dotfiles/claude/skills/nix-environment-setup";
+    "claude/skills/agent-config-setup".source = link "dotfiles/claude/skills/agent-config-setup";
+    "claude/skills/bro".source = link "dotfiles/claude/skills/bro";
+    "claude/skills/visual-verification".source = link "dotfiles/claude/skills/visual-verification";
     "claude/commands".source = link "dotfiles/claude/commands";
     "claude/output-styles".source = link "dotfiles/claude/output-styles";
     "claude/agents".source = link "dotfiles/claude/agents";

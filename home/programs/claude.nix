@@ -6,6 +6,8 @@
 }:
 
 let
+  claudeEnvironment = ../../dotfiles/claude/environment.json;
+
   claudeHostEnvironment = ''
     export TZ="Europe/London"
     export TZDIR="${pkgs.tzdata}/share/zoneinfo"
@@ -15,24 +17,25 @@ let
     export LANGUAGE="en_GB:en"
     export LOCALE_ARCHIVE="${pkgs.glibcLocales}/lib/locale/locale-archive"
 
-    export HTTP_PROXY="''${HTTP_PROXY:-http://127.0.0.1:7890}"
-    export HTTPS_PROXY="''${HTTPS_PROXY:-http://127.0.0.1:7890}"
-    export ALL_PROXY="''${ALL_PROXY:-socks5h://127.0.0.1:7890}"
-    # 100.64.0.0/10 and .ts.net keep tailnet traffic off the proxy: peer
-    # addresses are reachable only over tailscale0, so proxying them fails.
-    export NO_PROXY="''${NO_PROXY:-localhost,127.0.0.1,::1,.local,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,100.64.0.0/10,.ts.net}"
-
+    claude_environment=${lib.escapeShellArg (toString claudeEnvironment)}
+    claude_env_value() {
+      ${pkgs.jq}/bin/jq -r --arg key "$1" '.[$key] // empty' "$claude_environment"
+    }
+    for claude_env_name in ALL_PROXY DISABLE_ERROR_REPORTING DISABLE_TELEMETRY HTTPS_PROXY HTTP_PROXY MCP_TIMEOUT NO_PROXY; do
+      claude_env_default="$(claude_env_value "$claude_env_name")"
+      [ -n "$claude_env_default" ] || continue
+      if [ -z "''${!claude_env_name+x}" ]; then
+        export "$claude_env_name=$claude_env_default"
+      fi
+    done
     export http_proxy="$HTTP_PROXY"
     export https_proxy="$HTTPS_PROXY"
     export all_proxy="$ALL_PROXY"
     export no_proxy="$NO_PROXY"
 
-    export DISABLE_TELEMETRY="1"
-    export DISABLE_ERROR_REPORTING="1"
-    # Force full alt-screen repaints to stop residual flicker/jumping on the
-    # fullscreen renderer (terminal coalesces positioned writes otherwise).
+    # Launcher-only process wiring; these values are intentionally not persisted
+    # in settings.json or environment.json.
     export CLAUDE_CODE_ALT_SCREEN_FULL_REPAINT="1"
-    export MCP_TIMEOUT="60000"
   '';
 
   claudeThemeSettings = ''
@@ -152,7 +155,7 @@ in
     home.sessionVariables.CLAUDE_CONFIG_DIR = "$HOME/.config/claude";
 
     # Commands, agents, and runtime profile state stay mutable under each
-    # CLAUDE_CONFIG_DIR. settings.json is materialized from a tracked
-    # non-secret baseline, then the theme hooks keep every profile's theme live.
+    # CLAUDE_CONFIG_DIR. settings.json is reconciled from tracked policy
+    # fields by activation; session theme remains launcher-only.
   };
 }

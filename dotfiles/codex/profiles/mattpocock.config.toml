@@ -133,7 +133,3 @@ enabled = true
 name = "wizard"
 enabled = true
 
-[tui]
-status_line = ["model-with-reasoning", "current-dir", "git-branch", "five-hour-limit", "context-used", "weekly-limit"]
-status_line_use_colors = true
-vim_mode_default = true

@@ -1,20 +1,15 @@
 theme:
   dark: matrix
-providers:
-  webSearchOrder: []
-modelRoles:
-  default: openai-codex/gpt-5.6-terra:medium
+  light: light
 symbolPreset: nerd
-setupVersion: 1
-defaultThinkingLevel: medium
-task:
-  maxRecursionDepth: 3
-  enableEffort: true
 skills:
   enableCodexUser: false
   enablePiUser: true
-  ignoredSkills:
-    - lavish
-    - r-dev-shell
-dev:
-  autoqaConsent: granted
+compaction:
+  enabled: true
+  strategy: context-full
+  remoteEnabled: true
+  remoteStreamingV2Enabled: true
+task:
+  maxRecursionDepth: 3
+  enableEffort: true

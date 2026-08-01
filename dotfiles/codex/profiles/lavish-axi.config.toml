@@ -21,5 +21,3 @@ enabled = false
 name = "lavish"
 enabled = true
 
-[tui]
-vim_mode_default = true

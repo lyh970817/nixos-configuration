@@ -1,5 +1,5 @@
-model = "gpt-5.5"
-model_reasoning_effort = "high"
+model = "gpt-5.6-terra"
+model_reasoning_effort = "medium"
 # Profile for the last30days research skill.
 # Select it with: codex --profile last30days
 
@@ -18,11 +18,6 @@ enabled = false
 [plugins."deep-research@openai-bundled"]
 enabled = false
 
-# Skill group dotfiles/codex/skills/last30days (symlink into the pool);
-# disabled in base config.toml, enabled here. Only name selectors work in
-# Codex 0.144.5.
 [[skills.config]]
 name = "last30days"
 enabled = true
-[tui]
-vim_mode_default = true

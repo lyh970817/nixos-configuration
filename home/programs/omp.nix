@@ -19,8 +19,8 @@ in
     force = true;
   };
 
-  # OMP owns config.yml and rewrites it at runtime. Seed it from a copied
-  # template, then reconcile only settings this repository intentionally owns.
+  # OMP owns config.yml and rewrites it at runtime. Seed it only when absent,
+  # then reconcile repository-owned leaves without replacing runtime state.
   home.activation.ompTheme = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     omp_config_dir="$HOME/.omp/agent"
     omp_config="$omp_config_dir/config.yml"
@@ -30,9 +30,24 @@ in
         ${../../dotfiles/omp/config.yml} "$omp_config"
     fi
 
-    run ${pkgs.yq-go}/bin/yq -i '.theme.dark = "matrix" | .skills.enableCodexUser = false | .skills.enablePiUser = true | .skills.ignoredSkills = ["lavish", "r-dev-shell"]' "$omp_config"
-
-    run ${pkgs.coreutils}/bin/chmod 0600 "$omp_config"
+    omp_config_tmp="$(${pkgs.coreutils}/bin/mktemp "$omp_config.XXXXXX")"
+    trap 'rm -f "$omp_config_tmp"' EXIT
+    ${pkgs.yq-go}/bin/yq -y '
+      .theme.dark = "matrix"
+      | .theme.light = "light"
+      | .symbolPreset = "nerd"
+      | .skills.enableCodexUser = false
+      | .skills.enablePiUser = true
+      | .compaction.enabled = true
+      | .compaction.strategy = "context-full"
+      | .compaction.remoteEnabled = true
+      | .compaction.remoteStreamingV2Enabled = true
+      | .task.maxRecursionDepth = 3
+      | .task.enableEffort = true
+    ' "$omp_config" > "$omp_config_tmp"
+    run ${pkgs.coreutils}/bin/chmod 0600 "$omp_config_tmp"
+    run ${pkgs.coreutils}/bin/mv -f "$omp_config_tmp" "$omp_config"
+    trap - EXIT
   '';
 
   # Keep the Matt Pocock profile isolated from the Codex user-skill source.
@@ -47,8 +62,23 @@ in
         ${../../dotfiles/omp/profiles/mattpocock/config.yml} "$omp_config"
     fi
 
-    run ${pkgs.yq-go}/bin/yq -i '.theme.dark = "matrix" | .skills.enableCodexUser = false | .skills.enablePiUser = true' "$omp_config"
-
-    run ${pkgs.coreutils}/bin/chmod 0600 "$omp_config"
+    omp_config_tmp="$(${pkgs.coreutils}/bin/mktemp "$omp_config.XXXXXX")"
+    trap 'rm -f "$omp_config_tmp"' EXIT
+    ${pkgs.yq-go}/bin/yq -y '
+      .theme.dark = "matrix"
+      | .theme.light = "light"
+      | .symbolPreset = "nerd"
+      | .skills.enableCodexUser = false
+      | .skills.enablePiUser = true
+      | .compaction.enabled = true
+      | .compaction.strategy = "context-full"
+      | .compaction.remoteEnabled = true
+      | .compaction.remoteStreamingV2Enabled = true
+      | .task.maxRecursionDepth = 3
+      | .task.enableEffort = true
+    ' "$omp_config" > "$omp_config_tmp"
+    run ${pkgs.coreutils}/bin/chmod 0600 "$omp_config_tmp"
+    run ${pkgs.coreutils}/bin/mv -f "$omp_config_tmp" "$omp_config"
+    trap - EXIT
   '';
 }

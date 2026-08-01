@@ -1,0 +1,35 @@
+{
+  "standard": {
+    "marketplaces": {
+      "last30days-skill": {
+        "source": "github",
+        "repo": "mvanhorn/last30days-skill"
+      }
+    },
+    "plugins": {
+      "last30days@last30days-skill": true
+    }
+  },
+  "mattpocock": {
+    "marketplaces": {
+      "mattpocock": {
+        "source": "github",
+        "repo": "mattpocock/skills"
+      }
+    },
+    "plugins": {
+      "mattpocock-skills@mattpocock": true
+    }
+  },
+  "gpt56": {
+    "marketplaces": {
+      "mattpocock": {
+        "source": "github",
+        "repo": "mattpocock/skills"
+      }
+    },
+    "plugins": {
+      "mattpocock-skills@mattpocock": true
+    }
+  }
+}

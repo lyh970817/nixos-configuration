@@ -1,11 +1,15 @@
+theme:
+  dark: matrix
+  light: light
+symbolPreset: nerd
 skills:
   enableCodexUser: false
   enablePiUser: true
-providers:
-  webSearchOrder: []
-modelRoles:
-  default: openai-codex/gpt-5.6-sol:low
-symbolPreset: nerd
-theme:
-  dark: matrix
-setupVersion: 1
+compaction:
+  enabled: true
+  strategy: context-full
+  remoteEnabled: true
+  remoteStreamingV2Enabled: true
+task:
+  maxRecursionDepth: 3
+  enableEffort: true
