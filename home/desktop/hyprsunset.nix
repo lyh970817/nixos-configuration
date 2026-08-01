@@ -2,8 +2,8 @@
 
 let
   dayTemperature = 6500;
-  # 3000 K is deliberately warmer than the former 4000 K night setting.
-  nightTemperature = 3000;
+  # 2000 K is deliberately very warm for the night setting.
+  nightTemperature = 2000;
 
   hyprsunsetToggle = pkgs.writeShellApplication {
     name = "hyprsunset-toggle";
