@@ -4,7 +4,6 @@
     "ALL_PROXY": "socks5h://127.0.0.1:7890",
     "DISABLE_ERROR_REPORTING": "1",
     "DISABLE_TELEMETRY": "1",
-    "ENABLE_EXPERIMENTAL_MCP_CLI": "true",
     "HTTPS_PROXY": "http://127.0.0.1:7890",
     "HTTP_PROXY": "http://127.0.0.1:7890",
     "MCP_TIMEOUT": "60000",

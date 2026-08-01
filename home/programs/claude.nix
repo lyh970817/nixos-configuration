@@ -29,7 +29,6 @@ let
 
     export DISABLE_TELEMETRY="1"
     export DISABLE_ERROR_REPORTING="1"
-    export ENABLE_EXPERIMENTAL_MCP_CLI="true"
     # Force full alt-screen repaints to stop residual flicker/jumping on the
     # fullscreen renderer (terminal coalesces positioned writes otherwise).
     export CLAUDE_CODE_ALT_SCREEN_FULL_REPAINT="1"
