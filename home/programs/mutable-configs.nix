@@ -569,26 +569,68 @@ in
     run ${pkgs.coreutils}/bin/install -d -m 0700 "$codex_home"
     export CODEX_HOME="$codex_home"
 
+    codex_handle_failure() {
+      codex_failure_output="$1"
+      codex_failure_status="$2"
+      if printf '%s\n' "$codex_failure_output" \
+        | ${pkgs.gnugrep}/bin/grep -Eiq \
+          'network|dns|resolve|github|remote|timed[ -]?out|timeout|connection|fetch|tls|temporar|unavailable|no such file|clone|premature|out[ -]?of[ -]?date|502|503|429'; then
+        echo "warning: transient Codex marketplace failure (status $codex_failure_status); will retry on next activation: $codex_failure_output" >&2
+        return 0
+      fi
+      echo "error: Codex marketplace/plugin command failed (status $codex_failure_status): $codex_failure_output" >&2
+      return 1
+    }
+
+    codex_marketplace_degraded=0
     if codex_marketplaces="$(${pkgs.codex}/bin/codex plugin marketplace list 2>&1)"; then
       :
     else
       codex_status="$?"
-      echo "error: Codex marketplace check failed (status $codex_status): $codex_marketplaces" >&2
-      exit "$codex_status"
+      if codex_handle_failure "$codex_marketplaces" "$codex_status"; then
+        codex_marketplace_degraded=1
+        codex_marketplaces=""
+      else
+        exit "$codex_status"
+      fi
     fi
-    if ! printf '%s\n' "$codex_marketplaces" | ${pkgs.gnugrep}/bin/grep -Eq '(^|[[:space:]])last30days-skill([[:space:]]|$)'; then
-      run ${pkgs.codex}/bin/codex plugin marketplace add mvanhorn/last30days-skill
+    if [ "$codex_marketplace_degraded" -eq 0 ] \
+      && ! printf '%s\n' "$codex_marketplaces" \
+        | ${pkgs.gnugrep}/bin/grep -Eq '(^|[[:space:]])last30days-skill([[:space:]]|$)'; then
+      if codex_marketplace_add="$(${pkgs.codex}/bin/codex plugin marketplace add mvanhorn/last30days-skill 2>&1)"; then
+        :
+      else
+        codex_status="$?"
+        if codex_handle_failure "$codex_marketplace_add" "$codex_status"; then
+          codex_marketplace_degraded=1
+        else
+          exit "$codex_status"
+        fi
+      fi
     fi
 
-    if codex_plugins="$(${pkgs.codex}/bin/codex plugin list --json 2>&1)"; then
-      :
-    else
-      codex_status="$?"
-      echo "error: Codex plugin check failed (status $codex_status): $codex_plugins" >&2
-      exit "$codex_status"
-    fi
-    if ! printf '%s\n' "$codex_plugins" | ${pkgs.gnugrep}/bin/grep -Fq '"pluginId": "last30days@last30days-skill"'; then
-      run ${pkgs.codex}/bin/codex plugin add last30days@last30days-skill
+    if [ "$codex_marketplace_degraded" -eq 0 ]; then
+      if codex_plugins="$(${pkgs.codex}/bin/codex plugin list --json 2>&1)"; then
+        :
+      else
+        codex_status="$?"
+        if codex_handle_failure "$codex_plugins" "$codex_status"; then
+          codex_marketplace_degraded=1
+          codex_plugins=""
+        else
+          exit "$codex_status"
+        fi
+      fi
+      if [ "$codex_marketplace_degraded" -eq 0 ] \
+        && ! printf '%s\n' "$codex_plugins" \
+          | ${pkgs.gnugrep}/bin/grep -Fq '"pluginId": "last30days@last30days-skill"'; then
+        if codex_plugin_add="$(${pkgs.codex}/bin/codex plugin add last30days@last30days-skill 2>&1)"; then
+          :
+        else
+          codex_status="$?"
+          codex_handle_failure "$codex_plugin_add" "$codex_status" || exit "$codex_status"
+        fi
+      fi
     fi
 
     run ${pkgs.python3}/bin/python3 ${codexReconcile} \
