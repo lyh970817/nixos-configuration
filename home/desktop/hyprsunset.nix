@@ -3,12 +3,34 @@
 let
   hyprsunsetToggle = pkgs.writeShellApplication {
     name = "hyprsunset-toggle";
-    runtimeInputs = [ pkgs.systemd ];
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.hyprland
+      pkgs.systemd
+    ];
     text = ''
+      wait_for_socket() {
+        for _ in 1 2 3 4 5 6 7 8 9 10; do
+          if hyprctl hyprsunset temperature 4000 >/dev/null 2>&1; then
+            return 0
+          fi
+          sleep 0.1
+        done
+
+        printf '%s\n' "hyprsunset IPC socket did not become ready" >&2
+        return 1
+      }
+
       if systemctl --user is-active --quiet hyprsunset.service; then
-        systemctl --user stop hyprsunset.service
+        current_temperature=$(hyprctl hyprsunset temperature)
+        if [ "$current_temperature" = 4000 ]; then
+          systemctl --user stop hyprsunset.service
+        else
+          hyprctl hyprsunset temperature 4000
+        fi
       else
         systemctl --user start hyprsunset.service
+        wait_for_socket
       fi
     '';
   };
