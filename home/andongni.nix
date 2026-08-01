@@ -60,6 +60,7 @@
     SSH_AUTH_SOCK = "$HOME/.bitwarden-ssh-agent.sock";
     NPM_CONFIG_PREFIX = "$HOME/.npm-global";
     SCRATCH_DIR = "$HOME/.scratch";
+    PI_NO_PTY = "1";
   };
 
   home.sessionPath = [
