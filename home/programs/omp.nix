@@ -32,7 +32,7 @@ in
 
     omp_config_tmp="$(${pkgs.coreutils}/bin/mktemp "$omp_config.XXXXXX")"
     trap 'rm -f "$omp_config_tmp"' EXIT
-    ${pkgs.yq-go}/bin/yq -y '
+    ${pkgs.yq-go}/bin/yq '
       .theme.dark = "matrix"
       | .theme.light = "light"
       | .symbolPreset = "nerd"
@@ -64,7 +64,7 @@ in
 
     omp_config_tmp="$(${pkgs.coreutils}/bin/mktemp "$omp_config.XXXXXX")"
     trap 'rm -f "$omp_config_tmp"' EXIT
-    ${pkgs.yq-go}/bin/yq -y '
+    ${pkgs.yq-go}/bin/yq '
       .theme.dark = "matrix"
       | .theme.light = "light"
       | .symbolPreset = "nerd"
