@@ -10,6 +10,7 @@
   systemd.services.yandex-disk = {
     description = "Yandex.Disk daemon";
     after = [ "network.target" ];
+    unitConfig.ConditionPathExists = "${config.users.users.andongni.home}/.config/yandex-disk/token";
     wantedBy = [ "multi-user.target" ];
 
     serviceConfig = {
