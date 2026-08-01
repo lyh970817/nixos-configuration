@@ -440,7 +440,7 @@ in
       failure_status="$2"
       if printf '%s\n' "$failure_output" \
         | ${pkgs.gnugrep}/bin/grep -Eiq \
-          'network|dns|resolve|github|remote|timed[ -]?out|timeout|connection|fetch|tls|temporar|unavailable|502|503|429'; then
+          'network|dns|resolve|github|remote|timed[ -]?out|timeout|connection|fetch|tls|temporar|unavailable|clone|premature|out[ -]?of[ -]?date|local copy|502|503|429'; then
         echo "warning: transient Claude marketplace failure (status $failure_status); will retry on next activation: $failure_output" >&2
         return 0
       fi
@@ -452,6 +452,7 @@ in
       claude_profile_name="$1"
       claude_config_dir="$2"
       export CLAUDE_CONFIG_DIR="$HOME/$claude_config_dir"
+      claude_marketplace_degraded=0
 
       while IFS="$(printf '\t')" read -r marketplace_name marketplace_source; do
         [ -n "$marketplace_name" ] || continue
@@ -459,20 +460,32 @@ in
           :
         else
           marketplace_status="$?"
-          claude_handle_failure "$marketplace_list" "$marketplace_status" || return 1
-          marketplace_list=""
+          if claude_handle_failure "$marketplace_list" "$marketplace_status"; then
+            claude_marketplace_degraded=1
+            continue
+          else
+            return 1
+          fi
         fi
         if ! printf '%s\n' "$marketplace_list" | ${pkgs.gnugrep}/bin/grep -Fq "$marketplace_name"; then
           if marketplace_add="$(${pkgs.claude-code}/bin/claude plugin marketplace add "$marketplace_source" 2>&1)"; then
             :
           else
             marketplace_status="$?"
-            claude_handle_failure "$marketplace_add" "$marketplace_status" || return 1
+            if claude_handle_failure "$marketplace_add" "$marketplace_status"; then
+              claude_marketplace_degraded=1
+              continue
+            else
+              return 1
+            fi
           fi
         fi
       done < <("$claude_jq" -r --arg profile "$claude_profile_name" \
         '.[$profile].marketplaces // {} | to_entries[] | [.key, .value.repo] | @tsv' \
         "$claude_marketplaces")
+      if [ "$claude_marketplace_degraded" -ne 0 ]; then
+        return 0
+      fi
 
       while IFS="$(printf '\t')" read -r plugin_name plugin_enabled; do
         [ -n "$plugin_name" ] || continue
