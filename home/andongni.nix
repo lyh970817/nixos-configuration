@@ -41,7 +41,7 @@
     ./directories.nix
     ./desktop/btop-workspace.nix
     ./desktop/theming.nix
-    ./desktop/wlsunset.nix
+    ./desktop/hyprsunset.nix
     ./desktop/xdg.nix
     ./packages/base.nix
     ./packages/desktop.nix
