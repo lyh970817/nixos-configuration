@@ -25,6 +25,7 @@ let
     name = "codexbar-refresh-cache";
     runtimeInputs = with pkgs; [
       coreutils
+      jq
     ];
     text = ''
       cache_path=${lib.escapeShellArg codexbarCachePath}
@@ -33,15 +34,35 @@ let
 
       tmp_path=$(mktemp "$cache_dir/.usage.json.XXXXXX")
       trap 'rm -f "$tmp_path"' EXIT
-      response=$(${pkgs.codexbar}/bin/codexbar usage \
+      if response=$(${pkgs.codexbar}/bin/codexbar usage \
         --provider both \
         --source oauth \
         --format json \
-        --no-color)
-      printf '%s\n' "$response" > "$tmp_path"
-      chmod 600 "$tmp_path"
-      mv -f "$tmp_path" "$cache_path"
-      trap - EXIT
+        --no-color); then
+        codexbar_status=0
+      else
+        codexbar_status=$?
+      fi
+
+      if [ -n "$response" ] && printf '%s\n' "$response" | jq empty >/dev/null 2>&1; then
+        printf '%s\n' "$response" > "$tmp_path"
+        chmod 600 "$tmp_path"
+        mv -f "$tmp_path" "$cache_path"
+        trap - EXIT
+
+        if [ "$codexbar_status" -ne 0 ]; then
+          printf 'codexbar usage exited with status %s; cached valid partial response\n' "$codexbar_status" >&2
+        fi
+        exit 0
+      fi
+
+      if [ "$codexbar_status" -eq 0 ]; then
+        printf 'codexbar usage returned empty or invalid JSON; cache unchanged\n' >&2
+        exit 1
+      fi
+      printf 'codexbar usage exited with status %s and returned empty or invalid JSON; cache unchanged\n' \
+        "$codexbar_status" >&2
+      exit "$codexbar_status"
     '';
   };
 
