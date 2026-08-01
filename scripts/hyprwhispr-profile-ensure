@@ -5,11 +5,12 @@ readonly modes=(qwen-omni-realtime qwen-audio3)
 
 profiles_dir="${HYPRWHISPR_PROFILE_PROFILES_DIR:-$HOME/.config/hyprwhspr/profiles}"
 state_home="${HYPRWHISPR_PROFILE_STATE_HOME:-${XDG_STATE_HOME:-$HOME/.local/state}}"
-runtime_dir="${HYPRWHISPR_PROFILE_RUNTIME_DIR:-${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}/hyprwhspr}"
+runtime_home="${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}"
+config_home="${HYPRWHISPR_CONFIG_HOME:-$runtime_home/hyprwhspr-config}"
 selector="${HYPRWHISPR_PROFILE_SELECTOR:-hyprwhispr-profile}"
 
 mode_file="$state_home/hyprwhispr-profile/mode"
-active_config="$runtime_dir/config.json"
+active_config="$config_home/hyprwhspr/config.json"
 expected_profile=""
 
 for mode in "${modes[@]}"; do
