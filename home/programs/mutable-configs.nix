@@ -564,7 +564,7 @@ in
     '') claudeProfiles}
   '';
 
-  home.activation.codexPolicy = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+  home.activation.codexPolicy = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
     codex_home="$HOME/.codex"
     run ${pkgs.coreutils}/bin/install -d -m 0700 "$codex_home"
     export CODEX_HOME="$codex_home"
