@@ -714,7 +714,7 @@ in
     Service = {
       Type = "simple";
       ExecStartPre = [
-        "${pkgs.coreutils}/bin/rm -f %t/hyprwhspr/recording_control"
+        "${pkgs.coreutils}/bin/rm -f %t/hyprwhspr/recording_control %t/hyprwhspr/recording_status %t/hyprwhspr/audio_level"
         "${pkgs.bash}/bin/bash -lc 'for i in $(${pkgs.coreutils}/bin/seq 1 60); do ${pkgs.coreutils}/bin/ls \"$XDG_RUNTIME_DIR\"/wayland-* >/dev/null 2>&1 && exit 0; ${pkgs.coreutils}/bin/sleep 0.25; done; echo \"Wayland socket not found\"; exit 1'"
         "${hyprwhisprProfileEnsure}/bin/hyprwhispr-profile-ensure"
         "-${hyprwhsprDismissNotifications}/bin/hyprwhspr-dismiss-notifications"
