@@ -11,11 +11,11 @@ buildNpmPackage (finalAttrs: {
   # Pinned deliberately: the openai-server-compaction extension declares a
   # peer range of >=0.80.9 <0.81.0. Bump both together — see
   # docs/pi-coding-agent.md.
-  version = "0.80.9";
+  version = "0.83.0";
 
   src = fetchzip {
     url = "https://registry.npmjs.org/@earendil-works/pi-coding-agent/-/pi-coding-agent-${finalAttrs.version}.tgz";
-    hash = "sha256-xG2+APfl3zmzoNLbcoOjnGpY+LHfHe9P4rCAAmZ0hiA=";
+    hash = "sha256-cJf+Szh2Ldp+x4AB57kEMMhJ+69xcyW/6BCXROMiVeY=";
   };
 
   # Upstream's npm-shrinkwrap.json omits `integrity` for the three first-party
@@ -26,9 +26,9 @@ buildNpmPackage (finalAttrs: {
   # not nativeBuildInputs.
   postPatch = ''
     ${lib.getExe jq} --sort-keys \
-      '.packages["node_modules/@earendil-works/pi-agent-core"].integrity = "sha512-tObjeOLiw1kYUciBi9R+rRyc4QGK+1akbLLQHvzsn2JrrV2btUdDncJ7jMIR5TKvOYKzKxAwQSl/5k7h3Tjrrg=="
-       | .packages["node_modules/@earendil-works/pi-ai"].integrity = "sha512-kHsH5nO4FU7mbKnskK0BVPVuWzNb2DrZtiN1fb6LamP+6BMI8xEZiAOw2fqs4VudvlMQgOLjtbgErv+kNJRPIg=="
-       | .packages["node_modules/@earendil-works/pi-tui"].integrity = "sha512-unPTW8hRgIHEGjV8mJJ2jqm+fzgnRubes6V2FPk9ay1W9ZLofcpYQ3NDfrODXSci+oKbBpX9JyYUMfQV6jCA/A=="' \
+      '.packages["node_modules/@earendil-works/pi-agent-core"].integrity = "sha512-RorGp9OH5l3ElpuC5a5ZQ2eWcchZGXflXRzVGkV99y3y6tT+LLNyxoYIdVKvTKWEObwhExeQbTH0fI2tE4iX4g=="
+       | .packages["node_modules/@earendil-works/pi-ai"].integrity = "sha512-m3IZD4g3er0V8TC9+Vpgw/sjTKqcJlkcIBy/JvsgRubuuik3tAVzyugUg4rVrShIkkOT69mEd34NEqKUIsl6JQ=="
+       | .packages["node_modules/@earendil-works/pi-tui"].integrity = "sha512-IoYrb0rORjELmEpNtoCA/U8je3KopMkRAVJRdSzvXRvgb+Huo1gNh8Q5CSZvNOiYtDxJdj2tYZZHZ4B3+IN3hA=="' \
       npm-shrinkwrap.json > npm-shrinkwrap.json.patched
     mv npm-shrinkwrap.json.patched npm-shrinkwrap.json
 
@@ -41,7 +41,7 @@ buildNpmPackage (finalAttrs: {
     mv package.json.patched package.json
   '';
 
-  npmDepsHash = "sha256-YrRVm5a9wxYwc/4vs4r6xJwkAzSSlYggv1CPMvuoUVw=";
+  npmDepsHash = "sha256-fQ/phHywWTJM3dtHAhT2IcKiL+5I2eC4Gult++QuGOU=";
 
   nodejs = nodejs_22;
 
