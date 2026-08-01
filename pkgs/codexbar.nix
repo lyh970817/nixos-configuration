@@ -14,6 +14,7 @@ stdenv.mkDerivation (finalAttrs: {
   src = fetchzip {
     url = "https://github.com/steipete/CodexBar/releases/download/v${finalAttrs.version}/CodexBarCLI-v${finalAttrs.version}-linux-x86_64.tar.gz";
     hash = "sha256-dR/7ml6dvXJXB9LTjKX8ix2C+Adjfzo+RM8diaAXLTE=";
+    stripRoot = false;
   };
 
   nativeBuildInputs = [ autoPatchelfHook ];
