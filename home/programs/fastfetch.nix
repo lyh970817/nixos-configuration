@@ -1,4 +1,9 @@
-{ config, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   fastfetchAudio = pkgs.writeShellApplication {
@@ -165,45 +170,49 @@ let
       done <<< "$device_rows"
     '';
   };
+  codexbarCachePath = "${config.home.homeDirectory}/.cache/codexbar/usage.json";
   fastfetchCodexbar = pkgs.writeShellApplication {
     name = "fastfetch-codexbar";
     runtimeInputs = with pkgs; [
-      curl
       jq
     ];
     text = ''
-      response=$(curl \
-        --fail \
-        --silent \
-        --show-error \
-        --connect-timeout 0.2 \
-        --max-time 0.35 \
-        'http://127.0.0.1:8080/usage?provider=both' \
-        2>/dev/null || true)
+      provider="''${1:-}"
+      case "$provider" in
+        codex|claude) ;;
+        *)
+          printf 'unavailable\n'
+          exit 0
+          ;;
+      esac
 
-      if [[ -z "$response" ]]; then
+      cache_path=${lib.escapeShellArg codexbarCachePath}
+      if [[ ! -r "$cache_path" ]]; then
         printf 'unavailable\n'
         exit 0
       fi
 
-      rendered=$(jq -r '
+      rendered=$(jq -r --arg provider "$provider" '
         def remaining($window):
           if ($window == null or $window.usedPercent == null) then "?"
           else ((100 - $window.usedPercent) | round | tostring) + "%"
           end;
 
         (if type == "array" then . else [.] end)
-        | map(
-            select(.provider == "codex" or .provider == "claude")
-            | (if .provider == "codex" then "Codex" else "Claude" end) as $name
-            | if .usage == null then
-                "\($name): unavailable"
+        | map(select(.provider == $provider))
+        | if length == 0 then
+            "unavailable"
+          else
+            map(
+              if .usage == null then
+                "unavailable"
               else
-                "\($name): 5h \(remaining(.usage.primary)) | 7d \(remaining(.usage.secondary))"
+                "5h \(remaining(.usage.primary)) · 7d \(remaining(.usage.secondary))"
               end
-          )
-        | join(" · ")
-      ' <<< "$response" 2>/dev/null || true)
+            )
+            | join(" · ")
+          end
+      ' "$cache_path" 2>/dev/null || true)
 
       if [[ -n "$rendered" ]]; then
         printf '%s\n' "$rendered"
@@ -262,8 +271,13 @@ in
         }
         {
           type = "command";
-          key = "AI quota";
-          text = "fastfetch-codexbar";
+          key = "Codex";
+          text = "fastfetch-codexbar codex";
+        }
+        {
+          type = "command";
+          key = "Claude";
+          text = "fastfetch-codexbar claude";
         }
         {
           type = "command";

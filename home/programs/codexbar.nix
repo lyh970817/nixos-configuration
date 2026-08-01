@@ -6,7 +6,6 @@
 }:
 
 let
-  codexbarUrl = "http://127.0.0.1:8080/usage?provider=both";
   providerPath = lib.makeBinPath [
     pkgs.codex
     pkgs.claude-code
@@ -21,6 +20,31 @@ let
     "all_proxy=socks5h://127.0.0.1:7890"
     "no_proxy=localhost,127.0.0.1,::1,.local,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,100.64.0.0/10,.ts.net"
   ];
+  codexbarCachePath = "${config.home.homeDirectory}/.cache/codexbar/usage.json";
+  codexbarRefresh = pkgs.writeShellApplication {
+    name = "codexbar-refresh-cache";
+    runtimeInputs = with pkgs; [
+      coreutils
+    ];
+    text = ''
+      cache_path=${lib.escapeShellArg codexbarCachePath}
+      cache_dir=$(dirname "$cache_path")
+      install -d -m 700 "$cache_dir"
+
+      tmp_path=$(mktemp "$cache_dir/.usage.json.XXXXXX")
+      trap 'rm -f "$tmp_path"' EXIT
+      response=$(${pkgs.codexbar}/bin/codexbar usage \
+        --provider both \
+        --source oauth \
+        --format json \
+        --no-color)
+      printf '%s\n' "$response" > "$tmp_path"
+      chmod 600 "$tmp_path"
+      mv -f "$tmp_path" "$cache_path"
+      trap - EXIT
+    '';
+  };
+
 in
 {
   home.packages = [ pkgs.codexbar ];
@@ -52,8 +76,8 @@ in
     Install.WantedBy = [ "default.target" ];
   };
 
-  # Keep the serve cache warm independently of Fastfetch. Fastfetch only reads
-  # the loopback endpoint and therefore never waits for provider requests.
+  # Refresh the snapshot cache independently of Fast Fetch. Fast Fetch only
+  # reads this local file and never waits for provider requests.
   systemd.user.services.codexbar-refresh = {
     Unit = {
       Description = "Refresh CodexBar usage cache";
@@ -66,7 +90,13 @@ in
 
     Service = {
       Type = "oneshot";
-      ExecStart = "${pkgs.curl}/bin/curl --noproxy '*' --fail --silent --show-error --connect-timeout 5 --max-time 30 --output /dev/null ${lib.escapeShellArg codexbarUrl}";
+      Environment = [
+        "CODEX_HOME=${config.home.homeDirectory}/.codex"
+        "CLAUDE_CONFIG_DIR=${config.home.homeDirectory}/.config/claude"
+        "PATH=${providerPath}"
+      ]
+      ++ proxyEnvironment;
+      ExecStart = "${codexbarRefresh}/bin/codexbar-refresh-cache";
     };
   };
 
