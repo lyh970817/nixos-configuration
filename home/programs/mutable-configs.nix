@@ -418,25 +418,30 @@ in
             .skipDangerousModePermissionPrompt = $template.skipDangerousModePermissionPrompt |
             .statusLine = $template.statusLine |
             .extraKnownMarketplaces =
-              if (.extraKnownMarketplaces | type) == "object"
-              then .extraKnownMarketplaces
-              else {}
-              end |
-            reduce (($profile_policy.marketplaces // {}) | to_entries[]) as $marketplace
-              (.extraKnownMarketplaces;
-                .[$marketplace.key] = {
-                  source: {
-                    source: "github",
-                    repo: $marketplace.value.repo
-                  }
-                }) |
+              (
+                if (.extraKnownMarketplaces | type) == "object"
+                then .extraKnownMarketplaces
+                else {}
+                end |
+                reduce (($profile_policy.marketplaces // {}) | to_entries[]) as $marketplace
+                  (.;
+                    .[$marketplace.key] = {
+                      source: {
+                        source: "github",
+                        repo: $marketplace.value.repo
+                      }
+                    })
+              ) |
             .enabledPlugins =
-              if (.enabledPlugins | type) == "object"
-              then .enabledPlugins
-              else {}
-              end |
-            reduce (($profile_policy.plugins // {}) | to_entries[]) as $plugin
-              (.enabledPlugins; .[$plugin.key] = $plugin.value) |
+              (
+                if (.enabledPlugins | type) == "object"
+                then .enabledPlugins
+                else {}
+                end |
+                reduce (($profile_policy.plugins // {}) | to_entries[]) as $plugin
+                  (.;
+                    .[$plugin.key] = $plugin.value)
+              ) |
             if ($profile == "mattpocock" or $profile == "gpt56") then
               del(.enabledPlugins["last30days@last30days-skill"]) |
               del(.extraKnownMarketplaces["last30days-skill"])
