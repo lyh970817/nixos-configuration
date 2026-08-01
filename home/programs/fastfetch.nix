@@ -197,6 +197,14 @@ let
           if ($window == null or $window.usedPercent == null) then "?"
           else ((100 - $window.usedPercent) | round | tostring) + "%"
           end;
+        def exhausted($window):
+          ($window != null and $window.usedPercent != null and $window.usedPercent >= 100);
+        def effective_remaining($usage):
+          if (exhausted($usage.primary) or exhausted($usage.secondary)) then
+            "5h 0% · 7d 0%"
+          else
+            "5h \(remaining($usage.primary)) · 7d \(remaining($usage.secondary))"
+          end;
 
         (if type == "array" then . else [.] end)
         | map(select(.provider == $provider))
@@ -207,7 +215,7 @@ let
               if .usage == null then
                 "unavailable"
               else
-                "5h \(remaining(.usage.primary)) · 7d \(remaining(.usage.secondary))"
+                "\(effective_remaining(.usage))"
               end
             )
             | join(" · ")
