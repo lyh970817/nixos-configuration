@@ -288,6 +288,7 @@ in
           key = "Tailnet";
           text = "fastfetch-tailnet";
         }
+        "Break"
       ];
     };
   };
