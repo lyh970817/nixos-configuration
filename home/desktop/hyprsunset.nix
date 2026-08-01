@@ -1,6 +1,10 @@
 { pkgs, ... }:
 
 let
+  dayTemperature = 6500;
+  # 3000 K is deliberately warmer than the former 4000 K night setting.
+  nightTemperature = 3000;
+
   hyprsunsetToggle = pkgs.writeShellApplication {
     name = "hyprsunset-toggle";
     runtimeInputs = [
@@ -11,7 +15,7 @@ let
     text = ''
       wait_for_socket() {
         for _ in 1 2 3 4 5 6 7 8 9 10; do
-          if hyprctl hyprsunset temperature 4000 >/dev/null 2>&1; then
+          if hyprctl hyprsunset temperature ${toString nightTemperature} >/dev/null 2>&1; then
             return 0
           fi
           sleep 0.1
@@ -23,10 +27,10 @@ let
 
       if systemctl --user is-active --quiet hyprsunset.service; then
         current_temperature=$(hyprctl hyprsunset temperature)
-        if [ "$current_temperature" = 4000 ]; then
+        if [ "$current_temperature" = "${toString nightTemperature}" ]; then
           systemctl --user stop hyprsunset.service
         else
-          hyprctl hyprsunset temperature 4000
+          hyprctl hyprsunset temperature ${toString nightTemperature}
         fi
       else
         systemctl --user start hyprsunset.service
@@ -45,11 +49,11 @@ in
       profile = [
         {
           time = "06:00";
-          temperature = 6500;
+          temperature = dayTemperature;
         }
         {
           time = "16:00";
-          temperature = 4000;
+          temperature = nightTemperature;
         }
       ];
     };
