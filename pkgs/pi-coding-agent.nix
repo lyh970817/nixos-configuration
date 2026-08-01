@@ -15,7 +15,7 @@ buildNpmPackage (finalAttrs: {
 
   src = fetchzip {
     url = "https://registry.npmjs.org/@earendil-works/pi-coding-agent/-/pi-coding-agent-${finalAttrs.version}.tgz";
-    hash = "sha256-cJf+Szh2Ldp+x4AB57kEMMhJ+69xcyW/6BCXROMiVeY=";
+    hash = "sha256-u/MCbliYB4OY4HP3KDNUWFEkCFny+srlMxB9mhgtEvA=";
   };
 
   # Upstream's npm-shrinkwrap.json omits `integrity` for the three first-party
