@@ -271,20 +271,15 @@ in
         }
         {
           type = "command";
-          key = "Codex";
-          text = "fastfetch-codexbar codex";
+          key = builtins.fromJSON ''"\u001b[1mCodex\u001b[22m"'';
+          text = "printf '%s | \\033[1mClaude\\033[22m: %s' \"$(fastfetch-codexbar codex)\" \"$(fastfetch-codexbar claude)\"";
         }
-        {
-          type = "command";
-          key = "Claude";
-          text = "fastfetch-codexbar claude";
-        }
+        "Break"
         {
           type = "command";
           key = "Tailnet";
           text = "fastfetch-tailnet";
         }
-        "Break"
       ];
     };
   };
