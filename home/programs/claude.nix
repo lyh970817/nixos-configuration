@@ -21,13 +21,13 @@ let
     claude_env_value() {
       ${pkgs.jq}/bin/jq -r --arg key "$1" '.[$key] // empty' "$claude_environment"
     }
-    for claude_env_name in ALL_PROXY DISABLE_ERROR_REPORTING DISABLE_TELEMETRY HTTPS_PROXY HTTP_PROXY MCP_TIMEOUT NO_PROXY; do
-      claude_env_default="$(claude_env_value "$claude_env_name")"
-      [ -n "$claude_env_default" ] || continue
-      if [ -z "''${!claude_env_name+x}" ]; then
-        export "$claude_env_name=$claude_env_default"
-      fi
-    done
+    export ALL_PROXY="''${ALL_PROXY:-$(claude_env_value ALL_PROXY)}"
+    export DISABLE_ERROR_REPORTING="''${DISABLE_ERROR_REPORTING:-$(claude_env_value DISABLE_ERROR_REPORTING)}"
+    export DISABLE_TELEMETRY="''${DISABLE_TELEMETRY:-$(claude_env_value DISABLE_TELEMETRY)}"
+    export HTTPS_PROXY="''${HTTPS_PROXY:-$(claude_env_value HTTPS_PROXY)}"
+    export HTTP_PROXY="''${HTTP_PROXY:-$(claude_env_value HTTP_PROXY)}"
+    export MCP_TIMEOUT="''${MCP_TIMEOUT:-$(claude_env_value MCP_TIMEOUT)}"
+    export NO_PROXY="''${NO_PROXY:-$(claude_env_value NO_PROXY)}"
     export http_proxy="$HTTP_PROXY"
     export https_proxy="$HTTPS_PROXY"
     export all_proxy="$ALL_PROXY"
