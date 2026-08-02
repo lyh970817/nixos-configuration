@@ -3,7 +3,8 @@
   "defaultModel": "gpt-5.6-terra",
   "theme": "matrix",
   "packages": [
-    "/home/andongni/.pi/agent/extensions/openai-server-compaction"
+    "/home/andongni/.pi/agent/extensions/openai-server-compaction",
+    "/home/andongni/.pi/agent/extensions/web-access"
   ],
   "compaction": {
     "enabled": true,

@@ -73,6 +73,7 @@
           oh-my-pi = final.callPackage ./pkgs/oh-my-pi.nix { };
           pi-coding-agent = final.callPackage ./pkgs/pi-coding-agent.nix { };
           pi-openai-server-compaction = final.callPackage ./pkgs/pi-openai-server-compaction.nix { };
+          pi-web-access = final.callPackage ./pkgs/pi-web-access.nix { };
           quicktui = final.callPackage ./pkgs/quicktui.nix { };
           treehouse = firstmateTools.treehouse;
           "no-mistakes" = firstmateTools.no-mistakes;

@@ -99,15 +99,19 @@ in
   ];
 
   home.file = {
-    # Registered declaratively by absolute path in settings.json's `packages`
-    # array. pi classifies a bare path as a local package and only stats it,
-    # so no `pi install` and no network access are involved.
+    # Both extensions are registered declaratively by absolute path in
+    # settings.json's `packages` array. pi classifies a bare path as a local
+    # package and only stats it, so no `pi install` and no network access are
+    # involved.
     ".pi/agent/extensions/openai-server-compaction".source = pkgs.pi-openai-server-compaction;
+    ".pi/agent/extensions/web-access".source = pkgs.pi-web-access;
 
     # The extension never writes this file, so a live out-of-store symlink is
     # safe. settings.json is materialized instead (pi rewrites it at runtime)
     # — see home/programs/mutable-configs.nix.
     ".pi/agent/openai-server-compaction.json".source = link "dotfiles/pi/openai-server-compaction.json";
+
+    ".pi/agent/models.json".source = link "dotfiles/pi/models.json";
 
     # pi never writes into its custom themes directory, so a live symlink is
     # safe here too. Colors are ANSI palette indices (0-15), not hex, so this
