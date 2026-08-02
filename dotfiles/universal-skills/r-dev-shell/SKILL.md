@@ -1,6 +1,7 @@
 ---
 name: r-dev-shell
 description: R package development shell setup with a project-local R library. Use when configuring shell.nix, flake devShells, .R-lib, R_LIBS_USER, devtools::install_dev_deps(), or moving R package dependencies out of Nix/OS-level tooling into an R-managed local library.
+disable-model-invocation: true
 ---
 
 # R Dev Shell

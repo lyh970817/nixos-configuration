@@ -1,0 +1,7 @@
+interface:
+  display_name: "Lavish"
+  short_description: "Create rich HTML artifacts for review"
+  default_prompt: "Use $lavish to turn this response into a rich, reviewable HTML artifact."
+
+policy:
+  allow_implicit_invocation: false

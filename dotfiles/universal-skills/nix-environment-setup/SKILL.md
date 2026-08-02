@@ -1,6 +1,7 @@
 ---
 name: nix-environment-setup
 description: Use for non-system project work on NixOS only when a missing development tool/env var should be fixed with a project-local shell.nix, .envrc, and direnv setup. Do not use for /home/andongni/.nixos-config, NixOS/Home Manager/system configuration repos, or merely because a repo contains Nix files or flake.nix.
+disable-model-invocation: true
 ---
 
 # Nix Environment Setup
@@ -11,19 +12,19 @@ When project tooling is missing on NixOS, enter this workflow before editing cod
 
 ## Hard Stop
 
-Environment setup must happen only in `codex --yolo`, where filesystem and network access are unrestricted.
+Environment setup must happen only in an unrestricted active-agent session, where filesystem and network access are unrestricted.
 
 If setup is needed while sandboxed, stop before creating or modifying `shell.nix`, creating or modifying `.envrc`, installing dependencies, running `direnv allow`, or validating downloaded Nix dependencies.
 
 When stopping, tell the user exactly:
 
-"This needs environment setup, which the skill requires in `codex --yolo`. Please restart/switch Codex with unrestricted access, then ask me to continue."
+"This needs environment setup, which the skill requires in an unrestricted active-agent session. Please restart or switch to an unrestricted session, then ask me to continue."
 
 ## Workflow
 
 1. Run the intended project command directly from the project directory.
 2. If it works, continue the original task and do not invoke `nix-shell`.
-3. If it fails because a tool or variable is missing, confirm `codex --yolo` before setup.
+3. If it fails because a tool or variable is missing, confirm that the active-agent session is unrestricted before setup.
 4. Classify the missing setup:
    - Program dependency: add the required package or wrapper to `shell.nix`.
    - Environment variable: add the variable setup to `.envrc`.
@@ -37,7 +38,7 @@ When stopping, tell the user exactly:
 7. Reuse only safe patterns from example `shell.nix` or `.envrc` files. Never copy secrets or machine-specific values.
 8. Track whether `.envrc` was created or changed.
 9. Run `direnv allow` only if `.envrc` was created or changed.
-10. If `direnv allow` ran, tell the user to reload the directory with `cd .. && cd -` or restart Codex.
+10. If `direnv allow` ran, tell the user to reload the directory with `cd .. && cd -` or restart the active-agent session.
 
 Completion criterion: setup is complete only when the required project-local file changes are present, `.envrc` contains `use nix`, and `direnv allow` has succeeded if `.envrc` changed.
 
@@ -68,7 +69,7 @@ If the project needs pinned CLIs that are not packaged cleanly in nixpkgs, prefe
 
 Do not use these to get past missing project tooling:
 
-- `nix-shell --run` after `.envrc` contains `use nix`, except when in `codex --yolo` and validating changes to the Nix shell environment itself. Keep that exception limited to small environment checks; do not use it to run ordinary project test/build workflows.
+- `nix-shell --run` after `.envrc` contains `use nix`, except when in an unrestricted active-agent session and validating changes to the Nix shell environment itself. Keep that exception limited to small environment checks; do not use it to run ordinary project test/build workflows.
 - `nix-env -i`, `nix profile install`, `apt`, `brew`, or global installs
 - Temporary virtualenvs, `/tmp` installs, `pip install --user`, or one-off wrapper scripts outside the project
 - Writing custom code to replace a program that could be added to `shell.nix`
