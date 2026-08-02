@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+number=${1:?tab number is required}
+case "$number" in
+  [1-9]) ;;
+  *)
+    printf 'tab number must be between 1 and 9\n' >&2
+    exit 2
+    ;;
+esac
+
+# Herdr assigns sequential internal numbers and cannot create a requested
+# number. Its visible label is stable, so use that as the Alt-number slot.
+tab_id=$(herdr tab list | jq -er --arg number "$number" '
+  .result.tabs[] | select(.label == $number) | .tab_id
+' || true)
+
+if [[ -n "$tab_id" ]]; then
+  exec herdr tab focus "$tab_id"
+fi
+
+exec herdr tab create --label "$number" --focus
