@@ -797,7 +797,7 @@ in
       force = true;
     };
     "claude-mattpocock/skills/visual-verification" = {
-      source = link "skills/visual-verification";
+      source = link "dotfiles/claude/skills/visual-verification";
       force = true;
     };
     "claude-mattpocock/skills/bro" = {

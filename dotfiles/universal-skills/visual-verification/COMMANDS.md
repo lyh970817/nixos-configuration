@@ -16,8 +16,8 @@ screen-verify end --session ID
 creates or returns the session's invisible headless staging output; `launch`
 and `adapter` also create it lazily. `status` reports whether a stage is
 active and its output name. `end` terminates owned process groups unless
-launched with `--keep-open`, deletes the private runtime directory, removes
-the staging output (`stage_removed`), and reconciles a mode displaced for
+launched with `--keep-open`, deletes the private runtime directory, removes the
+staging output (`stage_removed`), and reconciles a mode displaced for
 verification.
 
 ## Capture targets
@@ -64,15 +64,16 @@ the stage does not stop it grabbing the keyboard — its launch result carries a
 `warning` field noting this. `notification` (mako) toasts always land on the
 real screen and cannot be relocated. A staged launch crosses Hyprland's `exec`
 shell and a screen-verify trampoline, every argument shell-quoted so none is
-evaluated; `--no-stage` uses no shell. It inherits Hyprland's cwd, environment,
-and PATH, not screen-verify's, so `./result/bin/...` and `nix-shell`/direnv
-PATH bite. Hyprland's exec workspace rule only places the first window of the
-tree, so the trampoline marks the whole tree with a session environment
-variable, a detached per-session watcher moves owned windows that open off the
-stage back onto it, and `launch` sweeps stragglers after the primary window
-resolves; the launch `warning` field reports a primary window still off the
-stage after that. Generic launch records the process start time and associated
-Hyprland window so cleanup does not act on a reused PID or pre-existing window.
+evaluated; `--no-stage` uses no shell. It inherits Hyprland's cwd,
+environment, and PATH, not screen-verify's, so `./result/bin/...` and
+nix-shell/direnv PATH bite. Hyprland's exec workspace rule only places the
+first window of the tree, so the trampoline marks the whole tree with a
+session environment variable, a detached per-session watcher moves owned
+windows that open off the stage back onto it, and `launch` sweeps stragglers
+after the primary window resolves; the launch `warning` field reports a
+primary window still off the stage after that. Generic launch records the
+process start time and associated Hyprland window so cleanup does not act on a
+reused PID or pre-existing window.
 
 ## Reversible previews
 

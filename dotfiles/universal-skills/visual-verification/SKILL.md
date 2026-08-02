@@ -1,6 +1,7 @@
 ---
 name: visual-verification
 description: Use only when correctness depends on inspecting rendered pixels or live GUI behavior that CLI checks cannot establish, such as actual layout, typography, contrast, clipping, composition, or visual interaction. Do not use for changes whose correctness is established by tests, config evaluation, logs, command output, or machine-readable desktop state.
+disable-model-invocation: true
 ---
 
 # Visual verification

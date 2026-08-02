@@ -6,6 +6,6 @@ in
 {
   home.packages = [ screenVerify ];
 
-  # All declared Claude profiles and Codex receive this skill through their
-  # tracked configuration trees in mutable-configs.nix.
+  # All declared Claude profiles, Codex, and OMP receive this skill through
+  # their tracked configuration trees.
 }

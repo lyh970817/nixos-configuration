@@ -1,0 +1,7 @@
+interface:
+  display_name: "Visual Verification"
+  short_description: "Verify rendered GUI behavior and pixels"
+  default_prompt: "Use $visual-verification when correctness requires inspecting rendered pixels or live GUI behavior."
+
+policy:
+  allow_implicit_invocation: false
