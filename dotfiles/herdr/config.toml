@@ -19,6 +19,7 @@ onboarding = false
 # while the Ctrl-a prefix keeps the complete keymap available.
 [keys]
 prefix = "ctrl+a"
+copy_mode = "alt+v"
 
 # The hidden sidebar is the agent explorer: reveal it directly, then move
 # through attention-ordered agent rows without leaving the keyboard.
