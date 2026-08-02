@@ -9,11 +9,13 @@
 {
   # Development tools and programming languages. Home role only: the remote
   # portable laptop develops over `mosh home`, so it omits this heavy toolchain.
-  # Python is kept on the remote role too since it's useful standalone.
+  # Python and yt-dlp are kept on the remote role too since they're useful
+  # standalone; yt-dlp also backs the last30days skill's YouTube source.
   config = lib.mkMerge [
     (lib.mkIf (osConfig.portable.role != "home") {
       home.packages = with pkgs; [
         python3
+        yt-dlp
       ];
     })
     (lib.mkIf (osConfig.portable.role == "home") {
