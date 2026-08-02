@@ -81,6 +81,6 @@ pane_borders = false
 pane_gaps = false
 show_agent_labels_on_pane_borders = true
 
-agent_panel_sort = "priority"
+agent_panel_sort = "spaces"
 [ui.toast]
 delivery = "system"
