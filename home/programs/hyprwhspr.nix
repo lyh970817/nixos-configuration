@@ -545,11 +545,7 @@ let
   };
 
   qwenAsrShimPython = pkgs.python3.withPackages (ps: [
-    ps.websocket-client
-    ps.urllib3
     ps.numpy
-    ps.soxr
-    ps.soundfile
     ps.websockets
   ]);
 
@@ -777,7 +773,7 @@ in
 
   systemd.user.services."qwen-asr-shim" = {
     Unit = {
-      Description = "Qwen ASR local HTTP and realtime WebSocket bridge";
+      Description = "Qwen realtime WebSocket translator for hyprwhspr";
       Documentation = "https://github.com/goodroot/hyprwhspr";
       PartOf = [ "graphical-session.target" ];
       After = [ "graphical-session.target" ];
@@ -787,13 +783,6 @@ in
       Type = "simple";
       ExecStart = "${qwenAsrShimPython}/bin/python3 ${../../scripts/qwen-asr-shim.py}";
       Environment = [
-        "PATH=${
-          lib.makeBinPath [
-            pkgs.ffmpeg
-            pkgs.coreutils
-          ]
-        }"
-        "QWEN_ASR_PORT=8770"
         "QWEN_ASR_CREDENTIALS=%h/.local/share/hyprwhspr/credentials"
         "PYTHONUNBUFFERED=1"
       ];
