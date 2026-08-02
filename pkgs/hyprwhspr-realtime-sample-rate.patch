@@ -1,8 +1,26 @@
+diff --git a/lib/src/backends/realtime_ws_backend.py b/lib/src/backends/realtime_ws_backend.py
+index 6d34e7e..1fd5050 100644
+--- a/lib/src/backends/realtime_ws_backend.py
++++ b/lib/src/backends/realtime_ws_backend.py
+@@ -240,7 +240,10 @@ class RealtimeWsBackend(TranscriptionBackend):
+                     flush=True,
+                 )
+                 return False
+-            self._realtime_client = RealtimeClient(mode=realtime_mode)
++            self._realtime_client = RealtimeClient(
++                mode=realtime_mode,
++                sample_rate=self.config.get_setting('realtime_sample_rate', 24000),
++            )
+ 
+             # Get WebSocket URL
+             websocket_url = self.config.get_setting('websocket_url')
+diff --git a/lib/src/realtime_client.py b/lib/src/realtime_client.py
+index b678f8b..b7d34ca 100644
 --- a/lib/src/realtime_client.py
 +++ b/lib/src/realtime_client.py
-@@ -19,17 +19,18 @@
-     LOG_TAG = '[REALTIME]'
+@@ -31,19 +31,20 @@ class RealtimeClient(WebSocketRealtimeClientBase):
      VALID_TRANSCRIPTION_DELAYS = {'minimal', 'low', 'medium', 'high', 'xhigh'}
+     VALID_CONVERSATION_HISTORY = {'session', 'turn'}
  
 -    def __init__(self, mode: str = 'transcribe'):
 +    def __init__(self, mode: str = 'transcribe', sample_rate: int = 24000):
@@ -15,13 +33,15 @@
          """
          super().__init__(mode=mode)
          self.transcription_delay = 'low'
+         self.transcription_prompt = None
+         self.conversation_history = 'turn'
          self.partial_transcript_callback = None
 -        self.sample_rate = 24000  # OpenAI Realtime API requires 24kHz
 +        self.sample_rate = int(sample_rate)
  
          # Track if buffer was committed (by VAD or manual)
          # Prevents double-commit error when VAD auto-commits on speech end
-@@ -205,7 +206,7 @@
+@@ -298,7 +299,7 @@ class RealtimeClient(WebSocketRealtimeClientBase):
                      'input': {
                          'format': {
                              'type': 'audio/pcm',
@@ -29,8 +49,8 @@
 +                            'rate': self.sample_rate
                          },
                          'transcription': transcription_config,
-                         'turn_detection': None if is_realtime_whisper else {
-@@ -226,7 +227,7 @@
+                         'turn_detection': None if uses_manual_commit(model) else {
+@@ -319,7 +320,7 @@ class RealtimeClient(WebSocketRealtimeClientBase):
                      'input': {
                          'format': {
                              'type': 'audio/pcm',
@@ -39,20 +59,8 @@
                          },
                          'turn_detection': None  # Manual commit on stop
                      }
---- a/lib/src/backends/realtime_ws_backend.py
-+++ b/lib/src/backends/realtime_ws_backend.py
-@@ -198,7 +198,10 @@
-             if provider_id == 'openai' and model_id == 'gpt-realtime-whisper' and realtime_mode != 'transcribe':
-                 print('ERROR: gpt-realtime-whisper is supported only with realtime_mode="transcribe"', flush=True)
-                 return False
--            self._realtime_client = RealtimeClient(mode=realtime_mode)
-+            self._realtime_client = RealtimeClient(
-+                mode=realtime_mode,
-+                sample_rate=self.config.get_setting('realtime_sample_rate', 24000),
-+            )
- 
-             # Get WebSocket URL
-             websocket_url = self.config.get_setting('websocket_url')
+diff --git a/share/config.schema.json b/share/config.schema.json
+index ea3954c..3660f1c 100644
 --- a/share/config.schema.json
 +++ b/share/config.schema.json
 @@ -299,6 +299,13 @@

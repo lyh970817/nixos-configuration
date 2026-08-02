@@ -5,6 +5,7 @@
   "websocket_url": "ws://127.0.0.1:8772",
   "websocket_model": "qwen-audio-3.0-realtime-plus",
   "realtime_mode": "converse",
+  "realtime_conversation_history": "session",
   "realtime_sample_rate": 16000,
   "realtime_timeout": 8,
   "recording_mode": "toggle",

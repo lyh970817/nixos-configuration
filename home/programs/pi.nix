@@ -49,10 +49,11 @@ let
     '';
   };
 
-  # First Mate is a project-local Pi distribution, not a global plugin. OMP is
-  # Pi-compatible: its native discovery loads the tracked .pi/extensions from
-  # this checkout. The markers let First Mate use its verified Pi adapter while
-  # keeping OMP as the only agent executable.
+  # First Mate is a project-local distribution. OMP does not discover tracked
+  # `.pi/extensions`, so the primary launcher must load both the turn-end guard
+  # and the OMP-native watcher explicitly. The PI markers remain the primary
+  # harness contract; FM_OMP_HARNESS is a separate process-scoped discriminator.
+  # The OMP crewmate adapter overrides FM_OMP_PRIMARY to 0.
   firstmateLauncher = pkgs.writeShellApplication {
     name = "firstmate";
     text = ''
@@ -61,8 +62,13 @@ let
       export FM_HOME="/home/andongni/firstmate"
       export PI_CODING_AGENT=true
       export FM_PI_HARNESS=pi
+      export FM_OMP_HARNESS=omp
+      export FM_OMP_PRIMARY=1
       cd "$FM_HOME"
-      exec ${ompLauncher}/bin/omp "$@"
+      exec ${ompLauncher}/bin/omp \
+        -e "$FM_HOME/.pi/extensions/fm-primary-turnend-guard.ts" \
+        -e "$FM_HOME/.pi/extensions/fm-primary-omp-watch.ts" \
+        "$@"
     '';
   };
 in

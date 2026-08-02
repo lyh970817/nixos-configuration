@@ -1325,6 +1325,7 @@ class RealtimeTranslator:
             "raw_asr": "",
             "in_flight": False,
             "item_ids": [],
+            "request_id": None,
             "silence_gate": _RealtimeSilenceGate(),
         }
         stop = asyncio.Event()
@@ -1382,7 +1383,13 @@ class RealtimeTranslator:
                     payloads = [msg]
                     if t == "response.create":
                         # Instructions are already set at session level;
-                        # force text.
+                        # force text. Remember hyprwhspr's correlation id
+                        # (metadata.hyprwhspr_request_id, required by its
+                        # converse client since v1.40): DashScope won't echo
+                        # it, so the reader stamps it onto response events.
+                        state["request_id"] = (
+                            (msg.get("response") or {}).get("metadata") or {}
+                        ).get("hyprwhspr_request_id")
                         payloads = [{
                             "type": "response.create",
                             "response": {"modalities": ["text"]},
@@ -1407,6 +1414,7 @@ class RealtimeTranslator:
                         state["raw_asr"] = ""
                         state["in_flight"] = False
                         state["item_ids"].clear()
+                        state["request_id"] = None
                         state["silence_gate"].clear()
                     if not payloads:
                         continue
@@ -1508,6 +1516,14 @@ class RealtimeTranslator:
                             state["item_ids"].clear()
                             state["commit_t"] = None
                             state["in_flight"] = False
+                        # Echo hyprwhspr's correlation id (top-level metadata
+                        # fallback in its converse client) on every response
+                        # event; without it the client drops the whole turn.
+                        request_id = state["request_id"]
+                        if request_id and ev.get("type", "").startswith("response."):
+                            ev["metadata"] = {"hyprwhspr_request_id": request_id}
+                            if t == "response.done":
+                                state["request_id"] = None
                         try:
                             await client_ws.send(json.dumps(ev))
                         except websockets.exceptions.ConnectionClosed:
