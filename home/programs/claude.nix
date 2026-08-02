@@ -141,6 +141,17 @@ let
     '';
   };
 
+  # Alternate First Mate primary route: run the same project-local distro under
+  # Claude Code while leaving the OMP-backed `firstmate` launcher unchanged.
+  firstmateClaudeLauncher = pkgs.writeShellApplication {
+    name = "firstmate-claude";
+    text = ''
+      export FM_HOME="''${FM_HOME:-/home/andongni/firstmate}"
+      cd "$FM_HOME"
+      exec ${claudeHostLauncher}/bin/claude "$@"
+    '';
+  };
+
 in
 {
   # Coding CLI: installed on both home and remote roles.
@@ -148,6 +159,7 @@ in
     home.packages = [
       claudeHostLauncher
       claudeGpt56Launcher
+      firstmateClaudeLauncher
       # Standalone Claude Science workbench binary, not a Claude Code plugin; no wrapper needed.
       pkgs.claude-science
     ];
