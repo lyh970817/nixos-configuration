@@ -40,52 +40,11 @@ zoom = "alt+f"
 goto = "alt+g"
 workspace_picker = "alt+w"
 
-# Focus an existing indexed tab, or create a focused tab when that index does
-# not exist. Native switch_tab only handles the first case.
-[[keys.command]]
-key = "alt+1"
-command = "$HOME/.nixos-config/scripts/herdr-select-or-create-tab 1"
-description = "focus or create tab 1"
-
-[[keys.command]]
-key = "alt+2"
-command = "$HOME/.nixos-config/scripts/herdr-select-or-create-tab 2"
-description = "focus or create tab 2"
-
-[[keys.command]]
-key = "alt+3"
-command = "$HOME/.nixos-config/scripts/herdr-select-or-create-tab 3"
-description = "focus or create tab 3"
-
-[[keys.command]]
-key = "alt+4"
-command = "$HOME/.nixos-config/scripts/herdr-select-or-create-tab 4"
-description = "focus or create tab 4"
-
-[[keys.command]]
-key = "alt+5"
-command = "$HOME/.nixos-config/scripts/herdr-select-or-create-tab 5"
-description = "focus or create tab 5"
-
-[[keys.command]]
-key = "alt+6"
-command = "$HOME/.nixos-config/scripts/herdr-select-or-create-tab 6"
-description = "focus or create tab 6"
-
-[[keys.command]]
-key = "alt+7"
-command = "$HOME/.nixos-config/scripts/herdr-select-or-create-tab 7"
-description = "focus or create tab 7"
-
-[[keys.command]]
-key = "alt+8"
-command = "$HOME/.nixos-config/scripts/herdr-select-or-create-tab 8"
-description = "focus or create tab 8"
-
-[[keys.command]]
-key = "alt+9"
-command = "$HOME/.nixos-config/scripts/herdr-select-or-create-tab 9"
-description = "focus or create tab 9"
+# Keep the native Ctrl-a index bindings while adding direct Alt selection.
+# Herdr selects by tab position, so tab labels may change freely.
+switch_tab = ["prefix+1..9", "alt+1..9"]
+previous_tab = ["prefix+p", "shift+alt+tab"]
+next_tab = ["prefix+n", "alt+tab"]
 
 [theme]
 name = "terminal"
