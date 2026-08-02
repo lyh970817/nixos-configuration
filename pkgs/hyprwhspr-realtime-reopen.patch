@@ -1,0 +1,22 @@
+diff --git a/lib/src/realtime_base.py b/lib/src/realtime_base.py
+index 8de3954..47719fc 100644
+--- a/lib/src/realtime_base.py
++++ b/lib/src/realtime_base.py
+@@ -335,6 +335,17 @@ class WebSocketRealtimeClientBase(RealtimeAudioClientBase):
+         self.model = model
+         self.instructions = instructions
+ 
++        with self.lock:
++            # An explicit connect() reopens a client that close() latched
++            # shut. The backend's on-demand reconnect closes stale state
++            # before reconnecting; without this reset _connect_internal
++            # refuses (self._closed) and every reconnect fails until the
++            # whole service restarts. Background _attempt_reconnect loops
++            # still honor the latch: they bypass connect() and check
++            # _closed themselves.
++            self._closed = False
++            self._stop_event.clear()
++
+         return self._connect_internal()
+ 
+     def _connect_internal(self) -> bool:

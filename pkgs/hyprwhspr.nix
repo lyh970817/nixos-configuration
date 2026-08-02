@@ -81,10 +81,16 @@ stdenvNoCC.mkDerivation rec {
   # Status-notification text shows only the state (e.g. "● Recording…",
   # "Transcribing…") as the notification summary instead of a "hyprwhspr"
   # title with the state in the body, and uses a monochrome recording glyph.
+  # hyprwhspr-realtime-reopen.patch: upstream's on-demand realtime reconnect
+  # calls close() before connect(), but close() latches _closed and connect()
+  # refuses while it is set — the first idle/server-side disconnect kills
+  # dictation until the service restarts. Let an explicit connect() clear
+  # the latch.
   patches = [
     ./hyprwhspr-realtime-sample-rate.patch
     ./hyprwhspr-short-audio-archive.patch
     ./hyprwhspr-notification-text.patch
+    ./hyprwhspr-realtime-reopen.patch
   ];
 
   nativeBuildInputs = [ makeWrapper ];
