@@ -67,6 +67,10 @@ let
         bind = $mainMod, Return, exec, btop-workspace exec alacritty --class Alacritty-float --command home-terminal
         bind = $mainMod SHIFT, Return, exec, btop-workspace exec alacritty --class Alacritty-float --command tmux new-session -A -s main
         exec-once = btop-workspace exec alacritty --class Alacritty-float --command home-terminal
+        # Remote laptop: lid close turns the screen off via DPMS without
+        # suspending. logind ignores the lid; see modules/system/lid.nix.
+        bindl = , switch:on:Lid Switch, exec, hyprctl dispatch dpms off
+        bindl = , switch:off:Lid Switch, exec, hyprctl dispatch dpms on
       ''
     else
       ''
