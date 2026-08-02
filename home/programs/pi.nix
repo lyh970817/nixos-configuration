@@ -71,6 +71,24 @@ let
         "$@"
     '';
   };
+
+  # Pi discovers First Mate's remaining project extensions itself. Load the
+  # watchdog pair explicitly too, matching the OMP route while keeping
+  # declarative settings packages (web access and server compaction) enabled.
+  firstmatePiLauncher = pkgs.writeShellApplication {
+    name = "firstmate-pi";
+    text = ''
+      ${piHostEnvironment}
+
+      export FM_HOME="/home/andongni/firstmate"
+      export FM_PI_HARNESS=pi
+      cd "$FM_HOME"
+      exec ${piLauncher}/bin/pi \
+        -e "$FM_HOME/.pi/extensions/fm-primary-turnend-guard.ts" \
+        -e "$FM_HOME/.pi/extensions/fm-primary-pi-watch.ts" \
+        "$@"
+    '';
+  };
 in
 {
   # Pi uses its native `openai-codex` provider, independently of the
@@ -85,6 +103,7 @@ in
     ompLauncher
     piLauncher
     firstmateLauncher
+    firstmatePiLauncher
 
     # First Mate's bootstrap remains detection-only. Nix owns these pinned
     # executables, while optional AXI hook integrations remain disabled: do not
