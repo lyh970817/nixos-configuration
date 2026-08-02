@@ -39,6 +39,8 @@ close_pane = "alt+q"
 zoom = "alt+f"
 goto = "alt+g"
 workspace_picker = "alt+w"
+previous_workspace = "alt+left"
+next_workspace = "alt+right"
 
 # Keep the native Ctrl-a index bindings while adding direct Alt selection.
 # Herdr selects by tab position, so tab labels may change freely.
