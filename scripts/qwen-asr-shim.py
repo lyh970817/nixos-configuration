@@ -97,10 +97,13 @@ QWEN_AGGRESSIVE_CLEANUP_PROMPT = _env(
 )
 QWEN_WARM_TIMEOUT = float(_env("QWEN_WARM_TIMEOUT", "8"))
 
-# Silence-gate tuning (see _RealtimeSilenceGate).
+# Silence-gate tuning (see _RealtimeSilenceGate). Floor measured over 1611
+# archived takes: quiet-room ambient ~40-140 RMS, speech mass >= ~1000;
+# high-ambient sessions idle at 500-1100 and cannot be gated safely by any
+# fixed floor, so 150 is deliberately a no-op there.
 TARGET_RATE = 16000
 _TRIM_MARGIN_MS = 200
-_TRIM_FLOOR = 80.0  # frames below this int16 RMS floor count as silence
+_TRIM_FLOOR = 150.0  # chunks below this int16 RMS count as silence
 
 QWEN_OMNI_REALTIME_WS_URL = (
     f"wss://{QWEN_ASR_HOST}/api-ws/v1/realtime?model={QWEN_OMNI_REALTIME_MODEL}"
