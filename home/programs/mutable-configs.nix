@@ -740,6 +740,9 @@ in
     "claude/skills/agent-config-setup".source = link "dotfiles/claude/skills/agent-config-setup";
     "claude/skills/bro".source = link "dotfiles/claude/skills/bro";
     "claude/skills/visual-verification".source = link "dotfiles/claude/skills/visual-verification";
+    "claude/skills/domain-context".source = link "dotfiles/claude/skills/domain-context";
+    "claude/skills/lavish".source = link "dotfiles/claude/skills/lavish";
+    "claude/skills/r-dev-shell".source = link "dotfiles/claude/skills/r-dev-shell";
     "claude/commands".source = link "dotfiles/claude/commands";
     "claude/output-styles".source = link "dotfiles/claude/output-styles";
     "claude/agents".source = link "dotfiles/claude/agents";
@@ -758,6 +761,9 @@ in
       link "dotfiles/claude/skills/nix-environment-setup";
     "claude-gpt56/skills/visual-verification".source =
       link "dotfiles/claude/skills/visual-verification";
+    "claude-gpt56/skills/domain-context".source = link "dotfiles/claude/skills/domain-context";
+    "claude-gpt56/skills/lavish".source = link "dotfiles/claude/skills/lavish";
+    "claude-gpt56/skills/r-dev-shell".source = link "dotfiles/claude/skills/r-dev-shell";
 
     # Claude has a profile per CLAUDE_CONFIG_DIR. Share only portable authored
     # assets with claude-mattpocock; its credential, settings, plugin state,
@@ -796,6 +802,18 @@ in
     };
     "claude-mattpocock/skills/bro" = {
       source = link "dotfiles/claude/skills/bro";
+      force = true;
+    };
+    "claude-mattpocock/skills/domain-context" = {
+      source = link "dotfiles/claude/skills/domain-context";
+      force = true;
+    };
+    "claude-mattpocock/skills/lavish" = {
+      source = link "dotfiles/claude/skills/lavish";
+      force = true;
+    };
+    "claude-mattpocock/skills/r-dev-shell" = {
+      source = link "dotfiles/claude/skills/r-dev-shell";
       force = true;
     };
   };

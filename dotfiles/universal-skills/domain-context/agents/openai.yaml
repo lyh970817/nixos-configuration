@@ -1,0 +1,7 @@
+interface:
+  display_name: "Domain Context"
+  short_description: "Apply repository domain context consistently"
+  default_prompt: "Use $domain-context to apply this repository's domain vocabulary and workflow guidance."
+
+policy:
+  allow_implicit_invocation: false

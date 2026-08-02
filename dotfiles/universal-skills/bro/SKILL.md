@@ -1,6 +1,7 @@
 ---
 name: bro
 description: Rewrite your immediately preceding response in plain, natural language without changing its meaning.
+disable-model-invocation: true
 ---
 
 # Bro

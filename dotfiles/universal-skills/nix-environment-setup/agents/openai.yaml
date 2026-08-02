@@ -1,0 +1,7 @@
+interface:
+  display_name: "Nix Env Setup"
+  short_description: "Set up shell.nix and direnv for missing tools"
+  default_prompt: "Use $nix-environment-setup to configure this project's shell.nix and direnv environment."
+
+policy:
+  allow_implicit_invocation: false

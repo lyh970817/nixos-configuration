@@ -1,6 +1,7 @@
 ---
 name: domain-context
 description: Use when planning, implementing, reviewing, debugging, or writing workflow artifacts in a repo with docs/agents/domain.md, CONTEXT.md, CONTEXT-MAP.md, ADRs, or behavior-affecting domain vocabulary.
+disable-model-invocation: true
 ---
 
 # Domain Context
