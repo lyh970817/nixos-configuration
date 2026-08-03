@@ -33,6 +33,59 @@ let
     export XDG_CONFIG_HOME="$cfgdir"
     ${pkgs.captive-browser}/bin/captive-browser
   '';
+
+  # See the systemd unit below for the failure this repairs.
+  reapStaleTailscaleSockets = pkgs.writeShellScript "tailscaled-reap-stale-sockets" ''
+    set -euo pipefail
+
+    pid="$(${pkgs.systemd}/bin/systemctl show -p MainPID --value tailscaled 2>/dev/null || true)"
+    if [ -z "$pid" ] || [ "$pid" = 0 ]; then
+      exit 0
+    fi
+
+    # Every address the kernel currently holds, on any interface.
+    assigned="$(${pkgs.iproute2}/bin/ip -o addr show \
+      | ${pkgs.gawk}/bin/awk '{print $4}' \
+      | ${pkgs.coreutils}/bin/cut -d/ -f1 \
+      | ${pkgs.coreutils}/bin/sort -u)"
+
+    # Default `ss -t` reports connected sockets only, so listeners (which bind
+    # wildcard addresses that would never match $assigned) are already excluded.
+    sockets="$(${pkgs.iproute2}/bin/ss -tnHp | ${pkgs.gnugrep}/bin/grep -F "pid=$pid," || true)"
+    if [ -z "$sockets" ]; then
+      exit 0
+    fi
+
+    printf '%s\n' "$sockets" | while read -r _state _recvq _sendq local peer _rest; do
+      # $local is "1.2.3.4:443" or "[2001:db8::1]:443".
+      port="''${local##*:}"
+      ip="''${local%:*}"
+      family=-4
+      src="$ip"
+      case "$ip" in
+        \[*\])
+          ip="''${ip#[}"
+          ip="''${ip%]}"
+          family=-6
+          src="[$ip]"
+          ;;
+      esac
+
+      case "$ip" in
+        "" | "*" | 0.0.0.0 | ::) continue ;;
+      esac
+
+      if printf '%s\n' "$assigned" | ${pkgs.gnugrep}/bin/grep -qxF "$ip"; then
+        continue
+      fi
+
+      ${pkgs.util-linux}/bin/logger -t tailscaled-reaper \
+        "Destroying tailscaled socket $local -> $peer (local address no longer assigned)."
+      ${pkgs.iproute2}/bin/ss "$family" -K "src $src:$port" >/dev/null || true
+    done
+
+    exit 0
+  '';
 in
 {
   # Hostname comes only from the generated /etc/nixos/local.nix (out-of-tree).
@@ -122,6 +175,40 @@ in
     pkgs.captive-browser
     pkgs.mosh
   ];
+
+  # tailscaled does not tear down its control connection when the kernel removes
+  # the IPv6 address that connection is bound to, which is what happens whenever
+  # the ISP delegates a new prefix: the old prefix's temporary (RFC 4941) address
+  # is deleted outright while tailscaled keeps the socket. Every /machine/map
+  # poll then hangs for its full 2-minute timeout, the coordination server marks
+  # the node offline, and it never self-heals. Peer traffic keeps flowing over
+  # WireGuard/UDP, so the only symptom is a node that reports "offline" while
+  # SSH to it plainly works. Upstream tailscale/tailscale#1726, open since 2021.
+  #
+  # A socket bound to an address the kernel no longer has can never recover, so
+  # destroying it is safe with no liveness check: tailscaled redials at once from
+  # a current address. This stays narrower than restarting tailscaled, which
+  # would drop live tailnet SSH sessions to repair a purely cosmetic-looking
+  # fault. Deprecated-but-still-assigned addresses are deliberately left alone --
+  # those are ordinary privacy-address rotation, where existing connections are
+  # meant to drain gracefully.
+  systemd.services.tailscaled-stale-socket-reaper = {
+    description = "Destroy tailscaled sockets bound to removed local addresses";
+    after = [ "tailscaled.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = reapStaleTailscaleSockets;
+    };
+  };
+  systemd.timers.tailscaled-stale-socket-reaper = {
+    description = "Periodically reap stale tailscaled sockets";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "2min";
+      OnUnitActiveSec = "1min";
+      AccuracySec = "10s";
+    };
+  };
 
   systemd.user.services."captive-browser-auto@" = {
     description = "Open captive portal browser on %i";
