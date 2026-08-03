@@ -18,6 +18,19 @@ let
       exec ${pkgs.codex}/bin/codex --dangerously-bypass-approvals-and-sandbox "$@"
     '';
   };
+
+  # Same First Mate primary route, layered with the mattpocock skills profile
+  # (~/.codex/mattpocock.config.toml, materialized from
+  # dotfiles/codex/profiles/mattpocock.config.toml by the codexPolicy
+  # activation script in mutable-configs.nix).
+  firstmateCodexMattLauncher = pkgs.writeShellApplication {
+    name = "firstmate-codex-matt";
+    text = ''
+      export FM_HOME="''${FM_HOME:-/home/andongni/firstmate}"
+      cd "$FM_HOME"
+      exec ${pkgs.codex}/bin/codex --profile mattpocock --dangerously-bypass-approvals-and-sandbox "$@"
+    '';
+  };
 in
 {
   # Keep terminal Apps disabled without changing the CLI Desktop launches.
@@ -25,6 +38,7 @@ in
   home.packages = [
     pkgs.codex
     firstmateCodexLauncher
+    firstmateCodexMattLauncher
   ];
 
   programs.codexDesktopLinux = {
