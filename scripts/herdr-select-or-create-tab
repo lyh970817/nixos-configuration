@@ -88,7 +88,8 @@ if [[ -e "$state_file" ]]; then
         (.key | test("^[1-9]$"))
         and ((.value | type) == "string")
         and ((.value | length) > 0)
-      );
+      )
+      and (([.[]] | unique | length) == ([.[]] | length));
     if (
       type == "object"
       and .version == 1
@@ -107,6 +108,29 @@ else
   state='{"version":1,"workspaces":{}}'
 fi
 
+persist_slot() {
+  local updated_state
+
+  if ! updated_state=$(jq -ce \
+    --arg workspace "$workspace_id" \
+    --arg slot "$number" \
+    --arg tab_id "$tab_id" '
+    .workspaces[$workspace] = (.workspaces[$workspace] // {})
+    | .workspaces[$workspace][$slot] = $tab_id
+  ' <<<"$state"); then
+    fail 'could not update the tab slot state'
+  fi
+
+  if ! temporary_state=$(mktemp "$state_dir/.tab-slots.json.XXXXXX"); then
+    fail "could not create temporary state file in $state_dir"
+  fi
+  printf '%s\n' "$updated_state" >"$temporary_state"
+  chmod 600 -- "$temporary_state"
+  mv -f -- "$temporary_state" "$state_file"
+  temporary_state=
+  state=$updated_state
+}
+
 if ! tab_id=$(jq -r --arg workspace "$workspace_id" --arg slot "$number" '
   .workspaces[$workspace][$slot] // empty
 ' <<<"$state"); then
@@ -124,6 +148,10 @@ load_tabs() {
         .result.tabs[];
         ((.tab_id | type) == "string")
         and ((.workspace_id | type) == "string")
+        and (
+          .number
+          | (type == "number" and floor == . and . > 0)
+        )
       )
     ) then .
     else error("invalid tab list")
@@ -138,6 +166,32 @@ tab_is_live() {
       .tab_id == $tab_id and .workspace_id == $workspace
     )
   ' <<<"$tabs" >/dev/null
+}
+
+tab_with_public_number() {
+  jq -r --arg workspace "$workspace_id" --argjson slot "$number" '
+    [
+      .result.tabs[]
+      | select(.workspace_id == $workspace and .number == $slot)
+      | .tab_id
+    ] as $tab_ids
+    | if ($tab_ids | length) == 0 then ""
+      elif ($tab_ids | length) == 1 then $tab_ids[0]
+      else error("duplicate public tab number")
+      end
+  ' <<<"$tabs"
+}
+
+tab_is_mapped_to_another_slot() {
+  jq -e \
+    --arg workspace "$workspace_id" \
+    --arg slot "$number" \
+    --arg tab_id "$tab_id" '
+    any(
+      (.workspaces[$workspace] // {}) | to_entries[];
+      .key != $slot and .value == $tab_id
+    )
+  ' <<<"$state" >/dev/null
 }
 
 if ! load_tabs; then
@@ -156,6 +210,31 @@ if [[ -n "$tab_id" ]] && tab_is_live; then
   fi
   if tab_is_live; then
     fail "could not focus mapped tab $tab_id"
+  fi
+fi
+
+# A missing or stale mapping can still have a deterministic live owner. Herdr
+# assigns public tab numbers per workspace, keeps them stable, and never reuses
+# them after close; persist the opaque tab ID once it is adopted.
+if ! adopted_tab_id=$(tab_with_public_number); then
+  fail "could not identify public tab number $number in workspace $workspace_id"
+fi
+if [[ -n "$adopted_tab_id" ]]; then
+  tab_id=$adopted_tab_id
+  if tab_is_mapped_to_another_slot; then
+    fail "public tab $tab_id is already assigned to another slot"
+  fi
+  if herdr tab focus "$tab_id"; then
+    persist_slot
+    exit 0
+  fi
+
+  # As above, only create after proving the adopted tab disappeared.
+  if ! load_tabs; then
+    fail "could not revalidate adopted tab slot $number in workspace $workspace_id"
+  fi
+  if tab_is_live; then
+    fail "could not focus adopted tab $tab_id"
   fi
 fi
 
@@ -190,20 +269,4 @@ if ! jq -e --arg workspace "$workspace_id" --arg tab_id "$tab_id" '
   fail "created tab $tab_id did not validate for workspace $workspace_id"
 fi
 
-if ! state=$(jq -ce \
-  --arg workspace "$workspace_id" \
-  --arg slot "$number" \
-  --arg tab_id "$tab_id" '
-  .workspaces[$workspace] = (.workspaces[$workspace] // {})
-  | .workspaces[$workspace][$slot] = $tab_id
-' <<<"$state"); then
-  fail 'could not update the tab slot state'
-fi
-
-if ! temporary_state=$(mktemp "$state_dir/.tab-slots.json.XXXXXX"); then
-  fail "could not create temporary state file in $state_dir"
-fi
-printf '%s\n' "$state" >"$temporary_state"
-chmod 600 -- "$temporary_state"
-mv -f -- "$temporary_state" "$state_file"
-temporary_state=
+persist_slot
