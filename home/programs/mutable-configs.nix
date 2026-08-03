@@ -61,6 +61,7 @@ let
     "codex-dynamic-workflows"
     "commit-guidelines"
     "domain-context"
+    "herdr"
     "lavish"
     "r-dev-shell"
     "root-browser-control"
@@ -391,17 +392,16 @@ in
   # creates the individual authored-resource links below. Otherwise the
   # activation can follow a legacy link into the repository and rewrite the
   # source tree with links back to the new generation.
-  home.activation.removeLegacyAgentDirectoryLinks =
-    lib.hm.dag.entryBefore [ "linkGeneration" ] ''
-      for legacy_link in \
-        "$HOME/.codex/rules" \
-        "$HOME/.codex/skills" \
-        "$HOME/.config/claude/skills"; do
-        if [ -L "$legacy_link" ]; then
-          run ${pkgs.coreutils}/bin/rm -f "$legacy_link"
-        fi
-      done
-    '';
+  home.activation.removeLegacyAgentDirectoryLinks = lib.hm.dag.entryBefore [ "linkGeneration" ] ''
+    for legacy_link in \
+      "$HOME/.codex/rules" \
+      "$HOME/.codex/skills" \
+      "$HOME/.config/claude/skills"; do
+      if [ -L "$legacy_link" ]; then
+        run ${pkgs.coreutils}/bin/rm -f "$legacy_link"
+      fi
+    done
+  '';
 
   home.activation.claudeSettings = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
     claude_jq=${pkgs.jq}/bin/jq
@@ -741,6 +741,7 @@ in
     "claude/skills/bro".source = link "dotfiles/claude/skills/bro";
     "claude/skills/visual-verification".source = link "dotfiles/claude/skills/visual-verification";
     "claude/skills/domain-context".source = link "dotfiles/claude/skills/domain-context";
+    "claude/skills/herdr".source = link "dotfiles/claude/skills/herdr";
     "claude/skills/r-dev-shell".source = link "dotfiles/claude/skills/r-dev-shell";
     "claude/commands".source = link "dotfiles/claude/commands";
     "claude/output-styles".source = link "dotfiles/claude/output-styles";
@@ -761,6 +762,7 @@ in
     "claude-gpt56/skills/visual-verification".source =
       link "dotfiles/claude/skills/visual-verification";
     "claude-gpt56/skills/domain-context".source = link "dotfiles/claude/skills/domain-context";
+    "claude-gpt56/skills/herdr".source = link "dotfiles/claude/skills/herdr";
     "claude-gpt56/skills/r-dev-shell".source = link "dotfiles/claude/skills/r-dev-shell";
 
     # Claude has a profile per CLAUDE_CONFIG_DIR. Share only portable authored
@@ -804,6 +806,10 @@ in
     };
     "claude-mattpocock/skills/domain-context" = {
       source = link "dotfiles/claude/skills/domain-context";
+      force = true;
+    };
+    "claude-mattpocock/skills/herdr" = {
+      source = link "dotfiles/claude/skills/herdr";
       force = true;
     };
     "claude-mattpocock/skills/r-dev-shell" = {

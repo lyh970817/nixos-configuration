@@ -18,6 +18,10 @@ in
     source = link "dotfiles/omp/skills";
     force = true;
   };
+  home.file.".omp/profiles/mattpocock/agent/skills/herdr" = {
+    source = link "dotfiles/universal-skills/herdr";
+    force = true;
+  };
 
   # OMP owns config.yml and rewrites it at runtime. Seed it only when absent,
   # then reconcile repository-owned leaves without replacing runtime state.

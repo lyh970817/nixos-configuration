@@ -131,6 +131,7 @@ in
     ".pi/agent/openai-server-compaction.json".source = link "dotfiles/pi/openai-server-compaction.json";
 
     ".pi/agent/models.json".source = link "dotfiles/pi/models.json";
+    ".pi/agent/skills/herdr".source = link "dotfiles/universal-skills/herdr";
 
     # pi never writes into its custom themes directory, so a live symlink is
     # safe here too. Colors are ANSI palette indices (0-15), not hex, so this
