@@ -23,6 +23,10 @@ let
       pkill swaybg || true
       ${pkgs.util-linux}/bin/setsid -f ${pkgs.swaybg}/bin/swaybg -c 000000 >/dev/null 2>&1
 
+      # Animated terminal wallpaper on top of the black swaybg layer. Only dark
+      # mode runs it; light mode wants its image wallpaper unobstructed.
+      ${pkgs.systemd}/bin/systemctl --user start escher-wallpaper.service || true
+
       # 2. HYPRLAND BACKGROUND COLOR (Misc setting)
       ${pkgs.hyprland}/bin/hyprctl keyword misc:background_color 0x000000
 
@@ -64,6 +68,9 @@ let
     ln -sf "$HOME/.config/hypr/themes/light.conf" "${hyprCurrentTheme}"
 
     # WALLPAPER
+    # Stop the animated terminal wallpaper first: as a hyprwinwrap background
+    # window it would otherwise cover the image below.
+    ${pkgs.systemd}/bin/systemctl --user stop escher-wallpaper.service || true
     pkill swaybg || true
     ${pkgs.util-linux}/bin/setsid -f ${pkgs.swaybg}/bin/swaybg -i "${lightWallpaper}" -m fit -c ffffff >/dev/null 2>&1
 

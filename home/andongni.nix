@@ -40,6 +40,7 @@
     ./programs/mutable-configs.nix
     ./directories.nix
     ./desktop/btop-workspace.nix
+    ./desktop/escher-wallpaper.nix
     ./desktop/theming.nix
     ./desktop/hyprsunset.nix
     ./desktop/xdg.nix
