@@ -39,6 +39,7 @@ close_pane = "alt+q"
 zoom = "alt+f"
 goto = "alt+g"
 workspace_picker = "alt+w"
+new_workspace = "alt+n"
 previous_workspace = "alt+left"
 next_workspace = "alt+right"
 
