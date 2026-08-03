@@ -32,7 +32,10 @@ in
 
     plugin {
         hyprwinwrap {
-            class = ^(${wallpaperClass})$
+            # Plain string: hyprwinwrap compares the class literally, so a
+            # ^(...)$ regex here silently matches nothing and the window is
+            # laid out as an ordinary tiled window instead.
+            class = ${wallpaperClass}
         }
     }
 
