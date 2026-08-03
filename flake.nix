@@ -65,7 +65,6 @@
           codex-desktop-isolated = final.callPackage ./pkgs/codex-desktop-isolated.nix {
             codexDesktopPackage = codex-desktop-linux.packages.${system}.codex-desktop;
           };
-          escher-stairs = final.callPackage ./pkgs/escher-stairs.nix { };
           kreuzberg-cli = final.callPackage ./pkgs/kreuzberg-cli.nix { };
           digg-pp-cli = final.callPackage ./pkgs/digg-pp-cli.nix { };
           # Upstream flake ships the package directly; take it from the pinned input.
