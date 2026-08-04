@@ -178,21 +178,10 @@ let
       jq
     ];
     text = ''
-      # Three presentations of the same data, for side-by-side comparison:
-      #   block       one Tailnet-shaped row per provider, windows labelled
-      #   block-bare  the same rows without the 5h/7d labels
-      #   line NAME   a single flat entry for one provider, unlabelled
-      # Rows carry a bullet for "has quota left right now"; every window shows
-      # its remaining percentage and a countdown to its reset.
-      mode="''${1:-}"
-      case "$mode" in
-        block | block-bare | line) ;;
-        *)
-          printf 'unavailable\n'
-          exit 0
-          ;;
-      esac
-
+      # Renders one indented row per provider, in the same shape as the Tailnet
+      # block: a bullet for "has quota left right now", then each window's
+      # remaining percentage followed by a countdown to its reset. The windows
+      # are always the 5-hour and 7-day ones, so they go unlabelled.
       cache_path=${lib.escapeShellArg codexbarCachePath}
       indent='                     '
 
@@ -261,51 +250,26 @@ let
         fi
       }
 
-      # A window's remaining figure with its countdown appended, e.g. "56% (1h)".
-      cell() {
-        local remaining="$1" reset="$2"
-        if [[ -z "$remaining" ]]; then
-          remaining='-'
-        fi
-        if [[ -n "$reset" ]]; then
-          printf '%s %s' "$remaining" "$reset"
-        else
-          printf '%s' "$remaining"
-        fi
-      }
-
-      if [[ "$mode" == line ]]; then
-        mapfile -t entry < <(query "''${2:-}")
-        if [[ "''${entry[0]}" == unavailable ]]; then
-          printf 'unavailable\n'
-          exit 0
-        fi
-        printf '%s · %s\n' \
-          "$(cell "''${entry[1]}" "$(countdown "''${entry[3]}")")" \
-          "$(cell "''${entry[2]}" "$(countdown "''${entry[4]}")")"
-        exit 0
-      fi
-
       mapfile -t codex < <(query codex)
       mapfile -t claude < <(query claude)
 
-      codex_reset5=$(countdown "''${codex[3]}")
-      codex_reset7=$(countdown "''${codex[4]}")
-      claude_reset5=$(countdown "''${claude[3]}")
-      claude_reset7=$(countdown "''${claude[4]}")
-
-      # A window the provider does not report at all reads as a dash.
-      dash_if_empty() {
+      # A window the provider does not report reads as N/A in both of its
+      # columns, so the row keeps its shape instead of leaving a gap.
+      na_if_empty() {
         if [[ -z "$1" ]]; then
-          printf -- '-'
+          printf 'N/A'
         else
           printf '%s' "$1"
         fi
       }
-      codex_left5=$(dash_if_empty "''${codex[1]}")
-      codex_left7=$(dash_if_empty "''${codex[2]}")
-      claude_left5=$(dash_if_empty "''${claude[1]}")
-      claude_left7=$(dash_if_empty "''${claude[2]}")
+      codex_left5=$(na_if_empty "''${codex[1]}")
+      codex_left7=$(na_if_empty "''${codex[2]}")
+      claude_left5=$(na_if_empty "''${claude[1]}")
+      claude_left7=$(na_if_empty "''${claude[2]}")
+      codex_reset5=$(na_if_empty "$(countdown "''${codex[3]}")")
+      codex_reset7=$(na_if_empty "$(countdown "''${codex[4]}")")
+      claude_reset5=$(na_if_empty "$(countdown "''${claude[3]}")")
+      claude_reset7=$(na_if_empty "$(countdown "''${claude[4]}")")
 
       widest() {
         local result=0 candidate
@@ -321,15 +285,6 @@ let
       width_reset5=$(widest "$codex_reset5" "$claude_reset5")
       width_left7=$(widest "$codex_left7" "$claude_left7")
 
-      # block labels each window, block-bare leaves the periods implicit.
-      if [[ "$mode" == block ]]; then
-        label5='5h '
-        label7='7d '
-      else
-        label5=""
-        label7=""
-      fi
-
       row() {
         local state="$1" name="$2" left5="$3" reset5="$4" left7="$5" reset7="$6" bullet
         if [[ "$state" == ok ]]; then
@@ -341,10 +296,10 @@ let
           printf '%s%s %-*s unavailable\n' "$indent" "$bullet" "$name_width" "$name"
           return
         fi
-        printf '%s%s %-*s %s%*s %-*s · %s%*s %s\n' \
+        printf '%s%s %-*s %*s %-*s · %*s %s\n' \
           "$indent" "$bullet" "$name_width" "$name" \
-          "$label5" "$width_left5" "$left5" "$width_reset5" "$reset5" \
-          "$label7" "$width_left7" "$left7" "$reset7"
+          "$width_left5" "$left5" "$width_reset5" "$reset5" \
+          "$width_left7" "$left7" "$reset7"
       }
 
       printf '\n'
@@ -400,27 +355,12 @@ in
           key = "Mihomo";
           text = "status=$(systemctl is-active mihomo 2>/dev/null); if [ \"$status\" = \"active\" ]; then config=$(curl -s http://127.0.0.1:9090/configs 2>/dev/null); mode=$(echo \"$config\" | jq -r '.mode' 2>/dev/null); tun=$(echo \"$config\" | jq -r 'if .tun.enable then \"TUN\" else \"noTUN\" end' 2>/dev/null); proxy=$(curl -s http://127.0.0.1:9090/proxies 2>/dev/null | jq -r '[.proxies | to_entries[] | select(.value.type == \"Selector\" and .key != \"GLOBAL\")] | .[0].value.now' 2>/dev/null); echo \"$mode | $proxy | $tun\"; else echo \"inactive\"; fi";
         }
-        {
-          type = "command";
-          key = "Codex";
-          text = "fastfetch-codexbar line codex";
-        }
-        {
-          type = "command";
-          key = "Claude";
-          text = "fastfetch-codexbar line claude";
-        }
-        # A blank key renders a block with no header, and supplies the blank
+        # A blank key renders the block with no header, and supplies the blank
         # line that would otherwise need a Break.
         {
           type = "command";
           key = " ";
-          text = "fastfetch-codexbar block";
-        }
-        {
-          type = "command";
-          key = " ";
-          text = "fastfetch-codexbar block-bare";
+          text = "fastfetch-codexbar";
         }
         "Break"
         {
