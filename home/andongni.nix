@@ -27,6 +27,7 @@
     ./programs/claude.nix
     ./programs/cli-proxy-api.nix
     ./programs/codex-desktop.nix
+    ./programs/claude-desktop.nix
     ./programs/visual-verification.nix
     ./programs/gemini.nix
     ./programs/herdr.nix

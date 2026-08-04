@@ -19,6 +19,7 @@
       "docker"
       "input"
       "uinput"
+      "kvm"
     ];
     shell = pkgs.zsh;
   };

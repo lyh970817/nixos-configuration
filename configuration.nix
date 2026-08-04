@@ -45,6 +45,7 @@
     ./modules/programs/input-method.nix
     ./modules/programs/firefox.nix
     ./modules/programs/development.nix
+    ./modules/programs/claude-desktop.nix
 
     # User accounts
     ./users/andongni.nix
