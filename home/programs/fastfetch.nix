@@ -174,59 +174,136 @@ let
   fastfetchCodexbar = pkgs.writeShellApplication {
     name = "fastfetch-codexbar";
     runtimeInputs = with pkgs; [
+      coreutils
       jq
     ];
     text = ''
-      provider="''${1:-}"
-      case "$provider" in
-        codex|claude) ;;
-        *)
-          printf 'unavailable\n'
-          exit 0
-          ;;
-      esac
-
+      # Renders one indented row per provider, in the same shape as the Tailnet
+      # block: a bullet for "has quota left right now", then the remaining
+      # percentage of each window followed by a countdown to that window's reset.
       cache_path=${lib.escapeShellArg codexbarCachePath}
-      if [[ ! -r "$cache_path" ]]; then
-        printf 'unavailable\n'
-        exit 0
-      fi
+      indent='                     '
 
-      rendered=$(jq -r --arg provider "$provider" '
-        def remaining($window):
-          if ($window == null or $window.usedPercent == null) then "?"
-          else ((100 - $window.usedPercent) | round | tostring) + "%"
-          end;
-        def exhausted($window):
-          ($window != null and $window.usedPercent != null and $window.usedPercent >= 100);
-        def effective_remaining($usage):
-          if (exhausted($usage.primary) or exhausted($usage.secondary)) then
-            "5h 0% · 7d 0%"
-          else
-            "5h \(remaining($usage.primary)) · 7d \(remaining($usage.secondary))"
-          end;
+      # Emit five lines for one provider: state, 5h remaining, 7d remaining, 5h
+      # resetsAt, 7d resetsAt. Line-delimited rather than tab-delimited because
+      # bash read collapses runs of tabs, which drops an empty resetsAt field.
+      # State is "spent" when either window is used up, which is what turns the
+      # bullet hollow; the per-window figures stay truthful either way.
+      query() {
+        local out
+        if [[ -r "$cache_path" ]] && out=$(jq -r --arg provider "$1" '
+          def remaining($window):
+            if ($window == null or $window.usedPercent == null) then ""
+            else ((100 - $window.usedPercent) | round | tostring) + "%"
+            end;
+          def exhausted($window):
+            ($window != null and $window.usedPercent != null and $window.usedPercent >= 100);
 
-        (if type == "array" then . else [.] end)
-        | map(select(.provider == $provider))
-        | if length == 0 then
-            "unavailable"
-          else
-            map(
-              if .usage == null then
-                "unavailable"
+          (if type == "array" then . else [.] end)
+          | map(select(.provider == $provider))
+          | if length == 0 then ["unavailable", "", "", "", ""]
+            else .[0] as $entry
+            | if $entry.usage == null then ["unavailable", "", "", "", ""]
               else
-                "\(effective_remaining(.usage))"
+                [ (if (exhausted($entry.usage.primary) or exhausted($entry.usage.secondary))
+                   then "spent" else "ok" end),
+                  remaining($entry.usage.primary),
+                  remaining($entry.usage.secondary),
+                  ($entry.usage.primary.resetsAt // ""),
+                  ($entry.usage.secondary.resetsAt // "") ]
               end
-            )
-            | join(" · ")
-          end
-      ' "$cache_path" 2>/dev/null || true)
+            end
+          | .[]
+        ' "$cache_path" 2>/dev/null) && [[ $(wc -l <<< "$out") -eq 5 ]]; then
+          printf '%s\n' "$out"
+        else
+          printf 'unavailable\n\n\n\n\n'
+        fi
+      }
 
-      if [[ -n "$rendered" ]]; then
-        printf '%s\n' "$rendered"
-      else
-        printf 'unavailable\n'
-      fi
+      now=$(date +%s)
+
+      # Coarse single-unit countdown in parentheses, empty when the window has
+      # no known reset time.
+      countdown() {
+        local timestamp="$1" target delta days hours minutes
+        if [[ -z "$timestamp" ]]; then
+          return
+        fi
+        if ! target=$(date -d "$timestamp" +%s 2>/dev/null); then
+          return
+        fi
+        delta=$(( target - now ))
+        if (( delta < 0 )); then
+          delta=0
+        fi
+        days=$(( delta / 86400 ))
+        hours=$(( (delta % 86400) / 3600 ))
+        minutes=$(( (delta % 3600) / 60 ))
+        if (( days > 0 )); then
+          printf '(%dd)' "$days"
+        elif (( hours > 0 )); then
+          printf '(%dh)' "$hours"
+        else
+          printf '(%dm)' "$minutes"
+        fi
+      }
+
+      mapfile -t codex < <(query codex)
+      mapfile -t claude < <(query claude)
+
+      codex_reset5=$(countdown "''${codex[3]}")
+      codex_reset7=$(countdown "''${codex[4]}")
+      claude_reset5=$(countdown "''${claude[3]}")
+      claude_reset7=$(countdown "''${claude[4]}")
+
+      # A window the provider does not report at all reads as a dash.
+      dash_if_empty() {
+        if [[ -z "$1" ]]; then
+          printf -- '-'
+        else
+          printf '%s' "$1"
+        fi
+      }
+      codex_left5=$(dash_if_empty "''${codex[1]}")
+      codex_left7=$(dash_if_empty "''${codex[2]}")
+      claude_left5=$(dash_if_empty "''${claude[1]}")
+      claude_left7=$(dash_if_empty "''${claude[2]}")
+
+      widest() {
+        local result=0 candidate
+        for candidate in "$@"; do
+          if (( ''${#candidate} > result )); then
+            result=''${#candidate}
+          fi
+        done
+        printf '%d' "$result"
+      }
+      name_width=$(widest codex claude)
+      width_left5=$(widest "$codex_left5" "$claude_left5")
+      width_reset5=$(widest "$codex_reset5" "$claude_reset5")
+      width_left7=$(widest "$codex_left7" "$claude_left7")
+
+      row() {
+        local state="$1" name="$2" left5="$3" reset5="$4" left7="$5" reset7="$6" bullet
+        if [[ "$state" == ok ]]; then
+          bullet='●'
+        else
+          bullet='○'
+        fi
+        if [[ "$state" == unavailable ]]; then
+          printf '%s%s %-*s unavailable\n' "$indent" "$bullet" "$name_width" "$name"
+          return
+        fi
+        printf '%s%s %-*s 5h %*s %-*s · 7d %*s %s\n' \
+          "$indent" "$bullet" "$name_width" "$name" \
+          "$width_left5" "$left5" "$width_reset5" "$reset5" \
+          "$width_left7" "$left7" "$reset7"
+      }
+
+      printf '\n'
+      row "''${codex[0]}" codex "$codex_left5" "$codex_reset5" "$codex_left7" "$codex_reset7"
+      row "''${claude[0]}" claude "$claude_left5" "$claude_reset5" "$claude_left7" "$claude_reset7"
     '';
   };
 
@@ -277,10 +354,11 @@ in
           key = "Mihomo";
           text = "status=$(systemctl is-active mihomo 2>/dev/null); if [ \"$status\" = \"active\" ]; then config=$(curl -s http://127.0.0.1:9090/configs 2>/dev/null); mode=$(echo \"$config\" | jq -r '.mode' 2>/dev/null); tun=$(echo \"$config\" | jq -r 'if .tun.enable then \"TUN\" else \"noTUN\" end' 2>/dev/null); proxy=$(curl -s http://127.0.0.1:9090/proxies 2>/dev/null | jq -r '[.proxies | to_entries[] | select(.value.type == \"Selector\" and .key != \"GLOBAL\")] | .[0].value.now' 2>/dev/null); echo \"$mode | $proxy | $tun\"; else echo \"inactive\"; fi";
         }
+        "Break"
         {
           type = "command";
-          key = builtins.fromJSON ''"\u001b[1mCodex\u001b[22m"'';
-          text = "printf '%s | \\033[1mClaude\\033[22m: %s' \"$(fastfetch-codexbar codex)\" \"$(fastfetch-codexbar claude)\"";
+          key = "Agents";
+          text = "fastfetch-codexbar";
         }
         "Break"
         {
