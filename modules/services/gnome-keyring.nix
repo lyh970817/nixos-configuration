@@ -16,6 +16,13 @@
   # already sets the real security boundary at physical access.
   services.gnome.gnome-keyring.enable = true;
 
+  # nixpkgs defaults this to gnome-keyring's own enable flag, and the socket
+  # unit runs `systemctl --user set-environment SSH_AUTH_SOCK=%t/gcr/ssh` in
+  # ExecStartPost. That would shadow the Bitwarden agent socket that
+  # home/andongni.nix puts in SSH_AUTH_SOCK, so keep the keyring's secrets
+  # component without letting it take over ssh.
+  services.gnome.gcr-ssh-agent.enable = false;
+
   security.pam.services.greetd.enableGnomeKeyring = true;
   security.pam.services.login.enableGnomeKeyring = true;
 }
