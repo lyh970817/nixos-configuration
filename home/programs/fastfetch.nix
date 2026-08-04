@@ -410,14 +410,13 @@ in
           key = "Claude";
           text = "fastfetch-codexbar line claude";
         }
-        "Break"
+        # A blank key renders a block with no header, and supplies the blank
+        # line that would otherwise need a Break.
         {
           type = "command";
-          key = "Agents";
+          key = " ";
           text = "fastfetch-codexbar block";
         }
-        # A blank key renders the block with no header, and supplies the blank
-        # line that would otherwise need a Break.
         {
           type = "command";
           key = " ";
