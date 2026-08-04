@@ -178,9 +178,21 @@ let
       jq
     ];
     text = ''
-      # Renders one indented row per provider, in the same shape as the Tailnet
-      # block: a bullet for "has quota left right now", then the remaining
-      # percentage of each window followed by a countdown to that window's reset.
+      # Three presentations of the same data, for side-by-side comparison:
+      #   block       one Tailnet-shaped row per provider, windows labelled
+      #   block-bare  the same rows without the 5h/7d labels
+      #   line NAME   a single flat entry for one provider, unlabelled
+      # Rows carry a bullet for "has quota left right now"; every window shows
+      # its remaining percentage and a countdown to its reset.
+      mode="''${1:-}"
+      case "$mode" in
+        block | block-bare | line) ;;
+        *)
+          printf 'unavailable\n'
+          exit 0
+          ;;
+      esac
+
       cache_path=${lib.escapeShellArg codexbarCachePath}
       indent='                     '
 
@@ -249,6 +261,31 @@ let
         fi
       }
 
+      # A window's remaining figure with its countdown appended, e.g. "56% (1h)".
+      cell() {
+        local remaining="$1" reset="$2"
+        if [[ -z "$remaining" ]]; then
+          remaining='-'
+        fi
+        if [[ -n "$reset" ]]; then
+          printf '%s %s' "$remaining" "$reset"
+        else
+          printf '%s' "$remaining"
+        fi
+      }
+
+      if [[ "$mode" == line ]]; then
+        mapfile -t entry < <(query "''${2:-}")
+        if [[ "''${entry[0]}" == unavailable ]]; then
+          printf 'unavailable\n'
+          exit 0
+        fi
+        printf '%s · %s\n' \
+          "$(cell "''${entry[1]}" "$(countdown "''${entry[3]}")")" \
+          "$(cell "''${entry[2]}" "$(countdown "''${entry[4]}")")"
+        exit 0
+      fi
+
       mapfile -t codex < <(query codex)
       mapfile -t claude < <(query claude)
 
@@ -284,6 +321,15 @@ let
       width_reset5=$(widest "$codex_reset5" "$claude_reset5")
       width_left7=$(widest "$codex_left7" "$claude_left7")
 
+      # block labels each window, block-bare leaves the periods implicit.
+      if [[ "$mode" == block ]]; then
+        label5='5h '
+        label7='7d '
+      else
+        label5=""
+        label7=""
+      fi
+
       row() {
         local state="$1" name="$2" left5="$3" reset5="$4" left7="$5" reset7="$6" bullet
         if [[ "$state" == ok ]]; then
@@ -295,10 +341,10 @@ let
           printf '%s%s %-*s unavailable\n' "$indent" "$bullet" "$name_width" "$name"
           return
         fi
-        printf '%s%s %-*s 5h %*s %-*s · 7d %*s %s\n' \
+        printf '%s%s %-*s %s%*s %-*s · %s%*s %s\n' \
           "$indent" "$bullet" "$name_width" "$name" \
-          "$width_left5" "$left5" "$width_reset5" "$reset5" \
-          "$width_left7" "$left7" "$reset7"
+          "$label5" "$width_left5" "$left5" "$width_reset5" "$reset5" \
+          "$label7" "$width_left7" "$left7" "$reset7"
       }
 
       printf '\n'
@@ -354,11 +400,28 @@ in
           key = "Mihomo";
           text = "status=$(systemctl is-active mihomo 2>/dev/null); if [ \"$status\" = \"active\" ]; then config=$(curl -s http://127.0.0.1:9090/configs 2>/dev/null); mode=$(echo \"$config\" | jq -r '.mode' 2>/dev/null); tun=$(echo \"$config\" | jq -r 'if .tun.enable then \"TUN\" else \"noTUN\" end' 2>/dev/null); proxy=$(curl -s http://127.0.0.1:9090/proxies 2>/dev/null | jq -r '[.proxies | to_entries[] | select(.value.type == \"Selector\" and .key != \"GLOBAL\")] | .[0].value.now' 2>/dev/null); echo \"$mode | $proxy | $tun\"; else echo \"inactive\"; fi";
         }
+        {
+          type = "command";
+          key = "Codex";
+          text = "fastfetch-codexbar line codex";
+        }
+        {
+          type = "command";
+          key = "Claude";
+          text = "fastfetch-codexbar line claude";
+        }
         "Break"
         {
           type = "command";
           key = "Agents";
-          text = "fastfetch-codexbar";
+          text = "fastfetch-codexbar block";
+        }
+        # A blank key renders the block with no header, and supplies the blank
+        # line that would otherwise need a Break.
+        {
+          type = "command";
+          key = " ";
+          text = "fastfetch-codexbar block-bare";
         }
         "Break"
         {
