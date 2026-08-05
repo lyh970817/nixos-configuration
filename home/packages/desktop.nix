@@ -9,7 +9,6 @@
     playerctl
     brave
     chromium
-    qutebrowser
     libnotify
     calibre
     sioyek
