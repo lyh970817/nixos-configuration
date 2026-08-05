@@ -1,7 +1,5 @@
 {
   pkgs,
-  lib,
-  osConfig,
   ...
 }:
 
@@ -11,5 +9,5 @@
   # without a system-wide libvirt/QEMU stack (see
   # modules/programs/claude-desktop.nix for the one host-side piece, the
   # vhost_vsock kernel module, that the FHS env can't provide itself).
-  home.packages = lib.mkIf (osConfig.portable.role == "home") [ pkgs.claude-desktop-fhs ];
+  home.packages = [ pkgs.claude-desktop-fhs ];
 }
