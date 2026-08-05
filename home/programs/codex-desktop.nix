@@ -6,9 +6,7 @@
 }:
 let
   link = subpath: config.lib.file.mkOutOfStoreSymlink "${osConfig.portable.configDir}/${subpath}";
-in
 
-let
   # Alternate First Mate primary route, matching firstmateClaudeLauncher in
   # home/programs/claude.nix. fm-spawn.sh's codex crewmate launch template
   # always passes --dangerously-bypass-approvals-and-sandbox, so the primary
