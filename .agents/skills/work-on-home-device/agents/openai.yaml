@@ -1,4 +1,0 @@
-interface:
-  display_name: "Work on Home Device"
-  short_description: "Safely operate on the linglong home NixOS host"
-  default_prompt: "Use $work-on-home-device to work safely on the linglong home device from this NixOS configuration repository."

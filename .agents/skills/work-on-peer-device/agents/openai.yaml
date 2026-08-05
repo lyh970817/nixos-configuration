@@ -1,0 +1,4 @@
+interface:
+  display_name: "Work on Peer Device"
+  short_description: "Safely operate on the other host of the home/remote NixOS pair"
+  default_prompt: "Use $work-on-peer-device to work safely on the peer machine (home desktop or remote laptop) from this NixOS configuration repository."
