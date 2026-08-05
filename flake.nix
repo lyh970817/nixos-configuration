@@ -21,6 +21,12 @@
       url = "github:ilysenko/codex-desktop-linux";
     };
 
+    # Official Anthropic .deb repackaged for Nix, with Cowork's KVM-backed
+    # VM stack (qemu_kvm, OVMF, virtiofsd) bundled into the FHS variant.
+    claude-desktop-debian = {
+      url = "github:aaddrick/claude-desktop-debian";
+    };
+
     herdr = {
       url = "github:ogulcancelik/herdr/v0.7.5";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -36,6 +42,7 @@
       nur,
       pre-commit-hooks,
       codex-desktop-linux,
+      claude-desktop-debian,
       herdr,
       ...
     }:
@@ -123,6 +130,7 @@
           {
             nixpkgs.overlays = [
               nur.overlays.default
+              claude-desktop-debian.overlays.default
               customOverlay
             ];
           }

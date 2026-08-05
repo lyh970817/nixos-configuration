@@ -37,6 +37,20 @@
           chars = "\\u001b[13;2u"; # CSI-u Shift+Enter for Codex multiline input
         }
         {
+          key = "Return";
+          mods = "Alt";
+          # CSI-u Alt+Enter for herdr's split_vertical (dotfiles/herdr/config.toml).
+          # Without this, Alacritty falls back to legacy ESC-then-Return encoding,
+          # which forces herdr to buffer the lone ESC and guess whether a second
+          # byte is coming. Over mosh to Home, network latency can delay that
+          # second byte past herdr's internal guess-timeout, so the chord splits
+          # into a bare Escape plus an ordinary Enter and the binding never fires
+          # (confirmed via a "flushing lone escape after input timeout" warning in
+          # herdr-server.log). A CSI-u sequence arrives as one atomic escape
+          # sequence, so no guessing is needed.
+          chars = "\\u001b[13;3u";
+        }
+        {
           key = "Insert";
           mods = "Shift";
           action = "Paste";
