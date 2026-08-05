@@ -44,8 +44,42 @@ let
         codexbar_status=$?
       fi
 
+      # A provider whose credentials have gone stale still comes back in the
+      # array, but with a null usage object. Claude does this every time its
+      # OAuth access token ages out, because CodexBar reads that token and
+      # refuses to renew it — only the Claude CLI itself rewrites the file. Rather
+      # than blank the row until the next Claude session, keep the last figures
+      # this provider reported and let them stand in.
+      merge_filter='
+        def as_array: if type == "array" then . else [.] end;
+
+        ($previous | as_array | map(select(.provider != null))) as $old
+        | (as_array | map(select(.provider != null))) as $new
+        | ([$old[].provider] - [$new[].provider]) as $dropped
+        | ( $new
+            | map(
+                . as $entry
+                | ($old | map(select(.provider == $entry.provider)) | first) as $prior
+                | if ($entry.usage // null) != null then $entry
+                  elif ($prior != null and ($prior.usage // null) != null) then $prior
+                  else $entry
+                  end
+              )
+          )
+          + ($old | map(select(.provider as $p | ($dropped | index($p)) != null)))
+      '
+
       if [ -n "$response" ] && printf '%s\n' "$response" | jq empty >/dev/null 2>&1; then
-        printf '%s\n' "$response" > "$tmp_path"
+        previous='[]'
+        if [ -r "$cache_path" ] && jq empty "$cache_path" >/dev/null 2>&1; then
+          previous=$(cat "$cache_path")
+        fi
+
+        if ! printf '%s\n' "$response" \
+          | jq --argjson previous "$previous" "$merge_filter" > "$tmp_path"; then
+          printf 'merging cached usage failed; caching the raw response\n' >&2
+          printf '%s\n' "$response" > "$tmp_path"
+        fi
         chmod 600 "$tmp_path"
         mv -f "$tmp_path" "$cache_path"
         trap - EXIT
