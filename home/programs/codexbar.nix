@@ -50,6 +50,7 @@ let
       # refuses to renew it — only the Claude CLI itself rewrites the file. Rather
       # than blank the row until the next Claude session, keep the last figures
       # this provider reported and let them stand in.
+      # shellcheck disable=SC2016  # the $names below are jq variables, not shell ones
       merge_filter='
         def as_array: if type == "array" then . else [.] end;
 
