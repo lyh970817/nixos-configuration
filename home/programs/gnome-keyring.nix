@@ -17,8 +17,8 @@
   # headless-ish Hyprland session.
   #
   # An empty passphrase means gnome-keyring keeps the keyring in its plaintext
-  # textual format, which is unlocked by definition, so pam has nothing to
-  # unlock and apps see a ready `default` collection at first use. The tradeoff
+  # textual format, which the daemon opens transparently on first use — no
+  # passphrase to ask for, so no prompter is ever spawned. The tradeoff
   # is the one already accepted in the system module: login.keyring is cleartext
   # on an unencrypted root, where autologin has put the security boundary at
   # physical access anyway.
