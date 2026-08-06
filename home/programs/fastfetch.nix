@@ -362,7 +362,7 @@ in
         }
         {
           type = "command";
-          key = "~/home";
+          key = "Disk (~/home)";
           text = "fastfetch-peer-home";
         }
         "Memory"
