@@ -61,6 +61,9 @@
     JAVA_HOME = "${pkgs.jdk17}/lib/openjdk";
     SSH_AUTH_SOCK = "$HOME/.bitwarden-ssh-agent.sock";
     NPM_CONFIG_PREFIX = "$HOME/.npm-global";
+    # Keep Go's module and build caches out of the home-directory root.
+    GOMODCACHE = "$HOME/.cache/go/mod";
+    GOCACHE = "$HOME/.cache/go/build";
     SCRATCH_DIR = "$HOME/.scratch";
     PI_NO_PTY = "1";
   };
