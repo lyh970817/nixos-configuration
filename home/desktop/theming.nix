@@ -7,7 +7,6 @@
 
 let
   lightWallpaper = "$HOME/.local/share/wallpapers/Taiji_mandala.png";
-  darkWallpaper = "$HOME/.local/share/wallpapers/Mandala_braille_dark.png";
   hyprCurrentTheme = "$HOME/.local/state/hypr/current-theme.conf";
 
   # Dark Mode Script
@@ -21,20 +20,21 @@ let
     mkdir -p "$HOME/.local/state/hypr"
 
     # 1. WALLPAPER (Kill old, start new)
-      pkill swaybg || true
-      ${pkgs.util-linux}/bin/setsid -f ${pkgs.swaybg}/bin/swaybg -i "${darkWallpaper}" -m fit -c 000000 >/dev/null 2>&1
+    pkill swaybg || true
+    ${pkgs.util-linux}/bin/setsid -f ${pkgs.swaybg}/bin/swaybg -c 000000 >/dev/null 2>&1
+    ${pkgs.systemd}/bin/systemctl --user start mandala-wallpaper.service || true
 
-      # 2. HYPRLAND BACKGROUND COLOR (Misc setting)
-      ${pkgs.hyprland}/bin/hyprctl keyword misc:background_color 0x000000
+    # 2. HYPRLAND BACKGROUND COLOR (Misc setting)
+    ${pkgs.hyprland}/bin/hyprctl keyword misc:background_color 0x000000
 
-      # 3. HYPRLAND THEME (Symlink + Live Settings)
-      ln -sf "$HOME/.config/hypr/themes/dark.conf" "${hyprCurrentTheme}"
+    # 3. HYPRLAND THEME (Symlink + Live Settings)
+    ln -sf "$HOME/.config/hypr/themes/dark.conf" "${hyprCurrentTheme}"
 
-      # Live update gaps/borders
-      ${pkgs.hyprland}/bin/hyprctl keyword general:gaps_in 20
-      ${pkgs.hyprland}/bin/hyprctl keyword general:gaps_out 30
-      ${pkgs.hyprland}/bin/hyprctl keyword general:border_size 2
-      ${pkgs.hyprland}/bin/hyprctl keyword general:col.active_border "rgba(056608ff)"
+    # Live update gaps/borders
+    ${pkgs.hyprland}/bin/hyprctl keyword general:gaps_in 20
+    ${pkgs.hyprland}/bin/hyprctl keyword general:gaps_out 30
+    ${pkgs.hyprland}/bin/hyprctl keyword general:border_size 2
+    ${pkgs.hyprland}/bin/hyprctl keyword general:col.active_border "rgba(056608ff)"
 
     ln -sf $HOME/.config/rofi/themes/dark.rasi $HOME/.config/rofi/current.rasi
 
@@ -65,6 +65,7 @@ let
     ln -sf "$HOME/.config/hypr/themes/light.conf" "${hyprCurrentTheme}"
 
     # WALLPAPER
+    ${pkgs.systemd}/bin/systemctl --user stop mandala-wallpaper.service || true
     pkill swaybg || true
     ${pkgs.util-linux}/bin/setsid -f ${pkgs.swaybg}/bin/swaybg -i "${lightWallpaper}" -m fit -c ffffff >/dev/null 2>&1
 
@@ -190,7 +191,6 @@ in
 
   # Managed Assets (Themes & Icons)
   xdg.dataFile."wallpapers/Taiji_mandala.png".source = ../../assets/wallpapers/Taiji_mandala.png;
-  xdg.dataFile."wallpapers/Mandala_braille_dark.png".source = ../../assets/wallpapers/Mandala_braille_dark.png;
   xdg.dataFile."themes/Trinity".source = ../../assets/themes/Trinity;
   xdg.dataFile."icons/Matrix-Icons".source = ../../assets/icons/Matrix-Icons;
   xdg.dataFile."icons/Hacker-C".source = ../../assets/icons/Hacker-C;
