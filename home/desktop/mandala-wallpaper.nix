@@ -10,37 +10,42 @@ let
     executable = true;
     text = ''
       #!${pkgs.python3.interpreter}
-      import curses
+      import os
       import pathlib
+      import signal
       import sys
+      import threading
 
       art = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").splitlines()
       art_width = max(map(len, art))
+      resize_event = threading.Event()
 
-      def draw(screen):
-          try:
-              curses.curs_set(0)
-          except curses.error:
-              pass
+      def mark_resize(_signum, _frame):
+          resize_event.set()
 
-          screen.timeout(1000)
+      def render():
+          width, height = os.get_terminal_size()
+          top = max(0, (height - len(art)) // 2)
+          left = max(0, (width - art_width) // 2)
+          visible_art = art[: max(0, height - top)]
+          output = ["\033[2J\033[H\033[?25l", "\n" * top]
+          output.extend(
+              " " * left + line[: max(0, width - left)] + "\n"
+              for line in visible_art
+          )
+          sys.stdout.write("".join(output))
+          sys.stdout.flush()
+
+      signal.signal(signal.SIGWINCH, mark_resize)
+      resize_event.set()
+      try:
           while True:
-              height, width = screen.getmaxyx()
-              top = max(0, (height - len(art)) // 2)
-              left = max(0, (width - art_width) // 2)
-              screen.erase()
-
-              for row, line in enumerate(art[:height]):
-                  try:
-                      screen.addstr(top + row, left, line[: max(0, width - left)])
-                  except curses.error:
-                      pass
-
-              screen.refresh()
-              if screen.getch() in (ord("q"), 27):
-                  return
-
-      curses.wrapper(draw)
+              resize_event.wait()
+              resize_event.clear()
+              render()
+      finally:
+          sys.stdout.write("\033[?25h")
+          sys.stdout.flush()
     '';
   };
 
