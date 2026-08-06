@@ -21,6 +21,7 @@
     ./modules/system/locale.nix
     ./modules/system/portable.nix
     ./modules/system/lid.nix
+    ./modules/system/peer-home-mount.nix
 
     # Desktop environment
     ./modules/desktop/hyprland.nix
