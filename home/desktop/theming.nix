@@ -7,6 +7,7 @@
 
 let
   lightWallpaper = "$HOME/.local/share/wallpapers/Taiji_mandala.png";
+  darkWallpaper = "$HOME/.local/share/wallpapers/Mandala_braille_dark.png";
   hyprCurrentTheme = "$HOME/.local/state/hypr/current-theme.conf";
 
   # Dark Mode Script
@@ -21,7 +22,7 @@ let
 
     # 1. WALLPAPER (Kill old, start new)
       pkill swaybg || true
-      ${pkgs.util-linux}/bin/setsid -f ${pkgs.swaybg}/bin/swaybg -c 000000 >/dev/null 2>&1
+      ${pkgs.util-linux}/bin/setsid -f ${pkgs.swaybg}/bin/swaybg -i "${darkWallpaper}" -m fit -c 000000 >/dev/null 2>&1
 
       # 2. HYPRLAND BACKGROUND COLOR (Misc setting)
       ${pkgs.hyprland}/bin/hyprctl keyword misc:background_color 0x000000
@@ -189,6 +190,7 @@ in
 
   # Managed Assets (Themes & Icons)
   xdg.dataFile."wallpapers/Taiji_mandala.png".source = ../../assets/wallpapers/Taiji_mandala.png;
+  xdg.dataFile."wallpapers/Mandala_braille_dark.png".source = ../../assets/wallpapers/Mandala_braille_dark.png;
   xdg.dataFile."themes/Trinity".source = ../../assets/themes/Trinity;
   xdg.dataFile."icons/Matrix-Icons".source = ../../assets/icons/Matrix-Icons;
   xdg.dataFile."icons/Hacker-C".source = ../../assets/icons/Hacker-C;
