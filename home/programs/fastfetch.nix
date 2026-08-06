@@ -337,7 +337,15 @@ in
           text = "echo \"$(TZ='Asia/Shanghai' date +'%H:%M:%S') | $(TZ='Europe/London' date +'%H:%M:%S')\"";
         }
         "OS"
-        "Disk"
+        {
+          type = "disk";
+          folders = "/";
+        }
+        {
+          type = "disk";
+          folders = "${config.home.homeDirectory}/home";
+          key = "~/home";
+        }
         "Memory"
         "Battery"
         {
