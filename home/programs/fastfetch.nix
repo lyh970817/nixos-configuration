@@ -106,6 +106,24 @@ let
     '';
   };
 
+  fastfetchPeerHome = pkgs.writeShellApplication {
+    name = "fastfetch-peer-home";
+    runtimeInputs = with pkgs; [
+      fastfetch
+      gawk
+      jq
+    ];
+    text = ''
+      mount_point=${lib.escapeShellArg "${config.home.homeDirectory}/home"}
+      fastfetch --format json --structure disk | jq -r --arg mountpoint "$mount_point" '
+        .[0].result[]
+        | select(.mountpoint == $mountpoint)
+        | [.bytes.used, .bytes.total, (.bytes.used * 100 / .bytes.total), .filesystem]
+        | @tsv
+      ' | awk -F '\t' '{ printf "%.2f GiB / %.2f GiB (%.0f%%) - %s\\n", $1 / 1073741824, $2 / 1073741824, $3, $4 }'
+    '';
+  };
+
   fastfetchTailnet = pkgs.writeShellApplication {
     name = "fastfetch-tailnet";
     runtimeInputs = with pkgs; [
@@ -312,6 +330,7 @@ in
 {
   home.packages = [
     fastfetchAudio
+    fastfetchPeerHome
     fastfetchTailnet
     fastfetchCodexbar
   ];
@@ -342,9 +361,9 @@ in
           folders = "/";
         }
         {
-          type = "disk";
-          folders = "${config.home.homeDirectory}/home";
+          type = "command";
           key = "~/home";
+          text = "fastfetch-peer-home";
         }
         "Memory"
         "Battery"
