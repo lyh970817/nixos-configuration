@@ -73,6 +73,13 @@
     "$HOME/.local/bin"
   ];
 
+  # Apply the same locations to Go invocations that do not inherit the shell
+  # environment, such as installer subprocesses started by desktop apps.
+  xdg.configFile."go/env".text = ''
+    GOCACHE=${config.home.homeDirectory}/.cache/go/build
+    GOMODCACHE=${config.home.homeDirectory}/.cache/go/mod
+  '';
+
   # Let Home Manager manage itself
   programs.home-manager.enable = true;
 
