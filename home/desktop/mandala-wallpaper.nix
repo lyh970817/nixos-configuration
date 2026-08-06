@@ -78,28 +78,32 @@ let
               lines.append("".join(glyphs))
           return lines
 
-      def render(lines, first_frame):
+      def render(lines, previous_size):
           width, height = os.get_terminal_size()
           top = max(0, (height - cell_height) // 2)
           left = max(0, (width - cell_width) // 2)
           visible_art = lines[: max(0, height - top)]
-          positioned = [""] * top + [
-              " " * left + line[: max(0, width - left)]
-              for line in visible_art
-          ]
-          prefix = "\033[2J\033[H\033[?25l" if first_frame else "\033[H"
-          sys.stdout.write(prefix + "\n".join(positioned))
+          size = (width, height)
+          output = ["\033[?25l"]
+          if size != previous_size:
+              output.append("\033[2J")
+          for row, line in enumerate(visible_art):
+              output.append(
+                  f"\033[{top + row + 1};{left + 1}H"
+                  + line[: max(0, width - left)]
+              )
+          sys.stdout.write("".join(output))
           sys.stdout.flush()
+          return size
 
       started = time.monotonic()
       next_frame = started
-      first_frame = True
+      previous_size = None
       try:
           while True:
               elapsed = time.monotonic() - started
               angle = elapsed * math.tau / rotation_period
-              render(make_frame(angle), first_frame)
-              first_frame = False
+              previous_size = render(make_frame(angle), previous_size)
               next_frame += frame_interval
               time.sleep(max(0.0, next_frame - time.monotonic()))
       finally:
