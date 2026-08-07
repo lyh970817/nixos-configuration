@@ -29,6 +29,11 @@ image = [
 	# otherwise opens locally. See home/programs/image-open.nix.
 	{ run = 'yazi-open-image "$@"', desc = "Open image", orphan = true },
 ]
+html = [
+	# Serves the file's directory to the laptop when this Yazi is being driven
+	# over mosh, otherwise opens locally. See home/programs/html-open.nix.
+	{ run = 'open-html "$@"', desc = "Open in browser", orphan = true },
+]
 extract = [
 	{ run = 'ya pub extract --list "$@"', desc = "Extract here" },
 ]
@@ -39,6 +44,7 @@ subtitle = [
 [open]
 prepend_rules = [
 	{ url = "*.{ass,srt,ssa,sty,sup,vtt}", use = [ "subtitle", "edit" ] },
+	{ url = "*.{html,htm}", use = [ "html", "edit" ] },
 	# Remote files start out as vfs/absent, so this only matches once Yazi has
 	# cached the file locally -- the built-in download rule runs first.
 	{ mime = "image/*", use = [ "image", "edit" ] },
