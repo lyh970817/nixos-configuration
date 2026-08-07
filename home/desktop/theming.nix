@@ -33,10 +33,14 @@ let
     ln -sf "$HOME/.config/hypr/themes/dark.conf" "${hyprCurrentTheme}"
 
     # Live update gaps/borders
-    ${pkgs.hyprland}/bin/hyprctl keyword general:gaps_in 20
-    ${pkgs.hyprland}/bin/hyprctl keyword general:gaps_out 30
-    ${pkgs.hyprland}/bin/hyprctl keyword general:border_size 2
-    ${pkgs.hyprland}/bin/hyprctl keyword general:col.active_border "rgba(D99B32ff)"
+    ${pkgs.hyprland}/bin/hyprctl keyword general:gaps_in 8
+    ${pkgs.hyprland}/bin/hyprctl keyword general:gaps_out 12
+    ${pkgs.hyprland}/bin/hyprctl keyword general:border_size 1
+    ${pkgs.hyprland}/bin/hyprctl keyword general:col.active_border "rgba(BE842Aff)"
+    ${pkgs.hyprland}/bin/hyprctl keyword general:col.inactive_border "rgba(2A2011ff)"
+    ${pkgs.hyprland}/bin/hyprctl keyword decoration:rounding 0
+    ${pkgs.hyprland}/bin/hyprctl keyword decoration:active_opacity 1
+    ${pkgs.hyprland}/bin/hyprctl keyword decoration:inactive_opacity 1
 
     ln -sf $HOME/.config/rofi/themes/dark.rasi $HOME/.config/rofi/current.rasi
 
@@ -81,6 +85,10 @@ let
     ${pkgs.hyprland}/bin/hyprctl keyword general:gaps_out 15
     ${pkgs.hyprland}/bin/hyprctl keyword general:border_size 2
     ${pkgs.hyprland}/bin/hyprctl keyword general:col.active_border "rgba(000000ff)"
+    ${pkgs.hyprland}/bin/hyprctl keyword general:col.inactive_border "rgba(00000000)"
+    ${pkgs.hyprland}/bin/hyprctl keyword decoration:rounding 4
+    ${pkgs.hyprland}/bin/hyprctl keyword decoration:active_opacity 1
+    ${pkgs.hyprland}/bin/hyprctl keyword decoration:inactive_opacity 0.7
 
     ln -sf $HOME/.config/rofi/themes/light.rasi $HOME/.config/rofi/current.rasi
 

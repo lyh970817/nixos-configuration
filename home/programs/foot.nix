@@ -8,6 +8,7 @@ let
     font-bold=Hack Nerd Font:style=Bold:size=12
     font-italic=Hack Nerd Font:style=Italic:size=12
     font-bold-italic=Hack Nerd Font:style=Bold Italic:size=12
+    pad=8x8 center
   '';
 
   lightFonts = ''
@@ -15,10 +16,10 @@ let
     font-bold=Hack Nerd Font:style=Bold:size=11
     font-italic=Hack Nerd Font:style=Italic:size=11
     font-bold-italic=Hack Nerd Font:style=Bold Italic:size=11
+    pad=10x10 center
   '';
 
   common = ''
-    pad=10x10 center
     selection-target=clipboard
 
     [cursor]

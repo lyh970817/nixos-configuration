@@ -34,24 +34,23 @@
       border-color=#000000
 
       [mode=dark]
-      # VT220 Amber Theme (10% Dimmer Colors)
+      # Compact VT220-inspired operator-console treatment.
       font=Hack Nerd Font 12
       background-color=#080705
       text-color=#D99B32
-      width=450
+      width=400
       height=400
       margin=10
-      padding=10
-      border-size=2
-      border-color=#D99B32
-      border-radius=4
-      icons=1
-      max-icon-size=64
+      padding=8
+      border-size=1
+      border-color=#BE842A
+      border-radius=0
+      icons=0
       anchor=top-right
       default-timeout=10000
       layer=overlay
       max-visible=5
-      format=<b>%s</b>\n%b
+      format=[%a] <b>%s</b>\n%b
 
       # Low urgency notifications - darker amber
       [urgency=low mode=dark]

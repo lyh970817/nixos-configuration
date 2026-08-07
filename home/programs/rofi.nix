@@ -27,17 +27,18 @@
           fg: #D99B32;
           fg-alt: #9B6D24;
           border: #D99B32;
-          selected: #BE842A;
+          selected: #9B6D24;
           background-color: transparent;
           text-color: @fg;
           font: "Hack Nerd Font 12";
       }
 
       window {
+          width: 52em;
           background-color: @bg;
           border: 1px solid;
           border-color: @border;
-          border-radius: 4px;
+          border-radius: 0;
           padding: 5px;
       }
 
@@ -69,7 +70,7 @@
       listview {
           background-color: @bg;
           columns: 1;
-          lines: 6;
+          lines: 8;
           cycle: true;
           dynamic: true;
           scrollbar: false;
@@ -78,8 +79,8 @@
       element {
           background-color: @bg;
           text-color: @fg;
-          border-radius: 1px;
-          padding: 1px 5px;
+          border-radius: 0;
+          padding: 3px 6px;
       }
 
       element.normal.normal {
@@ -113,7 +114,7 @@
           handle-width: 6px;
           handle-color: @fg-alt;
           background-color: @bg-alt;
-          border-radius: 3px;
+          border-radius: 0;
           margin: 0 0 0 5px;
       }
 
@@ -121,8 +122,8 @@
           background-color: @bg;
           border: 1px solid;
           border-color: @border;
-          border-radius: 8px;
-          padding: 10px;
+          border-radius: 0;
+          padding: 8px;
       }
 
       textbox {

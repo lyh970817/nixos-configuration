@@ -147,8 +147,8 @@
 
       # Window settings
       [window]
-      padding.x = 10
-      padding.y = 10
+      padding.x = 8
+      padding.y = 8
       decorations = "full"
 
       # Font settings
