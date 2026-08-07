@@ -63,6 +63,9 @@ let
     ln -sf $HOME/.config/alacritty/themes/dark.toml $HOME/.config/alacritty/current.toml
     ln -sf $HOME/.config/foot/themes/dark.ini $HOME/.config/foot/foot.ini
 
+    # Claude Code: rewrite the theme in each profile's settings.json.
+    ${claudeTheme}/bin/claude-theme dark
+
     # Mako: Switch mode
     ${pkgs.mako}/bin/makoctl mode -a dark
     ${pkgs.mako}/bin/makoctl reload
@@ -109,6 +112,9 @@ let
     # Terminals: select the palette used by new windows.
     ln -sf $HOME/.config/alacritty/themes/light.toml $HOME/.config/alacritty/current.toml
     ln -sf $HOME/.config/foot/themes/light.ini $HOME/.config/foot/foot.ini
+
+    # Claude Code: rewrite the theme in each profile's settings.json.
+    ${claudeTheme}/bin/claude-theme light
 
     # Mako: Remove dark mode
     ${pkgs.mako}/bin/makoctl mode -r dark
@@ -170,6 +176,45 @@ let
     esac
   '';
 
+  # claude-theme: usage `claude-theme <dark|light>`. Writes the matching theme
+  # into every Claude Code profile's settings.json.
+  #
+  # This keeps the *fallback* theme in step with the mode. Sessions started
+  # through the launcher in programs/claude.nix are already themed from
+  # THEME_MODE via --settings, which outranks settings.json; the ones that skip
+  # it -- Claude Code's agent view and background daemon re-exec the binary
+  # directly -- read settings.json instead, so that copy has to track the mode
+  # rather than sit on one value.
+  #
+  # `dark-ansi` and `light-ansi` are the only two themes that draw purely
+  # through ANSI slots, and so the only ones that follow the phosphor ladder in
+  # dark mode and the e-ink black-on-white in light. `auto` ("match terminal")
+  # sounds like the answer and is not: it only chooses between the two 24-bit
+  # themes, both of which ignore the terminal palette.
+  #
+  # Only newly started sessions pick this up, the same as alacritty windows.
+  # Activation writes the same key from the same source (the reconciler in
+  # programs/mutable-configs.nix), so the two writers cannot disagree.
+  claudeTheme = pkgs.writeShellScriptBin "claude-theme" ''
+    case "$1" in
+    dark) theme="dark-ansi" ;;
+    light) theme="light-ansi" ;;
+    *) exit 0 ;;
+    esac
+
+    for dir in claude claude-mattpocock claude-gpt56; do
+      settings="$HOME/.config/$dir/settings.json"
+      [ -f "$settings" ] || continue
+      tmp="$(${pkgs.coreutils}/bin/mktemp "$settings.XXXXXX")" || continue
+      if ${pkgs.jq}/bin/jq --arg theme "$theme" '.theme = $theme' "$settings" >"$tmp"; then
+        ${pkgs.coreutils}/bin/chmod 0600 "$tmp"
+        ${pkgs.coreutils}/bin/mv -f "$tmp" "$settings"
+      else
+        ${pkgs.coreutils}/bin/rm -f "$tmp"
+      fi
+    done
+  '';
+
   # theme-hold: usage `theme-hold <mode> <command...>`. Exports THEME_MODE
   # into the wrapped process and execs it in place. exec preserves the PID,
   # and the export survives into the wrapped session process (tmux client or
@@ -189,6 +234,7 @@ in
   home.packages = with pkgs; [
     (pkgs.writeShellScriptBin "switch-dark" "${darkModeHook}")
     (pkgs.writeShellScriptBin "switch-light" "${lightModeHook}")
+    claudeTheme
     themePush
     themeToggle
     themeMode

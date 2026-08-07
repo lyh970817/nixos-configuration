@@ -1,5 +1,4 @@
 {
-  "theme": "dark-ansi",
   "availableModels": ["opus", "sonnet", "haiku"],
   "modelOverrides": {
     "claude-opus-4-8": "claude-gpt-5-6-sol",

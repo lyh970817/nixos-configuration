@@ -23,7 +23,9 @@ let
   # them via a temp-file+rename; if that happens, re-run `nixos-rebuild switch`
   # to restore the link. Claude settings are ordinary mutable files: activation
   # seeds missing files and reconciles only the explicitly owned JSON leaves.
-  # Theme is supplied per session by the launcher (see home/programs/claude.nix).
+  # The theme is one of the two ANSI-only Claude Code themes, chosen from this
+  # machine's current mode at activation below and rewritten on a mode switch
+  # by claude-theme (desktop/theming.nix).
   link = subpath: config.lib.file.mkOutOfStoreSymlink "${osConfig.portable.configDir}/${subpath}";
   claudeEnvironment = ../../dotfiles/claude/environment.json;
   claudeMarketplaces = ../../dotfiles/claude/marketplaces.json;
@@ -408,10 +410,42 @@ in
     done
   '';
 
+  # Presentation keys written into every profile's settings.json.
+  #
+  # These are a *fallback*, not the usual path. The launcher in
+  # programs/claude.nix themes each session from THEME_MODE and passes it as
+  # --settings, which lands in flagSettings and outranks settings.json, so
+  # anything started through it is already correct in both modes. What it
+  # cannot reach are the sessions it never runs: Claude Code's agent view and
+  # background daemon re-exec the binary directly. Those fell through to a
+  # settings.json carrying no theme at all, which resolves to the 24-bit "dark"
+  # palette in either mode -- the reason an agent-view session came up
+  # non-monochromatic.
+  #
+  # Written per mode rather than pinned, so the fallback is also right in light
+  # mode. dark-ansi and light-ansi are the only two themes drawn purely from
+  # ANSI slots, and so the only ones that follow the phosphor ladder and the
+  # e-ink palette respectively. `auto` is not the answer despite its "match
+  # terminal" label: it only chooses between the two 24-bit themes, and both
+  # ignore the terminal palette.
+  #
+  # prefersReducedMotion is the same story. The spinner's effort suffix is
+  # drawn in a hardcoded RGB grey that no theme key reaches; reduced motion
+  # selects the branch that colours it from the theme instead.
   home.activation.claudeSettings = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
     claude_jq=${pkgs.jq}/bin/jq
     claude_environment=${lib.escapeShellArg (toString claudeEnvironment)}
     claude_marketplaces=${lib.escapeShellArg (toString claudeMarketplaces)}
+
+    # Which of the two ANSI-only themes matches this machine's current mode.
+    # Derived from the hypr current-theme symlink, the same source the
+    # claude-theme helper in desktop/theming.nix uses when a mode switch
+    # rewrites the same key -- so the two writers cannot disagree. Defaults to
+    # dark when the link is missing, matching the btop and nmtui wrappers.
+    case "$(readlink "$HOME/.local/state/hypr/current-theme.conf" 2>/dev/null)" in
+      *light.conf) claude_theme="light-ansi" ;;
+      *) claude_theme="dark-ansi" ;;
+    esac
 
     claude_reconcile() {
       input="$1"
@@ -423,6 +457,7 @@ in
         --slurpfile template "$profile_template" \
         --slurpfile manifest "$claude_marketplaces" \
         --arg profile "$profile_name" \
+        --arg claude_theme "$claude_theme" \
         '
           ($template[0]) as $template |
           ($environment[0]) as $environment |
@@ -438,13 +473,11 @@ in
             .permissions.deny = $template.permissions.deny |
             .skipDangerousModePermissionPrompt = $template.skipDangerousModePermissionPrompt |
             .statusLine = $template.statusLine |
-            # Pinned, not merely defaulted: with no theme set anywhere Claude
-            # Code falls back to its own 24-bit palette and stops being
-            # monochromatic, and the interactive /theme choice lives in a
-            # per-install file that does not survive a fresh config directory.
-            # dark-ansi is the one theme that draws only through ANSI slots,
-            # so it follows the phosphor ladder like everything else.
-            .theme = $template.theme |
+            # Fallback presentation for sessions the launcher never sees.
+            # Rationale above the activation block; keep apostrophes out of
+            # this jq program, it is inside a single-quoted shell string.
+            .theme = $claude_theme |
+            .prefersReducedMotion = true |
             .extraKnownMarketplaces =
               (
                 if (.extraKnownMarketplaces | type) == "object"
