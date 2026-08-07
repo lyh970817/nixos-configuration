@@ -24,6 +24,71 @@
 # one. Rungs are listed darkest to brightest, which is the order every ladder
 # must preserve.
 let
+  # --- hex helpers, used to derive the night-comparison profile below ---
+  hexDigits = {
+    "0" = 0;
+    "1" = 1;
+    "2" = 2;
+    "3" = 3;
+    "4" = 4;
+    "5" = 5;
+    "6" = 6;
+    "7" = 7;
+    "8" = 8;
+    "9" = 9;
+    "A" = 10;
+    "B" = 11;
+    "C" = 12;
+    "D" = 13;
+    "E" = 14;
+    "F" = 15;
+  };
+  hexChars = "0123456789ABCDEF";
+  byteOf =
+    s: i:
+    16 * hexDigits.${builtins.substring (2 * i) 1 s} + hexDigits.${builtins.substring (2 * i + 1) 1 s};
+  toByteHex =
+    n:
+    builtins.substring (builtins.div n 16) 1 hexChars
+    + builtins.substring (n - 16 * (builtins.div n 16)) 1 hexChars;
+  clampByte =
+    n:
+    if n > 255 then
+      255
+    else if n < 0 then
+      0
+    else
+      n;
+  round = x: builtins.floor (x + 0.5);
+
+  # Scale one hex colour by a per-channel gain, rounding and clamping the way a
+  # display would.
+  scaleHex =
+    gain: hex:
+    builtins.concatStringsSep "" (
+      builtins.map (i: toByteHex (clampByte (round (byteOf hex i * builtins.elemAt gain i)))) [
+        0
+        1
+        2
+      ]
+    );
+  scaleProfile = gain: builtins.mapAttrs (_: scaleHex gain);
+
+  # Per-channel gains of the night-mode CTM. hyprsunset derives these from
+  # temperature and gamma via a blackbody approximation; Nix has no logarithm
+  # builtin, so they are transcribed from the matrix the service itself logs on
+  # every profile load:
+  #
+  #   Calculated the CTM to be [mat3x3: 2.8, 0, 0, 0, 0.84989333, 0, 0, 0, 0]
+  #
+  # If nightTemperature or nightGamma in home/desktop/hyprsunset.nix changes,
+  # re-read these from that log line — nothing here can recompute them.
+  nightGain = [
+    2.8
+    0.84989333
+    0.0
+  ];
+
   profiles = {
     # VT220 amber. The reference ladder; every other profile is fitted to it
     # rung for rung, so the two are structurally interchangeable.
@@ -57,9 +122,38 @@ let
       hot = "86E68C";
     };
   };
+  # Profiles that exist only to be looked at side by side. They are written out
+  # as terminal themes like any other profile, but are never sensible choices
+  # for `active`.
+  previewProfiles = {
+    # Amber, pre-divided by the night-mode gains, so that *while night mode is
+    # on* a terminal using this profile renders as real amber. That makes a
+    # genuine same-screen comparison possible: with night mode on, put this
+    # window next to an ordinary green one and the left is the target, the
+    # right is what the transform actually achieves — both under the identical
+    # CTM, because a CTM applies per output and cannot be scoped to a window.
+    #
+    # The blue gain is zero and division by it is undefined, so blue is dropped
+    # here too. That is not a shortcut: night mode annihilates blue for
+    # everything on screen, so no reference shown under it can carry blue
+    # either. The comparison is therefore honest about hue and lightness and
+    # silent about amber's small blue component.
+    #
+    # With night mode *off* this profile looks like a harsh yellow-green. That
+    # is expected; it is a pre-distorted image meant to be viewed through the
+    # transform.
+    amberViaNight = scaleProfile (builtins.map (
+      g: if g == 0.0 then 0.0 else 1.0 / g
+    ) nightGain) profiles.amber;
+
+    # What the fit predicts green becomes under the night CTM, as a static
+    # palette. Useful for judging the match with night mode *off*, though it
+    # assumes the CTM multiplies encoded sRGB rather than linear light.
+    greenAsNight = scaleProfile nightGain profiles.green;
+  };
 in
 {
-  inherit profiles;
+  inherit profiles previewProfiles;
 
   # The profile that dark mode is generated from. Flip this one name and
   # rebuild to change every terminal at once. Each profile is *also* written

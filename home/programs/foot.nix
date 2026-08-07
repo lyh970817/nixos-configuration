@@ -135,7 +135,7 @@ in
   # window. A dark/light switch puts the active profile back.
   // lib.mapAttrs' (
     name: p: lib.nameValuePair ".config/foot/themes/dark-${name}.ini" { text = mkDarkConfig p; }
-  ) palettes.profiles;
+  ) (palettes.profiles // palettes.previewProfiles);
 
   # The theme hooks replace this symlink when the desktop mode changes.
   systemd.user.tmpfiles.rules = [

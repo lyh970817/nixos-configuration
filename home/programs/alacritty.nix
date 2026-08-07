@@ -303,5 +303,5 @@ in
   # open a new window. A dark/light switch puts the active profile back.
   // lib.mapAttrs' (
     name: p: lib.nameValuePair ".config/alacritty/themes/dark-${name}.toml" { text = mkDarkConfig p; }
-  ) palettes.profiles;
+  ) (palettes.profiles // palettes.previewProfiles);
 }

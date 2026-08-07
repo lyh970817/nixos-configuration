@@ -46,6 +46,7 @@
     ./desktop/mandala-wallpaper.nix
     ./desktop/theming.nix
     ./desktop/hyprsunset.nix
+    ./desktop/palette-compare.nix
     ./desktop/xdg.nix
     ./packages/base.nix
     ./packages/desktop.nix
