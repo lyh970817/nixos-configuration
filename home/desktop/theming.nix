@@ -29,10 +29,12 @@ let
 
     # 2. HYPRLAND BACKGROUND COLOR (Misc setting)
     ${pkgs.hyprland}/bin/hyprctl keyword misc:background_color 0x${p.background}
-    # No screen shader. The CRT softness shader adds a warm-tinted bloom and
-    # black lift, which casts amber over the green phosphor and contaminates
-    # any colour measured from a screenshot. Both modes now leave it empty.
-    ${pkgs.hyprland}/bin/hyprctl keyword decoration:screen_shader '[[EMPTY]]'
+    # Panel shader. Its predecessor was disabled because a warm-tinted bloom
+    # and black lift cast amber over the green phosphor and contaminated any
+    # colour measured from a screenshot; the lift is gone and the surviving
+    # tints follow the phosphor, so that objection no longer applies. Light
+    # mode still leaves it empty.
+    ${pkgs.hyprland}/bin/hyprctl keyword decoration:screen_shader "$HOME/.config/hypr/shaders/panel.glsl"
 
     # 3. HYPRLAND THEME (Symlink + Live Settings)
     ln -sf "$HOME/.config/hypr/themes/dark.conf" "${hyprCurrentTheme}"
