@@ -4,10 +4,10 @@
 
 let
   darkFonts = ''
-    font=Glass TTY VT220:size=15, Hack Nerd Font:size=15
-    font-bold=Glass TTY VT220:style=Regular:size=15, Hack Nerd Font:style=Bold:size=15
-    font-italic=Glass TTY VT220:style=Regular:size=15, Hack Nerd Font:style=Italic:size=15
-    font-bold-italic=Glass TTY VT220:style=Regular:size=15, Hack Nerd Font:style=Bold Italic:size=15
+    font=Hack Nerd Font:size=12
+    font-bold=Hack Nerd Font:style=Bold:size=12
+    font-italic=Hack Nerd Font:style=Italic:size=12
+    font-bold-italic=Hack Nerd Font:style=Bold Italic:size=12
   '';
 
   lightFonts = ''

@@ -6,40 +6,33 @@ layout(location = 0) out vec4 fragColor;
 
 uniform sampler2D tex;
 
-const float BLOOM_STRENGTH = 0.055;
-const float SCANLINE_STRENGTH = 0.000;
-const float VIGNETTE_STRENGTH = 0.050;
-const float CURVATURE = 0.000;
+// A restrained optical-softness treatment for a modern LCD. This deliberately
+// contains no CRT geometry, scan raster, vignette, noise, or color separation.
+const float DIFFUSION_STRENGTH = 0.025;
+const float BLOOM_STRENGTH = 0.070;
 
 void main() {
-    vec2 p = v_texcoord * 2.0 - 1.0;
-    float r2 = dot(p, p);
-    p *= 1.0 + CURVATURE * r2;
-    vec2 uv = p * 0.5 + 0.5;
-
-    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
-        fragColor = vec4(8.0 / 255.0, 7.0 / 255.0, 5.0 / 255.0, 1.0);
-        return;
-    }
-
+    vec2 uv = v_texcoord;
     vec2 pixel = 1.0 / vec2(textureSize(tex, 0));
     vec4 base = texture(tex, uv);
-    vec3 bloom = vec3(0.0);
-    bloom += texture(tex, uv + vec2(pixel.x, 0.0)).rgb;
-    bloom += texture(tex, uv - vec2(pixel.x, 0.0)).rgb;
-    bloom += texture(tex, uv + vec2(0.0, pixel.y)).rgb;
-    bloom += texture(tex, uv - vec2(0.0, pixel.y)).rgb;
-    bloom *= 0.25;
+    vec2 x = vec2(pixel.x, 0.0);
+    vec2 y = vec2(0.0, pixel.y);
 
-    float luminance = dot(base.rgb, vec3(0.2126, 0.7152, 0.0722));
-    vec3 color = base.rgb + bloom * luminance * BLOOM_STRENGTH;
+    // Compact Gaussian-like kernel: enough to take the digital edge off the
+    // panel without making text look defocused.
+    vec3 soft = base.rgb * 0.24;
+    soft += texture(tex, uv + x).rgb * 0.12;
+    soft += texture(tex, uv - x).rgb * 0.12;
+    soft += texture(tex, uv + y).rgb * 0.12;
+    soft += texture(tex, uv - y).rgb * 0.12;
+    soft += texture(tex, uv + x + y).rgb * 0.07;
+    soft += texture(tex, uv + x - y).rgb * 0.07;
+    soft += texture(tex, uv - x + y).rgb * 0.07;
+    soft += texture(tex, uv - x - y).rgb * 0.07;
 
-    float scanline = 1.0 - SCANLINE_STRENGTH
-        * (0.5 + 0.5 * sin(uv.y / pixel.y * 3.14159265));
-    color *= scanline;
+    vec3 diffused = mix(base.rgb, soft, DIFFUSION_STRENGTH);
+    vec3 bloom = max(soft - base.rgb, vec3(0.0));
+    vec3 color = diffused + bloom * BLOOM_STRENGTH;
 
-    float vignette = 1.0 - VIGNETTE_STRENGTH * smoothstep(0.2, 1.35, r2);
-    color *= vignette;
-
-    fragColor = vec4(color, base.a);
+    fragColor = vec4(clamp(color, 0.0, 1.0), base.a);
 }
