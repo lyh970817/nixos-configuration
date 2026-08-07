@@ -40,6 +40,22 @@ let
       hot = "FFD064";
     };
 
+    # P1 phosphor green, fitted rung for rung to the amber ladder above so the
+    # two are structurally interchangeable: same rung count, same ordering,
+    # same role per rung. Only the hue differs, so every program that reaches
+    # colour through an ANSI slot follows the swap untouched.
+    green = {
+      background = "050806";
+      deepSurface = "080C09";
+      raisedBlack = "0B120D";
+      subtleBorder = "15261A";
+      mutedText = "193F20";
+      secondaryText = "286731";
+      accent = "3D8E48";
+      foreground = "4BAE55";
+      bright = "65C96D";
+      hot = "86E68C";
+    };
   };
 in
 {
@@ -50,6 +66,6 @@ in
   # out under its own name (themes/dark-amber.*, themes/dark-green.*), so the
   # two can be compared live by repointing the terminal's theme symlink without
   # a rebuild.
-  activeName = "amber";
-  active = profiles.amber;
+  activeName = "green";
+  active = profiles.green;
 }
