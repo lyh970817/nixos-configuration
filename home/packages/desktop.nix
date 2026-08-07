@@ -33,6 +33,8 @@
     whisper-cpp
     adwaita-icon-theme
     gnome-themes-extra
+    # Dark-mode icon theme; Adwaita above is its declared Inherits fallback.
+    matrix-icons
     glib
     gsettings-desktop-schemas
     darkman

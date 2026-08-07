@@ -54,7 +54,7 @@ let
     ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
     # (Optional) Force a specific dark GTK theme if you have one installed, e.g., Adwaita-dark
     ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface gtk-theme 'VT220-Amber'
-    ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface icon-theme 'HighContrast'
+    ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface icon-theme 'Matrix-Icons'
     ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface cursor-theme 'Adwaita'
 
     # Terminals: select the palette used by new windows.
@@ -207,8 +207,11 @@ in
     "L+ %h/.local/share/light-mode.d/10-nixos-hook.sh - - - - ${lightModeHook}"
   ];
 
-  # Managed theme assets. Dark mode uses neutral system icons and cursor so
-  # no green pixels remain outside the amber GTK palette.
+  # Managed theme assets. Dark mode pairs VT220-Amber with the Matrix-Icons
+  # set (packaged in pkgs/matrix-icons.nix, installed via home/packages);
+  # that set is green throughout, so it matches the phosphor palette instead
+  # of the white raster icons HighContrast was falling back to. The cursor
+  # stays neutral Adwaita.
   xdg.dataFile."wallpapers/Taiji_mandala.png".source = ../../assets/wallpapers/Taiji_mandala.png;
   xdg.dataFile."themes/VT220-Amber".source = ../../assets/themes/VT220-Amber;
 }
