@@ -438,6 +438,13 @@ in
             .permissions.deny = $template.permissions.deny |
             .skipDangerousModePermissionPrompt = $template.skipDangerousModePermissionPrompt |
             .statusLine = $template.statusLine |
+            # Pinned, not merely defaulted: with no theme set anywhere Claude
+            # Code falls back to its own 24-bit palette and stops being
+            # monochromatic, and the interactive /theme choice lives in a
+            # per-install file that does not survive a fresh config directory.
+            # dark-ansi is the one theme that draws only through ANSI slots,
+            # so it follows the phosphor ladder like everything else.
+            .theme = $template.theme |
             .extraKnownMarketplaces =
               (
                 if (.extraKnownMarketplaces | type) == "object"
