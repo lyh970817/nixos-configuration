@@ -31,10 +31,13 @@ let
     text = '#${p.background}'
     cursor = '#${p.accent}'
 
-    # Selection colors
+    # Selection colors. accent rather than secondaryText, because the selection
+    # carries background-coloured text and the green ladder's secondaryText rung
+    # is only 0.58x the luminance of amber's, taking that pairing to 2.9:1.
+    # See rofi.nix.
     [colors.selection]
     text = '#${p.background}'
-    background = '#${p.secondaryText}'
+    background = '#${p.accent}'
 
     # Normal colors - the intensity ladder standing in for hue
     [colors.normal]

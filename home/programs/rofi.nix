@@ -32,7 +32,13 @@ in
           fg: #${p.foreground};
           fg-alt: #${p.secondaryText};
           border: #${p.foreground};
-          selected: #${p.secondaryText};
+          # Selection fill. This carries background-coloured text, so it is one
+          # rung above secondaryText: the green ladder's middle rungs sit at
+          # 0.42-0.58x the luminance of their amber counterparts, and on
+          # secondaryText the selected row measured 2.12:1 against its own
+          # label. accent restores 4.94:1, closest to the 4.42:1 the amber
+          # profile gave. Same substitution in foot, alacritty, btop, mako.
+          selected: #${p.accent};
           background-color: transparent;
           text-color: @fg;
           font: "Hack Nerd Font 12";

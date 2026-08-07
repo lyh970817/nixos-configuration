@@ -100,7 +100,10 @@ in
         theme[main_fg]="#${p.foreground}"
         theme[title]="#${p.foreground}"
         theme[hi_fg]="#${p.foreground}"
-        theme[selected_bg]="#${p.secondaryText}"
+        # accent, not secondaryText: selected_fg is the background colour, and
+        # the green ladder's secondaryText rung is too dim to carry it. See
+        # rofi.nix.
+        theme[selected_bg]="#${p.accent}"
         theme[selected_fg]="#${p.background}"
         theme[inactive_fg]="#${p.subtleBorder}"
         theme[graph_text]="#${p.accent}"
