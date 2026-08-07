@@ -121,6 +121,30 @@ let
       bright = "65C96D";
       hot = "86E68C";
     };
+
+    # A greyer revision of the green above: the foreground drops from 0.57 to
+    # 0.48 saturation, mostly by lifting red and blue rather than cutting green.
+    #
+    # That desaturation matters for the night-mode transform. What limits the
+    # green -> amber fit is not the *size* of the red:green gain needed but its
+    # *spread* across the ladder, since one CTM supplies a single value. Lifting
+    # red narrows that spread from 1.80-3.66 to 1.68-2.82, so this profile
+    # reaches a better amber (mean dE 13.2) at gamma 200% than the profile above
+    # manages at 280% (13.9) — i.e. it fits within hyprsunset's stock gamma
+    # ceiling, with no max-gamma override, and is easier on melanopic exposure.
+    # See home/desktop/hyprsunset.nix for the values that would go with it.
+    greenRevised = {
+      background = "060907";
+      deepSurface = "090D0A";
+      raisedBlack = "0D120E";
+      subtleBorder = "17251B";
+      mutedText = "294A30";
+      secondaryText = "376D40";
+      accent = "478A4F";
+      foreground = "58A860";
+      bright = "72C67A";
+      hot = "94E39B";
+    };
   };
   # Profiles that exist only to be looked at side by side. They are written out
   # as terminal themes like any other profile, but are never sensible choices
