@@ -2,8 +2,134 @@
 # Managed by home-manager
 # Original: ~/.config/alacritty/
 # Theme switching handled by darkman hooks (symlinks to current.toml)
-{ config, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
+let
+  palettes = import ../palettes.nix;
+
+  # Dark palette, addressed by ladder rung rather than by hex so any phosphor
+  # profile in ../palettes.nix produces the same emphasis hierarchy. See that
+  # file for why normal.black, normal.white, bright.green, and bright.blue sit
+  # where they do.
+  mkDarkTheme = p: ''
+    # CRT console theme for Alacritty: near-black glass with a single-phosphor
+    # intensity ladder standing in for the usual eight hues.
+
+    [colors]
+    # Default colors
+    [colors.primary]
+    background = '#${p.background}'
+    foreground = '#${p.foreground}'
+
+    # Cursor colors
+    [colors.cursor]
+    text = '#${p.background}'
+    cursor = '#${p.accent}'
+
+    # Selection colors
+    [colors.selection]
+    text = '#${p.background}'
+    background = '#${p.secondaryText}'
+
+    # Normal colors - the intensity ladder standing in for hue
+    [colors.normal]
+    black   = '#${p.raisedBlack}'
+    red     = '#${p.subtleBorder}'
+    green   = '#${p.mutedText}'
+    yellow  = '#${p.secondaryText}'
+    blue    = '#${p.accent}'
+    magenta = '#${p.foreground}'
+    cyan    = '#${p.accent}'
+    white   = '#${p.secondaryText}'
+
+    # Bright colors - the upper half of the ladder, for emphasis
+    [colors.bright]
+    black   = '#${p.subtleBorder}'
+    red     = '#${p.mutedText}'
+    green   = '#${p.hot}'
+    yellow  = '#${p.accent}'
+    blue    = '#${p.bright}'
+    magenta = '#${p.foreground}'
+    cyan    = '#${p.foreground}'
+    white   = '#${p.foreground}'
+
+    # Dim colors - the lower half of the ladder
+    [colors.dim]
+    black   = '#${p.deepSurface}'
+    red     = '#${p.deepSurface}'
+    green   = '#${p.subtleBorder}'
+    yellow  = '#${p.mutedText}'
+    blue    = '#${p.mutedText}'
+    magenta = '#${p.secondaryText}'
+    cyan    = '#${p.mutedText}'
+    white   = '#${p.secondaryText}'
+
+    # Vi mode colors
+    [colors.vi_mode_cursor]
+    text = '#${p.background}'
+    cursor = '#${p.foreground}'
+
+    # Search colors
+    [colors.search]
+    [colors.search.matches]
+    foreground = '#${p.background}'
+    background = '#${p.accent}'
+    [colors.search.focused_match]
+    foreground = '#${p.background}'
+    background = '#${p.foreground}'
+
+    # Line indicator colors
+    [colors.line_indicator]
+    foreground = '#${p.foreground}'
+    background = '#${p.background}'
+
+    # Footer bar (used in vi mode)
+    [colors.footer_bar]
+    foreground = '#${p.foreground}'
+    background = '#${p.deepSurface}'
+  '';
+
+  # Geometry, font, and cursor behaviour are palette-independent.
+  darkChrome = ''
+
+    # Window settings
+    [window]
+    padding.x = 8
+    padding.y = 8
+    decorations = "full"
+
+    # Font settings
+    [font]
+    size = 12.0
+    normal.family = "Hack Nerd Font"
+    normal.style = "Regular"
+    bold.family = "Hack Nerd Font"
+    bold.style = "Bold"
+    italic.family = "Hack Nerd Font"
+    italic.style = "Italic"
+    bold_italic.family = "Hack Nerd Font"
+    bold_italic.style = "Bold Italic"
+
+    # Cursor settings
+    [cursor]
+    style.shape = "Block"
+    style.blinking = "On"
+    # blink_interval = 500
+    blink_timeout = 0
+    unfocused_hollow = true
+
+    # Selection settings
+    [selection]
+    save_to_clipboard = true
+  '';
+
+  mkDarkConfig = p: mkDarkTheme p + darkChrome;
+in
 {
   programs.alacritty = {
     enable = true;
@@ -68,113 +194,8 @@
 
   # Theme files for darkman switching
   home.file = {
-    ".config/alacritty/themes/dark.toml".text = ''
-      # VT220 Amber Theme for Alacritty Terminal
-      # Black background with amber intensity ladder colors
-
-      [colors]
-      # Default colors
-      [colors.primary]
-      background = '#080705'  # Brown-black CRT glass background
-      foreground = '#D99B32'  # Bright amber text for readability
-
-      # Cursor colors
-      [colors.cursor]
-      text = '#080705'        # Black text when cursor is over it
-      cursor = '#BE842A'      # Accent amber cursor block
-
-      # Selection colors
-      [colors.selection]
-      text = '#080705'
-      background = '#9B6D24'  # Secondary amber highlight
-
-      # Normal colors - using amber intensity ladder
-      [colors.normal]
-      black   = '#110E08'  # Dark amber — lifted off pure-black bg so ANSI-selected rows are visible
-      red     = '#2A2011'  # Subtle border
-      green   = '#6E501D'  # Muted amber
-      yellow  = '#9B6D24'  # Secondary amber
-      blue    = '#BE842A'  # Accent amber
-      magenta = '#D99B32'  # Warm amber (brightest)
-      cyan    = '#BE842A'  # Accent amber
-      white   = '#9B6D24'  # Secondary amber — receded below the #D99B32 foreground so SGR-37 secondary text (menu descriptions, hints) reads as secondary
-
-      # Bright colors - using lighter ambers for emphasis
-      [colors.bright]
-      black   = '#2A2011'  # Subtle border
-      red     = '#6E501D'  # Muted amber
-      green   = '#FFD064'  # Light amber — lifted above the #D99B32 foreground so bright-amber emphasis (e.g. selected menu entries) is distinguishable
-      yellow  = '#BE842A'  # Accent amber
-      blue    = '#EDB144'  # Soft light amber — above the #D99B32 foreground but below bright amber, so fuzzy-match fragments read as accents rather than glare
-      magenta = '#D99B32'  # Warm amber
-      cyan    = '#D99B32'  # Warm amber
-      white   = '#D99B32'  # Warm amber (brightest)
-
-      # Dim colors - using darker ambers
-      [colors.dim]
-      black   = '#0C0A06'  # Deep surface (darkest)
-      red     = '#0C0A06'  # Deep surface
-      green   = '#2A2011'  # Subtle border
-      yellow  = '#6E501D'  # Muted amber
-      blue    = '#6E501D'  # Muted amber
-      magenta = '#9B6D24'  # Secondary amber
-      cyan    = '#6E501D'  # Muted amber
-      white   = '#9B6D24'  # Secondary amber
-
-      # Vi mode colors
-      [colors.vi_mode_cursor]
-      text = '#080705'
-      cursor = '#D99B32'
-
-      # Search colors
-      [colors.search]
-      [colors.search.matches]
-      foreground = '#080705'
-      background = '#BE842A'  # Accent amber
-      [colors.search.focused_match]
-      foreground = '#080705'
-      background = '#D99B32'  # Warm amber (brightest for focus)
-
-      # Line indicator colors
-      [colors.line_indicator]
-      foreground = '#D99B32'
-      background = '#080705'
-
-      # Footer bar (used in vi mode)
-      [colors.footer_bar]
-      foreground = '#D99B32'
-      background = '#0C0A06'  # Deep surface for contrast
-
-      # Window settings
-      [window]
-      padding.x = 8
-      padding.y = 8
-      decorations = "full"
-
-      # Font settings
-      [font]
-      size = 12.0
-      normal.family = "Hack Nerd Font"
-      normal.style = "Regular"
-      bold.family = "Hack Nerd Font"
-      bold.style = "Bold"
-      italic.family = "Hack Nerd Font"
-      italic.style = "Italic"
-      bold_italic.family = "Hack Nerd Font"
-      bold_italic.style = "Bold Italic"
-
-      # Cursor settings
-      [cursor]
-      style.shape = "Block"
-      style.blinking = "On"
-      # blink_interval = 500
-      blink_timeout = 0
-      unfocused_hollow = true
-
-      # Selection settings
-      [selection]
-      save_to_clipboard = true
-    '';
+    # The theme the dark-mode hook links to: whichever profile is active.
+    ".config/alacritty/themes/dark.toml".text = mkDarkConfig palettes.active;
 
     ".config/alacritty/themes/light.toml".text = ''
       # E-Ink Theme for Alacritty Terminal
@@ -276,5 +297,11 @@
       [selection]
       save_to_clipboard = true
     '';
-  };
+  }
+  # Every profile is also written under its own name so two phosphors can be
+  # compared live: relink ~/.config/alacritty/current.toml at one of these and
+  # open a new window. A dark/light switch puts the active profile back.
+  // lib.mapAttrs' (
+    name: p: lib.nameValuePair ".config/alacritty/themes/dark-${name}.toml" { text = mkDarkConfig p; }
+  ) palettes.profiles;
 }

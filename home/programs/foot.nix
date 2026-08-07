@@ -1,8 +1,10 @@
 # Foot Terminal Configuration
 # Managed by Home Manager alongside Alacritty.
-{ pkgs, ... }:
+{ lib, pkgs, ... }:
 
 let
+  palettes = import ../palettes.nix;
+
   darkFonts = ''
     font=Hack Nerd Font:size=12
     font-bold=Hack Nerd Font:style=Bold:size=12
@@ -41,42 +43,47 @@ let
     \x1b[13;3u=Mod1+Return
   '';
 
-  darkTheme = ''
+  # Dark palette, addressed by ladder rung rather than by hex so any phosphor
+  # profile in ../palettes.nix produces the same emphasis hierarchy. See that
+  # file for why regular0, regular7, bright2, and bright4 sit where they do.
+  mkDarkTheme = p: ''
     [colors]
-    background=080705
-    foreground=D99B32
-    selection-foreground=080705
-    selection-background=9B6D24
-    regular0=110E08
-    regular1=2A2011
-    regular2=6E501D
-    regular3=9B6D24
-    regular4=BE842A
-    regular5=D99B32
-    regular6=BE842A
-    regular7=9B6D24
-    bright0=2A2011
-    bright1=6E501D
-    bright2=FFD064
-    bright3=BE842A
-    bright4=EDB144
-    bright5=D99B32
-    bright6=D99B32
-    bright7=D99B32
-    dim0=0C0A06
-    dim1=0C0A06
-    dim2=2A2011
-    dim3=6E501D
-    dim4=6E501D
-    dim5=9B6D24
-    dim6=6E501D
-    dim7=9B6D24
-    search-box-no-match=080705 BE842A
-    search-box-match=080705 D99B32
-    jump-labels=080705 D99B32
-    scrollback-indicator=D99B32 0C0A06
-    cursor=080705 BE842A
+    background=${p.background}
+    foreground=${p.foreground}
+    selection-foreground=${p.background}
+    selection-background=${p.secondaryText}
+    regular0=${p.raisedBlack}
+    regular1=${p.subtleBorder}
+    regular2=${p.mutedText}
+    regular3=${p.secondaryText}
+    regular4=${p.accent}
+    regular5=${p.foreground}
+    regular6=${p.accent}
+    regular7=${p.secondaryText}
+    bright0=${p.subtleBorder}
+    bright1=${p.mutedText}
+    bright2=${p.hot}
+    bright3=${p.accent}
+    bright4=${p.bright}
+    bright5=${p.foreground}
+    bright6=${p.foreground}
+    bright7=${p.foreground}
+    dim0=${p.deepSurface}
+    dim1=${p.deepSurface}
+    dim2=${p.subtleBorder}
+    dim3=${p.mutedText}
+    dim4=${p.mutedText}
+    dim5=${p.secondaryText}
+    dim6=${p.mutedText}
+    dim7=${p.secondaryText}
+    search-box-no-match=${p.background} ${p.accent}
+    search-box-match=${p.background} ${p.foreground}
+    jump-labels=${p.background} ${p.foreground}
+    scrollback-indicator=${p.foreground} ${p.deepSurface}
+    cursor=${p.background} ${p.accent}
   '';
+
+  mkDarkConfig = p: darkFonts + common + mkDarkTheme p;
 
   lightTheme = ''
     [colors]
@@ -119,9 +126,16 @@ in
   home.packages = [ pkgs.foot ];
 
   home.file = {
-    ".config/foot/themes/dark.ini".text = darkFonts + common + darkTheme;
+    # The theme the dark-mode hook links to: whichever profile is active.
+    ".config/foot/themes/dark.ini".text = mkDarkConfig palettes.active;
     ".config/foot/themes/light.ini".text = lightFonts + common + lightTheme;
-  };
+  }
+  # Every profile is also written under its own name so two phosphors can be
+  # compared live: relink ~/.config/foot/foot.ini at one of these and open a new
+  # window. A dark/light switch puts the active profile back.
+  // lib.mapAttrs' (
+    name: p: lib.nameValuePair ".config/foot/themes/dark-${name}.ini" { text = mkDarkConfig p; }
+  ) palettes.profiles;
 
   # The theme hooks replace this symlink when the desktop mode changes.
   systemd.user.tmpfiles.rules = [
