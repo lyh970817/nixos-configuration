@@ -70,7 +70,7 @@
       listview {
           background-color: @bg;
           columns: 1;
-          lines: 8;
+          lines: 6;
           cycle: true;
           dynamic: true;
           scrollbar: false;
@@ -80,7 +80,7 @@
           background-color: @bg;
           text-color: @fg;
           border-radius: 0;
-          padding: 3px 6px;
+          padding: 1px 5px;
       }
 
       element.normal.normal {

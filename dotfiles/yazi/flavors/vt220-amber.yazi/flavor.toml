@@ -216,3 +216,10 @@ rules = [
     # Fallback - mid-tone green
     { name = "*", fg = "#9B6D24" }
 ]
+
+[icon]
+# Override Yazi's multicolor application-logo table with a restrained terminal
+# marker. File type remains legible through the amber file-name hierarchy above.
+prepend_globs = [
+    { url = "**", text = "·", fg = "#6E501D" },
+]
