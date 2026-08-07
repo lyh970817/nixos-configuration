@@ -6,27 +6,32 @@
 # Note: We don't use programs.fzf color options as they conflict with dynamic loading
 { config, pkgs, ... }:
 
+let
+  # Active phosphor profile; see ../palettes.nix.
+  p = (import ../palettes.nix).active;
+in
+
 {
   # Per-mode (dark/light) theme variant files, selected at shell startup by
   # THEME_MODE (set by theme-hold for ssh/mosh sessions, otherwise defaulted
   # from the local monitor)
   home.file = {
     ".config/fzf/themes/dark".text = ''
-      --color=fg:#D99B32
-      --color=bg:#080705
-      --color=hl:#BE842A
-      --color=fg+:#D99B32
-      --color=bg+:#0C0A06
-      --color=hl+:#D99B32
-      --color=info:#9B6D24
-      --color=prompt:#D99B32
-      --color=pointer:#D99B32
-      --color=marker:#BE842A
-      --color=spinner:#9B6D24
-      --color=header:#6E501D
-      --color=border:#2A2011
-      --color=label:#BE842A
-      --color=query:#D99B32
+      --color=fg:#${p.foreground}
+      --color=bg:#${p.background}
+      --color=hl:#${p.accent}
+      --color=fg+:#${p.foreground}
+      --color=bg+:#${p.deepSurface}
+      --color=hl+:#${p.foreground}
+      --color=info:#${p.secondaryText}
+      --color=prompt:#${p.foreground}
+      --color=pointer:#${p.foreground}
+      --color=marker:#${p.accent}
+      --color=spinner:#${p.secondaryText}
+      --color=header:#${p.mutedText}
+      --color=border:#${p.subtleBorder}
+      --color=label:#${p.accent}
+      --color=query:#${p.foreground}
     '';
 
     ".config/fzf/themes/light".text = ''

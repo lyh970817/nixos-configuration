@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/earendil-works/pi/main/packages/coding-agent/src/modes/interactive/theme/theme-schema.json",
   "name": "vt220-amber",
   "vars": {
-    "userMsgBg": "#0C0A06"
+    "userMsgBg": "#080C09"
   },
   "colors": {
     "accent": 5,
@@ -64,8 +64,8 @@
     "bashMode": 10
   },
   "export": {
-    "pageBg": "#080705",
-    "cardBg": "#0C0A06",
-    "infoBg": "#2A2011"
+    "pageBg": "#050806",
+    "cardBg": "#080C09",
+    "infoBg": "#15261A"
   }
 }

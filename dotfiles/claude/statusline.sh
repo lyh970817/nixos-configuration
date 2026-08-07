@@ -32,9 +32,9 @@ ACCENT=$'\033[93m'
 
 # Severity ramp for the usage meters. The amber palette offers no usable hue
 # axis, so severity rides on luminance instead: muted -> accent -> bright.
-# Measured against the dark palette these are #6E501D -> #BE842A -> #FFD064,
+# Measured against the dark palette these are #193F20 -> #3D8E48 -> #86E68C,
 # so the meter always gets brighter as it fills. The stock red/yellow/green
-# resolved to #2A2011 -> #9B6D24 -> #6E501D, which was both near-invisible at
+# resolved to #15261A -> #286731 -> #193F20, which was both near-invisible at
 # the low end and inverted at the top. The light theme flattens all three
 # bright slots to one grey, which loses the ramp but never re-inverts it.
 USAGE_LOW=$'\033[91m'

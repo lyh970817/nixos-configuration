@@ -4,6 +4,9 @@
 { config, pkgs, ... }:
 
 let
+  # Active phosphor profile; see ../palettes.nix.
+  p = (import ../palettes.nix).active;
+
   scratchNote = pkgs.writeShellScript "tmux-scratch-note" ''
     set -eu
 
@@ -189,13 +192,13 @@ in
         set -g message-style fg=black,bg=#4AB34D,bold
         set -g mode-style fg=black,bg=#3CA23F
       %else
-        set -g status-style bg=#080705,fg=#D99B32
-        set -g pane-border-style fg=#2A2011
-        set -g pane-active-border-style fg=#D99B32
-        setw -g window-status-style fg=#D99B32,bg=#080705
-        setw -g window-status-current-style fg=#080705,bg=#D99B32,bold
-        set -g message-style fg=#080705,bg=#D99B32,bold
-        set -g mode-style fg=#080705,bg=#BE842A
+        set -g status-style bg=#${p.background},fg=#${p.foreground}
+        set -g pane-border-style fg=#${p.subtleBorder}
+        set -g pane-active-border-style fg=#${p.foreground}
+        setw -g window-status-style fg=#${p.foreground},bg=#${p.background}
+        setw -g window-status-current-style fg=#${p.background},bg=#${p.foreground},bold
+        set -g message-style fg=#${p.background},bg=#${p.foreground},bold
+        set -g mode-style fg=#${p.background},bg=#${p.accent}
       %endif
 
       set -ag terminal-overrides ",alacritty:RGB"

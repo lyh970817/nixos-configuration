@@ -3,7 +3,7 @@
 # Modified by: Alexandr Savca <alexandr.savca89@gmail.com>
 # License: GPL-3.0+
 
-active_text_color=#D99B32
+active_text_color=#4BAE55
 inactive_text_color=#008000
 show_app_icon=true
 full_width_title=true

@@ -23,13 +23,13 @@ if ! exists('g:vt220_amber_spell_undercurl')
 endif
 
 " Colors - VT220 Amber Palette
-let s:black = {'gui': '#080705', 'cterm': '0'}
-let s:deep_amber = {'gui': '#0C0A06', 'cterm': '22'}
-let s:subtle_border = {'gui': '#2A2011', 'cterm': '28'}
-let s:muted_amber = {'gui': '#6E501D', 'cterm': '34'}
-let s:secondary_amber = {'gui': '#9B6D24', 'cterm': '70'}
-let s:accent_amber = {'gui': '#BE842A', 'cterm': '76'}
-let s:amber = {'gui': '#D99B32', 'cterm': '82'}
+let s:black = {'gui': '#050806', 'cterm': '0'}
+let s:deep_amber = {'gui': '#080C09', 'cterm': '22'}
+let s:subtle_border = {'gui': '#15261A', 'cterm': '28'}
+let s:muted_amber = {'gui': '#193F20', 'cterm': '34'}
+let s:secondary_amber = {'gui': '#286731', 'cterm': '70'}
+let s:accent_amber = {'gui': '#3D8E48', 'cterm': '76'}
+let s:amber = {'gui': '#4BAE55', 'cterm': '82'}
 
 " Background and foreground
 let s:bg = s:black

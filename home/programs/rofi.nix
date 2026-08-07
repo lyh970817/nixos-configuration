@@ -4,6 +4,11 @@
 # Theme switching handled by darkman hooks (symlinks to current.rasi)
 { config, pkgs, ... }:
 
+let
+  # Active phosphor profile; see ../palettes.nix.
+  p = (import ../palettes.nix).active;
+in
+
 {
   programs.rofi = {
     enable = true;
@@ -22,12 +27,12 @@
   home.file = {
     ".config/rofi/themes/dark.rasi".text = ''
       * {
-          bg: #080705;
-          bg-alt: #0C0A06;
-          fg: #D99B32;
-          fg-alt: #9B6D24;
-          border: #D99B32;
-          selected: #9B6D24;
+          bg: #${p.background};
+          bg-alt: #${p.deepSurface};
+          fg: #${p.foreground};
+          fg-alt: #${p.secondaryText};
+          border: #${p.foreground};
+          selected: #${p.secondaryText};
           background-color: transparent;
           text-color: @fg;
           font: "Hack Nerd Font 12";

@@ -6,9 +6,11 @@
 }:
 
 let
+  # Active phosphor profile; see ../palettes.nix.
+  p = (import ../palettes.nix).active;
+
   lightWallpaper = "$HOME/.local/share/wallpapers/Taiji_mandala.png";
   hyprCurrentTheme = "$HOME/.local/state/hypr/current-theme.conf";
-  amberShader = "$HOME/.config/hypr/shaders/vt220-amber.glsl";
 
   # Dark Mode Script
   #
@@ -22,12 +24,15 @@ let
 
     # 1. WALLPAPER (Kill old, start new)
     pkill swaybg || true
-    ${pkgs.util-linux}/bin/setsid -f ${pkgs.swaybg}/bin/swaybg -c 080705 >/dev/null 2>&1
+    ${pkgs.util-linux}/bin/setsid -f ${pkgs.swaybg}/bin/swaybg -c ${p.background} >/dev/null 2>&1
     ${pkgs.systemd}/bin/systemctl --user start mandala-wallpaper.service || true
 
     # 2. HYPRLAND BACKGROUND COLOR (Misc setting)
-    ${pkgs.hyprland}/bin/hyprctl keyword misc:background_color 0x080705
-    ${pkgs.hyprland}/bin/hyprctl keyword decoration:screen_shader "${amberShader}"
+    ${pkgs.hyprland}/bin/hyprctl keyword misc:background_color 0x${p.background}
+    # No screen shader. The CRT softness shader adds a warm-tinted bloom and
+    # black lift, which casts amber over the green phosphor and contaminates
+    # any colour measured from a screenshot. Both modes now leave it empty.
+    ${pkgs.hyprland}/bin/hyprctl keyword decoration:screen_shader '[[EMPTY]]'
 
     # 3. HYPRLAND THEME (Symlink + Live Settings)
     ln -sf "$HOME/.config/hypr/themes/dark.conf" "${hyprCurrentTheme}"
@@ -36,8 +41,8 @@ let
     ${pkgs.hyprland}/bin/hyprctl keyword general:gaps_in 8
     ${pkgs.hyprland}/bin/hyprctl keyword general:gaps_out 12
     ${pkgs.hyprland}/bin/hyprctl keyword general:border_size 1
-    ${pkgs.hyprland}/bin/hyprctl keyword general:col.active_border "rgba(BE842Aff)"
-    ${pkgs.hyprland}/bin/hyprctl keyword general:col.inactive_border "rgba(2A2011ff)"
+    ${pkgs.hyprland}/bin/hyprctl keyword general:col.active_border "rgba(${p.accent}ff)"
+    ${pkgs.hyprland}/bin/hyprctl keyword general:col.inactive_border "rgba(${p.subtleBorder}ff)"
     ${pkgs.hyprland}/bin/hyprctl keyword decoration:rounding 0
     ${pkgs.hyprland}/bin/hyprctl keyword decoration:active_opacity 1
     ${pkgs.hyprland}/bin/hyprctl keyword decoration:inactive_opacity 1

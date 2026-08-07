@@ -1,11 +1,11 @@
-gtk_color_scheme = "bg_color:#080705
-fg_color:#D99B32
-base_color:#080705
-text_color:#D99B32
-selected_bg_color:#9B6D24
-selected_fg_color:#FFD064
-tooltip_bg_color:#080705
-tooltip_fg_color:#D99B32"
+gtk_color_scheme = "bg_color:#050806
+fg_color:#4BAE55
+base_color:#050806
+text_color:#4BAE55
+selected_bg_color:#286731
+selected_fg_color:#86E68C
+tooltip_bg_color:#050806
+tooltip_fg_color:#4BAE55"
 
 # gtkRC by delvalle26, GPL'd
 
@@ -14,10 +14,10 @@ style "default"
   GtkWidget::cursor-color = @text_color
   GtkWidget::secondary-cursor-color = "#ff0000"
   GtkWidget::cursor-aspect-ratio = 0.10
-  GtkWidget::link-color = "#EDB144"
+  GtkWidget::link-color = "#65C96D"
   GtkWidget::visited-link-color = "#555555"   
 
-  GtkTreeView::odd-row-color = "#080705"
+  GtkTreeView::odd-row-color = "#050806"
   NautilusIconContainer::selection_box_color = @fg_color 
 
   bg[ACTIVE]      = @bg_color 
@@ -61,8 +61,8 @@ widget "gtk-tooltip*" 	style "tooltips"
 
 style "scroll"
 {
-  bg[NORMAL]      = "#D99B32"
-  fg[NORMAL]      = "#080705"
+  bg[NORMAL]      = "#4BAE55"
+  fg[NORMAL]      = "#050806"
   GtkScrollbar::slider-width         = 4
   GtkScrollbar::has-backward-stepper = 0
   GtkScrollbar::has-forward-stepper  = 0
@@ -71,7 +71,7 @@ class "GtkRange"	style "scroll"
 
 style "button" 
 {
-  fg[NORMAL]      = "#D99B32" #gnome panel unselected
+  fg[NORMAL]      = "#4BAE55" #gnome panel unselected
   fg[ACTIVE]      = @selected_fg_color #gnome panel focused  
 }
 class "GtkButton"      	style "button"
@@ -79,7 +79,7 @@ class "GtkButton"      	style "button"
 style "tab" 
 {
   fg[NORMAL]      = @selected_fg_color
-  fg[ACTIVE]      = "#D99B32" #inactive tab
+  fg[ACTIVE]      = "#4BAE55" #inactive tab
 }
 class "GtkNotebook"      style "tab"
 
@@ -90,13 +90,13 @@ style "meta-frame"
 
   fg[NORMAL]      = @text_color
 
-  fg[ACTIVE]      = "#D99B32" #unselected titlebar text color (sometimes)
-  fg[INSENSITIVE] = "#D99B32" #unselected titlebar controls color (sometimes text color too)
+  fg[ACTIVE]      = "#4BAE55" #unselected titlebar text color (sometimes)
+  fg[INSENSITIVE] = "#4BAE55" #unselected titlebar controls color (sometimes text color too)
 }
 class "GtkWindow"      style "meta-frame"
 
 style "border" 
-{ fg[NORMAL]      = "#D99B32" }
+{ fg[NORMAL]      = "#4BAE55" }
 class "GtkContainer"      style "border"
 
 style "menuborder" 
@@ -109,7 +109,7 @@ class "GtkFrame"      style "menuborder"
 
 style "menu"
 {
-  fg[NORMAL]      = "#FFD064"
+  fg[NORMAL]      = "#86E68C"
 }
 class "GtkMenuItem"      style "menu"
 class "GtkCheckButton"      style "menu"
@@ -119,7 +119,7 @@ class "GtkTreeView"   style "menu"
 style "sep"
 {
   #fg[NORMAL]      = "#00aaaa"
-  fg[NORMAL]      = "#9B6D24"
+  fg[NORMAL]      = "#286731"
 }
 class "GtkSeparatorMenuItem" style "sep"
 class "GtkSeparatorToolItem" style "sep"

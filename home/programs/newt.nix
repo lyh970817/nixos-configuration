@@ -12,6 +12,9 @@
 }:
 
 let
+  # Active phosphor profile; see ../palettes.nix.
+  p = (import ../palettes.nix).active;
+
   # Claude Code's dark-ansi theme forced several ANSI slots away from the
   # original dark palette in programs/alacritty.nix. Newt names colors rather
   # than addressing hex, so nmtui inherits those tweaks — and because it paints
@@ -21,10 +24,10 @@ let
   # Restore the original values for the life of the process with OSC 4, then
   # reset just these slots with OSC 104 so unrelated palette state survives.
   originalSlots = {
-    "0" = "#080705"; # black — nmtui backdrop; lifted to #110E08 so Claude Code's ANSI-black selected row stays visible
-    "7" = "#D99B32"; # white — receded to #9B6D24 so Claude Code's secondary text reads as secondary
-    "10" = "#9B6D24"; # bright amber — lifted to #FFD064 so Claude Code's selected menu entry is distinguishable
-    "12" = "#D99B32"; # bright blue — retuned to #EDB144 so Claude Code's fuzzy-match fragments read as accents
+    "0" = "#${p.background}"; # black — nmtui backdrop; lifted to #0B120D so Claude Code's ANSI-black selected row stays visible
+    "7" = "#${p.foreground}"; # white — receded to #286731 so Claude Code's secondary text reads as secondary
+    "10" = "#${p.secondaryText}"; # bright amber — lifted to #86E68C so Claude Code's selected menu entry is distinguishable
+    "12" = "#${p.foreground}"; # bright blue — retuned to #65C96D so Claude Code's fuzzy-match fragments read as accents
   };
 
   osc = lib.concatStrings (lib.mapAttrsToList (i: c: ''\033]4;${i};${c}\007'') originalSlots);

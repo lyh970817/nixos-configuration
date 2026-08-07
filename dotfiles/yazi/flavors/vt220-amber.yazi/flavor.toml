@@ -6,43 +6,43 @@
 [mgr]
 
 # Current working directory - primary amber on warm black
-cwd = { fg = "#D99B32", bg = "#080705", bold = true }
+cwd = { fg = "#4BAE55", bg = "#050806", bold = true }
 
 # Hovered file - reverse video for clear selection
-hovered = { fg = "#080705", bg = "#BE842A", bold = true }
+hovered = { fg = "#050806", bg = "#3D8E48", bold = true }
 
 # Preview hovered - reverse video, one step dimmer
-preview_hovered = { fg = "#080705", bg = "#9B6D24" }
+preview_hovered = { fg = "#050806", bg = "#286731" }
 
 # Search highlights - reverse video for visibility
-find_keyword = { fg = "#080705", bg = "#D99B32", bold = true }
+find_keyword = { fg = "#050806", bg = "#4BAE55", bold = true }
 
 # Position indicator - accent amber
-find_position = { fg = "#BE842A" }
+find_position = { fg = "#3D8E48" }
 
 # File markers using different amber levels
-marker_copied = { fg = "#BE842A", bg = "#BE842A" }
-marker_cut = { fg = "#9B6D24", bg = "#9B6D24" }
-marker_marked = { fg = "#D99B32", bg = "#D99B32"}
-marker_selected = { fg = "#D99B32", bg = "#D99B32"}
+marker_copied = { fg = "#3D8E48", bg = "#3D8E48" }
+marker_cut = { fg = "#286731", bg = "#286731" }
+marker_marked = { fg = "#4BAE55", bg = "#4BAE55"}
+marker_selected = { fg = "#4BAE55", bg = "#4BAE55"}
 
 # Count indicators with subtle backgrounds
-count_copied = { fg = "#D99B32", bg = "#0C0A06" }
-count_cut = { fg = "#D99B32", bg = "#2A2011" }
-count_selected = { fg = "#080705", bg = "#BE842A" }
+count_copied = { fg = "#4BAE55", bg = "#080C09" }
+count_cut = { fg = "#4BAE55", bg = "#15261A" }
+count_selected = { fg = "#050806", bg = "#3D8E48" }
 
 # Border using primary amber
-border_style = { fg = "#D99B32" }
+border_style = { fg = "#4BAE55" }
 
 # Left empty: Yazi loads this flavor's tmtheme.xml for syntax highlighting.
 syntect_theme = ""
 
 [tabs]
 # Active tab - high contrast
-active = { fg = "#D99B32", bg = "#080705", bold = true }
+active = { fg = "#4BAE55", bg = "#050806", bold = true }
 
 # Inactive tabs - lower contrast
-inactive = { fg = "#6E501D", bg = "#0C0A06" }
+inactive = { fg = "#193F20", bg = "#080C09" }
 
 # Tab separators
 sep_inner = { open = "[", close = "]" }
@@ -50,104 +50,104 @@ sep_outer = { open = "", close = "" }
 
 [mode]
 # Normal mode - primary amber on warm black
-normal_main = { fg = "#D99B32", bg = "#080705", bold = true }
-normal_alt = { fg = "#BE842A", bg = "#080705" }
+normal_main = { fg = "#4BAE55", bg = "#050806", bold = true }
+normal_alt = { fg = "#3D8E48", bg = "#050806" }
 
 # Select mode - inverted for distinction
-select_main = { fg = "#080705", bg = "#D99B32", bold = true }
-select_alt = { fg = "#080705", bg = "#BE842A" }
+select_main = { fg = "#050806", bg = "#4BAE55", bold = true }
+select_alt = { fg = "#050806", bg = "#3D8E48" }
 
 # Unset mode - muted amber to show inactive state
-unset_main = { fg = "#6E501D", bg = "#0C0A06" }
-unset_alt = { fg = "#9B6D24", bg = "#0C0A06" }
+unset_main = { fg = "#193F20", bg = "#080C09" }
+unset_alt = { fg = "#286731", bg = "#080C09" }
 
 [status]
 # Overall status bar
-overall = { fg = "#D99B32", bg = "#080705" }
+overall = { fg = "#4BAE55", bg = "#050806" }
 
 # Status separators
 sep_left = { open = "", close = "]" }
 sep_right = { open = "[", close = "" }
 
 # Permission indicators with varying amber levels
-perm_type = { fg = "#D99B32", bold = true }
-perm_read = { fg = "#BE842A" }
-perm_write = { fg = "#9B6D24" }
-perm_exec = { fg = "#D99B32", bold = true }
-perm_sep = { fg = "#6E501D" }
+perm_type = { fg = "#4BAE55", bold = true }
+perm_read = { fg = "#3D8E48" }
+perm_write = { fg = "#286731" }
+perm_exec = { fg = "#4BAE55", bold = true }
+perm_sep = { fg = "#193F20" }
 
 # Progress indicators
-progress_label = { fg = "#D99B32", bold = true }
-progress_normal = { fg = "#080705", bg = "#BE842A" }
-progress_error = { fg = "#080705", bg = "#D99B32", bold = true }
+progress_label = { fg = "#4BAE55", bold = true }
+progress_normal = { fg = "#050806", bg = "#3D8E48" }
+progress_error = { fg = "#050806", bg = "#4BAE55", bold = true }
 
 [which]
 # Key help display
 cols = 2
-mask = { bg = "#0C0A06" }
-cand = { fg = "#D99B32", bold = true }
-rest = { fg = "#BE842A" }
-desc = { fg = "#BE842A" }
+mask = { bg = "#080C09" }
+cand = { fg = "#4BAE55", bold = true }
+rest = { fg = "#3D8E48" }
+desc = { fg = "#3D8E48" }
 separator = " → "
-separator_style = { fg = "#6E501D" }
+separator_style = { fg = "#193F20" }
 
 [confirm]
 # Confirmation dialogs
-border = { fg = "#D99B32" }
-title = { fg = "#D99B32", bold = true }
-content = { fg = "#D99B32" }
-list = { fg = "#BE842A" }
-btn_yes = { fg = "#D99B32", bg = "#080705", bold = true }
-btn_no = { fg = "#D99B32", bg = "#080705" }
+border = { fg = "#4BAE55" }
+title = { fg = "#4BAE55", bold = true }
+content = { fg = "#4BAE55" }
+list = { fg = "#3D8E48" }
+btn_yes = { fg = "#4BAE55", bg = "#050806", bold = true }
+btn_no = { fg = "#4BAE55", bg = "#050806" }
 
 [spot]
 # Search/spotlight features
-border = { fg = "#6E501D" }
-title = { fg = "#D99B32", bold = true }
-tbl_col = { fg = "#080705", bg = "#9B6D24" }
-tbl_cell = { fg = "#080705", bg = "#BE842A" }
+border = { fg = "#193F20" }
+title = { fg = "#4BAE55", bold = true }
+tbl_col = { fg = "#050806", bg = "#286731" }
+tbl_cell = { fg = "#050806", bg = "#3D8E48" }
 
 [notify]
 # Notification styles - using bold for emphasis
-title_info = { fg = "#D99B32", bold = true }
-title_warn = { fg = "#D99B32", bg = "#2A2011", bold = true }
-title_error = { fg = "#080705", bg = "#D99B32", bold = true }
+title_info = { fg = "#4BAE55", bold = true }
+title_warn = { fg = "#4BAE55", bg = "#15261A", bold = true }
+title_error = { fg = "#050806", bg = "#4BAE55", bold = true }
 
 [pick]
 # Picker dialogs
-border = { fg = "#6E501D" }
-active = { fg = "#080705", bg = "#BE842A", bold = true }
-inactive = { fg = "#9B6D24" }
+border = { fg = "#193F20" }
+active = { fg = "#050806", bg = "#3D8E48", bold = true }
+inactive = { fg = "#286731" }
 
 [input]
 # Input fields
-border = { fg = "#D99B32" }
-title = { fg = "#D99B32", bold = true }
-value = { fg = "#D99B32" }
-selected = { fg = "#080705", bg = "#BE842A" }
+border = { fg = "#4BAE55" }
+title = { fg = "#4BAE55", bold = true }
+value = { fg = "#4BAE55" }
+selected = { fg = "#050806", bg = "#3D8E48" }
 
 [cmp]
 # Completion menu
-border = { fg = "#6E501D" }
-active = { fg = "#080705", bg = "#BE842A", bold = true }
-inactive = { fg = "#9B6D24" }
+border = { fg = "#193F20" }
+active = { fg = "#050806", bg = "#3D8E48", bold = true }
+inactive = { fg = "#286731" }
 # icon_file = "▸"
 # icon_folder = "▾"
 # icon_command = "›"
 
 [tasks]
 # Task manager
-border = { fg = "#6E501D" }
-title = { fg = "#D99B32", bold = true }
-hovered = { fg = "#080705", bg = "#9B6D24" }
+border = { fg = "#193F20" }
+title = { fg = "#4BAE55", bold = true }
+hovered = { fg = "#050806", bg = "#286731" }
 
 [help]
 # Help menu
-on = { fg = "#D99B32", bold = true }
-run = { fg = "#BE842A" }
-desc = { fg = "#9B6D24" }
-hovered = { fg = "#080705", bg = "#BE842A" }
-footer = { fg = "#6E501D", bg = "#0C0A06" }
+on = { fg = "#4BAE55", bold = true }
+run = { fg = "#3D8E48" }
+desc = { fg = "#286731" }
+hovered = { fg = "#050806", bg = "#3D8E48" }
+footer = { fg = "#193F20", bg = "#080C09" }
 # icon_info = "ℹ"
 # icon_warn = "⚠"
 # icon_error = "✕"
@@ -156,65 +156,65 @@ footer = { fg = "#6E501D", bg = "#0C0A06" }
 # File type rules using amber luminance distinctions
 rules = [
     # Directories - primary amber bold
-    { name = "*/", fg = "#D99B32", bold = true },
+    { name = "*/", fg = "#4BAE55", bold = true },
 
     # Executables - accent amber with bold
-    { name = "*", is = "exec", fg = "#BE842A", bold = true },
+    { name = "*", is = "exec", fg = "#3D8E48", bold = true },
 
     # Archives - secondary amber
-    { mime = "application/zip", fg = "#9B6D24" },
-    { mime = "application/x-tar", fg = "#9B6D24" },
-    { mime = "application/x-gzip", fg = "#9B6D24" },
-    { mime = "application/x-bzip", fg = "#9B6D24" },
-    { mime = "application/x-7z-compressed", fg = "#9B6D24" },
+    { mime = "application/zip", fg = "#286731" },
+    { mime = "application/x-tar", fg = "#286731" },
+    { mime = "application/x-gzip", fg = "#286731" },
+    { mime = "application/x-bzip", fg = "#286731" },
+    { mime = "application/x-7z-compressed", fg = "#286731" },
 
     # Documents - accent amber
-    { mime = "application/pdf", fg = "#BE842A" },
-    { mime = "application/msword", fg = "#BE842A" },
-    { mime = "application/vnd.*", fg = "#BE842A" },
+    { mime = "application/pdf", fg = "#3D8E48" },
+    { mime = "application/msword", fg = "#3D8E48" },
+    { mime = "application/vnd.*", fg = "#3D8E48" },
 
     # Images - secondary amber
-    { mime = "image/*", fg = "#9B6D24" },
+    { mime = "image/*", fg = "#286731" },
 
     # Videos/Audio - muted amber
-    { mime = "video/*", fg = "#6E501D" },
-    { mime = "audio/*", fg = "#6E501D" },
+    { mime = "video/*", fg = "#193F20" },
+    { mime = "audio/*", fg = "#193F20" },
 
     # Text files - primary amber
-    { mime = "text/*", fg = "#D99B32" },
+    { mime = "text/*", fg = "#4BAE55" },
 
     # Code files - primary amber
-    { name = "*.py", fg = "#D99B32" },
-    { name = "*.js", fg = "#D99B32" },
-    { name = "*.rs", fg = "#D99B32" },
-    { name = "*.go", fg = "#D99B32" },
-    { name = "*.c", fg = "#D99B32" },
-    { name = "*.cpp", fg = "#D99B32" },
-    { name = "*.h", fg = "#D99B32" },
-    { name = "*.java", fg = "#D99B32" },
+    { name = "*.py", fg = "#4BAE55" },
+    { name = "*.js", fg = "#4BAE55" },
+    { name = "*.rs", fg = "#4BAE55" },
+    { name = "*.go", fg = "#4BAE55" },
+    { name = "*.c", fg = "#4BAE55" },
+    { name = "*.cpp", fg = "#4BAE55" },
+    { name = "*.h", fg = "#4BAE55" },
+    { name = "*.java", fg = "#4BAE55" },
 
     # Config files - secondary amber
-    { name = "*.toml", fg = "#9B6D24" },
-    { name = "*.yaml", fg = "#9B6D24" },
-    { name = "*.yml", fg = "#9B6D24" },
-    { name = "*.json", fg = "#9B6D24" },
-    { name = "*.xml", fg = "#9B6D24" },
-    { name = "*.ini", fg = "#9B6D24" },
+    { name = "*.toml", fg = "#286731" },
+    { name = "*.yaml", fg = "#286731" },
+    { name = "*.yml", fg = "#286731" },
+    { name = "*.json", fg = "#286731" },
+    { name = "*.xml", fg = "#286731" },
+    { name = "*.ini", fg = "#286731" },
 
     # Hidden files - muted amber
-    { name = ".*", fg = "#6E501D" },
+    { name = ".*", fg = "#193F20" },
 
     # Symbolic links - accent amber italic
-    { name = "*", is = "link", fg = "#BE842A", italic = true },
+    { name = "*", is = "link", fg = "#3D8E48", italic = true },
 
     # Broken links - primary amber on deep surface
-    { name = "*", is = "orphan", fg = "#D99B32", bg = "#0C0A06" },
+    { name = "*", is = "orphan", fg = "#4BAE55", bg = "#080C09" },
 
     # Empty files - border amber
-    { mime = "inode/empty", fg = "#2A2011" },
+    { mime = "inode/empty", fg = "#15261A" },
 
     # Fallback - secondary amber
-    { name = "*", fg = "#9B6D24" }
+    { name = "*", fg = "#286731" }
 ]
 
 [icon]
