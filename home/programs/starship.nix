@@ -78,6 +78,12 @@
           [git_commit]
           tag_symbol = '  '
 
+          # Starship defaults this to bold red, which the amber palette renders
+          # as its darkest brown, leaving the repository state barely visible.
+          # Use a palette name rather than a hex so light mode stays monochrome.
+          [git_status]
+          style = 'bold yellow'
+
           [golang]
           symbol = " "
 
