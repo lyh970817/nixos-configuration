@@ -13,6 +13,8 @@ let
   # Home Manager profile on PATH, so it needs a fixed absolute location.
   profileBin = "/etc/profiles/per-user/${config.home.username}/bin";
 
+  viewerIsRemote = pkgs.callPackage ../../pkgs/viewer-is-remote.nix { };
+
   # Receives image bytes on stdin and shows them on THIS machine's Wayland
   # session. Invoked over SSH, so it inherits no XDG_RUNTIME_DIR or
   # WAYLAND_DISPLAY and has to rediscover the compositor socket itself.
@@ -62,69 +64,18 @@ let
     runtimeInputs = [
       pkgs.imv
       pkgs.openssh
-      pkgs.tmux
-      pkgs.procps
       pkgs.coreutils
-      pkgs.gawk
+      viewerIsRemote
     ];
     text = ''
       PEER=${pkgs.lib.escapeShellArg peerHost}
-
-      # Walk a process ancestry looking for mosh-server.
-      ancestry_has_mosh() {
-        local pid="$1" comm
-        while [ -n "$pid" ]; do
-          case "$pid" in
-            *[!0-9]*) return 1 ;;
-          esac
-          [ "$pid" -gt 1 ] || return 1
-          comm="$(ps -o comm= -p "$pid" 2>/dev/null | tr -d ' ' || true)"
-          if [ "$comm" = "mosh-server" ]; then
-            return 0
-          fi
-          pid="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ' || true)"
-        done
-        return 1
-      }
-
-      # True when the human is at the far end of a mosh link. Two shapes,
-      # because the two entry points differ: `home-terminal` runs tmux on the
-      # far side (session "remote"), while the `mosh` shell function just runs
-      # `zsh -l` with no tmux at all.
-      viewer_is_remote() {
-        # No tmux: Yazi's own ancestry reaches mosh-server directly.
-        if ancestry_has_mosh "$$"; then
-          return 0
-        fi
-
-        # Under tmux the pane's shell descends from the tmux server, not from
-        # mosh, so the ancestry above stops short. Ask tmux which clients are
-        # attached and test those instead. Control-mode clients (editor and
-        # agent integrations) are skipped -- nobody is looking at those.
-        [ -n "''${TMUX:-}" ] || return 1
-
-        local session pid
-        session="$(tmux display-message -p '#{session_name}' 2>/dev/null)" || return 1
-
-        while read -r pid; do
-          if ancestry_has_mosh "$pid"; then
-            return 0
-          fi
-        done < <(
-          tmux list-clients -t "$session" \
-            -F '#{client_control_mode} #{client_pid}' 2>/dev/null \
-            | awk '$1 == 0 { print $2 }'
-        )
-
-        return 1
-      }
 
       for file in "$@"; do
         # Hoisted out of the ssh line: shellcheck reads `basename "$file"`
         # plus `< "$file"` in one command as a read/write conflict (SC2094).
         base="$(basename "$file")"
 
-        if [ -n "$PEER" ] && viewer_is_remote; then
+        if [ -n "$PEER" ] && viewer-is-remote; then
           # accept-new rather than a pinned key: the peer's identity is already
           # enforced by the tailnet, and a first push should not fail just
           # because known_hosts has no entry yet.
