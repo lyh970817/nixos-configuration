@@ -162,4 +162,13 @@ in
   # a rebuild.
   activeName = "green";
   active = profiles.green;
+
+  # The second phosphor baked into the same terminal config alongside the
+  # active one. Foot holds two complete themes at once and switches between
+  # them on a signal, so this one is reachable instantly at runtime with no
+  # rebuild — that is what the `phosphor` command drives. Consumers that
+  # hardcode hex rather than naming an ANSI slot cannot follow that switch and
+  # stay on whichever profile was built.
+  alternateName = "amber";
+  alternate = profiles.amber;
 }

@@ -47,6 +47,7 @@
     ./desktop/theming.nix
     ./desktop/hyprsunset.nix
     ./desktop/palette-compare.nix
+    ./desktop/phosphor-switch.nix
     ./desktop/xdg.nix
     ./packages/base.nix
     ./packages/desktop.nix

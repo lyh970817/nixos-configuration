@@ -46,8 +46,8 @@ let
   # Dark palette, addressed by ladder rung rather than by hex so any phosphor
   # profile in ../palettes.nix produces the same emphasis hierarchy. See that
   # file for why regular0, regular7, bright2, and bright4 sit where they do.
-  mkDarkTheme = p: ''
-    [colors]
+  mkDarkTheme = section: p: ''
+    [${section}]
     background=${p.background}
     foreground=${p.foreground}
     selection-foreground=${p.background}
@@ -83,7 +83,18 @@ let
     cursor=${p.background} ${p.accent}
   '';
 
-  mkDarkConfig = p: darkFonts + common + mkDarkTheme p;
+  # Foot carries two complete colour themes in one config and switches between
+  # them at runtime on SIGUSR1/SIGUSR2, with no reload and no relaunch. That is
+  # what makes an instant real green/amber swap possible. Values are explicitly
+  # *not* inherited from [colors] into [colors2], so both blocks are written in
+  # full. See the `phosphor` command in ../desktop/phosphor-switch.nix.
+  mkDarkConfig =
+    primary: secondary:
+    darkFonts + common + mkDarkTheme "colors" primary + mkDarkTheme "colors2" secondary;
+
+  # A per-profile file gets the same palette in both slots, so signalling one of
+  # these is a harmless no-op rather than a surprise switch to something else.
+  mkSoloConfig = p: mkDarkConfig p p;
 
   lightTheme = ''
     [colors]
@@ -126,15 +137,22 @@ in
   home.packages = [ pkgs.foot ];
 
   home.file = {
-    # The theme the dark-mode hook links to: whichever profile is active.
-    ".config/foot/themes/dark.ini".text = mkDarkConfig palettes.active;
+    # The theme the dark-mode hook links to: active phosphor in slot 1, the
+    # alternate in slot 2.
+    ".config/foot/themes/dark.ini".text = mkDarkConfig palettes.active palettes.alternate;
+
+    # The same pair the other way round. `phosphor` relinks foot.ini at this
+    # when the alternate is selected, so newly opened windows agree with the
+    # ones already switched by signal.
+    ".config/foot/themes/dark-swapped.ini".text = mkDarkConfig palettes.alternate palettes.active;
+
     ".config/foot/themes/light.ini".text = lightFonts + common + lightTheme;
   }
   # Every profile is also written under its own name so two phosphors can be
-  # compared live: relink ~/.config/foot/foot.ini at one of these and open a new
-  # window. A dark/light switch puts the active profile back.
+  # compared live: point a single window at one with `foot --config=`, or relink
+  # ~/.config/foot/foot.ini. A dark/light switch puts the active profile back.
   // lib.mapAttrs' (
-    name: p: lib.nameValuePair ".config/foot/themes/dark-${name}.ini" { text = mkDarkConfig p; }
+    name: p: lib.nameValuePair ".config/foot/themes/dark-${name}.ini" { text = mkSoloConfig p; }
   ) (palettes.profiles // palettes.previewProfiles);
 
   # The theme hooks replace this symlink when the desktop mode changes.
