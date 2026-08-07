@@ -31,6 +31,9 @@ let
     alacritty = "ctrl+shift+v";
     alacritty-float = "ctrl+shift+v";
     alacritty-main = "ctrl+shift+v";
+    foot = "ctrl+shift+v";
+    foot-float = "ctrl+shift+v";
+    foot-main = "ctrl+shift+v";
   };
 
 

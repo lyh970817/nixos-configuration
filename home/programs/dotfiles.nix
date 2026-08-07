@@ -64,9 +64,9 @@ let
     if role == "remote" then
       ''
         # Remote role: Super+Enter and boot connect to the home box; Super+Shift+Enter opens local Herdr.
-        bind = $mainMod, Return, exec, btop-workspace exec alacritty --class Alacritty-float --command home-terminal
-        bind = $mainMod SHIFT, Return, exec, btop-workspace exec alacritty --class Alacritty-float --command herdr
-        exec-once = btop-workspace exec alacritty --class Alacritty-float --command home-terminal
+        bind = $mainMod, Return, exec, btop-workspace exec foot --app-id foot-float home-terminal
+        bind = $mainMod SHIFT, Return, exec, btop-workspace exec foot --app-id foot-float herdr
+        exec-once = btop-workspace exec foot --app-id foot-float home-terminal
         # Remote laptop: lid close turns the screen off via DPMS without
         # suspending. logind ignores the lid; see modules/system/lid.nix.
         bindl = , switch:on:Lid Switch, exec, hyprctl dispatch dpms off
@@ -75,9 +75,9 @@ let
     else
       ''
         # Home role: Super+Enter attaches to the 'main' tmux session, Super+Shift+Enter opens 'secondary', Super+Ctrl+Enter attaches the laptop's 'remote' session.
-        bind = $mainMod, Return, exec, btop-workspace exec alacritty --class Alacritty-float --command tmux new-session -A -s main
-        bind = $mainMod SHIFT, Return, exec, btop-workspace exec alacritty --class Alacritty-float --command tmux new-session -A -s secondary
-        bind = $mainMod CTRL, Return, exec, btop-workspace exec alacritty --class Alacritty-float --command attach-remote
+        bind = $mainMod, Return, exec, btop-workspace exec foot --app-id foot-float tmux new-session -A -s main
+        bind = $mainMod SHIFT, Return, exec, btop-workspace exec foot --app-id foot-float tmux new-session -A -s secondary
+        bind = $mainMod CTRL, Return, exec, btop-workspace exec foot --app-id foot-float attach-remote
       '';
 in
 {

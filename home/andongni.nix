@@ -59,7 +59,7 @@
   # Environment variables
   home.sessionVariables = {
     EDITOR = "nvim";
-    TERMINAL = "alacritty";
+    TERMINAL = "foot";
     JAVA_HOME = "${pkgs.jdk17}/lib/openjdk";
     SSH_AUTH_SOCK = "$HOME/.bitwarden-ssh-agent.sock";
     NPM_CONFIG_PREFIX = "$HOME/.npm-global";

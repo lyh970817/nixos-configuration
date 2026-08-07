@@ -47,7 +47,7 @@ printf '%s\n' "$mode" > "$STATE_FILE"
 # shellcheck source=/dev/null
 . "${XDG_CONFIG_HOME:-$HOME/.config}/hypr/role.env" 2>/dev/null || true
 if [ "$mode" = "dark" ] && [ "${HYPR_ROLE:-}" != "remote" ]; then
-  alacritty --class Alacritty-main --command tmux new-session -A -s main &
+  foot --app-id foot-main tmux new-session -A -s main &
 fi
 
 # Poll state so this script has no socat runtime dependency. Apply the theme

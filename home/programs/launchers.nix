@@ -86,7 +86,7 @@ in
         Name=Network Manager
         GenericName=Network Configuration
         Comment=Text-based network configuration tool
-        Exec=alacritty --title nmtui -e zsh -i -c nmtui
+        Exec=foot --title nmtui zsh -i -c nmtui
         Icon=network-wired
         Terminal=false
         Categories=System;Network;Settings;
