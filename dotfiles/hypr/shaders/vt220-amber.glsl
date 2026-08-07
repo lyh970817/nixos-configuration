@@ -6,9 +6,9 @@ layout(location = 0) out vec4 fragColor;
 
 uniform sampler2D tex;
 
-const float BLOOM_STRENGTH = 0.040;
-const float SCANLINE_STRENGTH = 0.012;
-const float VIGNETTE_STRENGTH = 0.055;
+const float BLOOM_STRENGTH = 0.055;
+const float SCANLINE_STRENGTH = 0.000;
+const float VIGNETTE_STRENGTH = 0.050;
 const float CURVATURE = 0.000;
 
 void main() {

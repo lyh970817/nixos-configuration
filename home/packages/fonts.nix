@@ -3,6 +3,7 @@
 {
   # Font packages
   home.packages = with pkgs; [
+    glasstty-ttf
     nerd-fonts.hack
     noto-fonts
     noto-fonts-cjk-sans

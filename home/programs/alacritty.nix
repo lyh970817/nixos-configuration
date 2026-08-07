@@ -153,15 +153,15 @@
 
       # Font settings
       [font]
-      size = 12.0
-      normal.family = "Hack Nerd Font"
+      size = 15.0
+      normal.family = "Glass TTY VT220"
       normal.style = "Regular"
-      bold.family = "Hack Nerd Font"
-      bold.style = "Bold"
-      italic.family = "Hack Nerd Font"
-      italic.style = "Italic"
-      bold_italic.family = "Hack Nerd Font"
-      bold_italic.style = "Bold Italic"
+      bold.family = "Glass TTY VT220"
+      bold.style = "Regular"
+      italic.family = "Glass TTY VT220"
+      italic.style = "Regular"
+      bold_italic.family = "Glass TTY VT220"
+      bold_italic.style = "Regular"
 
       # Cursor settings
       [cursor]

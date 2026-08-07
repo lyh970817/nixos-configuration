@@ -3,11 +3,21 @@
 { pkgs, ... }:
 
 let
+  darkFonts = ''
+    font=Glass TTY VT220:size=15, Hack Nerd Font:size=15
+    font-bold=Glass TTY VT220:style=Regular:size=15, Hack Nerd Font:style=Bold:size=15
+    font-italic=Glass TTY VT220:style=Regular:size=15, Hack Nerd Font:style=Italic:size=15
+    font-bold-italic=Glass TTY VT220:style=Regular:size=15, Hack Nerd Font:style=Bold Italic:size=15
+  '';
+
+  lightFonts = ''
+    font=Hack Nerd Font:size=11
+    font-bold=Hack Nerd Font:style=Bold:size=11
+    font-italic=Hack Nerd Font:style=Italic:size=11
+    font-bold-italic=Hack Nerd Font:style=Bold Italic:size=11
+  '';
+
   common = ''
-    font=Hack Nerd Font:size=12
-    font-bold=Hack Nerd Font:style=Bold:size=12
-    font-italic=Hack Nerd Font:style=Italic:size=12
-    font-bold-italic=Hack Nerd Font:style=Bold Italic:size=12
     pad=10x10 center
     selection-target=clipboard
 
@@ -108,8 +118,8 @@ in
   home.packages = [ pkgs.foot ];
 
   home.file = {
-    ".config/foot/themes/dark.ini".text = common + darkTheme;
-    ".config/foot/themes/light.ini".text = builtins.replaceStrings [ "size=12" ] [ "size=11" ] common + lightTheme;
+    ".config/foot/themes/dark.ini".text = darkFonts + common + darkTheme;
+    ".config/foot/themes/light.ini".text = lightFonts + common + lightTheme;
   };
 
   # The theme hooks replace this symlink when the desktop mode changes.
