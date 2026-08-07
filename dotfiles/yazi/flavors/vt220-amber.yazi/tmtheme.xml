@@ -15,25 +15,25 @@
 				<key>background</key>
 				<string>#080705</string>
 				<key>foreground</key>
-				<string>#52C755</string>
+				<string>#D99B32</string>
 				<key>caret</key>
-				<string>#52C755</string>
+				<string>#D99B32</string>
 				<key>invisibles</key>
-				<string>#147917</string>
+				<string>#2A2011</string>
 				<key>lineHighlight</key>
 				<string>#0C0A06</string>
 				<key>selection</key>
-				<string>#248D27</string>
+				<string>#6E501D</string>
 				<key>selectionBorder</key>
-				<string>#248D27</string>
+				<string>#6E501D</string>
 				<key>findHighlight</key>
-				<string>#147917</string>
+				<string>#2A2011</string>
 				<key>findHighlightForeground</key>
-				<string>#52C755</string>
+				<string>#D99B32</string>
 			</dict>
 		</dict>
 
-		<!-- Comments: s:grey (#248D27) + Italic -->
+		<!-- Comments: muted amber + Italic -->
 		<dict>
 			<key>name</key>
 			<string>Comment</string>
@@ -42,13 +42,13 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#248D27</string>
+				<string>#6E501D</string>
 				<key>fontStyle</key>
 				<string>italic</string>
 			</dict>
 		</dict>
 
-		<!-- Constants, Strings, Numbers: s:american_green (#43B446) + Italic -->
+		<!-- Constants, Strings, Numbers: accent amber + Italic -->
 		<dict>
 			<key>name</key>
 			<string>Constant, String, Number</string>
@@ -57,13 +57,13 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#43B446</string>
+				<string>#BE842A</string>
 				<key>fontStyle</key>
 				<string>italic</string>
 			</dict>
 		</dict>
 
-		<!-- Keywords, Control, Operators: s:fg (#52C755) + Bold -->
+		<!-- Keywords, Control, Operators: primary amber + Bold -->
 		<!-- Maps to Vim 'Statement' -->
 		<dict>
 			<key>name</key>
@@ -73,13 +73,13 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#52C755</string>
+				<string>#D99B32</string>
 				<key>fontStyle</key>
 				<string>bold</string>
 			</dict>
 		</dict>
 
-		<!-- Types, Classes: s:american_green (#43B446) -->
+		<!-- Types, Classes: accent amber -->
 		<!-- Maps to Vim 'Type' -->
 		<dict>
 			<key>name</key>
@@ -89,11 +89,11 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#43B446</string>
+				<string>#BE842A</string>
 			</dict>
 		</dict>
 
-		<!-- Functions: s:fg (#52C755) -->
+		<!-- Functions: primary amber -->
 		<!-- Maps to Vim 'Identifier' -->
 		<dict>
 			<key>name</key>
@@ -103,11 +103,11 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#52C755</string>
+				<string>#D99B32</string>
 			</dict>
 		</dict>
 
-		<!-- Preprocessor: s:wageningen_green (#33A036) -->
+		<!-- Preprocessor: secondary amber -->
 		<!-- Maps to Vim 'PreProc' -->
 		<dict>
 			<key>name</key>
@@ -117,7 +117,7 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#33A036</string>
+				<string>#9B6D24</string>
 			</dict>
 		</dict>
 
@@ -131,7 +131,7 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#52C755</string>
+				<string>#D99B32</string>
 				<key>fontStyle</key>
 				<string>bold</string>
 			</dict>
@@ -144,11 +144,11 @@
 			<key>settings</key>
 			<dict>
 				<key>foreground</key>
-				<string>#52C755</string>
+				<string>#D99B32</string>
 			</dict>
 		</dict>
 
-		<!-- Invalid/Error: FG s:fg, BG s:deep_green, Bold -->
+		<!-- Invalid/Error: primary amber on deep surface, Bold -->
 		<dict>
 			<key>name</key>
 			<string>Invalid</string>
@@ -159,13 +159,13 @@
 				<key>background</key>
 				<string>#0C0A06</string>
 				<key>foreground</key>
-				<string>#52C755</string>
+				<string>#D99B32</string>
 				<key>fontStyle</key>
 				<string>bold</string>
 			</dict>
 		</dict>
 
-		<!-- TODO: FG s:bg (#080705), BG s:wageningen_green (#33A036), Bold -->
+		<!-- TODO: reverse video on secondary amber, Bold -->
 		<dict>
 			<key>name</key>
 			<string>TODO</string>
@@ -174,7 +174,7 @@
 			<key>settings</key>
 			<dict>
 				<key>background</key>
-				<string>#33A036</string>
+				<string>#9B6D24</string>
 				<key>foreground</key>
 				<string>#080705</string>
 				<key>fontStyle</key>
@@ -187,6 +187,6 @@
 	<key>colorSpaceName</key>
 	<string>sRGB</string>
 	<key>semanticClass</key>
-	<string>theme.dark.vt220-amber_green</string>
+	<string>theme.dark.vt220-amber</string>
 </dict>
 </plist>
