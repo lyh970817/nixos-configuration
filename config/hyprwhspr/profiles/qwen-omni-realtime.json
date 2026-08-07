@@ -15,10 +15,14 @@
   "applications": {
     "alacritty": { "auto_paste": "ctrl+shift+v" },
     "alacritty-float": { "auto_paste": "ctrl+shift+v" },
-    "alacritty-main": { "auto_paste": "ctrl+shift+v" }
+    "alacritty-main": { "auto_paste": "ctrl+shift+v" },
+    "foot": { "auto_paste": "ctrl+shift+v" },
+    "foot-float": { "auto_paste": "ctrl+shift+v" },
+    "foot-main": { "auto_paste": "ctrl+shift+v" }
   },
   "paste_mode": "ctrl",
   "prefer_clipboard_paste": true,
+  "clipboard_clear_delay": 0.2,
   "filter_filler_words": true,
   "post_transcription_hook": null,
   "notification_timeout_ms": 0,
