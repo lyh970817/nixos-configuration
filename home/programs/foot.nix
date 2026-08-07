@@ -17,6 +17,7 @@ let
     blink-rate=500
 
     [key-bindings]
+    primary-paste=none
     clipboard-paste=Control+Shift+v Shift+Insert
 
     # Preserve the explicit terminal sequences used by tmux, Codex, and Herdr.
@@ -63,9 +64,7 @@ let
     search-box-match=000000 4AB34D
     jump-labels=000000 4AB34D
     scrollback-indicator=4AB34D 045C07
-
-    [cursor]
-    color=000000 3CA23F
+    cursor=000000 3CA23F
   '';
 
   lightTheme = ''
@@ -102,9 +101,7 @@ let
     search-box-match=000000 FFFFFF
     jump-labels=FFFFFF 000000
     scrollback-indicator=000000 FFFFFF
-
-    [cursor]
-    color=FFFFFF 000000
+    cursor=FFFFFF 000000
   '';
 in
 {
