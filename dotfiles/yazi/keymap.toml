@@ -20,6 +20,10 @@ prepend_keymap = [
 
 	{ on = "Y", run = 'shell "cp -rL --reflink=auto -- $@ $0" --confirm', desc = "Yank (copy) following symlinks"},
 
+	# Archives
+	{ on = "E", run = 'shell "ya pub extract --list %s"', desc = "Extract selected archives here" },
+	{ on = "Z", run = 'shell -- n=$(basename %h); zip -r "${n%.*}.zip" -- $(for f in %s; do basename "$f"; done)', desc = "Compress selection into a zip" },
+
 	# Find
 	{ on = "n", run = "find_arrow" },
 	{ on = "N", run = "find_arrow --previous" },
