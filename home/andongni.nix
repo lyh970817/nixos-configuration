@@ -25,6 +25,7 @@
     ./programs/r.nix
     ./programs/fastfetch.nix
     ./programs/codexbar.nix
+    ./programs/codex-theme.nix
     ./programs/claude.nix
     ./programs/cli-proxy-api.nix
     ./programs/codex-desktop.nix

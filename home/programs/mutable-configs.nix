@@ -268,6 +268,11 @@ let
                 return
         lines = old.splitlines(True)
         changed = table_key(lines, "features", "remote_plugin", "false")
+        # Pin the syntax theme at the one generated from the phosphor palette
+        # (see programs/codex-theme.nix). Every bundled bat theme hardcodes its
+        # own RGB, so a stray /theme silently strands code blocks and the
+        # status line on a scheme that fights the rest of the terminal.
+        changed = table_key(lines, "tui", "theme", '"vt220-phosphor"') or changed
         for plugin in PLUGINS:
             changed = table_key(lines, 'plugins."%s"' % plugin, "enabled", "false") or changed
         present = set()
