@@ -19,11 +19,11 @@
 # this derivation.
 stdenv.mkDerivation {
   pname = "claude-science";
-  version = "0.1.25";
+  version = "0.1.27";
 
   src = fetchurl {
     url = "https://downloads.claude.ai/claude-science/latest/linux-x64";
-    sha256 = "c663367bbc7ec54e7d1e5a9102594a9e70804ed5070f5d7cd1117e665e3c376c";
+    sha256 = "2e318b2f5f0d1d54b0422cd73ea47bcc94c73f71b357d3614454a27ddd2d9baa";
   };
 
   dontUnpack = true;
