@@ -15,24 +15,28 @@ let
   # one CTM can only supply a single value. These numbers are the least bad
   # compromise, found by sweeping temperature and gamma against the CIELAB
   # distance from each transformed green rung to its amber counterpart:
-  # mean dE 13.8, and dE 10.4 on the foreground rung, which is the one actually
+  # mean dE 13.9, and dE 9.9 on the foreground rung, which is the one actually
   # read. See home/palettes.nix for the two ladders being matched.
   #
-  # 1080 K is below the 1900 K point where hyprsunset's blue term reaches zero,
+  # Keep this a multiple of 100. matrixForKelvin does `temp /= 100` on an
+  # integer, so the temperature is quantised to hundreds: 1100 and 1199 produce
+  # exactly the same matrix, and 1080 would silently behave as 1000.
+  #
+  # 1100 K is below the 1900 K point where hyprsunset's blue term reaches zero,
   # so the result carries no blue at all. Amber's small blue component is lost
   # and the transformed palette is a purer orange than the amber profile is.
   # That is a consequence of the fit rather than an oversight: any temperature
   # warm enough to make red dominate green has already clamped blue to zero.
-  nightTemperature = 1080;
+  nightTemperature = 1100;
 
-  # 285%. Green's red channel is far weaker than amber's, so the transform has
+  # 280%. Green's red channel is far weaker than amber's, so the transform has
   # to amplify, not merely attenuate. hyprsunset's --gamma help text claims a
   # 200% ceiling but nothing enforces it; the real limit is the max-gamma
   # config value below. Gains above 1.0 clip, so the top two rungs saturate
   # their red channel and the brightest end of the ladder compresses slightly.
   # It also amplifies red across every other surface, so photos and video look
   # heavily blown out while night mode is on.
-  nightGamma = 2.85;
+  nightGamma = 2.80;
 
   # Ceiling for the gamma above; hyprsunset refuses the profile outright if
   # gamma exceeds it. Expressed in percent, unlike the per-profile gamma.
