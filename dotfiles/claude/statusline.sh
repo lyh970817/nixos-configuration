@@ -2,7 +2,9 @@
 # Claude Code status line script
 # Mirrors the user's Starship prompt style (~/.config/starship.toml):
 # directory = bold cyan, git_branch = bold purple ("on  <branch>"),
-# git_status = bold red "[...]" with Starship's default symbol set,
+# git_status = bold yellow "[...]" with Starship's default symbol set
+# (yellow, not Starship's stock red: the amber palette maps bright red to its
+# darkest brown, which left the repository state unreadable),
 # plus Claude Code's own segments: model name and a context usage bar.
 
 set -euo pipefail
@@ -125,7 +127,7 @@ if [ -n "$git_root" ]; then
 
     git_segment=""
     [ -n "$branch" ] && git_segment=" on ${BOLD_PURPLE}${GIT_ICON} ${branch}${RESET}"
-    [ -n "$status_str" ] && git_segment+=" ${BOLD_RED}[${status_str}]${RESET}"
+    [ -n "$status_str" ] && git_segment+=" ${BOLD_YELLOW}[${status_str}]${RESET}"
 
     printf '%s\n%s' "$now" "$git_segment" > "$cache_file" 2>/dev/null || true
   fi
