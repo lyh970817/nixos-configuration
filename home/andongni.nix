@@ -17,6 +17,7 @@
     ./programs/htop.nix
     ./programs/btop.nix
     ./programs/alacritty.nix
+    ./programs/foot.nix
     ./programs/mako.nix
     ./programs/rofi.nix
     ./programs/fzf.nix

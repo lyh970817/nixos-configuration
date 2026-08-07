@@ -46,8 +46,9 @@ let
     ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface icon-theme 'Matrix-Icons'
     ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface cursor-theme 'Hacker-C'
 
-    # Alacritty: Update symlink (alacritty auto-reloads on import changes)
+    # Terminals: select the palette used by new windows.
     ln -sf $HOME/.config/alacritty/themes/dark.toml $HOME/.config/alacritty/current.toml
+    ln -sf $HOME/.config/foot/themes/dark.ini $HOME/.config/foot/foot.ini
 
     # Mako: Switch mode
     ${pkgs.mako}/bin/makoctl mode -a dark
@@ -87,8 +88,9 @@ let
     ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface icon-theme 'HighContrast'
     ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface cursor-theme 'Adwaita'
 
-    # Alacritty: Update symlink (alacritty auto-reloads on import changes)
+    # Terminals: select the palette used by new windows.
     ln -sf $HOME/.config/alacritty/themes/light.toml $HOME/.config/alacritty/current.toml
+    ln -sf $HOME/.config/foot/themes/light.ini $HOME/.config/foot/foot.ini
 
     # Mako: Remove dark mode
     ${pkgs.mako}/bin/makoctl mode -r dark
