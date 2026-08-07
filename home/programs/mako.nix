@@ -34,16 +34,16 @@
       border-color=#000000
 
       [mode=dark]
-      # Matrix Green Theme (10% Dimmer Colors)
+      # VT220 Amber Theme (10% Dimmer Colors)
       font=Hack Nerd Font 12
-      background-color=#000000
-      text-color=#4AB34D
+      background-color=#080705
+      text-color=#D99B32
       width=450
       height=400
       margin=10
       padding=10
       border-size=2
-      border-color=#4AB34D
+      border-color=#D99B32
       border-radius=4
       icons=1
       max-icon-size=64
@@ -53,23 +53,23 @@
       max-visible=5
       format=<b>%s</b>\n%b
 
-      # Low urgency notifications - darker green
+      # Low urgency notifications - darker amber
       [urgency=low mode=dark]
-      background-color=#000000
-      text-color=#2E9031
-      border-color=#207F23
+      background-color=#080705
+      text-color=#9B6D24
+      border-color=#6E501D
 
       # Normal urgency (default values above apply)
       [urgency=normal mode=dark]
-      background-color=#000000
-      text-color=#4AB34D
-      border-color=#4AB34D
+      background-color=#080705
+      text-color=#D99B32
+      border-color=#D99B32
 
-      # Critical urgency - inverted with bright green
+      # Critical urgency - inverted with bright amber
       [urgency=critical mode=dark]
-      background-color=#4AB34D
-      text-color=#000000
-      border-color=#4AB34D
+      background-color=#D99B32
+      text-color=#080705
+      border-color=#D99B32
       default-timeout=0
     '';
   };

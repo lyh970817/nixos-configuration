@@ -26,7 +26,7 @@ function M.apply(mode)
     pcall(vim.cmd.colorscheme, "bow-wob")
   else
     vim.opt.background = "dark"
-    pcall(vim.cmd.colorscheme, "matrix")
+    pcall(vim.cmd.colorscheme, "vt220-amber")
   end
 end
 

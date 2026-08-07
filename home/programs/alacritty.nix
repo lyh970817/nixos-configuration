@@ -69,81 +69,81 @@
   # Theme files for darkman switching
   home.file = {
     ".config/alacritty/themes/dark.toml".text = ''
-      # Matrix-Style Green Theme for Alacritty Terminal
-      # Black background with green gradient colors
+      # VT220 Amber Theme for Alacritty Terminal
+      # Black background with amber intensity ladder colors
 
       [colors]
       # Default colors
       [colors.primary]
-      background = '#000000'  # Pure black background
-      foreground = '#4AB34D'  # Bright Apple green text for readability
+      background = '#080705'  # Brown-black CRT glass background
+      foreground = '#D99B32'  # Bright amber text for readability
 
       # Cursor colors
       [colors.cursor]
-      text = '#000000'        # Black text when cursor is over it
-      cursor = '#3CA23F'      # American Green cursor block
+      text = '#080705'        # Black text when cursor is over it
+      cursor = '#BE842A'      # Accent amber cursor block
 
       # Selection colors
       [colors.selection]
-      text = '#000000'
-      background = '#2E9031'  # Wageningen Green highlight
+      text = '#080705'
+      background = '#9B6D24'  # Secondary amber highlight
 
-      # Normal colors - using green gradient
+      # Normal colors - using amber intensity ladder
       [colors.normal]
-      black   = '#0C3A0E'  # Dark green — lifted off pure-black bg so ANSI-selected rows are visible
-      red     = '#126D15'  # Verse Green
-      green   = '#207F23'  # Web Forest Green
-      yellow  = '#2E9031'  # Wageningen Green
-      blue    = '#3CA23F'  # American Green
-      magenta = '#4AB34D'  # Apple (brightest)
-      cyan    = '#3CA23F'  # American Green
-      white   = '#2E9031'  # Wageningen Green — receded below the #4AB34D foreground so SGR-37 secondary text (menu descriptions, hints) reads as secondary
+      black   = '#110E08'  # Dark amber — lifted off pure-black bg so ANSI-selected rows are visible
+      red     = '#2A2011'  # Subtle border
+      green   = '#6E501D'  # Muted amber
+      yellow  = '#9B6D24'  # Secondary amber
+      blue    = '#BE842A'  # Accent amber
+      magenta = '#D99B32'  # Warm amber (brightest)
+      cyan    = '#BE842A'  # Accent amber
+      white   = '#9B6D24'  # Secondary amber — receded below the #D99B32 foreground so SGR-37 secondary text (menu descriptions, hints) reads as secondary
 
-      # Bright colors - using lighter greens for emphasis
+      # Bright colors - using lighter ambers for emphasis
       [colors.bright]
-      black   = '#126D15'  # Verse Green
-      red     = '#207F23'  # Web Forest Green
-      green   = '#7CDC7F'  # Light green — lifted above the #4AB34D foreground so bright-green emphasis (e.g. selected menu entries) is distinguishable
-      yellow  = '#3CA23F'  # American Green
-      blue    = '#63C766'  # Soft light green — above the #4AB34D foreground but below bright green, so fuzzy-match fragments read as accents rather than glare
-      magenta = '#4AB34D'  # Apple
-      cyan    = '#4AB34D'  # Apple
-      white   = '#4AB34D'  # Apple (brightest)
+      black   = '#2A2011'  # Subtle border
+      red     = '#6E501D'  # Muted amber
+      green   = '#FFD064'  # Light amber — lifted above the #D99B32 foreground so bright-amber emphasis (e.g. selected menu entries) is distinguishable
+      yellow  = '#BE842A'  # Accent amber
+      blue    = '#EDB144'  # Soft light amber — above the #D99B32 foreground but below bright amber, so fuzzy-match fragments read as accents rather than glare
+      magenta = '#D99B32'  # Warm amber
+      cyan    = '#D99B32'  # Warm amber
+      white   = '#D99B32'  # Warm amber (brightest)
 
-      # Dim colors - using darker greens
+      # Dim colors - using darker ambers
       [colors.dim]
-      black   = '#045C07'  # Deep Green (darkest)
-      red     = '#045C07'  # Deep Green
-      green   = '#126D15'  # Verse Green
-      yellow  = '#207F23'  # Web Forest Green
-      blue    = '#207F23'  # Web Forest Green
-      magenta = '#2E9031'  # Wageningen Green
-      cyan    = '#207F23'  # Web Forest Green
-      white   = '#2E9031'  # Wageningen Green
+      black   = '#0C0A06'  # Deep surface (darkest)
+      red     = '#0C0A06'  # Deep surface
+      green   = '#2A2011'  # Subtle border
+      yellow  = '#6E501D'  # Muted amber
+      blue    = '#6E501D'  # Muted amber
+      magenta = '#9B6D24'  # Secondary amber
+      cyan    = '#6E501D'  # Muted amber
+      white   = '#9B6D24'  # Secondary amber
 
       # Vi mode colors
       [colors.vi_mode_cursor]
-      text = '#000000'
-      cursor = '#4AB34D'
+      text = '#080705'
+      cursor = '#D99B32'
 
       # Search colors
       [colors.search]
       [colors.search.matches]
-      foreground = '#000000'
-      background = '#3CA23F'  # American Green
+      foreground = '#080705'
+      background = '#BE842A'  # Accent amber
       [colors.search.focused_match]
-      foreground = '#000000'
-      background = '#4AB34D'  # Apple (brightest for focus)
+      foreground = '#080705'
+      background = '#D99B32'  # Warm amber (brightest for focus)
 
       # Line indicator colors
       [colors.line_indicator]
-      foreground = '#4AB34D'
-      background = '#000000'
+      foreground = '#D99B32'
+      background = '#080705'
 
       # Footer bar (used in vi mode)
       [colors.footer_bar]
-      foreground = '#4AB34D'
-      background = '#045C07'  # Deep Green for contrast
+      foreground = '#D99B32'
+      background = '#0C0A06'  # Deep surface for contrast
 
       # Window settings
       [window]
@@ -178,13 +178,13 @@
 
     ".config/alacritty/themes/light.toml".text = ''
       # E-Ink Theme for Alacritty Terminal
-      # Pure black and white theme optimized for e-ink displays
+      # Brown-black CRT glass and white theme optimized for e-ink displays
 
       [colors]
       # Default colors
       [colors.primary]
       background = '#FFFFFF'  # Pure white background
-      foreground = '#000000'  # Pure black text
+      foreground = '#000000'  # Brown-black CRT glass text
 
       # Cursor colors
       [colors.cursor]

@@ -178,28 +178,25 @@ in
       # When you release the mouse click after selecting, copy to clipboard automatically
       bind -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-pipe "${osc52Copy}/bin/osc52-copy"
 
-      # --- Matrix Green Theme (10% Dimmer Colors) ---
-
-      # 1. Basic Colors (Bright Green text on Black background)
-      set -g status-style bg=black,fg=#4AB34D
-
-      # 2. Pane Borders
-      # Inactive pane border: Verse Green (subtle, dark green)
-      set -g pane-border-style fg=#126D15
-      # Active pane border: Apple Green (bright, distinct)
-      set -g pane-active-border-style fg=#4AB34D
-
-      # 3. Status Bar - Window List
-      # Inactive windows: Apple Green text on black background
-      setw -g window-status-style fg=#4AB34D,bg=black
-      # Active window: Black text on Apple Green background (Inverted Block)
-      setw -g window-status-current-style fg=black,bg=#4AB34D,bold
-
-      # 4. Command/Message Line (The bottom bar when you type commands)
-      set -g message-style fg=black,bg=#4AB34D,bold
-
-      # 5. Selection Mode (When highlighting text)
-      set -g mode-style fg=black,bg=#3CA23F
+      # Keep the established green tmux colors in light sessions; only dark
+      # sessions become VT220 amber.
+      %if "#{==:#{E:THEME_MODE},light}"
+        set -g status-style bg=black,fg=#4AB34D
+        set -g pane-border-style fg=#126D15
+        set -g pane-active-border-style fg=#4AB34D
+        setw -g window-status-style fg=#4AB34D,bg=black
+        setw -g window-status-current-style fg=black,bg=#4AB34D,bold
+        set -g message-style fg=black,bg=#4AB34D,bold
+        set -g mode-style fg=black,bg=#3CA23F
+      %else
+        set -g status-style bg=#080705,fg=#D99B32
+        set -g pane-border-style fg=#2A2011
+        set -g pane-active-border-style fg=#D99B32
+        setw -g window-status-style fg=#D99B32,bg=#080705
+        setw -g window-status-current-style fg=#080705,bg=#D99B32,bold
+        set -g message-style fg=#080705,bg=#D99B32,bold
+        set -g mode-style fg=#080705,bg=#BE842A
+      %endif
 
       set -ag terminal-overrides ",alacritty:RGB"
     '';

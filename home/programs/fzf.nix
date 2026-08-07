@@ -12,21 +12,21 @@
   # from the local monitor)
   home.file = {
     ".config/fzf/themes/dark".text = ''
-      --color=fg:#4AB34D
-      --color=bg:#000000
-      --color=hl:#3CA23F
-      --color=fg+:#4AB34D
-      --color=bg+:#045C07
-      --color=hl+:#4AB34D
-      --color=info:#2E9031
-      --color=prompt:#4AB34D
-      --color=pointer:#4AB34D
-      --color=marker:#3CA23F
-      --color=spinner:#2E9031
-      --color=header:#207F23
-      --color=border:#126D15
-      --color=label:#3CA23F
-      --color=query:#4AB34D
+      --color=fg:#D99B32
+      --color=bg:#080705
+      --color=hl:#BE842A
+      --color=fg+:#D99B32
+      --color=bg+:#0C0A06
+      --color=hl+:#D99B32
+      --color=info:#9B6D24
+      --color=prompt:#D99B32
+      --color=pointer:#D99B32
+      --color=marker:#BE842A
+      --color=spinner:#9B6D24
+      --color=header:#6E501D
+      --color=border:#2A2011
+      --color=label:#BE842A
+      --color=query:#D99B32
     '';
 
     ".config/fzf/themes/light".text = ''

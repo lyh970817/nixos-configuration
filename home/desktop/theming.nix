@@ -8,6 +8,7 @@
 let
   lightWallpaper = "$HOME/.local/share/wallpapers/Taiji_mandala.png";
   hyprCurrentTheme = "$HOME/.local/state/hypr/current-theme.conf";
+  amberShader = "$HOME/.config/hypr/shaders/vt220-amber.glsl";
 
   # Dark Mode Script
   #
@@ -21,11 +22,12 @@ let
 
     # 1. WALLPAPER (Kill old, start new)
     pkill swaybg || true
-    ${pkgs.util-linux}/bin/setsid -f ${pkgs.swaybg}/bin/swaybg -c 000000 >/dev/null 2>&1
+    ${pkgs.util-linux}/bin/setsid -f ${pkgs.swaybg}/bin/swaybg -c 080705 >/dev/null 2>&1
     ${pkgs.systemd}/bin/systemctl --user start mandala-wallpaper.service || true
 
     # 2. HYPRLAND BACKGROUND COLOR (Misc setting)
-    ${pkgs.hyprland}/bin/hyprctl keyword misc:background_color 0x000000
+    ${pkgs.hyprland}/bin/hyprctl keyword misc:background_color 0x080705
+    ${pkgs.hyprland}/bin/hyprctl keyword decoration:screen_shader "${amberShader}"
 
     # 3. HYPRLAND THEME (Symlink + Live Settings)
     ln -sf "$HOME/.config/hypr/themes/dark.conf" "${hyprCurrentTheme}"
@@ -34,7 +36,7 @@ let
     ${pkgs.hyprland}/bin/hyprctl keyword general:gaps_in 20
     ${pkgs.hyprland}/bin/hyprctl keyword general:gaps_out 30
     ${pkgs.hyprland}/bin/hyprctl keyword general:border_size 2
-    ${pkgs.hyprland}/bin/hyprctl keyword general:col.active_border "rgba(056608ff)"
+    ${pkgs.hyprland}/bin/hyprctl keyword general:col.active_border "rgba(D99B32ff)"
 
     ln -sf $HOME/.config/rofi/themes/dark.rasi $HOME/.config/rofi/current.rasi
 
@@ -42,9 +44,9 @@ let
     # Sets the "System" preference to dark
     ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
     # (Optional) Force a specific dark GTK theme if you have one installed, e.g., Adwaita-dark
-    ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface gtk-theme 'Trinity'
-    ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface icon-theme 'Matrix-Icons'
-    ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface cursor-theme 'Hacker-C'
+    ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface gtk-theme 'VT220-Amber'
+    ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface icon-theme 'HighContrast'
+    ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface cursor-theme 'Adwaita'
 
     # Terminals: select the palette used by new windows.
     ln -sf $HOME/.config/alacritty/themes/dark.toml $HOME/.config/alacritty/current.toml
@@ -54,7 +56,7 @@ let
     ${pkgs.mako}/bin/makoctl mode -a dark
     ${pkgs.mako}/bin/makoctl reload
 
-    hyprctl setcursor Hacker-C 24
+    hyprctl setcursor Adwaita 24
 
   '';
 
@@ -72,6 +74,7 @@ let
 
     # 2. HYPRLAND BACKGROUND COLOR
     ${pkgs.hyprland}/bin/hyprctl keyword misc:background_color 0xffffff
+    ${pkgs.hyprland}/bin/hyprctl keyword decoration:screen_shader '[[EMPTY]]'
 
     # Live update gaps/borders
     ${pkgs.hyprland}/bin/hyprctl keyword general:gaps_in 4
@@ -191,9 +194,8 @@ in
     "L+ %h/.local/share/light-mode.d/10-nixos-hook.sh - - - - ${lightModeHook}"
   ];
 
-  # Managed Assets (Themes & Icons)
+  # Managed theme assets. Dark mode uses neutral system icons and cursor so
+  # no green pixels remain outside the amber GTK palette.
   xdg.dataFile."wallpapers/Taiji_mandala.png".source = ../../assets/wallpapers/Taiji_mandala.png;
-  xdg.dataFile."themes/Trinity".source = ../../assets/themes/Trinity;
-  xdg.dataFile."icons/Matrix-Icons".source = ../../assets/icons/Matrix-Icons;
-  xdg.dataFile."icons/Hacker-C".source = ../../assets/icons/Hacker-C;
+  xdg.dataFile."themes/VT220-Amber".source = ../../assets/themes/VT220-Amber;
 }

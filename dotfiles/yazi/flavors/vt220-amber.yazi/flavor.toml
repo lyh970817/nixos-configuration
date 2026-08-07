@@ -1,0 +1,218 @@
+# Yazi VT220 Amber Theme
+# A high-contrast VT220 Amber-style theme with black background and green gradient
+# Inspired by classic terminal aesthetics
+# Place this file at ~/.config/yazi/theme.toml
+
+[mgr]
+
+# Current working directory - bright green on black
+cwd = { fg = "#D99B32", bg = "#080705", bold = true }
+
+# Hovered file - black on bright green for clear selection
+hovered = { fg = "#080705", bg = "#BE842A", bold = true }
+
+# Preview hovered - slightly different green
+preview_hovered = { fg = "#080705", bg = "#9B6D24" }
+
+# Search highlights - black on bright green for visibility
+find_keyword = { fg = "#080705", bg = "#D99B32", bold = true }
+
+# Position indicator - mid-tone green
+find_position = { fg = "#BE842A" }
+
+# File markers using different green levels
+marker_copied = { fg = "#BE842A", bg = "#BE842A" }
+marker_cut = { fg = "#9B6D24", bg = "#9B6D24" }
+marker_marked = { fg = "#D99B32", bg = "#D99B32"}
+marker_selected = { fg = "#D99B32", bg = "#D99B32"}
+
+# Count indicators with subtle backgrounds
+count_copied = { fg = "#D99B32", bg = "#0C0A06" }
+count_cut = { fg = "#D99B32", bg = "#2A2011" }
+count_selected = { fg = "#080705", bg = "#BE842A" }
+
+# Border using bright green
+border_style = { fg = "#D99B32" }
+
+# Syntax highlighting theme for code preview (if needed)
+syntect_theme = ""
+
+[tabs]
+# Active tab - high contrast
+active = { fg = "#D99B32", bg = "#080705", bold = true }
+
+# Inactive tabs - lower contrast
+inactive = { fg = "#6E501D", bg = "#0C0A06" }
+
+# Tab separators
+sep_inner = { open = "[", close = "]" }
+sep_outer = { open = "", close = "" }
+
+[mode]
+# Normal mode - bright green on black
+normal_main = { fg = "#D99B32", bg = "#080705", bold = true }
+normal_alt = { fg = "#BE842A", bg = "#080705" }
+
+# Select mode - inverted for distinction
+select_main = { fg = "#080705", bg = "#D99B32", bold = true }
+select_alt = { fg = "#080705", bg = "#BE842A" }
+
+# Unset mode - darker green to show inactive state
+unset_main = { fg = "#6E501D", bg = "#0C0A06" }
+unset_alt = { fg = "#9B6D24", bg = "#0C0A06" }
+
+[status]
+# Overall status bar
+overall = { fg = "#D99B32", bg = "#080705" }
+
+# Status separators
+sep_left = { open = "", close = "]" }
+sep_right = { open = "[", close = "" }
+
+# Permission indicators with varying green levels
+perm_type = { fg = "#D99B32", bold = true }
+perm_read = { fg = "#BE842A" }
+perm_write = { fg = "#9B6D24" }
+perm_exec = { fg = "#D99B32", bold = true }
+perm_sep = { fg = "#6E501D" }
+
+# Progress indicators
+progress_label = { fg = "#D99B32", bold = true }
+progress_normal = { fg = "#080705", bg = "#BE842A" }
+progress_error = { fg = "#080705", bg = "#D99B32", bold = true }
+
+[which]
+# Key help display
+cols = 2
+mask = { bg = "#0C0A06" }
+cand = { fg = "#D99B32", bold = true }
+rest = { fg = "#BE842A" }
+desc = { fg = "#BE842A" }
+separator = " → "
+separator_style = { fg = "#6E501D" }
+
+[confirm]
+# Confirmation dialogs
+border = { fg = "#D99B32" }
+title = { fg = "#D99B32", bold = true }
+content = { fg = "#D99B32" }
+list = { fg = "#BE842A" }
+btn_yes = { fg = "#D99B32", bg = "#080705", bold = true }
+btn_no = { fg = "#D99B32", bg = "#080705" }
+
+[spot]
+# Search/spotlight features
+border = { fg = "#6E501D" }
+title = { fg = "#D99B32", bold = true }
+tbl_col = { fg = "#080705", bg = "#9B6D24" }
+tbl_cell = { fg = "#080705", bg = "#BE842A" }
+
+[notify]
+# Notification styles - using bold for emphasis
+title_info = { fg = "#D99B32", bold = true }
+title_warn = { fg = "#D99B32", bg = "#2A2011", bold = true }
+title_error = { fg = "#080705", bg = "#D99B32", bold = true }
+
+[pick]
+# Picker dialogs
+border = { fg = "#6E501D" }
+active = { fg = "#080705", bg = "#BE842A", bold = true }
+inactive = { fg = "#9B6D24" }
+
+[input]
+# Input fields
+border = { fg = "#D99B32" }
+title = { fg = "#D99B32", bold = true }
+value = { fg = "#D99B32" }
+selected = { fg = "#080705", bg = "#BE842A" }
+
+[cmp]
+# Completion menu
+border = { fg = "#6E501D" }
+active = { fg = "#080705", bg = "#BE842A", bold = true }
+inactive = { fg = "#9B6D24" }
+# icon_file = "▸"
+# icon_folder = "▾"
+# icon_command = "›"
+
+[tasks]
+# Task manager
+border = { fg = "#6E501D" }
+title = { fg = "#D99B32", bold = true }
+hovered = { fg = "#080705", bg = "#9B6D24" }
+
+[help]
+# Help menu
+on = { fg = "#D99B32", bold = true }
+run = { fg = "#BE842A" }
+desc = { fg = "#9B6D24" }
+hovered = { fg = "#080705", bg = "#BE842A" }
+footer = { fg = "#6E501D", bg = "#0C0A06" }
+# icon_info = "ℹ"
+# icon_warn = "⚠"
+# icon_error = "✕"
+
+[filetype]
+# File type rules using green gradient distinctions
+rules = [
+    # Directories - bright green bold
+    { name = "*/", fg = "#D99B32", bold = true },
+
+    # Executables - bright green with bold
+    { name = "*", is = "exec", fg = "#BE842A", bold = true },
+
+    # Archives - mid-tone green
+    { mime = "application/zip", fg = "#9B6D24" },
+    { mime = "application/x-tar", fg = "#9B6D24" },
+    { mime = "application/x-gzip", fg = "#9B6D24" },
+    { mime = "application/x-bzip", fg = "#9B6D24" },
+    { mime = "application/x-7z-compressed", fg = "#9B6D24" },
+
+    # Documents - American green
+    { mime = "application/pdf", fg = "#BE842A" },
+    { mime = "application/msword", fg = "#BE842A" },
+    { mime = "application/vnd.*", fg = "#BE842A" },
+
+    # Images - Wageningen green
+    { mime = "image/*", fg = "#9B6D24" },
+
+    # Videos/Audio - Web Forest green
+    { mime = "video/*", fg = "#6E501D" },
+    { mime = "audio/*", fg = "#6E501D" },
+
+    # Text files - bright Apple green
+    { mime = "text/*", fg = "#D99B32" },
+
+    # Code files - Apple green with different styles
+    { name = "*.py", fg = "#D99B32" },
+    { name = "*.js", fg = "#D99B32" },
+    { name = "*.rs", fg = "#D99B32" },
+    { name = "*.go", fg = "#D99B32" },
+    { name = "*.c", fg = "#D99B32" },
+    { name = "*.cpp", fg = "#D99B32" },
+    { name = "*.h", fg = "#D99B32" },
+    { name = "*.java", fg = "#D99B32" },
+
+    # Config files - Wageningen green
+    { name = "*.toml", fg = "#9B6D24" },
+    { name = "*.yaml", fg = "#9B6D24" },
+    { name = "*.yml", fg = "#9B6D24" },
+    { name = "*.json", fg = "#9B6D24" },
+    { name = "*.xml", fg = "#9B6D24" },
+    { name = "*.ini", fg = "#9B6D24" },
+
+    # Hidden files - Web Forest green
+    { name = ".*", fg = "#6E501D" },
+
+    # Symbolic links - American green italic (if supported)
+    { name = "*", is = "link", fg = "#BE842A", italic = true },
+
+    # Broken links - bright green on dark background
+    { name = "*", is = "orphan", fg = "#D99B32", bg = "#0C0A06" },
+
+    # Empty files - Verse green
+    { mime = "inode/empty", fg = "#2A2011" },
+
+    # Fallback - mid-tone green
+    { name = "*", fg = "#9B6D24" }
+]

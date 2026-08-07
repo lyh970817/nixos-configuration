@@ -10,9 +10,9 @@ let
   link = subpath: config.lib.file.mkOutOfStoreSymlink "${osConfig.portable.configDir}/${subpath}";
 in
 {
-  home.file.".omp/agent/themes/matrix.json".source = link "dotfiles/omp/themes/matrix.json";
-  home.file.".omp/profiles/mattpocock/agent/themes/matrix.json".source =
-    link "dotfiles/omp/themes/matrix.json";
+  home.file.".omp/agent/themes/vt220-amber.json".source = link "dotfiles/omp/themes/vt220-amber.json";
+  home.file.".omp/profiles/mattpocock/agent/themes/vt220-amber.json".source =
+    link "dotfiles/omp/themes/vt220-amber.json";
   home.file.".omp/agent/lsp.json".source = link "dotfiles/omp/lsp.json";
   home.file.".omp/agent/skills" = {
     source = link "dotfiles/omp/skills";
@@ -37,7 +37,7 @@ in
     omp_config_tmp="$(${pkgs.coreutils}/bin/mktemp "$omp_config.XXXXXX")"
     trap 'rm -f "$omp_config_tmp"' EXIT
     ${pkgs.yq-go}/bin/yq '
-      .theme.dark = "matrix"
+      .theme.dark = "vt220-amber"
       | .theme.light = "light"
       | .symbolPreset = "nerd"
       | .skills.enableCodexUser = false
@@ -69,7 +69,7 @@ in
     omp_config_tmp="$(${pkgs.coreutils}/bin/mktemp "$omp_config.XXXXXX")"
     trap 'rm -f "$omp_config_tmp"' EXIT
     ${pkgs.yq-go}/bin/yq '
-      .theme.dark = "matrix"
+      .theme.dark = "vt220-amber"
       | .theme.light = "light"
       | .symbolPreset = "nerd"
       | .skills.enableCodexUser = false

@@ -22,12 +22,12 @@
   home.file = {
     ".config/rofi/themes/dark.rasi".text = ''
       * {
-          bg: #000000;
-          bg-alt: #045C07;
-          fg: #4AB34D;
-          fg-alt: #2E9031;
-          border: #4AB34D;
-          selected: #3CA23F;
+          bg: #080705;
+          bg-alt: #0C0A06;
+          fg: #D99B32;
+          fg-alt: #9B6D24;
+          border: #D99B32;
+          selected: #BE842A;
           background-color: transparent;
           text-color: @fg;
           font: "Hack Nerd Font 12";

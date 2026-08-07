@@ -114,10 +114,10 @@ name = "terminal"
 # case. So the accent pair that matters is (accent, surface_dim).
 #
 # `accent = "lightgreen"` is ANSI slot 10, the deliberately lifted bright green
-# (#7CDC7F dark / #808080 light); slot 2 (`"green"`, #207F23) sits *below* the
-# #4AB34D foreground and left on-accent labels at 1.28:1. `surface_dim = "black"`
-# is slot 0 (#0C3A0E dark / #000000 light), the only slot dark enough in the
-# Matrix palette to knock out of the accent. Together: 7.62:1 dark, 5.32:1 light.
+# (#FFD064 dark / #808080 light); slot 2 (`"green"`, #6E501D) sits below the
+# #D99B32 foreground. `surface_dim = "black"` is slot 0 (#110E08 dark /
+# #000000 light), the dark knockout for the accent. The light palette remains
+# unchanged because these values resolve through each terminal's ANSI slots.
 #
 # Both values are ANSI names, so this still follows `theme-toggle`. herdr's
 # `parse_color` (src/config/theme.rs) lowercases but does NOT strip spaces or

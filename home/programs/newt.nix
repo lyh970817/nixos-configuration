@@ -13,18 +13,18 @@
 
 let
   # Claude Code's dark-ansi theme forced several ANSI slots away from the
-  # original Matrix palette in programs/alacritty.nix. Newt names colors rather
+  # original dark palette in programs/alacritty.nix. Newt names colors rather
   # than addressing hex, so nmtui inherits those tweaks — and because it paints
   # its whole backdrop with ANSI black, the lifted black turns the background
-  # into a dark green wash instead of the terminal's black.
+  # into a dark amber wash instead of the terminal's black.
   #
   # Restore the original values for the life of the process with OSC 4, then
   # reset just these slots with OSC 104 so unrelated palette state survives.
   originalSlots = {
-    "0" = "#000000"; # black — nmtui backdrop; lifted to #0C3A0E so Claude Code's ANSI-black selected row stays visible
-    "7" = "#4AB34D"; # white — receded to #2E9031 so Claude Code's secondary text reads as secondary
-    "10" = "#2E9031"; # bright green — lifted to #7CDC7F so Claude Code's selected menu entry is distinguishable
-    "12" = "#4AB34D"; # bright blue — retuned to #63C766 so Claude Code's fuzzy-match fragments read as accents
+    "0" = "#080705"; # black — nmtui backdrop; lifted to #110E08 so Claude Code's ANSI-black selected row stays visible
+    "7" = "#D99B32"; # white — receded to #9B6D24 so Claude Code's secondary text reads as secondary
+    "10" = "#9B6D24"; # bright amber — lifted to #FFD064 so Claude Code's selected menu entry is distinguishable
+    "12" = "#D99B32"; # bright blue — retuned to #EDB144 so Claude Code's fuzzy-match fragments read as accents
   };
 
   osc = lib.concatStrings (lib.mapAttrsToList (i: c: ''\033]4;${i};${c}\007'') originalSlots);
@@ -58,7 +58,7 @@ in
   # from the local monitor)
   home.file = {
     ".config/newt/themes/dark".text = ''
-      root=green,black:window=green,black:border=brightgreen,black:listbox=green,black:actlistbox=black,brightgreen:sellistbox=brightgreen,black:actsellistbox=black,green:textbox=green,black:acttextbox=brightgreen,black:entry=brightgreen,black:disentry=white,black:checkbox=green,black:actcheckbox=green,black:button=black,brightgreen:actbutton=green,black:compactbutton=green,black:actcompactbutton=black,brightgreen:label=brightgreen,black:title=brightgreen,black:roottext=green,black:emptyscale=green,black:fullscale=black,brightgreen:shadow=black,black
+      root=amber,black:window=amber,black:border=brightamber,black:listbox=amber,black:actlistbox=black,brightamber:sellistbox=brightamber,black:actsellistbox=black,amber:textbox=amber,black:acttextbox=brightamber,black:entry=brightamber,black:disentry=white,black:checkbox=amber,black:actcheckbox=amber,black:button=black,brightamber:actbutton=amber,black:compactbutton=amber,black:actcompactbutton=black,brightamber:label=brightamber,black:title=brightamber,black:roottext=amber,black:emptyscale=amber,black:fullscale=black,brightamber:shadow=black,black
     '';
 
     ".config/newt/themes/light".text = ''
