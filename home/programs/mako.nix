@@ -49,7 +49,7 @@ in
       padding=8
       border-size=1
       border-color=#${p.accent}
-      border-radius=0
+      border-radius=4
       icons=0
       anchor=top-right
       default-timeout=10000

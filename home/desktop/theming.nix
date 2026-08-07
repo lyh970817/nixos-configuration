@@ -43,7 +43,7 @@ let
     ${pkgs.hyprland}/bin/hyprctl keyword general:border_size 1
     ${pkgs.hyprland}/bin/hyprctl keyword general:col.active_border "rgba(${p.accent}ff)"
     ${pkgs.hyprland}/bin/hyprctl keyword general:col.inactive_border "rgba(${p.subtleBorder}ff)"
-    ${pkgs.hyprland}/bin/hyprctl keyword decoration:rounding 0
+    ${pkgs.hyprland}/bin/hyprctl keyword decoration:rounding 4
     ${pkgs.hyprland}/bin/hyprctl keyword decoration:active_opacity 1
     ${pkgs.hyprland}/bin/hyprctl keyword decoration:inactive_opacity 1
 

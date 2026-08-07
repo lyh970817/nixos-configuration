@@ -49,7 +49,7 @@ in
           background-color: @bg;
           border: 1px solid;
           border-color: @border;
-          border-radius: 0;
+          border-radius: 4px;
           padding: 5px;
       }
 
@@ -90,7 +90,7 @@ in
       element {
           background-color: @bg;
           text-color: @fg;
-          border-radius: 0;
+          border-radius: 1px;
           padding: 3px 6px;
       }
 
@@ -125,7 +125,7 @@ in
           handle-width: 6px;
           handle-color: @fg-alt;
           background-color: @bg-alt;
-          border-radius: 0;
+          border-radius: 3px;
           margin: 0 0 0 5px;
       }
 
@@ -133,7 +133,7 @@ in
           background-color: @bg;
           border: 1px solid;
           border-color: @border;
-          border-radius: 0;
+          border-radius: 8px;
           padding: 8px;
       }
 
