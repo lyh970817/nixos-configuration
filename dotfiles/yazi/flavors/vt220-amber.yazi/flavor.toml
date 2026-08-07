@@ -1,26 +1,26 @@
 # Yazi VT220 Amber Theme
-# A high-contrast VT220 Amber-style theme with black background and green gradient
-# Inspired by classic terminal aesthetics
+# A high-contrast VT220 Amber-style theme: warm near-black background with an
+# amber luminance ramp. Inspired by classic terminal aesthetics.
 # Place this file at ~/.config/yazi/theme.toml
 
 [mgr]
 
-# Current working directory - bright green on black
+# Current working directory - primary amber on warm black
 cwd = { fg = "#D99B32", bg = "#080705", bold = true }
 
-# Hovered file - black on bright green for clear selection
+# Hovered file - reverse video for clear selection
 hovered = { fg = "#080705", bg = "#BE842A", bold = true }
 
-# Preview hovered - slightly different green
+# Preview hovered - reverse video, one step dimmer
 preview_hovered = { fg = "#080705", bg = "#9B6D24" }
 
-# Search highlights - black on bright green for visibility
+# Search highlights - reverse video for visibility
 find_keyword = { fg = "#080705", bg = "#D99B32", bold = true }
 
-# Position indicator - mid-tone green
+# Position indicator - accent amber
 find_position = { fg = "#BE842A" }
 
-# File markers using different green levels
+# File markers using different amber levels
 marker_copied = { fg = "#BE842A", bg = "#BE842A" }
 marker_cut = { fg = "#9B6D24", bg = "#9B6D24" }
 marker_marked = { fg = "#D99B32", bg = "#D99B32"}
@@ -31,10 +31,10 @@ count_copied = { fg = "#D99B32", bg = "#0C0A06" }
 count_cut = { fg = "#D99B32", bg = "#2A2011" }
 count_selected = { fg = "#080705", bg = "#BE842A" }
 
-# Border using bright green
+# Border using primary amber
 border_style = { fg = "#D99B32" }
 
-# Syntax highlighting theme for code preview (if needed)
+# Left empty: Yazi loads this flavor's tmtheme.xml for syntax highlighting.
 syntect_theme = ""
 
 [tabs]
@@ -49,7 +49,7 @@ sep_inner = { open = "[", close = "]" }
 sep_outer = { open = "", close = "" }
 
 [mode]
-# Normal mode - bright green on black
+# Normal mode - primary amber on warm black
 normal_main = { fg = "#D99B32", bg = "#080705", bold = true }
 normal_alt = { fg = "#BE842A", bg = "#080705" }
 
@@ -57,7 +57,7 @@ normal_alt = { fg = "#BE842A", bg = "#080705" }
 select_main = { fg = "#080705", bg = "#D99B32", bold = true }
 select_alt = { fg = "#080705", bg = "#BE842A" }
 
-# Unset mode - darker green to show inactive state
+# Unset mode - muted amber to show inactive state
 unset_main = { fg = "#6E501D", bg = "#0C0A06" }
 unset_alt = { fg = "#9B6D24", bg = "#0C0A06" }
 
@@ -69,7 +69,7 @@ overall = { fg = "#D99B32", bg = "#080705" }
 sep_left = { open = "", close = "]" }
 sep_right = { open = "[", close = "" }
 
-# Permission indicators with varying green levels
+# Permission indicators with varying amber levels
 perm_type = { fg = "#D99B32", bold = true }
 perm_read = { fg = "#BE842A" }
 perm_write = { fg = "#9B6D24" }
@@ -153,37 +153,37 @@ footer = { fg = "#6E501D", bg = "#0C0A06" }
 # icon_error = "✕"
 
 [filetype]
-# File type rules using green gradient distinctions
+# File type rules using amber luminance distinctions
 rules = [
-    # Directories - bright green bold
+    # Directories - primary amber bold
     { name = "*/", fg = "#D99B32", bold = true },
 
-    # Executables - bright green with bold
+    # Executables - accent amber with bold
     { name = "*", is = "exec", fg = "#BE842A", bold = true },
 
-    # Archives - mid-tone green
+    # Archives - secondary amber
     { mime = "application/zip", fg = "#9B6D24" },
     { mime = "application/x-tar", fg = "#9B6D24" },
     { mime = "application/x-gzip", fg = "#9B6D24" },
     { mime = "application/x-bzip", fg = "#9B6D24" },
     { mime = "application/x-7z-compressed", fg = "#9B6D24" },
 
-    # Documents - American green
+    # Documents - accent amber
     { mime = "application/pdf", fg = "#BE842A" },
     { mime = "application/msword", fg = "#BE842A" },
     { mime = "application/vnd.*", fg = "#BE842A" },
 
-    # Images - Wageningen green
+    # Images - secondary amber
     { mime = "image/*", fg = "#9B6D24" },
 
-    # Videos/Audio - Web Forest green
+    # Videos/Audio - muted amber
     { mime = "video/*", fg = "#6E501D" },
     { mime = "audio/*", fg = "#6E501D" },
 
-    # Text files - bright Apple green
+    # Text files - primary amber
     { mime = "text/*", fg = "#D99B32" },
 
-    # Code files - Apple green with different styles
+    # Code files - primary amber
     { name = "*.py", fg = "#D99B32" },
     { name = "*.js", fg = "#D99B32" },
     { name = "*.rs", fg = "#D99B32" },
@@ -193,7 +193,7 @@ rules = [
     { name = "*.h", fg = "#D99B32" },
     { name = "*.java", fg = "#D99B32" },
 
-    # Config files - Wageningen green
+    # Config files - secondary amber
     { name = "*.toml", fg = "#9B6D24" },
     { name = "*.yaml", fg = "#9B6D24" },
     { name = "*.yml", fg = "#9B6D24" },
@@ -201,25 +201,46 @@ rules = [
     { name = "*.xml", fg = "#9B6D24" },
     { name = "*.ini", fg = "#9B6D24" },
 
-    # Hidden files - Web Forest green
+    # Hidden files - muted amber
     { name = ".*", fg = "#6E501D" },
 
-    # Symbolic links - American green italic (if supported)
+    # Symbolic links - accent amber italic
     { name = "*", is = "link", fg = "#BE842A", italic = true },
 
-    # Broken links - bright green on dark background
+    # Broken links - primary amber on deep surface
     { name = "*", is = "orphan", fg = "#D99B32", bg = "#0C0A06" },
 
-    # Empty files - Verse green
+    # Empty files - border amber
     { mime = "inode/empty", fg = "#2A2011" },
 
-    # Fallback - mid-tone green
+    # Fallback - secondary amber
     { name = "*", fg = "#9B6D24" }
 ]
 
 [icon]
-# Override Yazi's multicolor application-logo table with a restrained terminal
-# marker. File type remains legible through the amber file-name hierarchy above.
+# Upstream ships a large multicolor application-logo table. Shadow all of it
+# with one monochrome marker per category: `prepend_globs` is the first stage
+# Yazi consults, so the trailing "**" catch-all keeps upstream's `files` and
+# `exts` entries from ever being reached.
+#
+# No `fg` is set on purpose. An icon without an explicit color inherits the
+# color of its [filetype] rule, so markers follow the same amber luminance
+# hierarchy as the file names instead of forming a second, competing one.
+#
+# Directories are deliberately not matched here: patterns without a trailing
+# slash only match non-directories, so folders keep upstream's monochrome
+# folder glyph, which already inherits the bright amber directory color.
 prepend_globs = [
-    { url = "**", text = "·", fg = "#6E501D" },
+    { url = "*.{jpg,jpeg,png,gif,bmp,webp,avif,tiff,tif,ico,svg,heic,heif}", text = "" },
+    { url = "*.{mp4,mkv,webm,mov,avi,m4v,mpg,mpeg,wmv,flv}", text = "" },
+    { url = "*.{mp3,flac,wav,ogg,opus,m4a,aac,wma,mid,midi}", text = "" },
+    { url = "*.{zip,tar,gz,tgz,bz2,xz,zst,7z,rar,lz4,lzma,iso,dmg,deb,rpm}", text = "" },
+    { url = "*.{pdf,epub,mobi,djvu,doc,docx,odt,rtf,ppt,pptx,xls,xlsx,ods,odp}", text = "" },
+    { url = "*.{toml,yaml,yml,json,jsonc,ini,cfg,conf,env,lock,plist,xml}", text = "" },
+    { url = "*.{md,markdown,txt,text,log,rst,org,adoc,tex,csv,tsv}", text = "" },
+    { url = "*.{sh,bash,zsh,fish,ps1,bat,cmd}", text = "" },
+    { url = "*.{nix,c,h,cc,cpp,hpp,rs,go,py,pyi,js,mjs,cjs,ts,tsx,jsx,lua,vim,rb,pl,php,java,kt,swift,scala,hs,ml,ex,exs,erl,clj,r,jl,zig,sql,css,scss,html,htm}", text = "" },
+
+    # Everything else, including files with no extension.
+    { url = "**", text = "" },
 ]
