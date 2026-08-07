@@ -79,13 +79,13 @@ let
   # builtin, so they are transcribed from the matrix the service itself logs on
   # every profile load:
   #
-  #   Calculated the CTM to be [mat3x3: 2, 0, 0, 0, 0.79521239, 0, 0, 0, 0]
+  #   Calculated the CTM to be [mat3x3: 2.8, 0, 0, 0, 0.84989333, 0, 0, 0, 0]
   #
   # If nightTemperature or nightGamma in home/desktop/hyprsunset.nix changes,
   # re-read these from that log line — nothing here can recompute them.
   nightGain = [
-    2.0
-    0.79521239
+    2.8
+    0.84989333
     0.0
   ];
 
@@ -110,27 +110,26 @@ let
     # same role per rung. Only the hue differs, so every program that reaches
     # colour through an ANSI slot follows the swap untouched.
     #
-    # This is the greyer revision (foreground saturation 0.48; the first cut was
-    # 0.57), desaturated by lifting red and blue rather than cutting green. That
-    # choice is what makes the night-mode transform work as well as it does.
-    # What limits the green -> amber fit is not the *size* of the red:green gain
-    # needed but its *spread* across the ladder, because one diagonal CTM can
-    # supply only a single value. Lifting red narrows that spread from 1.80-3.66
-    # to 1.68-2.82, which buys a better amber (mean dE 13.2) at gamma 200% than
-    # the saturated version reached at 280% (13.9) — inside hyprsunset's
-    # documented gamma ceiling instead of past it, and with a lower melanopic
-    # load. See home/desktop/hyprsunset.nix for the matching night values.
+    # This is the vivid cut (foreground saturation 0.57). A greyer revision at
+    # 0.48 was tried and reverted: desaturating narrows the spread of the
+    # red:green gain the night-mode CTM has to supply (1.80-3.66 down to
+    # 1.68-2.82) and so buys a closer amber, but it does that by adding blue,
+    # which costs daytime melanopic exposure and reads less like a real P1
+    # phosphor — a narrow-band emitter is saturated by nature. The vivid cut is
+    # the deliberate choice; the amber fit pays for it by needing gamma 280%.
+    # See docs/phosphor-palette-and-night-mode.md for the full trade-off, and
+    # home/desktop/hyprsunset.nix for the matching night values.
     green = {
-      background = "060907";
-      deepSurface = "090D0A";
-      raisedBlack = "0D120E";
-      subtleBorder = "17251B";
-      mutedText = "294A30";
-      secondaryText = "376D40";
-      accent = "478A4F";
-      foreground = "58A860";
-      bright = "72C67A";
-      hot = "94E39B";
+      background = "050806";
+      deepSurface = "080C09";
+      raisedBlack = "0B120D";
+      subtleBorder = "15261A";
+      mutedText = "193F20";
+      secondaryText = "286731";
+      accent = "3D8E48";
+      foreground = "4BAE55";
+      bright = "65C96D";
+      hot = "86E68C";
     };
   };
   # Profiles that exist only to be looked at side by side. They are written out
