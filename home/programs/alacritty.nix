@@ -32,9 +32,8 @@ let
     cursor = '#${p.accent}'
 
     # Selection colors. accent rather than secondaryText, because the selection
-    # carries background-coloured text and the green ladder's secondaryText rung
-    # is only 0.58x the luminance of amber's, taking that pairing to 2.9:1.
-    # See rofi.nix.
+    # carries background-coloured text, which secondaryText only just supports
+    # even with the ladder corrected (3.9:1). See home/palettes.nix.
     [colors.selection]
     text = '#${p.background}'
     background = '#${p.accent}'

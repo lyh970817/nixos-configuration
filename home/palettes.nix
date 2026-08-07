@@ -119,14 +119,32 @@ let
     # the deliberate choice; the amber fit pays for it by needing gamma 280%.
     # See docs/phosphor-palette-and-night-mode.md for the full trade-off, and
     # home/desktop/hyprsunset.nix for the matching night values.
+    # The three middle rungs are placed by luminance, not by eye. The first cut
+    # matched hue per rung and let luminance fall where it would, and the
+    # middle of the ladder collapsed: as a fraction of the foreground it sits
+    # under, mutedText landed at 0.119 where amber's is 0.238, and
+    # secondaryText at 0.320 where amber's is 0.469, while both ends of the
+    # ladder stayed within 1.02-1.18x of amber. Every role that has to be dim
+    # but still readable broke at once — nmtui body text, the rofi, foot and
+    # alacritty selections, btop's selected process, mako's low-urgency
+    # notifications, fastfetch's parenthesised values.
+    #
+    # These reproduce amber's rung-to-rung spacing to within 0.02: 1.95x,
+    # 1.53x and 1.38x against amber's 1.97x, 1.53x and 1.39x. Note the fix
+    # anchors on the ratio to foreground rather than on amber's absolute
+    # luminance: the vivid green foreground is itself only 0.84x amber's, so
+    # matching absolutes squeezes accent up against it and costs a rung.
+    # Every rung's hue ratios are carried over from the first cut unchanged.
+    #
+    # Changing these changes the night-mode CTM fit; see hyprsunset.nix.
     green = {
       background = "050806";
       deepSurface = "080C09";
       raisedBlack = "0B120D";
       subtleBorder = "15261A";
-      mutedText = "193F20";
-      secondaryText = "286731";
-      accent = "3D8E48";
+      mutedText = "245A2E";
+      secondaryText = "307C3B";
+      accent = "40964C";
       foreground = "4BAE55";
       bright = "65C96D";
       hot = "86E68C";

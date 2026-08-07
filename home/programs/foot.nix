@@ -52,8 +52,8 @@ let
     foreground=${p.foreground}
     selection-foreground=${p.background}
     # accent, not secondaryText: the selection carries background-coloured
-    # text, and the green ladder's secondaryText rung is only 0.58x the
-    # luminance of amber's, which drops that pairing to 2.9:1. See rofi.nix.
+    # text, which secondaryText only just supports even with the ladder
+    # corrected (3.9:1). See home/palettes.nix.
     selection-background=${p.accent}
     regular0=${p.raisedBlack}
     regular1=${p.subtleBorder}

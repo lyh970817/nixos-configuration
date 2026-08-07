@@ -23,11 +23,15 @@ let
   #
   # Restore the original values for the life of the process with OSC 4, then
   # reset just these slots with OSC 104 so unrelated palette state survives.
+  # Slots are chosen for the roles the theme string below actually names, and
+  # every one of those must stay legible: newt has no notion of a "dim" colour,
+  # so a rung that is merely decorative elsewhere becomes body text here.
   originalSlots = {
-    "0" = "#${p.background}"; # black — nmtui backdrop; lifted to #0B120D so Claude Code's ANSI-black selected row stays visible
-    "7" = "#${p.foreground}"; # white — receded to #286731 so Claude Code's secondary text reads as secondary
-    "10" = "#${p.secondaryText}"; # bright amber — lifted to #86E68C so Claude Code's selected menu entry is distinguishable
-    "12" = "#${p.foreground}"; # bright blue — retuned to #65C96D so Claude Code's fuzzy-match fragments read as accents
+    "0" = "#${p.background}"; # black — the backdrop, and the text colour on every reversed element
+    "2" = "#${p.foreground}"; # green — body text; the terminals map this rung to mutedText, which is far too dim to read a form in
+    "7" = "#${p.foreground}"; # white — disabled entries
+    "10" = "#${p.bright}"; # brightgreen — borders, titles, labels, and the fill behind reversed rows, so it must outrank green
+    "12" = "#${p.foreground}"; # bright blue — retuned by Claude Code's theme so its fuzzy-match fragments read as accents
   };
 
   osc = lib.concatStrings (lib.mapAttrsToList (i: c: ''\033]4;${i};${c}\007'') originalSlots);
@@ -60,8 +64,15 @@ in
   # THEME_MODE (set by theme-hold for ssh/mosh sessions, otherwise defaulted
   # from the local monitor)
   home.file = {
+    # newt resolves colours by NAME against a fixed list: black, red, green,
+    # brown, blue, magenta, cyan, lightgray, gray, brightred, brightgreen,
+    # yellow, brightblue, brightmagenta, brightcyan, white. "amber" and
+    # "brightamber" are not on it, so the rename in 6239b4f1 silently voided
+    # every rule that used them. Only these names are safe, and the hue comes
+    # from the OSC 4 slots above rather than from the name -- "green" here is
+    # whatever slot 2 has been set to.
     ".config/newt/themes/dark".text = ''
-      root=amber,black:window=amber,black:border=brightamber,black:listbox=amber,black:actlistbox=black,brightamber:sellistbox=brightamber,black:actsellistbox=black,amber:textbox=amber,black:acttextbox=brightamber,black:entry=brightamber,black:disentry=white,black:checkbox=amber,black:actcheckbox=amber,black:button=black,brightamber:actbutton=amber,black:compactbutton=amber,black:actcompactbutton=black,brightamber:label=brightamber,black:title=brightamber,black:roottext=amber,black:emptyscale=amber,black:fullscale=black,brightamber:shadow=black,black
+      root=green,black:window=green,black:border=brightgreen,black:listbox=green,black:actlistbox=black,brightgreen:sellistbox=brightgreen,black:actsellistbox=black,green:textbox=green,black:acttextbox=brightgreen,black:entry=brightgreen,black:disentry=white,black:checkbox=green,black:actcheckbox=green,black:button=black,brightgreen:actbutton=green,black:compactbutton=green,black:actcompactbutton=black,brightgreen:label=brightgreen,black:title=brightgreen,black:roottext=green,black:emptyscale=green,black:fullscale=black,brightgreen:shadow=black,black
     '';
 
     ".config/newt/themes/light".text = ''
