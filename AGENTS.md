@@ -14,7 +14,9 @@ The flake exposes a single `.#system` output for both machines; per-machine fact
 
 ## Rebuild Policy
 
-For configuration changes, do not run standalone verification commands before rebuilding. Stage and commit the scoped change first so the configured pre-commit hooks run verification, then apply the committed configuration with `rebuild`.
+For configuration changes, do not run standalone verification commands before rebuilding. Stage and commit the scoped change first, then apply the committed configuration with `rebuild`.
+
+`rebuild` is the verification gate: a full evaluation and build catches every syntax, type, missing-attr, and build error, so running separate checks beforehand only duplicates it. The pre-commit hooks are deliberately *not* that gate — they cover only what a rebuild structurally cannot see (nixfmt drift, TOML/JSON parse errors in files Home Manager installs as opaque bytes, merge-conflict markers, private keys). A clean commit therefore does not mean the configuration evaluates; only a successful `rebuild` means that. The hooks install themselves at Home Manager activation (`home/programs/pre-commit.nix`), so a fresh clone picks them up on its first rebuild.
 
 For visual changes, perform visual verification automatically. Treat
 the mode active at task start as the entire change scope; change or inspect the
@@ -100,7 +102,7 @@ Use two-space indentation in Nix files. Keep modules focused on one concern and 
 
 Recent history uses short imperative subjects such as `Add 115 Browser launcher` and `Fix tmux copy-mode paging keys`. Follow that style: start with a verb, keep the subject specific, and avoid unrelated changes in one commit. Never push branches and never open pull requests, even from an isolated worktree — leave completed work committed on its local branch and let the user push and merge it themselves.
 
-Commit configuration changes before rebuilding. Treat the pre-commit hooks as the verification gate before `rebuild`; if the rebuild fails, make a follow-up fix commit and rebuild again.
+Commit configuration changes before rebuilding, then treat `rebuild` as the verification gate (see Rebuild Policy — the pre-commit hooks are only a formatting and hygiene screen, not a correctness check). If the rebuild fails, make a follow-up fix commit and rebuild again.
 
 ## Security & Configuration Tips
 
