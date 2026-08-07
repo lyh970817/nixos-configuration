@@ -11,9 +11,9 @@ uniform sampler2D tex;
 // separation.
 const float DIFFUSION_STRENGTH = 0.120;
 const float BLOOM_STRENGTH = 0.360;
-const float BLACK_LIFT = 0.010;
-const float BACKLIGHT_BLEED = 0.018;
-const float MURA_STRENGTH = 0.004;
+const float BLACK_LIFT = 0.016;
+const float BACKLIGHT_BLEED = 0.030;
+const float MURA_STRENGTH = 0.0065;
 
 float panelNoise(vec2 position) {
     vec2 cell = floor(position / 3.0);
