@@ -22,11 +22,39 @@ RESET=$'\033[0m'
 DIM=$'\033[2m'
 BOLD_CYAN=$'\033[1;36m'
 BOLD_PURPLE=$'\033[1;35m'
-BOLD_RED=$'\033[1;31m'
 BOLD_YELLOW=$'\033[1;33m'
 GIT_ICON=$''
-BOLD_GREEN=$'\033[1;32m'
-RED=$'\033[31m'
+INVERSE=$'\033[7m'
+
+# Severity ramp for the usage meters. The amber palette offers no usable hue
+# axis, so severity rides on luminance instead: muted -> accent -> bright. Every
+# step is a bright-slot code because the light theme collapses those to a single
+# grey, which flattens the ramp but never inverts it. Plain 31/32 inverted it in
+# both themes, which is what this replaces.
+USAGE_LOW=$'\033[1;31m'
+USAGE_WARN=$'\033[1;33m'
+USAGE_HIGH=$'\033[1;32m'
+
+# Picks the ramp step for a percentage.
+usage_color() {
+  if [ "$1" -ge 90 ]; then
+    printf '%s' "$USAGE_HIGH"
+  elif [ "$1" -ge 70 ]; then
+    printf '%s' "$USAGE_WARN"
+  else
+    printf '%s' "$USAGE_LOW"
+  fi
+}
+
+# Renders a percentage. Past the critical step it switches to reverse video and
+# gains a "!", so the state carries without depending on colour at all.
+usage_label() {
+  if [ "$1" -ge 90 ]; then
+    printf '%s !%s%% %s' "$INVERSE" "$1" "$RESET"
+  else
+    printf '%s%s%%%s' "$2" "$1" "$RESET"
+  fi
+}
 
 # --- model segment (first) ---
 output="${BOLD_YELLOW} ${model}${RESET}"
@@ -55,8 +83,11 @@ else
   fi
 fi
 
+# Starship stocks this as plain red, which the amber palette renders as its
+# border tone -- invisible. Accent amber plus the lock glyph makes the state
+# readable without leaning on a hue.
 read_only_segment=""
-[ ! -w "$cwd" ] && read_only_segment="${RED} 󰌾${RESET}"
+[ ! -w "$cwd" ] && read_only_segment="${BOLD_YELLOW} 󰌾${RESET}"
 
 output+=" ${DIM}|${RESET} ${BOLD_CYAN}${display_path}${RESET}${read_only_segment}"
 
@@ -139,13 +170,7 @@ fi
 if [ -n "$used" ]; then
   used_int=${used%.*}
   [ -z "$used_int" ] && used_int=0
-  if [ "$used_int" -ge 90 ]; then
-    bar_color="$BOLD_RED"
-  elif [ "$used_int" -ge 70 ]; then
-    bar_color="$BOLD_YELLOW"
-  else
-    bar_color="$BOLD_GREEN"
-  fi
+  bar_color=$(usage_color "$used_int")
 
   bar_width=10
   filled=$(( used_int * bar_width / 100 ))
@@ -155,7 +180,7 @@ if [ -n "$used" ]; then
   bar="${bar_color}"
   for ((i=0; i<filled; i++)); do bar+="█"; done
   for ((i=0; i<empty; i++)); do bar+="░"; done
-  bar+="${RESET} ${used_int}%"
+  bar+="${RESET} $(usage_label "$used_int" "$bar_color")"
 
   output+=" ${DIM}|${RESET} ${bar}"
 fi
@@ -164,14 +189,8 @@ fi
 if [ -n "$weekly" ]; then
   weekly_int=${weekly%.*}
   [ -z "$weekly_int" ] && weekly_int=0
-  if [ "$weekly_int" -ge 90 ]; then
-    weekly_color="$BOLD_RED"
-  elif [ "$weekly_int" -ge 70 ]; then
-    weekly_color="$BOLD_YELLOW"
-  else
-    weekly_color="$BOLD_GREEN"
-  fi
-  output+=" ${DIM}|${RESET} ${DIM}7d${RESET} ${weekly_color}${weekly_int}%${RESET}"
+  weekly_color=$(usage_color "$weekly_int")
+  output+=" ${DIM}|${RESET} ${DIM}7d${RESET} $(usage_label "$weekly_int" "$weekly_color")"
 fi
 
 # --- duration segment ---
