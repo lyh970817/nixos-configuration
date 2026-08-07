@@ -14,12 +14,12 @@ endif
 let g:colors_name='vt220-amber'
 
 " not all terminals support italics properly. If yours does not, opt-out.
-if ! exists('g:vt220-amber_amber_terminal_italics')
-  let g:vt220-amber_amber_terminal_italics = 1
+if ! exists('g:vt220_amber_terminal_italics')
+  let g:vt220_amber_terminal_italics = 1
 endif
 
-if ! exists('g:vt220-amber_amber_spell_undercurl')
-  let g:vt220-amber_amber_spell_undercurl = 1
+if ! exists('g:vt220_amber_spell_undercurl')
+  let g:vt220_amber_spell_undercurl = 1
 endif
 
 " Colors - VT220 Amber Palette
@@ -38,7 +38,7 @@ let s:grey = s:muted_amber
 let s:dark_grey = s:subtle_border
 let s:light_grey = s:secondary_amber
 
-if g:vt220-amber_amber_spell_undercurl == 1
+if g:vt220_amber_spell_undercurl == 1
   let s:sp_un = 'undercurl'
 else
   let s:sp_un = 'underline'
@@ -47,7 +47,7 @@ endif
 " shamelessly stolen from hemisu: https://github.com/noahfrederick/vim-hemisu/
 function! s:h(group, style)
   " Not all terminals support italics properly. If yours does, opt-in.
-  if g:vt220-amber_amber_terminal_italics == 0
+  if g:vt220_amber_terminal_italics == 0
         \ && has_key(a:style, 'cterm')
         \ && a:style['cterm'] == 'italic'
     unlet a:style.cterm
