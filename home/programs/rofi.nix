@@ -80,7 +80,7 @@
           background-color: @bg;
           text-color: @fg;
           border-radius: 0;
-          padding: 1px 5px;
+          padding: 3px 6px;
       }
 
       element.normal.normal {
