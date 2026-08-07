@@ -48,6 +48,14 @@ let
       dark | light) ;;
       *) theme_mode="dark" ;;
     esac
+
+    # The spinner's effort suffix ("thinking with high effort") is drawn in a
+    # hardcoded RGB grey that pulses between #999999 and #B9B9B9. It is not a
+    # theme key, so no ANSI theme can reach it and it lands as raw grey in the
+    # amber palette. Reduced motion selects the spinner branch that colours
+    # that text from the theme instead. It also stills the spinner glyph and
+    # drops the shimmer, which suits the operator console anyway.
+    claude_flag_settings="{\"theme\":\"''${theme_mode}-ansi\",\"prefersReducedMotion\":true}"
   '';
 
   claudeHostLauncher = pkgs.writeShellApplication {
@@ -58,7 +66,7 @@ let
       ${claudeHostEnvironment}
 
       ${claudeThemeSettings}
-      exec ${pkgs.claude-code}/bin/claude --settings "{\"theme\":\"''${theme_mode}-ansi\"}" "$@"
+      exec ${pkgs.claude-code}/bin/claude --settings "$claude_flag_settings" "$@"
     '';
   };
 
@@ -137,7 +145,7 @@ let
       unset CLAUDE_CODE_SUBAGENT_MODEL
 
       ${claudeThemeSettings}
-      exec ${pkgs.claude-code}/bin/claude --settings "{\"theme\":\"''${theme_mode}-ansi\"}" "$@"
+      exec ${pkgs.claude-code}/bin/claude --settings "$claude_flag_settings" "$@"
     '';
   };
 
