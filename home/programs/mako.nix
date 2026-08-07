@@ -50,7 +50,7 @@
       default-timeout=10000
       layer=overlay
       max-visible=5
-      format=[%a] <b>%s</b>\n%b
+      format=<b>%s</b>\n%b
 
       # Low urgency notifications - darker amber
       [urgency=low mode=dark]
