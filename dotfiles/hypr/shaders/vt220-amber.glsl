@@ -9,8 +9,8 @@ uniform sampler2D tex;
 // A restrained optical-softness treatment for a modern LCD. This deliberately
 // contains no CRT geometry, scan raster, vignette, animated noise, or color
 // separation.
-const float DIFFUSION_STRENGTH = 0.080;
-const float BLOOM_STRENGTH = 0.220;
+const float DIFFUSION_STRENGTH = 0.150;
+const float BLOOM_STRENGTH = 0.500;
 const float BLACK_LIFT = 0.010;
 const float BACKLIGHT_BLEED = 0.018;
 const float MURA_STRENGTH = 0.004;
@@ -27,22 +27,26 @@ void main() {
     vec2 x = vec2(pixel.x, 0.0);
     vec2 y = vec2(0.0, pixel.y);
 
-    // A deliberately assertive two-pixel Gaussian-like footprint. It stays
+    // A deliberately assertive three-pixel Gaussian-like footprint. It stays
     // spatially uniform, so the result can still read as imperfect panel
     // optics rather than simulated tube geometry.
-    vec3 soft = base.rgb * 0.16;
-    soft += texture(tex, uv + x).rgb * 0.10;
-    soft += texture(tex, uv - x).rgb * 0.10;
-    soft += texture(tex, uv + y).rgb * 0.10;
-    soft += texture(tex, uv - y).rgb * 0.10;
-    soft += texture(tex, uv + x + y).rgb * 0.06;
-    soft += texture(tex, uv + x - y).rgb * 0.06;
-    soft += texture(tex, uv - x + y).rgb * 0.06;
-    soft += texture(tex, uv - x - y).rgb * 0.06;
+    vec3 soft = base.rgb * 0.12;
+    soft += texture(tex, uv + x).rgb * 0.09;
+    soft += texture(tex, uv - x).rgb * 0.09;
+    soft += texture(tex, uv + y).rgb * 0.09;
+    soft += texture(tex, uv - y).rgb * 0.09;
+    soft += texture(tex, uv + x + y).rgb * 0.055;
+    soft += texture(tex, uv + x - y).rgb * 0.055;
+    soft += texture(tex, uv - x + y).rgb * 0.055;
+    soft += texture(tex, uv - x - y).rgb * 0.055;
     soft += texture(tex, uv + 2.0 * x).rgb * 0.05;
     soft += texture(tex, uv - 2.0 * x).rgb * 0.05;
     soft += texture(tex, uv + 2.0 * y).rgb * 0.05;
     soft += texture(tex, uv - 2.0 * y).rgb * 0.05;
+    soft += texture(tex, uv + 3.0 * x).rgb * 0.025;
+    soft += texture(tex, uv - 3.0 * x).rgb * 0.025;
+    soft += texture(tex, uv + 3.0 * y).rgb * 0.025;
+    soft += texture(tex, uv - 3.0 * y).rgb * 0.025;
 
     vec3 diffused = mix(base.rgb, soft, DIFFUSION_STRENGTH);
     vec3 bloom = max(soft - base.rgb, vec3(0.0));
