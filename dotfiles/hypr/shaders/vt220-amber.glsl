@@ -9,8 +9,8 @@ uniform sampler2D tex;
 // A restrained optical-softness treatment for a modern LCD. This deliberately
 // contains no CRT geometry, scan raster, vignette, animated noise, or color
 // separation.
-const float DIFFUSION_STRENGTH = 0.150;
-const float BLOOM_STRENGTH = 0.500;
+const float DIFFUSION_STRENGTH = 0.120;
+const float BLOOM_STRENGTH = 0.360;
 const float BLACK_LIFT = 0.010;
 const float BACKLIGHT_BLEED = 0.018;
 const float MURA_STRENGTH = 0.004;
