@@ -3,7 +3,9 @@
 # Original: ~/.config/newt/themes/
 # Both dark and light variants are written unconditionally by this file;
 # shell.nix selects which one to use per-session based on THEME_MODE and
-# exports it as NEWT_COLORS.
+# exports it as NEWT_COLORS (which whiptail and any other newt program also
+# read). The nmtui wrapper below sets the same variable itself rather than
+# trusting the environment — see there for why.
 {
   config,
   lib,
@@ -15,45 +17,114 @@ let
   # Active phosphor profile; see ../palettes.nix.
   p = (import ../palettes.nix).active;
 
-  # Claude Code's dark-ansi theme forced several ANSI slots away from the
-  # original dark palette in programs/alacritty.nix. Newt names colors rather
-  # than addressing hex, so nmtui inherits those tweaks — and because it paints
-  # its whole backdrop with ANSI black, the lifted black turns the background
-  # into a dark amber wash instead of the terminal's black.
+  # newt resolves colours by NAME against a fixed list -- black, red, green,
+  # brown, blue, magenta, cyan, lightgray, gray, brightred, brightgreen,
+  # yellow, brightblue, brightmagenta, brightcyan, white -- which is just
+  # ANSI 0-15 under other names. "amber" and "brightamber" are not on it, so
+  # the rename in 6239b4f1 silently voided every rule that used them and
+  # dropped nmtui to newt's built-in blue defaults.
   #
-  # Restore the original values for the life of the process with OSC 4, then
-  # reset just these slots with OSC 104 so unrelated palette state survives.
-  # Slots are chosen for the roles the theme string below actually names, and
-  # every one of those must stay legible: newt has no notion of a "dim" colour,
-  # so a rung that is merely decorative elsewhere becomes body text here.
-  originalSlots = {
-    "0" = "#${p.background}"; # black — the backdrop, and the text colour on every reversed element
-    "2" = "#${p.foreground}"; # green — body text; the terminals map this rung to mutedText, which is far too dim to read a form in
-    "7" = "#${p.foreground}"; # white — disabled entries
-    "10" = "#${p.bright}"; # brightgreen — borders, titles, labels, and the fill behind reversed rows, so it must outrank green
-    "12" = "#${p.foreground}"; # bright blue — retuned by Claude Code's theme so its fuzzy-match fragments read as accents
-  };
+  # So the names below are chosen for the *index* they resolve to, not for the
+  # hue they read as: the terminal themes in programs/foot.nix and
+  # programs/alacritty.nix lay the phosphor ladder over ANSI 0-15, and these
+  # pick the slots holding the rungs each role needs.
+  #
+  #   black       0   raisedBlack     the backdrop, and the text on reversed rows
+  #   brown       3   secondaryText   receded, for disabled entries
+  #   blue        4   accent          reversed fills (see the clamp below)
+  #   magenta     5   foreground      body text
+  #   brightblue 12   bright          borders, titles, labels, entries
+  #
+  # Backgrounds are restricted to 0-7: slang emits reversed fills as SGR 40-47
+  # and clamps a bright name down to its regular counterpart, so a fill can
+  # never reach `bright` or `hot`. `blue` (accent) is the brightest rung a fill
+  # can actually land on, which is also what the rofi, foot, alacritty and btop
+  # selections use.
+  #
+  # An earlier revision instead named green/brightgreen and corrected the slots
+  # at runtime with an OSC 4 shim. That was removed: OSC 4 only survives when
+  # the escape reaches the terminal, so it silently did nothing under a tmux
+  # popup or a nested multiplexer, and it mutated the terminal's palette for
+  # the life of the process. Naming the right slot needs no escape at all.
+  darkTheme = builtins.concatStringsSep ":" [
+    "root=magenta,black"
+    "window=magenta,black"
+    "border=brightblue,black"
+    "listbox=magenta,black"
+    "actlistbox=black,magenta"
+    "sellistbox=brightblue,black"
+    "actsellistbox=black,blue"
+    "textbox=magenta,black"
+    "acttextbox=brightblue,black"
+    "entry=brightblue,black"
+    "disentry=brown,black"
+    "checkbox=magenta,black"
+    "actcheckbox=magenta,black"
+    "button=black,magenta"
+    "actbutton=magenta,black"
+    "compactbutton=magenta,black"
+    "actcompactbutton=black,magenta"
+    "label=brightblue,black"
+    "title=brightblue,black"
+    "roottext=magenta,black"
+    "emptyscale=magenta,black"
+    "fullscale=black,magenta"
+    "shadow=black,black"
+  ];
 
-  osc = lib.concatStrings (lib.mapAttrsToList (i: c: ''\033]4;${i};${c}\007'') originalSlots);
-  resetOsc = lib.concatStrings (lib.mapAttrsToList (i: _: ''\033]104;${i}\007'') originalSlots);
+  lightTheme = builtins.concatStringsSep ";" [
+    "root=black,white"
+    "window=black,white"
+    "border=black,white"
+    "textbox=black,white"
+    "button=white,black"
+    "compactbutton=black,white"
+    "actbutton=white,black"
+    "checkbox=black,white"
+    "actcheckbox=white,black"
+    "entry=black,white"
+    "disentry=gray,white"
+    "label=black,white"
+    "listbox=black,white"
+    "actlistbox=white,black"
+    "sellistbox=black,gray"
+    "actsellistbox=white,black"
+  ];
 
   # Shadows the NetworkManager nmtui on PATH so both the launcher and an
-  # interactive shell get the shim.
+  # interactive shell get the theme.
   nmtui = pkgs.writeShellScriptBin "nmtui" ''
-    # The light e-ink palette was never retuned, so only shim in dark mode.
+    # NEWT_COLORS is normally exported by shell.nix, but the environment is not
+    # a channel this can rely on. A tmux server freezes the environment it was
+    # started with and hands that to every process it spawns, so a pane can
+    # still be serving a NEWT_COLORS from before the last rebuild long after
+    # the theme files on disk were corrected -- and because an unrecognised
+    # colour name voids the whole rule it appears in, a stale one does not
+    # degrade gracefully, it drops nmtui to newt's built-in defaults. Only an
+    # interactive zsh re-reads the file; anything launched any other way (a
+    # bare `nmtui` under a stale server, a desktop entry, a keybinding) keeps
+    # the frozen value. Setting it here makes the theme this build generated
+    # the one that is used, whatever the caller's environment says.
+    #
     # THEME_MODE is the per-session mode: set by theme-hold for ssh/mosh
     # sessions, otherwise defaulted from this machine's own monitor by
-    # shell.nix. The desktop launcher runs `zsh -i -c nmtui`, so it picks up
-    # that same default. (This replaced the old newt/current_theme symlink,
-    # which no longer exists.)
-    case "''${THEME_MODE:-}" in
-      dark)
-        trap 'printf "${resetOsc}"' EXIT INT TERM
-        printf "${osc}"
-        ;;
+    # shell.nix. When it is unset (a desktop entry, a systemd unit) fall back
+    # to this machine's own monitor by reading the hypr current-theme symlink
+    # directly, the same way the btop wrapper does.
+    mode="''${THEME_MODE:-}"
+    if [ -z "$mode" ]; then
+      case "$(readlink "$HOME/.local/state/hypr/current-theme.conf" 2>/dev/null)" in
+        *dark.conf) mode=dark ;;
+        *) mode=light ;;
+      esac
+    fi
+
+    case "$mode" in
+      light) export NEWT_COLORS='${lightTheme}' ;;
+      *) export NEWT_COLORS='${darkTheme}' ;;
     esac
 
-    ${pkgs.networkmanager}/bin/nmtui "$@"
+    exec ${pkgs.networkmanager}/bin/nmtui "$@"
   '';
 in
 
@@ -62,21 +133,10 @@ in
 
   # Per-mode (dark/light) theme variant files, selected at shell startup by
   # THEME_MODE (set by theme-hold for ssh/mosh sessions, otherwise defaulted
-  # from the local monitor)
+  # from the local monitor). These are what whiptail and any other newt
+  # program pick up; nmtui itself does not depend on them.
   home.file = {
-    # newt resolves colours by NAME against a fixed list: black, red, green,
-    # brown, blue, magenta, cyan, lightgray, gray, brightred, brightgreen,
-    # yellow, brightblue, brightmagenta, brightcyan, white. "amber" and
-    # "brightamber" are not on it, so the rename in 6239b4f1 silently voided
-    # every rule that used them. Only these names are safe, and the hue comes
-    # from the OSC 4 slots above rather than from the name -- "green" here is
-    # whatever slot 2 has been set to.
-    ".config/newt/themes/dark".text = ''
-      root=green,black:window=green,black:border=brightgreen,black:listbox=green,black:actlistbox=black,brightgreen:sellistbox=brightgreen,black:actsellistbox=black,green:textbox=green,black:acttextbox=brightgreen,black:entry=brightgreen,black:disentry=white,black:checkbox=green,black:actcheckbox=green,black:button=black,brightgreen:actbutton=green,black:compactbutton=green,black:actcompactbutton=black,brightgreen:label=brightgreen,black:title=brightgreen,black:roottext=green,black:emptyscale=green,black:fullscale=black,brightgreen:shadow=black,black
-    '';
-
-    ".config/newt/themes/light".text = ''
-      root=black,white;window=black,white;border=black,white;textbox=black,white;button=white,black;compactbutton=black,white;actbutton=white,black;checkbox=black,white;actcheckbox=white,black;entry=black,white;disentry=gray,white;label=black,white;listbox=black,white;actlistbox=white,black;sellistbox=black,gray;actsellistbox=white,black
-    '';
+    ".config/newt/themes/dark".text = darkTheme + "\n";
+    ".config/newt/themes/light".text = lightTheme + "\n";
   };
 }

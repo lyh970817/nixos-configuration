@@ -1,4 +1,5 @@
 {
+  "theme": "dark-ansi",
   "permissions": {
     "allow": [
       "Bash", "BashOutput", "Edit", "Glob", "Grep", "KillShell",

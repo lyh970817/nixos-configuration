@@ -342,6 +342,31 @@ in
       logo = {
         source = "${../../logo/escher-small}";
       };
+
+      # Percentages are the one place fastfetch reaches for hue: it picks
+      # green/yellow/red by how alarming the value is. A single-phosphor
+      # palette has no hue to give, so the three states are remapped onto SGR
+      # codes whose terminal slots climb the ladder instead -- severity as
+      # intensity, which is the only channel left. Codes rather than hexes, so
+      # a phosphor switch carries them; see home/palettes.nix and the slot
+      # assignments in programs/foot.nix.
+      #
+      # The defaults were unusable here: green and red both landed on
+      # mutedText (2.5:1 against the background, under even the 3:1 floor), so
+      # every parenthesised percentage was the dimmest thing on screen *and*
+      # a critical value looked identical to a healthy one. These clear 4.5:1
+      # at the bottom and rise from there, staying below the plain value text
+      # (7.1:1) when healthy and above it when not.
+      display = {
+        percent = {
+          color = {
+            green = "34"; # accent, 5.5:1 -- healthy, recedes behind the value
+            yellow = "94"; # bright, 9.6:1 -- rises above ordinary text
+            red = "92"; # hot, 13.1:1 -- the top rung, reserved for alarm
+          };
+        };
+      };
+
       modules = [
         "Title"
         "Separator"
