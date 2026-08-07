@@ -54,7 +54,7 @@ let
     text = ''
       # Both halves of the transform have to be sent. Temperature alone would
       # leave gamma at whatever the time-of-day profile loaded, and at gamma
-      # 100% a 1080 K CTM is a very dark red wash rather than amber.
+      # 100% an 1100 K CTM is a very dark red wash rather than amber.
       apply_night() {
         hyprctl hyprsunset temperature ${toString nightTemperature} >/dev/null 2>&1 || return 1
         hyprctl hyprsunset gamma ${nightGammaPercent} >/dev/null 2>&1 || return 1
