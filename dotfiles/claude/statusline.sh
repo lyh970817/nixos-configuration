@@ -25,15 +25,21 @@ BOLD_PURPLE=$'\033[1;35m'
 BOLD_YELLOW=$'\033[1;33m'
 GIT_ICON=$''
 INVERSE=$'\033[7m'
+# Bright slot 3. Foot leaves bold-text-in-bright off, so "bold red/green/yellow"
+# lands in the *regular* slots; reaching the brighter half of the amber ramp
+# needs an explicit 90-97 code.
+ACCENT=$'\033[93m'
 
 # Severity ramp for the usage meters. The amber palette offers no usable hue
-# axis, so severity rides on luminance instead: muted -> accent -> bright. Every
-# step is a bright-slot code because the light theme collapses those to a single
-# grey, which flattens the ramp but never inverts it. Plain 31/32 inverted it in
-# both themes, which is what this replaces.
-USAGE_LOW=$'\033[1;31m'
-USAGE_WARN=$'\033[1;33m'
-USAGE_HIGH=$'\033[1;32m'
+# axis, so severity rides on luminance instead: muted -> accent -> bright.
+# Measured against the dark palette these are #6E501D -> #BE842A -> #FFD064,
+# so the meter always gets brighter as it fills. The stock red/yellow/green
+# resolved to #2A2011 -> #9B6D24 -> #6E501D, which was both near-invisible at
+# the low end and inverted at the top. The light theme flattens all three
+# bright slots to one grey, which loses the ramp but never re-inverts it.
+USAGE_LOW=$'\033[91m'
+USAGE_WARN=$'\033[93m'
+USAGE_HIGH=$'\033[92m'
 
 # Picks the ramp step for a percentage.
 usage_color() {
@@ -87,7 +93,7 @@ fi
 # border tone -- invisible. Accent amber plus the lock glyph makes the state
 # readable without leaning on a hue.
 read_only_segment=""
-[ ! -w "$cwd" ] && read_only_segment="${BOLD_YELLOW} 󰌾${RESET}"
+[ ! -w "$cwd" ] && read_only_segment="${ACCENT} 󰌾${RESET}"
 
 output+=" ${DIM}|${RESET} ${BOLD_CYAN}${display_path}${RESET}${read_only_segment}"
 
