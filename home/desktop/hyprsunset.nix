@@ -62,7 +62,7 @@ let
     runtimeInputs = [ pkgs.hyprland ];
     text = ''
       valid_temperature=false
-      case "${1-}" in
+      case "''${1-}" in
         *[!0-9]* | "") ;;
         *)
           if [ "$1" -ge 2000 ] && [ "$1" -le 6500 ] && [ $(( $1 % 100 )) -eq 0 ]; then
