@@ -106,7 +106,11 @@ in
       # case the udev coldplug can miss (fired before ppd was running).
       after = [ "power-profiles-daemon.service" ];
       wants = [ "power-profiles-daemon.service" ];
-      wantedBy = [ "multi-user.target" ];
+      # ppd itself is ordered After=multi-user.target, so hanging this oneshot
+      # off multi-user.target creates an ordering cycle and systemd deletes the
+      # job at every boot (the profile was never applied). graphical.target is
+      # reached after ppd, so the ordering is consistent there.
+      wantedBy = [ "graphical.target" ];
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
