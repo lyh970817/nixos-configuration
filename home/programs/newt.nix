@@ -72,6 +72,12 @@ let
     "shadow=black,black"
   ];
 
+  # Unlike the shared newt theme above, nmtui should paint its unselected
+  # surfaces with the terminal's true background. Slang accepts `default` as a
+  # special colour and emits the terminal default instead of ANSI 0, whose
+  # deliberately raised palette rung otherwise makes nmtui look grey.
+  nmtuiDarkTheme = builtins.replaceStrings [ ",black" ] [ ",default" ] darkTheme;
+
   lightTheme = builtins.concatStringsSep ";" [
     "root=black,white"
     "window=black,white"
@@ -121,7 +127,7 @@ let
 
     case "$mode" in
       light) export NEWT_COLORS='${lightTheme}' ;;
-      *) export NEWT_COLORS='${darkTheme}' ;;
+      *) export NEWT_COLORS='${nmtuiDarkTheme}' ;;
     esac
 
     exec ${pkgs.networkmanager}/bin/nmtui "$@"
