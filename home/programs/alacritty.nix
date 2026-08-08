@@ -42,7 +42,10 @@ let
     [colors.normal]
     black   = '#${p.raisedBlack}'
     red     = '#${p.subtleBorder}'
-    green   = '#${p.mutedText}'
+    # Claude Code's dark-ansi syntaxComment token is ANSI green (slot 2).
+    # Keep comments below normal text while lifting them out of the palette's
+    # dim rung so they remain readable beside keywords and strings.
+    green   = '#${p.secondaryText}'
     yellow  = '#${p.secondaryText}'
     blue    = '#${p.accent}'
     magenta = '#${p.foreground}'

@@ -57,7 +57,10 @@ let
     selection-background=${p.accent}
     regular0=${p.raisedBlack}
     regular1=${p.subtleBorder}
-    regular2=${p.mutedText}
+    # Claude Code's dark-ansi syntaxComment token is ANSI green (slot 2).
+    # Keep comments below normal text while lifting them out of the palette's
+    # dim rung so they remain readable beside keywords and strings.
+    regular2=${p.secondaryText}
     regular3=${p.secondaryText}
     regular4=${p.accent}
     regular5=${p.foreground}
