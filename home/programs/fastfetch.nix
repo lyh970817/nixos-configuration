@@ -192,6 +192,78 @@ let
       done <<< "$device_rows"
     '';
   };
+  fastfetchMihomo = pkgs.writeShellApplication {
+    name = "fastfetch-mihomo";
+    runtimeInputs = with pkgs; [
+      curl
+      jq
+    ];
+    text = ''
+      # Probe mihomo's controller. A curl against a down controller fails
+      # instantly, so no systemctl gate is needed.
+      if ! config=$(curl -s --max-time 2 http://127.0.0.1:9090/configs 2>/dev/null) || [ -z "$config" ]; then
+        echo "inactive"
+        exit 0
+      fi
+      mode=$(jq -r '.mode // "?"' <<< "$config")
+      tun=$(jq -r 'if .tun.enable then "TUN" else "noTUN" end' <<< "$config")
+      proxy=$(curl -s --max-time 2 http://127.0.0.1:9090/proxies 2>/dev/null | jq -r '
+        [.proxies | to_entries[] | select(.value.type == "Selector" and .key != "GLOBAL")]
+        | .[0].value.now // "?"
+      ' 2>/dev/null || echo "?")
+      echo "$mode | $proxy | $tun"
+    '';
+  };
+
+  # The greeting used to probe mihomo and the tailnet inline, which put two
+  # network round-trips on every shell's startup path (and their costs are
+  # paid serially, in display order). Instead a user timer refreshes small
+  # text caches under $XDG_RUNTIME_DIR — the same pattern codexbar already
+  # uses — and the greeting only reads files. Runtime dir means the caches
+  # die with the session rather than surviving reboots.
+  fastfetchStatusRefresh = pkgs.writeShellApplication {
+    name = "fastfetch-status-refresh";
+    runtimeInputs = [
+      pkgs.coreutils
+      fastfetchMihomo
+      fastfetchTailnet
+    ];
+    text = ''
+      cache_dir="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/fastfetch-status"
+      install -d -m 700 "$cache_dir"
+      refresh() {
+        local name="$1" tmp
+        tmp=$(mktemp "$cache_dir/.$name.XXXXXX")
+        if "fastfetch-$name" > "$tmp" 2>/dev/null; then
+          mv -f "$tmp" "$cache_dir/$name.txt"
+        else
+          rm -f "$tmp"
+        fi
+      }
+      refresh mihomo &
+      refresh tailnet &
+      wait
+    '';
+  };
+
+  fastfetchStatus = pkgs.writeShellApplication {
+    name = "fastfetch-status";
+    runtimeInputs = [ pkgs.coreutils ];
+    text = ''
+      # Read a cache written by fastfetch-status-refresh. On a miss (first
+      # shell right after login, before the timer's first run) show a pending
+      # marker and kick the refresh unit so the next shell has real data.
+      name="$1"
+      cache="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/fastfetch-status/$name.txt"
+      if [ -r "$cache" ]; then
+        cat "$cache"
+      else
+        systemctl --user start --no-block fastfetch-status-refresh.service 2>/dev/null || true
+        echo "…"
+      fi
+    '';
+  };
+
   codexbarCachePath = "${config.home.homeDirectory}/.cache/codexbar/usage.json";
   fastfetchCodexbar = pkgs.writeShellApplication {
     name = "fastfetch-codexbar";
@@ -336,6 +408,8 @@ in
     fastfetchAudio
     fastfetchPeerHome
     fastfetchTailnet
+    fastfetchMihomo
+    fastfetchStatus
     fastfetchCodexbar
   ];
 
@@ -409,7 +483,7 @@ in
         {
           type = "command";
           key = "Mihomo";
-          text = "status=$(systemctl is-active mihomo 2>/dev/null); if [ \"$status\" = \"active\" ]; then config=$(curl -s http://127.0.0.1:9090/configs 2>/dev/null); mode=$(echo \"$config\" | jq -r '.mode' 2>/dev/null); tun=$(echo \"$config\" | jq -r 'if .tun.enable then \"TUN\" else \"noTUN\" end' 2>/dev/null); proxy=$(curl -s http://127.0.0.1:9090/proxies 2>/dev/null | jq -r '[.proxies | to_entries[] | select(.value.type == \"Selector\" and .key != \"GLOBAL\")] | .[0].value.now' 2>/dev/null); echo \"$mode | $proxy | $tun\"; else echo \"inactive\"; fi";
+          text = "fastfetch-status mihomo";
         }
         # A blank key renders the block with no header, and supplies the blank
         # line that would otherwise need a Break.
@@ -422,11 +496,32 @@ in
         {
           type = "command";
           key = "Tailnet";
-          text = "fastfetch-tailnet";
+          text = "fastfetch-status tailnet";
         }
         "Break"
       ];
     };
+  };
+
+  systemd.user.services.fastfetch-status-refresh = {
+    Unit.Description = "Refresh the shell greeting's network status caches";
+    Service = {
+      Type = "oneshot";
+      ExecStart = "${fastfetchStatusRefresh}/bin/fastfetch-status-refresh";
+    };
+  };
+
+  systemd.user.timers.fastfetch-status-refresh = {
+    # No Requires/After on other units: the codexbar-refresh timer showed how
+    # an ordering edge back into basic.target gets timers.target dropped from
+    # the login transaction. This timer depends on nothing, so it stays bare.
+    Unit.Description = "Refresh the shell greeting's network status caches periodically";
+    Timer = {
+      OnBootSec = "5s";
+      OnUnitActiveSec = "60s";
+      Unit = "fastfetch-status-refresh.service";
+    };
+    Install.WantedBy = [ "timers.target" ];
   };
 
   # Poems config
