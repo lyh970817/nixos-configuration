@@ -164,6 +164,9 @@ in
       if [[ -z "''${DENO_DIR+x}" ]]; then
         export DENO_DIR="''${XDG_CACHE_HOME:-$HOME/.cache}/deno"
       fi
+      # Reuse Deno's linked SQLite; loading @db/sqlite's bundled copy alongside
+      # it crashes Deno 2.9 during Zeno startup.
+      export DENO_SQLITE_PATH=${pkgs.sqlite.out}/lib/libsqlite3.so
       export ZENO_ROOT=${pkgs.zeno-zsh}/share/zeno.zsh
       source ${pkgs.zeno-zsh}/share/zeno.zsh/zeno.zsh
 
