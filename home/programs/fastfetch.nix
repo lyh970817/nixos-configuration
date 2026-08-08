@@ -225,6 +225,7 @@ let
     name = "fastfetch-status-refresh";
     runtimeInputs = [
       pkgs.coreutils
+      fastfetchAudio
       fastfetchMihomo
       fastfetchTailnet
     ];
@@ -240,6 +241,10 @@ let
           rm -f "$tmp"
         fi
       }
+      # Audio is local IPC, not network, but its six serial wpctl round-trips
+      # cost ~350ms — by far the greeting's biggest line item — so it rides
+      # the same cache. Volume shown can be up to a refresh interval stale.
+      refresh audio &
       refresh mihomo &
       refresh tailnet &
       wait
@@ -478,7 +483,7 @@ in
         {
           type = "command";
           key = "Audio";
-          text = "fastfetch-audio";
+          text = "fastfetch-status audio";
         }
         {
           type = "command";
