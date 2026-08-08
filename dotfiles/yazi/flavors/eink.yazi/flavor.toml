@@ -157,10 +157,10 @@ footer = { fg = "#808080", bg = "#F0F0F0" }
 # File type rules using grayscale distinctions
 rules = [
     # Directories - bold black
-    { name = "*/", fg = "black", bold = true },
+    { url = "*/", fg = "black", bold = true },
     
     # Executables - dark gray with bold
-    { name = "*", is = "exec", fg = "#404040", bold = true },
+    { url = "*", is = "exec", fg = "#404040", bold = true },
     
     # Archives - medium gray
     { mime = "application/zip", fg = "#606060" },
@@ -185,35 +185,35 @@ rules = [
     { mime = "text/*", fg = "black" },
     
     # Code files - black with different styles
-    { name = "*.py", fg = "black" },
-    { name = "*.js", fg = "black" },
-    { name = "*.rs", fg = "black" },
-    { name = "*.go", fg = "black" },
-    { name = "*.c", fg = "black" },
-    { name = "*.cpp", fg = "black" },
-    { name = "*.h", fg = "black" },
-    { name = "*.java", fg = "black" },
+    { url = "*.py", fg = "black" },
+    { url = "*.js", fg = "black" },
+    { url = "*.rs", fg = "black" },
+    { url = "*.go", fg = "black" },
+    { url = "*.c", fg = "black" },
+    { url = "*.cpp", fg = "black" },
+    { url = "*.h", fg = "black" },
+    { url = "*.java", fg = "black" },
     
     # Config files - gray
-    { name = "*.toml", fg = "#707070" },
-    { name = "*.yaml", fg = "#707070" },
-    { name = "*.yml", fg = "#707070" },
-    { name = "*.json", fg = "#707070" },
-    { name = "*.xml", fg = "#707070" },
-    { name = "*.ini", fg = "#707070" },
+    { url = "*.toml", fg = "#707070" },
+    { url = "*.yaml", fg = "#707070" },
+    { url = "*.yml", fg = "#707070" },
+    { url = "*.json", fg = "#707070" },
+    { url = "*.xml", fg = "#707070" },
+    { url = "*.ini", fg = "#707070" },
     
     # Hidden files - light gray
-    { name = ".*", fg = "#909090" },
+    { url = ".*", fg = "#909090" },
     
     # Symbolic links - gray italic (if supported)
-    { name = "*", is = "link", fg = "#808080", italic = true },
+    { url = "*", is = "link", fg = "#808080", italic = true },
     
     # Broken links - black on gray background
-    { name = "*", is = "orphan", fg = "black", bg = "#D0D0D0" },
+    { url = "*", is = "orphan", fg = "black", bg = "#D0D0D0" },
     
     # Empty files - light gray
     { mime = "inode/empty", fg = "#B0B0B0" },
     
     # Fallback - medium gray
-    { name = "*", fg = "#606060" }
+    { url = "*", fg = "#606060" }
 ]

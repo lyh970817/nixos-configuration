@@ -156,10 +156,10 @@ footer = { fg = "#193F20", bg = "#080C09" }
 # File type rules using amber luminance distinctions
 rules = [
     # Directories - primary amber bold
-    { name = "*/", fg = "#4BAE55", bold = true },
+    { url = "*/", fg = "#4BAE55", bold = true },
 
     # Executables - accent amber with bold
-    { name = "*", is = "exec", fg = "#3D8E48", bold = true },
+    { url = "*", is = "exec", fg = "#3D8E48", bold = true },
 
     # Archives - secondary amber
     { mime = "application/zip", fg = "#286731" },
@@ -184,37 +184,37 @@ rules = [
     { mime = "text/*", fg = "#4BAE55" },
 
     # Code files - primary amber
-    { name = "*.py", fg = "#4BAE55" },
-    { name = "*.js", fg = "#4BAE55" },
-    { name = "*.rs", fg = "#4BAE55" },
-    { name = "*.go", fg = "#4BAE55" },
-    { name = "*.c", fg = "#4BAE55" },
-    { name = "*.cpp", fg = "#4BAE55" },
-    { name = "*.h", fg = "#4BAE55" },
-    { name = "*.java", fg = "#4BAE55" },
+    { url = "*.py", fg = "#4BAE55" },
+    { url = "*.js", fg = "#4BAE55" },
+    { url = "*.rs", fg = "#4BAE55" },
+    { url = "*.go", fg = "#4BAE55" },
+    { url = "*.c", fg = "#4BAE55" },
+    { url = "*.cpp", fg = "#4BAE55" },
+    { url = "*.h", fg = "#4BAE55" },
+    { url = "*.java", fg = "#4BAE55" },
 
     # Config files - secondary amber
-    { name = "*.toml", fg = "#286731" },
-    { name = "*.yaml", fg = "#286731" },
-    { name = "*.yml", fg = "#286731" },
-    { name = "*.json", fg = "#286731" },
-    { name = "*.xml", fg = "#286731" },
-    { name = "*.ini", fg = "#286731" },
+    { url = "*.toml", fg = "#286731" },
+    { url = "*.yaml", fg = "#286731" },
+    { url = "*.yml", fg = "#286731" },
+    { url = "*.json", fg = "#286731" },
+    { url = "*.xml", fg = "#286731" },
+    { url = "*.ini", fg = "#286731" },
 
     # Hidden files - muted amber
-    { name = ".*", fg = "#193F20" },
+    { url = ".*", fg = "#193F20" },
 
     # Symbolic links - accent amber italic
-    { name = "*", is = "link", fg = "#3D8E48", italic = true },
+    { url = "*", is = "link", fg = "#3D8E48", italic = true },
 
     # Broken links - primary amber on deep surface
-    { name = "*", is = "orphan", fg = "#4BAE55", bg = "#080C09" },
+    { url = "*", is = "orphan", fg = "#4BAE55", bg = "#080C09" },
 
     # Empty files - border amber
     { mime = "inode/empty", fg = "#15261A" },
 
     # Fallback - secondary amber
-    { name = "*", fg = "#286731" }
+    { url = "*", fg = "#286731" }
 ]
 
 [icon]
