@@ -137,7 +137,7 @@ hide_tab_bar_when_single_tab = true
 pane_borders = true
 pane_gaps = false
 pane_scrollbars = false
-show_agent_labels_on_pane_borders = true
+show_agent_labels_on_pane_borders = false
 
 agent_panel_sort = "spaces"
 [ui.toast]
