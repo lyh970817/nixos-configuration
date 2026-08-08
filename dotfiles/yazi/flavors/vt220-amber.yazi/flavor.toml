@@ -230,6 +230,22 @@ rules = [
 # Directories are deliberately not matched here: patterns without a trailing
 # slash only match non-directories, so folders keep upstream's monochrome
 # folder glyph, which already inherits the bright amber directory color.
+# Since Yazi 26.5 upstream's icon table colors directory icons explicitly (a
+# generic blue folder via an `if = "dir"` cond, plus per-name icons for
+# Desktop, Downloads, etc. in `dirs`), so directories no longer pick up the
+# [filetype] "*/" color from an unstyled icon. Merged (prepend_*) rules that
+# match directories hit a 26.5 quirk that strips the whole row's colors, so
+# both lists are *replaced* instead; and because the no-fg inherit behavior
+# is broken for directories (icon and filename both lose their color) and
+# hex values are silently dropped on icon rules, the fg is the ANSI "blue"
+# slot, which this setup's terminal palettes map to the accent colour
+# (foot regular4) -- it also tracks the live green/amber phosphor swap.
+dirs = []
+conds = [
+    { if = "dir & hovered", text = "", fg = "blue" },
+    { if = "dir", text = "", fg = "blue" },
+]
+
 prepend_globs = [
     { url = "*.{jpg,jpeg,png,gif,bmp,webp,avif,tiff,tif,ico,svg,heic,heif}", text = "" },
     { url = "*.{mp4,mkv,webm,mov,avi,m4v,mpg,mpeg,wmv,flv}", text = "" },
