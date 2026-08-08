@@ -1,7 +1,12 @@
 return {
   {
     "OXY2DEV/markview.nvim",
-    ft = { "markdown", "quarto", "rmd" },
+    event = {
+      {
+        event = { "BufReadPre", "BufNewFile" },
+        pattern = { "*.md", "*.markdown", "*.quarto", "*.rmd" },
+      },
+    },
     opts = {
       preview = {
         -- Show raw markdown under the cursor while in insert mode; keep the
