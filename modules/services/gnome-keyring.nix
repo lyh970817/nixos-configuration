@@ -8,12 +8,12 @@
   # as orphaned again just because one consumer goes away.
   #
   # greetd logs in without a password (services/greetd.nix runs the session
-  # directly as the user), so pam_gnome_keyring has no passphrase to unlock
-  # with and creates the login keyring with an empty one. That keyring
-  # auto-unlocks with no prompt, which is what makes this work headlessly
-  # under Hyprland, but it also leaves ~/.local/share/keyrings/login.keyring
-  # readable as cleartext. The root filesystem is unencrypted, so autologin
-  # already sets the real security boundary at physical access.
+  # directly as the user), so pam_gnome_keyring can start the daemon but cannot
+  # create or unlock a login keyring. The Home Manager module seeds a missing
+  # login keyring with an empty passphrase so first use unlocks without a prompt.
+  # That leaves ~/.local/share/keyrings/login.keyring readable as cleartext. The
+  # root filesystem is unencrypted, so autologin already sets the real security
+  # boundary at physical access.
   services.gnome.gnome-keyring.enable = true;
 
   # nixpkgs defaults this to gnome-keyring's own enable flag, and the socket

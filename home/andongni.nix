@@ -12,6 +12,7 @@
     ./programs/git.nix
     ./programs/ssh.nix
     ./programs/mpv.nix
+    ./programs/gnome-keyring.nix
     ./programs/starship.nix
     ./programs/tmux.nix
     ./programs/htop.nix
