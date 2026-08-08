@@ -46,7 +46,7 @@ in
       width=400
       height=400
       margin=10
-      padding=8
+      padding=6
       border-size=1
       border-color=#${p.accent}
       border-radius=4
