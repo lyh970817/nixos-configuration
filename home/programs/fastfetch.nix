@@ -385,12 +385,19 @@ let
       width_left7=$(widest "$codex_left7" "$claude_left7")
 
       row() {
-        local state="$1" name="$2" left5="$3" reset5="$4" left7="$5" reset7="$6" bullet
-        if [[ "$state" == ok ]]; then
-          bullet='●'
-        else
-          bullet='○'
-        fi
+        local state="$1" name="$2" left5="$3" reset5="$4" left7="$5" reset7="$6" bullet color
+        # Keep the marker's shape semantics (filled means usable, hollow means
+        # not) and give its actual CodexBar state the same severity ladder as
+        # Fastfetch percentages: available is the receding accent; unavailable
+        # is bright so stale/missing data is noticeable; a spent window is hot.
+        # These are ANSI slots rather than hues, so phosphor switching preserves
+        # the health ordering in both terminal palettes.
+        case "$state" in
+          ok) color=34; bullet='●' ;;
+          unavailable) color=94; bullet='○' ;;
+          *) color=92; bullet='○' ;;
+        esac
+        bullet=$(printf '\033[%sm%s\033[0m' "$color" "$bullet")
         if [[ "$state" == unavailable ]]; then
           printf '%s%s %-*s unavailable\n' "$indent" "$bullet" "$name_width" "$name"
           return
