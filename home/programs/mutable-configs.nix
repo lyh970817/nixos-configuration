@@ -49,7 +49,6 @@ let
 
   codexProfileNames = [
     "last30days"
-    "lavish-axi"
     "mattpocock"
     "superpowers"
     "understand-anything-codegraph"
@@ -64,7 +63,6 @@ let
     "commit-guidelines"
     "domain-context"
     "herdr"
-    "lavish"
     "r-dev-shell"
     "root-browser-control"
     "superpowers-domain-context"

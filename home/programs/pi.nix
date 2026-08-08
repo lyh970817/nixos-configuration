@@ -48,47 +48,6 @@ let
       exec ${pkgs.oh-my-pi}/bin/omp "$@"
     '';
   };
-
-  # First Mate is a project-local distribution. OMP does not discover tracked
-  # `.pi/extensions`, so the primary launcher must load both the turn-end guard
-  # and the OMP-native watcher explicitly. The PI markers remain the primary
-  # harness contract; FM_OMP_HARNESS is a separate process-scoped discriminator.
-  # The OMP crewmate adapter overrides FM_OMP_PRIMARY to 0.
-  firstmateLauncher = pkgs.writeShellApplication {
-    name = "firstmate";
-    text = ''
-      ${piHostEnvironment}
-
-      export FM_HOME="/home/andongni/firstmate"
-      export PI_CODING_AGENT=true
-      export FM_PI_HARNESS=pi
-      export FM_OMP_HARNESS=omp
-      export FM_OMP_PRIMARY=1
-      cd "$FM_HOME"
-      exec ${ompLauncher}/bin/omp \
-        -e "$FM_HOME/.pi/extensions/fm-primary-turnend-guard.ts" \
-        -e "$FM_HOME/.pi/extensions/fm-primary-omp-watch.ts" \
-        "$@"
-    '';
-  };
-
-  # Pi discovers First Mate's remaining project extensions itself. Load the
-  # watchdog pair explicitly too, matching the OMP route while keeping
-  # declarative settings packages (web access and server compaction) enabled.
-  firstmatePiLauncher = pkgs.writeShellApplication {
-    name = "firstmate-pi";
-    text = ''
-      ${piHostEnvironment}
-
-      export FM_HOME="/home/andongni/firstmate"
-      export FM_PI_HARNESS=pi
-      cd "$FM_HOME"
-      exec ${piLauncher}/bin/pi \
-        -e "$FM_HOME/.pi/extensions/fm-primary-turnend-guard.ts" \
-        -e "$FM_HOME/.pi/extensions/fm-primary-pi-watch.ts" \
-        "$@"
-    '';
-  };
 in
 {
   # Pi uses its native `openai-codex` provider, independently of the
@@ -102,19 +61,6 @@ in
   home.packages = [
     ompLauncher
     piLauncher
-    firstmateLauncher
-    firstmatePiLauncher
-
-    # First Mate's bootstrap remains detection-only. Nix owns these pinned
-    # executables, while optional AXI hook integrations remain disabled: do not
-    # run their imperative `setup hooks` commands.
-    pkgs.treehouse
-    pkgs."no-mistakes"
-    pkgs.gh-axi
-    pkgs.chrome-devtools-axi
-    pkgs.lavish-axi
-    pkgs.tasks-axi
-    pkgs.quota-axi
   ];
 
   home.file = {
