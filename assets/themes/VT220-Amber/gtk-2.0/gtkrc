@@ -27,7 +27,7 @@ style "default"
   bg[SELECTED]    = @selected_bg_color
 
   fg[ACTIVE]      = @fg_color
-  fg[INSENSITIVE] = "#286731"
+  fg[INSENSITIVE] = "#307C3B"
   fg[NORMAL]      = @fg_color 
   fg[PRELIGHT]    = @selected_fg_color
   fg[SELECTED]    = @fg_color
@@ -39,7 +39,7 @@ style "default"
   base[SELECTED]    = @selected_bg_color
 
   text[ACTIVE]      = @text_color
-  text[INSENSITIVE] = "#286731"
+  text[INSENSITIVE] = "#307C3B"
   text[NORMAL]      = @text_color
   text[PRELIGHT]    = @selected_fg_color
   text[SELECTED]    = @selected_fg_color
