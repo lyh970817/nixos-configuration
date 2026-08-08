@@ -18,6 +18,11 @@
         (builtins.fromTOML ''
           "$schema" = 'https://starship.rs/config-schema.json'
 
+          # Keep prompt detection bounded to the modules used here. Starship's
+          # implicit $all format scans every entry in $HOME, including the
+          # stale sshfs ~/home mount, before it can draw the first prompt.
+          format = '$directory$git_branch$git_commit$git_status$nix_shell$character'
+
           [aws]
           symbol = " "
 
