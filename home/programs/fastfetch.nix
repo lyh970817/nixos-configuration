@@ -106,28 +106,6 @@ let
     '';
   };
 
-  fastfetchPeerHome = pkgs.writeShellApplication {
-    name = "fastfetch-peer-home";
-    runtimeInputs = with pkgs; [
-      coreutils
-      gawk
-    ];
-    text = ''
-      # statfs on the sshfs peer mount blocks indefinitely when the peer is
-      # asleep or the tailnet path is stale, and this runs in every new
-      # shell's greeting — so the probe is a plain df under a hard timeout
-      # instead of a nested fastfetch disk scan (which also statfs'd every
-      # other mount along the way).
-      mount_point=${lib.escapeShellArg "${config.home.homeDirectory}/home"}
-      if out=$(timeout 0.5 df -B1 --output=fstype,used,size "$mount_point" 2>/dev/null | tail -1) \
-          && [ -n "$out" ]; then
-        echo "$out" | awk '{ printf "%.2f GiB / %.2f GiB (%.0f%%) - %s\n", $2 / 1073741824, $3 / 1073741824, $2 * 100 / $3, $1 }'
-      else
-        echo "unavailable"
-      fi
-    '';
-  };
-
   fastfetchTailnet = pkgs.writeShellApplication {
     name = "fastfetch-tailnet";
     runtimeInputs = with pkgs; [
@@ -418,7 +396,6 @@ in
 {
   home.packages = [
     fastfetchAudio
-    fastfetchPeerHome
     fastfetchTailnet
     fastfetchMihomo
     fastfetchStatus
@@ -474,11 +451,6 @@ in
         {
           type = "disk";
           folders = "/";
-        }
-        {
-          type = "command";
-          key = "Disk (~/home)";
-          text = "fastfetch-peer-home";
         }
         "Memory"
         "Battery"
