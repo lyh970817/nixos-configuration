@@ -57,6 +57,33 @@ let
 
   nightGammaPercent = toString (builtins.floor (nightGamma * 100.0));
 
+  hyprsunsetWarmth = pkgs.writeShellApplication {
+    name = "hyprsunset-warmth";
+    runtimeInputs = [ pkgs.hyprland ];
+    text = ''
+      valid_temperature=false
+      case "${1-}" in
+        *[!0-9]* | "") ;;
+        *)
+          if [ "$1" -ge 2000 ] && [ "$1" -le 6500 ] && [ $(( $1 % 100 )) -eq 0 ]; then
+            valid_temperature=true
+          fi
+          ;;
+      esac
+
+      if [ "$#" -ne 1 ] || [ "$valid_temperature" != true ]; then
+        printf '%s\n' "usage: hyprsunset-warmth TEMPERATURE_K (2000-6500, in 100 K steps)" >&2
+        exit 2
+      fi
+
+      # hyprsunset accepts 1000-20000 K, but 2000-6500 K covers a conventional
+      # night-light range through the configured daylight temperature. Its CTM
+      # quantises temperatures to 100 K; send only temperature so the active
+      # profile's gamma is preserved.
+      hyprctl hyprsunset temperature "$1"
+    '';
+  };
+
   hyprsunsetToggle = pkgs.writeShellApplication {
     name = "hyprsunset-toggle";
     runtimeInputs = [
@@ -127,5 +154,8 @@ in
     };
   };
 
-  home.packages = [ hyprsunsetToggle ];
+  home.packages = [
+    hyprsunsetToggle
+    hyprsunsetWarmth
+  ];
 }
