@@ -630,7 +630,17 @@ function M:entry(job)
 
 		local archive_name = Url(st.hovered_path).name
 		local yazip_path = get_tmp_path(st.hovered_path)
-		local tmp_url = (yazip_path and Url(yazip_path)) or fs.unique_name(Url(get_yazip_dir()):join(archive_name))
+		local tmp_url = yazip_path and Url(yazip_path)
+		if not tmp_url then
+			-- fs.unique_name was removed in Yazi 26.5; fs.unique("dir", ..)
+			-- reserves the name and creates the directory in one step.
+			local unique_err
+			tmp_url, unique_err = fs.unique("dir", Url(get_yazip_dir()):join(archive_name))
+			if not tmp_url then
+				ya.err("Unable to create a unique yazip directory for " .. archive_name, unique_err)
+				return
+			end
+		end
 		set_tmp_path(st.hovered_path, tostring(tmp_url))
 		set_opened_archive(st.hovered_path, st.active_tab)
 
