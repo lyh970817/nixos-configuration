@@ -51,13 +51,13 @@ prepend_rules = [
 
 [plugin]
 prepend_previewers = [
-	{ name = "*.pdf", run = "pdf" },
+	{ url = "*.pdf", run = "pdf" },
 	{ mime = "video/*", run = "video" },
 	{ mime = "audio/*", run = "video" },
 	{ mime = "application/json", run = 'piper -- jq --color-output . "$1"' },
-	{ name = "*.json", run = 'piper -- jq --color-output . "$1"' },
-	{ name = "*.tar*", run = 'piper --format=url -- tar tf "$1"' },
-	{ name = "*.{csv,tsv,md}", run = 'piper -- bat -p --color=always "$1"' },
+	{ url = "*.json", run = 'piper -- jq --color-output . "$1"' },
+	{ url = "*.tar*", run = 'piper --format=url -- tar tf "$1"' },
+	{ url = "*.{csv,tsv,md}", run = 'piper -- bat -p --color=always "$1"' },
 ]
 
 prepend_fetchers = [
