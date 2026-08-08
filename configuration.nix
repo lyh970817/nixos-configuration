@@ -61,6 +61,10 @@
 
   services.envfs.enable = true;
 
+  environment.systemPackages = with pkgs; [
+    openssl
+  ];
+
   # Docker (dev-only; home role only)
   virtualisation.docker.enable = lib.mkIf (config.portable.role == "home") true;
 
