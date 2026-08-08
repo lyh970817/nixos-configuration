@@ -1,9 +1,9 @@
 # Mounts the peer machine's home directory over SSHFS, in both directions:
 # each side's portable.peerHost already names the *other* machine (remote's
 # peerHost is "home"; home's peerHost is the remote's Tailscale name), so
-# using that value both as the SSH target and as the local mountpoint name
-# gives the reciprocal ~/home <-> ~/<remote-hostname> layout for free, with
-# no role branching needed here.
+# using that value as the SSH target and visible link name gives the reciprocal
+# ~/home <-> ~/<remote-hostname> layout without nesting either native mount in
+# the home tree exported back to its peer.
 {
   config,
   lib,
@@ -13,7 +13,9 @@
 
 let
   peer = config.portable.peerHost;
-  mountPoint = "/home/andongni/${peer}";
+  mountRoot = "/run/mount/peer-home";
+  mountPoint = "${mountRoot}/${peer}";
+  homeLink = "/home/andongni/${peer}";
 in
 {
   config = lib.mkIf (peer != "") {
@@ -21,9 +23,11 @@ in
     # path rather than relying on an fstab generator lookup.
     system.fsPackages = [ pkgs.sshfs ];
 
-    # Pre-create the mountpoint so the automount unit has somewhere to hook.
+    # Keep the native automount outside the SFTP-exported home tree.  Convert
+    # the former mountpoint to the stable link only during clean boot setup;
+    # activation must not touch a still-mounted legacy path.
     systemd.tmpfiles.rules = [
-      "d ${mountPoint} 0755 andongni users -"
+      "L+! ${homeLink} - - - - ${mountPoint}"
     ];
 
     # These are native units rather than an fstab row: systemd-fstab-generator
@@ -63,8 +67,13 @@ in
         where = mountPoint;
         # Activating this unit at boot installs the autofs trigger only; the
         # SSHFS mount itself still starts solely when the directory is used.
+        # PID 1 creates the root-owned 0755 mountpoint and parent directories;
+        # SSHFS maps mounted content to andongni:users below.
         wantedBy = [ "remote-fs.target" ];
-        automountConfig.TimeoutIdleSec = "600s";
+        automountConfig = {
+          DirectoryMode = "0755";
+          TimeoutIdleSec = "600s";
+        };
       }
     ];
   };
