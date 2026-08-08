@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Named time zones live here on NixOS rather than under /usr/share.
+export TZDIR=/etc/zoneinfo
+
 now=$(date +%s)
 
 system_date=$(date -d "@${now}" "+%Y-%m-%d (%A)")

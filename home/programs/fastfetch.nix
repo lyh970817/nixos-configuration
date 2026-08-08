@@ -456,12 +456,12 @@ in
         {
           type = "command";
           key = "Date";
-          text = "echo \"$(TZ='Asia/Shanghai' date +'%Y-%m-%d (%A)') | $(TZ='Europe/London' date +'%Y-%m-%d (%A)')\"";
+          text = "TZDIR=/etc/zoneinfo TZ='Asia/Shanghai' date +'%Y-%m-%d (%A)'";
         }
         {
           type = "command";
           key = "Time";
-          text = "echo \"$(TZ='Asia/Shanghai' date +'%H:%M:%S') | $(TZ='Europe/London' date +'%H:%M:%S')\"";
+          text = "export TZDIR=/etc/zoneinfo; echo \"$(TZ='Asia/Shanghai' date +'%H:%M:%S') | $(TZ='Europe/London' date +'%H:%M:%S')\"";
         }
         "OS"
         {
