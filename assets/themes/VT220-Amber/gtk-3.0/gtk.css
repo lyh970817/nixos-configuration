@@ -42,7 +42,7 @@
     color: #4BAE55;
     background-color: shade(#050806, 0.9); }
   .gtkstyle-fallback:disabled {
-    color: #AA0000;
+    color: #286731;
     background-color: #050806; }
   .gtkstyle-fallback:selected {
     color: #86E68C;
@@ -189,12 +189,12 @@ button {
     button:active:backdrop, button:checked:backdrop {
       color: #86E68C; }
     button:active:disabled, button:checked:disabled {
-      color: #AA0000;
-      border-color: #AA0000;
+      color: #286731;
+      border-color: #286731;
       background-color: #050806; }
   button:disabled {
-    color: #AA0000;
-    border-color: #AA0000; }
+    color: #286731;
+    border-color: #286731; }
   button.flat {
     border-color: transparent;
     border-radius: 0px;
@@ -210,14 +210,14 @@ button {
       background-color: #286731; }
     button.flat:disabled {
       border-color: transparent;
-      color: #AA0000;
+      color: #286731;
       background-color: transparent; }
 
 checkbutton.text-button, radiobutton.text-button {
   padding: 4px;
   outline-offset: 0; }
   checkbutton.text-button:disabled, radiobutton.text-button:disabled {
-    color: #AA0000; }
+    color: #286731; }
 
 checkbutton {
   padding: 4px; }
@@ -299,11 +299,11 @@ entry {
     color: #86E68C;
     background-color: #286731; }
   entry:disabled {
-    color: #AA0000;
-    border-color: #AA0000; }
+    color: #286731;
+    border-color: #286731; }
     entry:disabled:backdrop {
-      color: #AA0000;
-      border-color: #AA0000;
+      color: #286731;
+      border-color: #286731;
       background-color: #050806; }
   entry:backdrop {
     color: #4BAE55;
@@ -666,7 +666,7 @@ menubar > menuitem, .menubar > menuitem {
     color: #86E68C;
     background-color: #286731; }
   menubar > menuitem:disabled, .menubar > menuitem:disabled {
-    color: #AA0000;
+    color: #286731;
     background-color: transparent; }
   menubar > menuitem:backdrop, .menubar > menuitem:backdrop {
     color: #4BAE55;
@@ -860,7 +860,7 @@ notebook {
     notebook > header > tabs > arrow:active {
       color: shade(#4BAE55, 0.8); }
     notebook > header > tabs > arrow:disabled {
-      color: #AA0000; }
+      color: #286731; }
 
 paned > separator {
   border: none;
@@ -950,7 +950,7 @@ undershoot.right {
 progressbar {
   padding: 0;
   border: none;
-  color: #AA0000;
+  color: #286731;
   background-color: transparent; }
   progressbar progress {
     border: 1px solid #4BAE55;
@@ -1027,7 +1027,7 @@ scale {
     outline-offset: 2px;
     -gtk-outline-radius: 0; }
     scale fill:disabled, scale trough:disabled {
-      border-color: #AA0000; }
+      border-color: #286731; }
   scale.horizontal indicator {
     min-height: 6px;
     min-width: 1px; }
@@ -1071,7 +1071,7 @@ scale {
     border-radius: 0;
     background-color: #4BAE55; }
     scale slider:disabled {
-      background-color: #AA0000;
+      background-color: #286731;
       -gtk-icon-shadow: none; }
   scale.vertical slider {
     min-height: 29px;
@@ -1153,12 +1153,12 @@ spinbutton.horizontal {
   border-radius: 0px;
   background-color: #050806; }
   spinbutton.horizontal:disabled {
-    border-color: #AA0000;
-    color: #AA0000;
+    border-color: #286731;
+    color: #286731;
     background-color: #050806; }
     spinbutton.horizontal:disabled:backdrop {
-      border-color: #AA0000;
-      color: #AA0000;
+      border-color: #286731;
+      color: #286731;
       background-color: #050806; }
   spinbutton.horizontal:backdrop {
     background-color: #050806;
@@ -1180,7 +1180,7 @@ spinbutton.horizontal {
     background: none;
     box-shadow: -1px 0 #4BAE55; }
     spinbutton.horizontal button:disabled {
-      box-shadow: -1px 0 #AA0000;
+      box-shadow: -1px 0 #286731;
       background: none; }
     spinbutton.horizontal button.up {
       border-radius: 0 0px 0px 0; }
@@ -1226,10 +1226,10 @@ switch {
     border-color: #4BAE55;
     background-color: #286731; }
   switch:disabled {
-    border-color: #AA0000;
+    border-color: #286731;
     background-color: #050806; }
     switch:disabled:backdrop {
-      border-color: #AA0000; }
+      border-color: #286731; }
   switch:backdrop {
     border-color: #4BAE55; }
   switch slider {
@@ -1241,10 +1241,10 @@ switch {
     color: #4BAE55;
     background-color: #050806; }
   switch:disabled slider {
-    border-color: #AA0000;
+    border-color: #286731;
     background-color: #050806; }
   switch:disabled:backdrop slider {
-    border-color: #AA0000;
+    border-color: #286731;
     background-color: #050806; }
   switch:backdrop slider {
     background-color: #050806; }
@@ -1367,12 +1367,12 @@ headerbar, headerbar:not(.titlebar) {
       headerbar button:active:backdrop, headerbar button:checked:backdrop, headerbar:not(.titlebar) button:active:backdrop, headerbar:not(.titlebar) button:checked:backdrop {
         color: #86E68C; }
       headerbar button:active:disabled, headerbar button:checked:disabled, headerbar:not(.titlebar) button:active:disabled, headerbar:not(.titlebar) button:checked:disabled {
-        color: #AA0000;
-        border-color: #AA0000;
+        color: #286731;
+        border-color: #286731;
         background-color: #050806; }
     headerbar button:disabled, headerbar:not(.titlebar) button:disabled {
-      color: #AA0000;
-      border-color: #AA0000; }
+      color: #286731;
+      border-color: #286731; }
   headerbar entry, headerbar:not(.titlebar) entry {
     padding: 4px 8px; }
 
@@ -1385,7 +1385,7 @@ toolbar {
     color: #4BAE55;
     background-color: #050806; }
   toolbar:disabled {
-    color: #AA0000;
+    color: #286731;
     background-color: #050806; }
   toolbar button.flat {
     border-color: transparent;
@@ -1402,7 +1402,7 @@ toolbar {
       background-color: #286731; }
     toolbar button.flat:disabled {
       border-color: transparent;
-      color: #AA0000;
+      color: #286731;
       background-color: transparent; }
   toolbar menubar {
     -GtkToolbar-button-relief: normal; }
@@ -1438,12 +1438,12 @@ toolbar {
       .primary-toolbar button:active:backdrop, .primary-toolbar button:checked:backdrop, .primary-toolbar .raised button:active:backdrop, .primary-toolbar .raised button:checked:backdrop {
         color: #86E68C; }
       .primary-toolbar button:active:disabled, .primary-toolbar button:checked:disabled, .primary-toolbar .raised button:active:disabled, .primary-toolbar .raised button:checked:disabled {
-        color: #AA0000;
-        border-color: #AA0000;
+        color: #286731;
+        border-color: #286731;
         background-color: #050806; }
     .primary-toolbar button:disabled, .primary-toolbar .raised button:disabled {
-      color: #AA0000;
-      border-color: #AA0000; }
+      color: #286731;
+      border-color: #286731; }
 
 .inline-toolbar {
   padding: 1px;
@@ -1474,12 +1474,12 @@ toolbar {
       .inline-toolbar toolbutton > button:active:backdrop, .inline-toolbar toolbutton > button:checked:backdrop {
         color: #86E68C; }
       .inline-toolbar toolbutton > button:active:disabled, .inline-toolbar toolbutton > button:checked:disabled {
-        color: #AA0000;
-        border-color: #AA0000;
+        color: #286731;
+        border-color: #286731;
         background-color: #050806; }
     .inline-toolbar toolbutton > button:disabled {
-      color: #AA0000;
-      border-color: #AA0000; }
+      color: #286731;
+      border-color: #286731; }
 
 .linked button, .linked .raised button, .primary-toolbar .linked button, .primary-toolbar .linked .raised button {
   border-radius: 0;
@@ -1701,7 +1701,7 @@ treeview {
     color: #4BAE55;
     background-color: #050806; }
   .view:disabled {
-    color: #AA0000;
+    color: #286731;
     background-color: #050806; }
   .view:selected, .view:selected:focus, .view text:selected, .view text:selected:focus, .view text selection, .view text selection:focus {
     color: #86E68C;
@@ -1709,7 +1709,7 @@ treeview {
     border-radius: 0px;
     -gtk-outline-radius: 0px; }
     .view:selected:disabled, .view:selected:focus:disabled, .view text:selected:disabled, .view text:selected:focus:disabled, .view text selection:disabled, .view text selection:focus:disabled {
-      color: mix(#86E68C, #AA0000, 0.5);
+      color: mix(#86E68C, #286731, 0.5);
       background-color: #286731; }
     .view:selected:backdrop, .view:selected:focus:backdrop, .view text:selected:backdrop, .view text:selected:focus:backdrop, .view text selection:backdrop, .view text selection:focus:backdrop {
       color: #86E68C;
@@ -1999,10 +1999,10 @@ button.suggested-action {
       background-color: #86E68C; }
   button.suggested-action:disabled {
     border-color: mix(#286731, #050806, 0.2);
-    color: mix(#86E68C, #AA0000, 0.2); }
+    color: mix(#86E68C, #286731, 0.2); }
     button.suggested-action:disabled:backdrop {
       border-color: mix(#286731, #050806, 0.2);
-      color: mix(#86E68C, #AA0000, 0.2); }
+      color: mix(#86E68C, #286731, 0.2); }
   button.suggested-action:backdrop {
     border-color: #286731;
     color: #86E68C; }
@@ -2022,10 +2022,10 @@ headerbar button.suggested-action {
       background-color: #86E68C; }
   headerbar button.suggested-action:disabled {
     border-color: mix(#286731, #050806, 0.2);
-    color: mix(#86E68C, #AA0000, 0.2); }
+    color: mix(#86E68C, #286731, 0.2); }
     headerbar button.suggested-action:disabled:backdrop {
       border-color: mix(#286731, #050806, 0.2);
-      color: mix(#86E68C, #AA0000, 0.2); }
+      color: mix(#86E68C, #286731, 0.2); }
   headerbar button.suggested-action:backdrop {
     border-color: #286731;
     color: #86E68C; }
@@ -2076,10 +2076,10 @@ headerbar.selection-mode, toolbar.selection-mode {
         background-color: #86E68C; }
     headerbar.selection-mode button.suggested-action:disabled, toolbar.selection-mode button.suggested-action:disabled {
       border-color: mix(#286731, #050806, 0.2);
-      color: mix(#86E68C, #AA0000, 0.2); }
+      color: mix(#86E68C, #286731, 0.2); }
       headerbar.selection-mode button.suggested-action:disabled:backdrop, toolbar.selection-mode button.suggested-action:disabled:backdrop {
         border-color: mix(#286731, #050806, 0.2);
-        color: mix(#86E68C, #AA0000, 0.2); }
+        color: mix(#86E68C, #286731, 0.2); }
     headerbar.selection-mode button.suggested-action:backdrop, toolbar.selection-mode button.suggested-action:backdrop {
       border-color: #286731;
       color: #86E68C; }
@@ -2254,7 +2254,7 @@ panel-toplevel.background na-tray-applet {
     color: #4BAE55;
     font-style: normal; }
     .mate-panel-menu-bar GtkMenu .label:disabled {
-      color: #AA0000; }
+      color: #286731; }
   .mate-panel-menu-bar .button:not(#tasklist-button) {
     color: #4BAE55;
     border-radius: 0;
@@ -2351,12 +2351,12 @@ panel-toplevel.background na-tray-applet {
       #XfceNotifyWindow.osd button:active:backdrop, #XfceNotifyWindow.osd button:checked:backdrop {
         color: #86E68C; }
       #XfceNotifyWindow.osd button:active:disabled, #XfceNotifyWindow.osd button:checked:disabled {
-        color: #AA0000;
-        border-color: #AA0000;
+        color: #286731;
+        border-color: #286731;
         background-color: #050806; }
     #XfceNotifyWindow.osd button:disabled {
-      color: #AA0000;
-      border-color: #AA0000; }
+      color: #286731;
+      border-color: #286731; }
 
 .nemo-window .nemo-window-pane widget.entry {
   border: 1px solid;
@@ -2436,7 +2436,7 @@ UnityPanelWidget, .unity-panel {
 /* base background color of insensitive widgets */
 @define-color insensitive_bg_color #050806;
 /* text foreground color of insensitive widgets */
-@define-color insensitive_fg_color #AA0000;
+@define-color insensitive_fg_color #286731;
 /* insensitive text widgets and the like base background color */
 @define-color insensitive_base_color #050806;
 /* widget text/foreground color on backdrop windows */
@@ -2452,7 +2452,7 @@ UnityPanelWidget, .unity-panel {
 /* text/foreground color of selections on backdrop windows */
 @define-color theme_unfocused_selected_fg_color #86E68C;
 /* insensitive color on backdrop windows*/
-@define-color unfocused_insensitive_color #AA0000;
+@define-color unfocused_insensitive_color #286731;
 /* widgets main borders color */
 @define-color borders #4BAE55;
 /* widgets main borders color on backdrop windows */

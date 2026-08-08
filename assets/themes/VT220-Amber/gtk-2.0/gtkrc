@@ -21,25 +21,25 @@ style "default"
   NautilusIconContainer::selection_box_color = @fg_color 
 
   bg[ACTIVE]      = @bg_color 
-  bg[INSENSITIVE] = "#110000"
+  bg[INSENSITIVE] = "#0B120D"
   bg[NORMAL]      = @bg_color
   bg[PRELIGHT]    = @selected_bg_color
   bg[SELECTED]    = @selected_bg_color
 
   fg[ACTIVE]      = @fg_color
-  fg[INSENSITIVE] = "#AA0000"
+  fg[INSENSITIVE] = "#286731"
   fg[NORMAL]      = @fg_color 
   fg[PRELIGHT]    = @selected_fg_color
   fg[SELECTED]    = @fg_color
 
   base[ACTIVE]      = @selected_bg_color #darker?
-  base[INSENSITIVE] = "#110000"
+  base[INSENSITIVE] = "#0B120D"
   base[NORMAL]      = @base_color
   base[PRELIGHT]    = @selected_bg_color
   base[SELECTED]    = @selected_bg_color
 
   text[ACTIVE]      = @text_color
-  text[INSENSITIVE] = "#AA0000"
+  text[INSENSITIVE] = "#286731"
   text[NORMAL]      = @text_color
   text[PRELIGHT]    = @selected_fg_color
   text[SELECTED]    = @selected_fg_color
