@@ -219,6 +219,13 @@ in
     };
   };
 
+  # openresolv's libc subscriber restarts nscd on every DNS change; boots with
+  # DNS churn (NetworkManager + tailscaled + mihomo in quick succession) trip
+  # systemd's default 5-starts-per-10s limit and latch the unit failed, leaving
+  # the system "degraded". Name lookups still work without nscd, but let it
+  # restart freely instead.
+  systemd.services.nscd.unitConfig.StartLimitIntervalSec = 0;
+
   # Firewall configuration
   networking.firewall.allowedTCPPorts = [
     9090

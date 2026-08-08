@@ -32,7 +32,14 @@ in
           fg: #${p.foreground};
           fg-alt: #${p.secondaryText};
           border: #${p.foreground};
-          selected: #${p.secondaryText};
+          /* Selection fill, one rung above secondaryText. The green ladder's
+             middle rungs sit at 0.42-0.58x the luminance of their amber
+             counterparts, and on secondaryText the selected row measured
+             2.12:1 against its own label. accent restores 4.94:1, nearest
+             the 4.42:1 amber gave. Same substitution in foot, alacritty,
+             btop and mako. Note rasi comments are C-style: a '#' here is a
+             colour literal, not a comment, and breaks the parser. */
+          selected: #${p.accent};
           background-color: transparent;
           text-color: @fg;
           font: "Hack Nerd Font 12";
@@ -43,7 +50,7 @@ in
           background-color: @bg;
           border: 1px solid;
           border-color: @border;
-          border-radius: 0;
+          border-radius: 4px;
           padding: 5px;
       }
 
@@ -84,7 +91,7 @@ in
       element {
           background-color: @bg;
           text-color: @fg;
-          border-radius: 0;
+          border-radius: 1px;
           padding: 3px 6px;
       }
 
@@ -119,7 +126,7 @@ in
           handle-width: 6px;
           handle-color: @fg-alt;
           background-color: @bg-alt;
-          border-radius: 0;
+          border-radius: 3px;
           margin: 0 0 0 5px;
       }
 
@@ -127,7 +134,7 @@ in
           background-color: @bg;
           border: 1px solid;
           border-color: @border;
-          border-radius: 0;
+          border-radius: 8px;
           padding: 8px;
       }
 

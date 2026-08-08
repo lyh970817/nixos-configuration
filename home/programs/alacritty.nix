@@ -31,10 +31,12 @@ let
     text = '#${p.background}'
     cursor = '#${p.accent}'
 
-    # Selection colors
+    # Selection colors. accent rather than secondaryText, because the selection
+    # carries background-coloured text, which secondaryText only just supports
+    # even with the ladder corrected (3.9:1). See home/palettes.nix.
     [colors.selection]
     text = '#${p.background}'
-    background = '#${p.secondaryText}'
+    background = '#${p.accent}'
 
     # Normal colors - the intensity ladder standing in for hue
     [colors.normal]

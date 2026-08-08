@@ -97,18 +97,23 @@
             patches = (old.patches or [ ]) ++ [ ./pkgs/patches/mosh-cursor-shape.patch ];
           });
         };
+      # Deliberately thin. `rebuild` is the verification gate: a full evaluation
+      # and build already catches every syntax, type, missing-attr, and build
+      # error, so re-checking any of that here would only add latency to every
+      # commit. These hooks cover the gap -- what a rebuild structurally cannot
+      # see. Keep them all parse-or-scan only; nothing that evaluates the flake.
       preCommitCheck = pre-commit-hooks.lib.${system}.run {
         src = ./.;
+        # Formatting drift is invisible to a build.
         hooks.nixfmt.enable = true;
-        hooks.nix-gc = {
-          enable = true;
-          name = "nix garbage collect";
-          entry = "sh -c 'sudo -n nix-collect-garbage --delete-older-than 3d'";
-          language = "system";
-          pass_filenames = false;
-          always_run = true;
-          stages = [ "pre-push" ];
-        };
+        # Home Manager installs these as opaque bytes, so a syntax error here
+        # rebuilds perfectly clean and only surfaces when the tool next starts.
+        hooks.check-toml.enable = true;
+        hooks.check-json.enable = true;
+        # Neither of these ever reaches a build, and the second is unrecoverable
+        # once it lands in history.
+        hooks.check-merge-conflicts.enable = true;
+        hooks.detect-private-keys.enable = true;
       };
     in
     {
@@ -142,6 +147,9 @@
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
             home-manager.backupFileExtension = "backup";
+            # home/programs/pre-commit.nix installs the generated hooks at
+            # activation, so it needs the same check this flake's devShell uses.
+            home-manager.extraSpecialArgs = { inherit preCommitCheck; };
             home-manager.users.andongni = {
               imports = [
                 codex-desktop-linux.homeManagerModules.default

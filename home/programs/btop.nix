@@ -100,7 +100,9 @@ in
         theme[main_fg]="#${p.foreground}"
         theme[title]="#${p.foreground}"
         theme[hi_fg]="#${p.foreground}"
-        theme[selected_bg]="#${p.secondaryText}"
+        # accent, not secondaryText: selected_fg is the background colour,
+        # which secondaryText only just supports. See home/palettes.nix.
+        theme[selected_bg]="#${p.accent}"
         theme[selected_fg]="#${p.background}"
         theme[inactive_fg]="#${p.subtleBorder}"
         theme[graph_text]="#${p.accent}"

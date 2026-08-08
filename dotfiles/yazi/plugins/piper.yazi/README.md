@@ -27,9 +27,10 @@ This will set `piper` as the previewer for all file types and use `$1` (file pat
 
 Available variables:
 
-- `$w`: the width of the preview area.
-- `$h`: the height of the preview area.
-- `$1`: the path to the file being previewed.
+- `$1`: path of the file being previewed.
+- `$w`: width of the preview area.
+- `$h`: height of the preview area.
+- `$t`: terminal theme mode, either `"dark"` or `"light"`.
 
 ## Examples
 
@@ -53,7 +54,14 @@ url = "*.csv"
 run = 'piper -- bat -p --color=always "$1"'
 ```
 
-Note that certain distributions might use a different name for `bat`, like Debian and Ubuntu uses `batcat` instead, so please adjust accordingly.
+Note that certain distributions might use a different name than `bat`, like Debian and Ubuntu use `batcat`, so please adjust accordingly.
+
+To have `bat` use the appropriate theme (dark vs light) for syntax highlighting:
+
+```toml
+# Run `bat --list-themes` to list your available themes
+run = 'piper -- bat -p --color=always --theme="$([ "$t" = "dark" ] && echo Dracula || echo GitHub)" "$1"'
+```
 
 ### Preview Markdown with [`glow`](https://github.com/charmbracelet/glow)
 
@@ -92,6 +100,10 @@ This example uses `hexyl` as a fallback previewer instead of `file`.
 url = "*"
 run = 'piper -- hexyl --border=none --terminal-width=$w "$1"'
 ```
+
+## Related projects
+
+[`faster-piper.yazi`](https://github.com/alberti42/faster-piper.yazi): a cache-based, scrolling-optimized rewrite compatible with `piper.yazi`.
 
 ## License
 

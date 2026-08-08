@@ -131,17 +131,15 @@ in
 
   xdg.dataFile."wallpapers/Mandala_braille.txt".source = wallpaperArt;
 
-  # Sourced from hyprland.conf. hyprwinwrap compares its class as a literal
-  # string; unlike a normal window rule, a regex here silently fails.
+  # Sourced from hyprland.conf, so the file must exist even while the
+  # wallpaper is disabled. hyprwinwrap was dropped from hyprland-plugins
+  # upstream in v0.56.0 ("all: drop unmaintained plugins") and its last fix
+  # targeted Hyprland 0.54.3, so no build of it can load into Hyprland 0.56.
+  # The plugin wiring and the systemd unit are removed until the viewer is
+  # ported to a native layer-shell surface (`kitten panel --edge=background`);
+  # the theming hooks tolerate the missing unit. The windowrule stays so a
+  # manually launched viewer still renders frameless.
   xdg.configFile."hypr/wallpaper.conf".text = ''
-    plugin = ${pkgs.hyprlandPlugins.hyprwinwrap}/lib/libhyprwinwrap.so
-
-    plugin {
-        hyprwinwrap {
-            class = ${wallpaperClass}
-        }
-    }
-
     windowrule {
         name = mandala-wallpaper
         match:class = ^(${wallpaperClass})$
@@ -151,21 +149,4 @@ in
         no_focus = true
     }
   '';
-
-  systemd.user.services.mandala-wallpaper = {
-    Unit = {
-      Description = "Braille mandala terminal wallpaper";
-      PartOf = [ "graphical-session.target" ];
-      After = [ "graphical-session.target" ];
-    };
-    Service = {
-      Type = "simple";
-      ExecStart = "${wallpaperTerminal}/bin/mandala-terminal-wallpaper";
-      Restart = "always";
-      RestartSec = "2s";
-      StandardOutput = "journal";
-      StandardError = "journal";
-    };
-    # Dark/light mode hooks own this service's lifecycle.
-  };
 }

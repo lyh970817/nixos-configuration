@@ -176,6 +176,9 @@ in
 
     # Commands, agents, and runtime profile state stay mutable under each
     # CLAUDE_CONFIG_DIR. settings.json is reconciled from tracked policy
-    # fields by activation; session theme remains launcher-only.
+    # fields by activation. The session theme is still launcher-owned --
+    # flagSettings outranks settings.json -- but activation now also writes a
+    # mode-matched theme into settings.json as the fallback for sessions this
+    # launcher never sees, such as the ones the agent view spawns itself.
   };
 }

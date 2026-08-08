@@ -1,4 +1,4 @@
---- @since 25.2.7
+--- @since 26.1.22
 
 local function info(content)
 	return ya.notify {
@@ -9,14 +9,18 @@ local function info(content)
 end
 
 local selected_path = ya.sync(function()
-	for _, u in pairs(cx.active.selected) do
-		return u.cache or u
+	for _, f in pairs(cx.active.selected) do
+		if f.url then
+			return f.cache or f.url
+		else
+			return f.cache or f -- TODO: remove
+		end
 	end
 end)
 
 local hovered_path = ya.sync(function()
 	local h = cx.active.current.hovered
-	return h and (h.path or h.url) -- TODO: remove "or h.url"
+	return h and h.path
 end)
 
 return {

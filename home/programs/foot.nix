@@ -51,7 +51,10 @@ let
     background=${p.background}
     foreground=${p.foreground}
     selection-foreground=${p.background}
-    selection-background=${p.secondaryText}
+    # accent, not secondaryText: the selection carries background-coloured
+    # text, which secondaryText only just supports even with the ladder
+    # corrected (3.9:1). See home/palettes.nix.
+    selection-background=${p.accent}
     regular0=${p.raisedBlack}
     regular1=${p.subtleBorder}
     regular2=${p.mutedText}
@@ -85,19 +88,22 @@ let
 
   # Foot carries two complete colour themes in one config and switches between
   # them at runtime on SIGUSR1/SIGUSR2, with no reload and no relaunch. That is
-  # what makes an instant real green/amber swap possible. Values are explicitly
-  # *not* inherited from [colors] into [colors2], so both blocks are written in
-  # full. See the `phosphor` command in ../desktop/phosphor-switch.nix.
+  # what makes an instant real green/amber swap possible. Since foot 1.26 the
+  # sections are named [colors-dark] (SIGUSR1 slot, startup default) and
+  # [colors-light] (SIGUSR2 slot) — the old [colors]/[colors2] names are
+  # deprecated aliases with identical signal semantics; both slots here carry
+  # dark phosphor palettes and are *not* inherited into each other, so both
+  # blocks are written in full. See `phosphor` in ../desktop/phosphor-switch.nix.
   mkDarkConfig =
     primary: secondary:
-    darkFonts + common + mkDarkTheme "colors" primary + mkDarkTheme "colors2" secondary;
+    darkFonts + common + mkDarkTheme "colors-dark" primary + mkDarkTheme "colors-light" secondary;
 
   # A per-profile file gets the same palette in both slots, so signalling one of
   # these is a harmless no-op rather than a surprise switch to something else.
   mkSoloConfig = p: mkDarkConfig p p;
 
   lightTheme = ''
-    [colors]
+    [colors-dark]
     background=FFFFFF
     foreground=000000
     selection-foreground=FFFFFF

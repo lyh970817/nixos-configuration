@@ -109,18 +109,22 @@ let
   fastfetchPeerHome = pkgs.writeShellApplication {
     name = "fastfetch-peer-home";
     runtimeInputs = with pkgs; [
-      fastfetch
+      coreutils
       gawk
-      jq
     ];
     text = ''
+      # statfs on the sshfs peer mount blocks indefinitely when the peer is
+      # asleep or the tailnet path is stale, and this runs in every new
+      # shell's greeting — so the probe is a plain df under a hard timeout
+      # instead of a nested fastfetch disk scan (which also statfs'd every
+      # other mount along the way).
       mount_point=${lib.escapeShellArg "${config.home.homeDirectory}/home"}
-      fastfetch --format json --structure disk | jq -r --arg mountpoint "$mount_point" '
-        .[0].result[]
-        | select(.mountpoint == $mountpoint and .filesystem == "fuse.sshfs")
-        | [.bytes.used, .bytes.total, (.bytes.used * 100 / .bytes.total), .filesystem]
-        | @tsv
-      ' | awk -F '\t' '{ printf "%.2f GiB / %.2f GiB (%.0f%%) - %s\n", $1 / 1073741824, $2 / 1073741824, $3, $4 }'
+      if out=$(timeout 0.5 df -B1 --output=fstype,used,size "$mount_point" 2>/dev/null | tail -1) \
+          && [ -n "$out" ]; then
+        echo "$out" | awk '{ printf "%.2f GiB / %.2f GiB (%.0f%%) - %s\n", $2 / 1073741824, $3 / 1073741824, $2 * 100 / $3, $1 }'
+      else
+        echo "unavailable"
+      fi
     '';
   };
 
@@ -188,6 +192,83 @@ let
       done <<< "$device_rows"
     '';
   };
+  fastfetchMihomo = pkgs.writeShellApplication {
+    name = "fastfetch-mihomo";
+    runtimeInputs = with pkgs; [
+      curl
+      jq
+    ];
+    text = ''
+      # Probe mihomo's controller. A curl against a down controller fails
+      # instantly, so no systemctl gate is needed.
+      if ! config=$(curl -s --max-time 2 http://127.0.0.1:9090/configs 2>/dev/null) || [ -z "$config" ]; then
+        echo "inactive"
+        exit 0
+      fi
+      mode=$(jq -r '.mode // "?"' <<< "$config")
+      tun=$(jq -r 'if .tun.enable then "TUN" else "noTUN" end' <<< "$config")
+      proxy=$(curl -s --max-time 2 http://127.0.0.1:9090/proxies 2>/dev/null | jq -r '
+        [.proxies | to_entries[] | select(.value.type == "Selector" and .key != "GLOBAL")]
+        | .[0].value.now // "?"
+      ' 2>/dev/null || echo "?")
+      echo "$mode | $proxy | $tun"
+    '';
+  };
+
+  # The greeting used to probe mihomo and the tailnet inline, which put two
+  # network round-trips on every shell's startup path (and their costs are
+  # paid serially, in display order). Instead a user timer refreshes small
+  # text caches under $XDG_RUNTIME_DIR — the same pattern codexbar already
+  # uses — and the greeting only reads files. Runtime dir means the caches
+  # die with the session rather than surviving reboots.
+  fastfetchStatusRefresh = pkgs.writeShellApplication {
+    name = "fastfetch-status-refresh";
+    runtimeInputs = [
+      pkgs.coreutils
+      fastfetchAudio
+      fastfetchMihomo
+      fastfetchTailnet
+    ];
+    text = ''
+      cache_dir="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/fastfetch-status"
+      install -d -m 700 "$cache_dir"
+      refresh() {
+        local name="$1" tmp
+        tmp=$(mktemp "$cache_dir/.$name.XXXXXX")
+        if "fastfetch-$name" > "$tmp" 2>/dev/null; then
+          mv -f "$tmp" "$cache_dir/$name.txt"
+        else
+          rm -f "$tmp"
+        fi
+      }
+      # Audio is local IPC, not network, but its six serial wpctl round-trips
+      # cost ~350ms — by far the greeting's biggest line item — so it rides
+      # the same cache. Volume shown can be up to a refresh interval stale.
+      refresh audio &
+      refresh mihomo &
+      refresh tailnet &
+      wait
+    '';
+  };
+
+  fastfetchStatus = pkgs.writeShellApplication {
+    name = "fastfetch-status";
+    runtimeInputs = [ pkgs.coreutils ];
+    text = ''
+      # Read a cache written by fastfetch-status-refresh. On a miss (first
+      # shell right after login, before the timer's first run) show a pending
+      # marker and kick the refresh unit so the next shell has real data.
+      name="$1"
+      cache="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/fastfetch-status/$name.txt"
+      if [ -r "$cache" ]; then
+        cat "$cache"
+      else
+        systemctl --user start --no-block fastfetch-status-refresh.service 2>/dev/null || true
+        echo "…"
+      fi
+    '';
+  };
+
   codexbarCachePath = "${config.home.homeDirectory}/.cache/codexbar/usage.json";
   fastfetchCodexbar = pkgs.writeShellApplication {
     name = "fastfetch-codexbar";
@@ -332,6 +413,8 @@ in
     fastfetchAudio
     fastfetchPeerHome
     fastfetchTailnet
+    fastfetchMihomo
+    fastfetchStatus
     fastfetchCodexbar
   ];
 
@@ -342,6 +425,31 @@ in
       logo = {
         source = "${../../logo/escher-small}";
       };
+
+      # Percentages are the one place fastfetch reaches for hue: it picks
+      # green/yellow/red by how alarming the value is. A single-phosphor
+      # palette has no hue to give, so the three states are remapped onto SGR
+      # codes whose terminal slots climb the ladder instead -- severity as
+      # intensity, which is the only channel left. Codes rather than hexes, so
+      # a phosphor switch carries them; see home/palettes.nix and the slot
+      # assignments in programs/foot.nix.
+      #
+      # The defaults were unusable here: green and red both landed on
+      # mutedText (2.5:1 against the background, under even the 3:1 floor), so
+      # every parenthesised percentage was the dimmest thing on screen *and*
+      # a critical value looked identical to a healthy one. These clear 4.5:1
+      # at the bottom and rise from there, staying below the plain value text
+      # (7.1:1) when healthy and above it when not.
+      display = {
+        percent = {
+          color = {
+            green = "34"; # accent, 5.5:1 -- healthy, recedes behind the value
+            yellow = "94"; # bright, 9.6:1 -- rises above ordinary text
+            red = "92"; # hot, 13.1:1 -- the top rung, reserved for alarm
+          };
+        };
+      };
+
       modules = [
         "Title"
         "Separator"
@@ -375,12 +483,12 @@ in
         {
           type = "command";
           key = "Audio";
-          text = "fastfetch-audio";
+          text = "fastfetch-status audio";
         }
         {
           type = "command";
           key = "Mihomo";
-          text = "status=$(systemctl is-active mihomo 2>/dev/null); if [ \"$status\" = \"active\" ]; then config=$(curl -s http://127.0.0.1:9090/configs 2>/dev/null); mode=$(echo \"$config\" | jq -r '.mode' 2>/dev/null); tun=$(echo \"$config\" | jq -r 'if .tun.enable then \"TUN\" else \"noTUN\" end' 2>/dev/null); proxy=$(curl -s http://127.0.0.1:9090/proxies 2>/dev/null | jq -r '[.proxies | to_entries[] | select(.value.type == \"Selector\" and .key != \"GLOBAL\")] | .[0].value.now' 2>/dev/null); echo \"$mode | $proxy | $tun\"; else echo \"inactive\"; fi";
+          text = "fastfetch-status mihomo";
         }
         # A blank key renders the block with no header, and supplies the blank
         # line that would otherwise need a Break.
@@ -393,11 +501,32 @@ in
         {
           type = "command";
           key = "Tailnet";
-          text = "fastfetch-tailnet";
+          text = "fastfetch-status tailnet";
         }
         "Break"
       ];
     };
+  };
+
+  systemd.user.services.fastfetch-status-refresh = {
+    Unit.Description = "Refresh the shell greeting's network status caches";
+    Service = {
+      Type = "oneshot";
+      ExecStart = "${fastfetchStatusRefresh}/bin/fastfetch-status-refresh";
+    };
+  };
+
+  systemd.user.timers.fastfetch-status-refresh = {
+    # No Requires/After on other units: the codexbar-refresh timer showed how
+    # an ordering edge back into basic.target gets timers.target dropped from
+    # the login transaction. This timer depends on nothing, so it stays bare.
+    Unit.Description = "Refresh the shell greeting's network status caches periodically";
+    Timer = {
+      OnBootSec = "5s";
+      OnUnitActiveSec = "60s";
+      Unit = "fastfetch-status-refresh.service";
+    };
+    Install.WantedBy = [ "timers.target" ];
   };
 
   # Poems config

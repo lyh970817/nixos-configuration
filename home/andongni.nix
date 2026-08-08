@@ -25,6 +25,7 @@
     ./programs/r.nix
     ./programs/fastfetch.nix
     ./programs/codexbar.nix
+    ./programs/codex-theme.nix
     ./programs/claude.nix
     ./programs/cli-proxy-api.nix
     ./programs/codex-desktop.nix
@@ -39,6 +40,7 @@
     ./programs/launchers.nix
     ./programs/image-open.nix
     ./programs/html-open.nix
+    ./programs/pre-commit.nix
     ./programs/qutebrowser.nix
     ./programs/dotfiles.nix
     ./programs/mutable-configs.nix

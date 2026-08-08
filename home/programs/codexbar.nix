@@ -159,8 +159,11 @@ in
   systemd.user.timers.codexbar-refresh = {
     Unit = {
       Description = "Refresh CodexBar usage cache periodically";
+      # Requires alone adds no ordering edge. An After= here closes an ordering
+      # cycle (timers.target -> this timer -> codexbar.service -> basic.target
+      # -> timers.target) that made systemd drop timers.target from the initial
+      # user transaction at every login.
       Requires = [ "codexbar.service" ];
-      After = [ "codexbar.service" ];
     };
 
     Timer = {

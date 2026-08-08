@@ -49,7 +49,7 @@ in
       padding=8
       border-size=1
       border-color=#${p.accent}
-      border-radius=0
+      border-radius=4
       icons=0
       anchor=top-right
       default-timeout=10000
@@ -57,10 +57,14 @@ in
       max-visible=5
       format=<b>%s</b>\n%b
 
-      # Low urgency notifications - darker amber
+      # Low urgency notifications - deliberately dimmer than normal urgency.
+      # accent rather than secondaryText: this is body text on the background,
+      # and the green ladder's secondaryText rung reads 2.9:1 there against the
+      # 4.4:1 the amber profile gave. accent restores it without losing the
+      # rung of separation from normal urgency, which uses foreground.
       [urgency=low mode=dark]
       background-color=#${p.background}
-      text-color=#${p.secondaryText}
+      text-color=#${p.accent}
       border-color=#${p.mutedText}
 
       # Normal urgency (default values above apply)
