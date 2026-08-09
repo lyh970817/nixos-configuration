@@ -22,11 +22,13 @@ in
     # the whole history file instead of appending, and NO_EXTENDED_HISTORY
     # (default) drops timestamps. Pin the good behaviour explicitly so it
     # doesn't depend on Home Manager defaults, which can change silently on
-    # a flake bump. ignoreSpace is deliberately left unset (its default,
-    # true, already matches the live HIST_IGNORE_SPACE behaviour).
+    # a flake bump. ignoreSpace is off so a stray leading space cannot drop a
+    # command from history without any trace; keep secrets out by reading them
+    # from a file or the environment rather than typing them.
     history = {
       append = true;
       extended = true;
+      ignoreSpace = false;
       share = true;
       size = 200000;
       save = 200000;
