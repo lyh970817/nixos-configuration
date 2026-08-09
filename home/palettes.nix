@@ -74,15 +74,12 @@ let
     );
   scaleProfile = gain: builtins.mapAttrs (_: scaleHex gain);
 
-  # Per-channel gains of the night-mode CTM. hyprsunset derives these from
-  # temperature and gamma via a blackbody approximation; Nix has no logarithm
-  # builtin, so they are transcribed from the matrix the service itself logs on
-  # every profile load:
-  #
-  #   Calculated the CTM to be [mat3x3: 2.8, 0, 0, 0, 0.84989333, 0, 0, 0, 0]
-  #
-  # If nightTemperature or nightGamma in home/desktop/hyprsunset.nix changes,
-  # re-read these from that log line — nothing here can recompute them.
+  # Leftover from the retired green -> amber night transform: these are the
+  # per-channel CTM gains of the old 1100 K / gamma 280% profile, transcribed
+  # from the matrix the service logged (Nix has no logarithm builtin, so nothing
+  # here can recompute them). Night mode is now plain warmth at gamma 1.0, so
+  # these no longer describe the live profile and only feed the preview
+  # profiles below, which are stale for the same reason.
   nightGain = [
     2.8
     0.84989333
@@ -111,14 +108,10 @@ let
     # colour through an ANSI slot follows the swap untouched.
     #
     # This is the vivid cut (foreground saturation 0.57). A greyer revision at
-    # 0.48 was tried and reverted: desaturating narrows the spread of the
-    # red:green gain the night-mode CTM has to supply (1.80-3.66 down to
-    # 1.68-2.82) and so buys a closer amber, but it does that by adding blue,
-    # which costs daytime melanopic exposure and reads less like a real P1
-    # phosphor — a narrow-band emitter is saturated by nature. The vivid cut is
-    # the deliberate choice; the amber fit pays for it by needing gamma 280%.
-    # See docs/phosphor-palette-and-night-mode.md for the full trade-off, and
-    # home/desktop/hyprsunset.nix for the matching night values.
+    # 0.48 was tried and reverted: desaturating adds blue, which costs daytime
+    # melanopic exposure and reads less like a real P1 phosphor — a narrow-band
+    # emitter is saturated by nature.
+    #
     # The three middle rungs are placed by luminance, not by eye. The first cut
     # matched hue per rung and let luminance fall where it would, and the
     # middle of the ladder collapsed: as a fraction of the foreground it sits
@@ -135,8 +128,6 @@ let
     # luminance: the vivid green foreground is itself only 0.84x amber's, so
     # matching absolutes squeezes accent up against it and costs a rung.
     # Every rung's hue ratios are carried over from the first cut unchanged.
-    #
-    # Changing these changes the night-mode CTM fit; see hyprsunset.nix.
     green = {
       background = "050806";
       deepSurface = "080C09";

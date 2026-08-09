@@ -1,5 +1,9 @@
 # Side-by-side viewer for judging the night-mode green -> amber fit.
 #
+# RETIRED: that transform was abandoned. Night mode is now plain warmth at
+# gamma 1.0, so the pre-distorted reference below no longer matches the live
+# CTM and this comparison is not meaningful until the gains are refreshed.
+#
 # A colour transform on this machine is a CTM, and hyprland-ctm-control-v1 sets
 # a CTM per *output*. There is no per-window or per-workspace scope, so two
 # windows can never sit under different transforms at the same time. The way
