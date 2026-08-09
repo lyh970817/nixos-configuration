@@ -854,16 +854,23 @@ in
     "claude/statusline.sh".source = link "dotfiles/claude/statusline.sh";
     "claude/hooks/delegation-return-contract.sh".source =
       link "dotfiles/claude/hooks/delegation-return-contract.sh";
+    "claude/hooks/response-simplifier.sh".source = link "dotfiles/claude/hooks/response-simplifier.sh";
     # Orchestrator system prompts, passed by the `co`/`cf` aliases and by the
     # session-handoff skill with --append-system-prompt-file.
     "claude/orchestrator-opus.md".source = link "dotfiles/claude/orchestrator-opus.md";
     "claude/orchestrator-fable.md".source = link "dotfiles/claude/orchestrator-fable.md";
+    # Rewrite prompt for the Stop hook above, passed with --system-prompt-file.
+    "claude/response-simplifier.md".source = link "dotfiles/claude/response-simplifier.md";
     "claude/skills/session-handoff".source = link "dotfiles/claude/skills/session-handoff";
     "claude/skills/nix-environment-setup".source = link "dotfiles/claude/skills/nix-environment-setup";
     "claude/skills/agent-config-setup".source = link "dotfiles/claude/skills/agent-config-setup";
     "claude/skills/bro".source = link "dotfiles/claude/skills/bro";
     "claude/skills/visual-verification".source = link "dotfiles/claude/skills/visual-verification";
     "claude/skills/domain-context".source = link "dotfiles/claude/skills/domain-context";
+    # Independent copy of the pool's domain-modeling skill: the
+    # sync-mattpocock-skills preflight aborts if anything under
+    # ~/.config/claude*/skills resolves into dotfiles/agents/skills.
+    "claude/skills/domain-modeling".source = link "dotfiles/claude/skills/domain-modeling";
     "claude/skills/herdr".source = link "dotfiles/claude/skills/herdr";
     "claude/skills/r-dev-shell".source = link "dotfiles/claude/skills/r-dev-shell";
     "claude/commands".source = link "dotfiles/claude/commands";
