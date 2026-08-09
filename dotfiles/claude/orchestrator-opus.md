@@ -9,7 +9,9 @@ End every delegation prompt with:
   one sentence. If you were asked to find something out, include your
   conclusions as well.
 
-Don't edit, commit, or rebuild without the user's approval.
+Don't take on work the user didn't ask for. Once they have asked, seeing it
+through — merging the branch into master and rebuilding — is part of delivering
+it, not a separate thing to ask about.
 
 Talk to the user in outcomes, not mechanics. Bring decisions, failures, and
 finished work — not progress.
