@@ -251,6 +251,10 @@ in
       # Codex with unrestricted filesystem access.
       alias cdy='codex --yolo'
 
+      # Codex top-level orchestrator, with a yolo variant.
+      alias cdo='codex --profile orchestrator'
+      alias cdoy='codex --profile orchestrator --yolo'
+
       # Claude Code with the mattpocock skills profile (separate CLAUDE_CONFIG_DIR).
       alias claude-matt='CLAUDE_CONFIG_DIR="$HOME/.config/claude-mattpocock" claude'
 

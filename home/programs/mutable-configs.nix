@@ -91,6 +91,7 @@ let
   codexProfileNames = [
     "last30days"
     "mattpocock"
+    "orchestrator"
     "superpowers"
     "understand-anything-codegraph"
   ];
@@ -831,6 +832,15 @@ in
     # Codex CLI authored resources. The base config.toml, profiles, auth,
     # sessions, caches, marketplaces, and installed payloads stay mutable.
     ".codex/AGENTS.md".source = link "dotfiles/codex/AGENTS.md";
+    ".codex/agents/merge.toml".source = link "dotfiles/codex/agents/merge.toml";
+    ".codex/hooks.json" = {
+      source = link "dotfiles/codex/hooks.json";
+      force = true;
+    };
+    ".codex/hooks/response-simplifier.sh".source = link "dotfiles/codex/hooks/response-simplifier.sh";
+    # The rewrite contract is runtime-neutral and already tuned against real
+    # responses, so Claude Code and Codex deliberately share one source.
+    ".codex/response-simplifier.md".source = link "dotfiles/claude/response-simplifier.md";
     ".codex/rules/default.rules".source = link "dotfiles/codex/rules/default.rules";
 
     # Curated agent skill pool, shared with Codex profiles via relative
