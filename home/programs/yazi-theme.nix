@@ -483,6 +483,117 @@ let
     				<string>bold</string>
     			</dict>
     		</dict>
+
+    		<!-- Markup (Markdown) scopes. Every rule above names a code scope,
+    		     so prose files matched nothing at all and previewed as one flat
+    		     block of foreground. Markdown is the most-previewed file type in
+    		     this repo, so it gets its own rungs: emphasis climbs above the
+    		     body, syntax markers recede below it. -->
+
+    		<!-- Headings: hot + Bold. The top rung, above the body, because a
+    		     heading is the one thing a preview is skimmed for. -->
+    		<dict>
+    			<key>name</key>
+    			<string>Markup Heading</string>
+    			<key>scope</key>
+    			<string>markup.heading, entity.name.section</string>
+    			<key>settings</key>
+    			<dict>
+    				<key>foreground</key>
+    				<string>#${p.hot}</string>
+    				<key>fontStyle</key>
+    				<string>bold</string>
+    			</dict>
+    		</dict>
+
+    		<!-- Bold: bright, one rung under a heading -->
+    		<dict>
+    			<key>name</key>
+    			<string>Markup Bold</string>
+    			<key>scope</key>
+    			<string>markup.bold</string>
+    			<key>settings</key>
+    			<dict>
+    				<key>foreground</key>
+    				<string>#${p.bright}</string>
+    				<key>fontStyle</key>
+    				<string>bold</string>
+    			</dict>
+    		</dict>
+
+    		<!-- Italic: body rung, carried by the slant alone -->
+    		<dict>
+    			<key>name</key>
+    			<string>Markup Italic</string>
+    			<key>scope</key>
+    			<string>markup.italic</string>
+    			<key>settings</key>
+    			<dict>
+    				<key>foreground</key>
+    				<string>#${p.foreground}</string>
+    				<key>fontStyle</key>
+    				<string>italic</string>
+    			</dict>
+    		</dict>
+
+    		<!-- Inline code and fence info strings: accent, the same rung
+    		     strings take above, since both are quoted literal text -->
+    		<dict>
+    			<key>name</key>
+    			<string>Markup Raw</string>
+    			<key>scope</key>
+    			<string>markup.raw, markup.inline.raw, meta.code-fence</string>
+    			<key>settings</key>
+    			<dict>
+    				<key>foreground</key>
+    				<string>#${p.accent}</string>
+    			</dict>
+    		</dict>
+
+    		<!-- Links: secondaryText + Underline. Underlined so a URL is still
+    		     identifiable at a rung that reads as secondary. -->
+    		<dict>
+    			<key>name</key>
+    			<string>Markup Link</string>
+    			<key>scope</key>
+    			<string>markup.underline.link, meta.link, string.other.link</string>
+    			<key>settings</key>
+    			<dict>
+    				<key>foreground</key>
+    				<string>#${p.secondaryText}</string>
+    				<key>fontStyle</key>
+    				<string>underline</string>
+    			</dict>
+    		</dict>
+
+    		<!-- List bullets and quote bars: accent -->
+    		<dict>
+    			<key>name</key>
+    			<string>Markup List, Quote</string>
+    			<key>scope</key>
+    			<string>markup.list, punctuation.definition.list_item, markup.quote</string>
+    			<key>settings</key>
+    			<dict>
+    				<key>foreground</key>
+    				<string>#${p.accent}</string>
+    			</dict>
+    		</dict>
+
+    		<!-- Syntax markers -- #, **, *, ` -- recede to mutedText. This is
+    		     the one place mutedText's 2.47:1 is right: the markers are
+    		     chrome around the text, not text, and dimming them is what
+    		     leaves the heading itself standing alone on the top rung. -->
+    		<dict>
+    			<key>name</key>
+    			<string>Markup Punctuation</string>
+    			<key>scope</key>
+    			<string>punctuation.definition.heading, punctuation.definition.bold, punctuation.definition.italic, punctuation.definition.raw</string>
+    			<key>settings</key>
+    			<dict>
+    				<key>foreground</key>
+    				<string>#${p.mutedText}</string>
+    			</dict>
+    		</dict>
     	</array>
     	<key>uuid</key>
     	<string>D8D5E82E-3D5B-46B5-B38E-8C841C21347D</string>

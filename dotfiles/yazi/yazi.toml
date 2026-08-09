@@ -57,7 +57,13 @@ prepend_previewers = [
 	{ mime = "application/json", run = 'piper -- jq --color-output . "$1"' },
 	{ url = "*.json", run = 'piper -- jq --color-output . "$1"' },
 	{ url = "*.tar*", run = 'piper --format=url -- tar tf "$1"' },
-	{ url = "*.{csv,tsv,md}", run = 'piper -- bat -p --color=always "$1"' },
+	# Markdown is deliberately absent: bat ships its own hardcoded theme, so a
+	# .md preview rendered Monokai orange/pink/cyan inside an otherwise
+	# monochrome phosphor UI, and piper never wraps, so prose was truncated at
+	# the pane edge despite `wrap = "yes"` above. The built-in `code` previewer
+	# has neither problem -- it highlights through the flavor's tmtheme.xml
+	# (see home/programs/yazi-theme.nix) and honours [preview].
+	{ url = "*.{csv,tsv}", run = 'piper -- bat -p --color=always "$1"' },
 ]
 
 prepend_fetchers = [
