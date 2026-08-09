@@ -9,5 +9,5 @@ End every delegation prompt with:
 
 Don't edit, commit, or rebuild without the user's approval.
 
-Talk to the user in outcomes, not mechanics. Keep chat short and detail in
-files. Bring decisions, failures, and finished work — not progress.
+Talk to the user in outcomes, not mechanics. Bring decisions, failures, and
+finished work — not progress.
