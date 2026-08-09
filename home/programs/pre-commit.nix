@@ -1,5 +1,6 @@
 {
   lib,
+  pkgs,
   osConfig,
   preCommitCheck,
   ...
@@ -7,6 +8,27 @@
 
 let
   configDir = osConfig.portable.configDir;
+
+  # pre-commit's installer bakes a *repo-relative* config path into the hook it
+  # writes, and that path only resolves in the main checkout. A linked worktree
+  # (`.claude/worktrees/*`) has no `.pre-commit-config.yaml` of its own, so every
+  # commit made there aborted with "No .pre-commit-config.yaml file was found"
+  # and the whole screen was skipped -- exactly the checks a rebuild cannot
+  # replace. Own the hook instead and give it an absolute config path. Neither
+  # the hook nor the config lives in a working tree, so one installation covers
+  # the main checkout and every worktree, including ones added later by hand.
+  gitHooks = pkgs.writeTextFile {
+    name = "pre-commit-git-hooks";
+    destination = "/pre-commit";
+    executable = true;
+    text = ''
+      #!${pkgs.runtimeShell}
+      exec ${pkgs.pre-commit}/bin/pre-commit hook-impl \
+        --config=${configDir}/.pre-commit-config.yaml \
+        --hook-type=pre-commit \
+        --hook-dir "''${0%/*}" -- "$@"
+    '';
+  };
 in
 {
   # pre-commit-hooks.nix generates the hooks, but ships their installer only as
@@ -30,6 +52,12 @@ in
         PATH="/run/current-system/sw/bin:$PATH"
         cd ${lib.escapeShellArg configDir} && ${preCommitCheck.shellHook}
       ) || true
+
+      # The installer clears core.hooksPath and repoints it at .git/hooks
+      # whenever it regenerates the config, so claim it back on every
+      # activation. Its own hook stays there unused; git runs only this one.
+      ${pkgs.git}/bin/git -C ${lib.escapeShellArg configDir} \
+        config --local core.hooksPath ${gitHooks} || true
     fi
   '';
 }
