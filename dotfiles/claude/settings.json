@@ -27,6 +27,17 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.config/claude/hooks/response-simplifier.sh",
+            "timeout": 180
+          }
+        ]
+      }
     ]
   }
 }
