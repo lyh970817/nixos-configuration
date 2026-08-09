@@ -1,12 +1,12 @@
 return {
   {
     "OXY2DEV/markview.nvim",
-    event = {
-      {
-        event = { "BufReadPre", "BufNewFile" },
-        pattern = { "*.md", "*.markdown", "*.quarto", "*.rmd" },
-      },
-    },
+    -- Upstream ships its own lazy loading (plugin/markview.lua is a two-line
+    -- autocmd; the heavy modules load on attach) and asks not to add another
+    -- layer. Any hand-written trigger list here is a second copy of the
+    -- plugin's preview.filetypes that drifts out of sync -- the glob form
+    -- missed .qmd and .Rmd entirely.
+    lazy = false,
     opts = {
       preview = {
         -- Show raw markdown under the cursor while in insert mode; keep the
