@@ -39,6 +39,11 @@
     # gsettings: a cursor-theme value that is not on the icon search path
     # resolves to nothing and falls back silently.
     bibata-vt220-cursors
+    # The other two variants from the cursor design document, installed only so
+    # they can be compared live against the one above. Nothing points at them;
+    # drop these two lines once a variant has been chosen.
+    bibata-vt220-cursors-darker
+    bibata-vt220-cursors-muted
     glib
     gsettings-desktop-schemas
     darkman

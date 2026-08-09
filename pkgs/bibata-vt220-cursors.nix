@@ -4,6 +4,14 @@
   fetchFromGitHub,
   clickgen,
   resvg,
+  # XCursor theme name. This is the string gsettings, XCURSOR_THEME and
+  # `hyprctl setcursor` resolve, and it is also the installed directory name, so
+  # two instantiations with different names install side by side and can be
+  # flipped between at runtime with no rebuild. The default is the one dark mode
+  # actually uses; see the overlay in flake.nix for the comparison builds.
+  themeName ? "Bibata-Original-VT220",
+  # index.theme Comment. Purely descriptive, but it is what a theme picker shows.
+  themeComment ? "Grey and sharp edge Bibata XCursors with phosphor-green detail",
   # Base (body) colour. Grey on purpose: the pointer is meant to read as a
   # plausible pointer on a battered modern Unix laptop, not as part of a VT220.
   # Green belongs in the details, not in the arrow.
@@ -38,6 +46,23 @@
 # including the drop-shadow-filtered `wait` frames. resvg is a drop-in for the
 # browser here, not an approximation.
 #
+# That check is re-runnable, and re-running it is the only thing that proves the
+# recolour pipeline is still faithful after an edit here. Instantiate this file
+# with upstream's stock Ice values -- themeName "Bibata-Original-Ice", base
+# #FFFFFF, outline #000000, accent #FFFFFF, all four taken from upstream's
+# render.json -- and diff the built cursors/ directory against nixpkgs'
+# `bibata-cursors`, which is compiled from upstream's own released bitmaps.zip
+# rather than from these SVGs:
+#
+#   diff -r result/share/icons/Bibata-Original-Ice/cursors \
+#          "$(nix-build '<nixpkgs>' -A bibata-cursors --no-out-link)"/share/icons/Bibata-Original-Ice/cursors
+#
+# Byte-identical output there covers the whole pipeline end to end -- resvg's
+# rasterisation, ctgen's frame packing and upstream's hotspots -- not just the
+# PNG stage the original RMSE comparison reached. Every instantiation shares
+# this one function and differs only in the three sed values and the name, so
+# one such run validates all of them.
+#
 # The three placeholders come from upstream's cbmp contract, documented in
 # README.md ("Customize Colors") and used by render.json:
 #
@@ -53,11 +78,10 @@
 # not built: its rounded geometry is what the sharper-edged Original was chosen
 # over.
 
-let
-  themeName = "Bibata-Original-VT220";
-in
 stdenvNoCC.mkDerivation (finalAttrs: {
-  pname = "bibata-vt220-cursors";
+  # Derived from the theme name so several instantiations are distinguishable in
+  # the store and in `home.packages` rather than three identically-named paths.
+  pname = lib.toLower themeName;
   # Tracks the upstream source revision the SVGs and hotspot configs come from,
   # which is also the version nixpkgs' bibata-cursors pins -- so the fetch is
   # already in the binary cache's fixed-output set.
@@ -93,7 +117,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     # than shipping a theme silently rendered in cbmp's raw red/green/blue.
     for placeholder in '#00FF00' '#0000FF' '#FF0000'; do
       grep -RIqi -e "$placeholder" svgwork || {
-        echo "bibata-vt220-cursors: placeholder $placeholder is absent from" >&2
+        echo "${themeName}: placeholder $placeholder is absent from" >&2
         echo "svg/original; upstream changed the cbmp colour contract." >&2
         echo "Recheck render.json and README.md before bumping version." >&2
         exit 1
@@ -106,7 +130,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
       -e "s/#FF0000/$accentColor/gI"
 
     if grep -RIn -i -e '#00FF00' -e '#0000FF' -e '#FF0000' svgwork; then
-      echo "bibata-vt220-cursors: placeholder survived above; substitution" >&2
+      echo "${themeName}: placeholder survived above; substitution" >&2
       echo "did not cover the whole tree." >&2
       exit 1
     fi
@@ -126,7 +150,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
       -p x11 \
       -d "$PWD/bitmaps" \
       -n '${themeName}' \
-      -c 'Grey and sharp edge Bibata XCursors with phosphor-green detail'
+      -c '${themeComment}'
 
     runHook postBuild
   '';
@@ -148,7 +172,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
   passthru = { inherit themeName; };
 
   meta = {
-    description = "Bibata Original cursors in grey with VT220 phosphor-green detail";
+    description = themeComment;
     homepage = "https://github.com/ful1e5/Bibata_Cursor";
     license = lib.licenses.gpl3Only;
     platforms = lib.platforms.linux;
