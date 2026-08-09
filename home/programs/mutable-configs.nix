@@ -474,6 +474,17 @@ in
   # prefersReducedMotion is the same story. The spinner's effort suffix is
   # drawn in a hardcoded RGB grey that no theme key reaches; reduced motion
   # selects the branch that colours it from the theme instead.
+  #
+  # tui pins the fullscreen renderer. Claude Code ships two; the classic one
+  # never mounts the scroll hook or the virtual scrollbox, so every scroll key
+  # in Ctrl+O transcript mode (k/j/Ctrl+U/Ctrl+B/g/G/arrows/PgUp/PgDn) has no
+  # handler registered at all, while Ctrl+E/q/Escape still work. Left unset the
+  # renderer falls to per-session experiment flags, which is why scrolling
+  # "sometimes" worked. Chosen over CLAUDE_CODE_NO_FLICKER=1 in the launcher so
+  # /tui default stays usable per session. Written here rather than in a
+  # profile template because it is not per-profile and because a template key
+  # with no stage in claude_reconcile below is silently dropped -- exactly how
+  # this setting was lost once already.
   home.activation.claudeSettings = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
     claude_jq=${pkgs.jq}/bin/jq
     claude_environment=${lib.escapeShellArg (toString claudeEnvironment)}
@@ -520,6 +531,7 @@ in
             # this jq program, it is inside a single-quoted shell string.
             .theme = $claude_theme |
             .prefersReducedMotion = true |
+            .tui = "fullscreen" |
             (if ($template.hooks | type) == "object" then .hooks = $template.hooks else . end) |
             # Same guard as hooks: only profiles whose template declares the
             # key get it, so the others are not handed a null.
