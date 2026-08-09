@@ -8,11 +8,11 @@
 
 stdenv.mkDerivation (finalAttrs: {
   pname = "codex";
-  version = "0.146.0";
+  version = "0.147.0";
 
   src = fetchzip {
     url = "https://registry.npmjs.org/@openai/codex/-/codex-${finalAttrs.version}-linux-x64.tgz";
-    hash = "sha256-xY1fqt1N5dar0KxZbgtBxjhEe2uJwg2PD5mmKL3q97M=";
+    hash = "sha256-i4BAS8nbgTD2+4pEFnexq9+p4WKgfTDuJf16a6ChpL4=";
   };
 
   dontBuild = true;
@@ -33,9 +33,7 @@ stdenv.mkDerivation (finalAttrs: {
 
     mkdir -p "$out/bin"
     makeWrapper "$out/lib/codex/vendor/x86_64-unknown-linux-musl/bin/codex" "$out/bin/codex" \
-      --unset COLORTERM ${
-        lib.optionalString disableApps ''--add-flags "--disable apps"''
-      }
+      --unset COLORTERM ${lib.optionalString disableApps ''--add-flags "--disable apps"''}
 
     install -Dm644 README.md "$out/share/doc/codex/README.md"
     install -Dm644 package.json "$out/share/doc/codex/package.json"
