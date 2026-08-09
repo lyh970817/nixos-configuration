@@ -116,9 +116,20 @@ in
         theme[temp_start]="#${p.subtleBorder}"
         theme[temp_mid]="#${p.secondaryText}"
         theme[temp_end]="#${p.foreground}"
-        theme[cpu_start]="#${p.subtleBorder}"
-        theme[cpu_mid]="#${p.secondaryText}"
-        theme[cpu_end]="#${p.foreground}"
+        # btop indexes this ramp by the value it is about to print, so it
+        # colours the CPU *numbers* — total and per-core — and not just the
+        # meter and graphs. Starting it at subtleBorder left every idle
+        # reading at 1.3:1 while the "%" beside it stayed on main_fg, which is
+        # what made the figures unreadable. The ramp now starts at body text
+        # and climbs, so a figure never drops below 7.1:1 and severity still
+        # rides luminance — the same ascent programs/fastfetch.nix gives every
+        # other percentage. The graph and meter share the ramp and cannot be
+        # split off; they gain a visible low end, which is also what finally
+        # separates a filled cell from the subtleBorder graph background it
+        # used to match exactly.
+        theme[cpu_start]="#${p.foreground}"
+        theme[cpu_mid]="#${p.bright}"
+        theme[cpu_end]="#${p.hot}"
         theme[free_start]="#${p.subtleBorder}"
         theme[free_mid]="#${p.mutedText}"
         theme[free_end]="#${p.secondaryText}"
