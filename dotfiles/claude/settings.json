@@ -5,7 +5,7 @@
       "NotebookEdit", "Read", "SlashCommand", "Task", "TodoWrite",
       "WebFetch", "WebSearch", "Write"
     ],
-    "deny": []
+    "deny": ["AskUserQuestion"]
   },
   "statusLine": {
     "type": "command",
