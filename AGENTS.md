@@ -104,7 +104,7 @@ Use two-space indentation in Nix files. Keep modules focused on one concern and 
 
 Recent history uses short imperative subjects such as `Add 115 Browser launcher` and `Fix tmux copy-mode paging keys`. Follow that style: start with a verb, keep the subject specific, and avoid unrelated changes in one commit.
 
-Committing your own work on your own branch or worktree needs no approval. Merging into `master` and running `rebuild` belong to the top-level session: if another session gave you this task, leave the finished work committed on your branch and report it, and expect anything the rebuild catches to come back to you as a follow-up. Never push branches and never open pull requests.
+Committing your own work on your own branch or worktree needs no approval. Merging into `master` and running `rebuild` belong to the top-level session: if another session gave you this task, leave the finished work committed on your branch and report it, and expect anything the rebuild catches to come back to you as a follow-up. In the top-level session, don't take on work the user didn't ask for; once they have asked, merging and rebuilding is part of delivering it, not a separate thing to ask about. Never push branches and never open pull requests.
 
 ## Security & Configuration Tips
 
