@@ -852,8 +852,6 @@ in
     # Claude Code (CLAUDE_CONFIG_DIR=~/.config/claude) — stable authored config.
     "claude/CLAUDE.md".source = link "dotfiles/claude/CLAUDE.md";
     "claude/statusline.sh".source = link "dotfiles/claude/statusline.sh";
-    "claude/hooks/delegation-return-contract.sh".source =
-      link "dotfiles/claude/hooks/delegation-return-contract.sh";
     "claude/hooks/response-simplifier.sh".source = link "dotfiles/claude/hooks/response-simplifier.sh";
     # Orchestrator system prompts, passed by the `co`/`cf` aliases and by the
     # session-handoff skill with --append-system-prompt-file.
