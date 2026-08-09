@@ -566,12 +566,17 @@ let
     			</dict>
     		</dict>
 
-    		<!-- List bullets and quote bars: accent -->
+    		<!-- List bullets and quote bars: accent. Deliberately NOT
+    		     `markup.list` -- in syntect's Markdown that scope spans the
+    		     whole list item, so naming it drops every list line a rung
+    		     below the surrounding paragraphs. `punctuation.definition
+    		     .list_item` isolates the marker, which is what we want.
+    		     (For ordered lists that is the `.` only, not the digit.) -->
     		<dict>
     			<key>name</key>
     			<string>Markup List, Quote</string>
     			<key>scope</key>
-    			<string>markup.list, punctuation.definition.list_item, markup.quote</string>
+    			<string>punctuation.definition.list_item, markup.quote</string>
     			<key>settings</key>
     			<dict>
     				<key>foreground</key>

@@ -63,7 +63,11 @@ prepend_previewers = [
 	# the pane edge despite `wrap = "yes"` above. The built-in `code` previewer
 	# has neither problem -- it highlights through the flavor's tmtheme.xml
 	# (see home/programs/yazi-theme.nix) and honours [preview].
-	{ url = "*.{csv,tsv}", run = 'piper -- bat -p --color=always "$1"' },
+	# --theme=ansi is mandatory, not cosmetic: with no theme, no BAT_THEME and
+	# no ~/.config/bat/config, bat falls back to Monokai Extended and paints
+	# these previews orange/pink/purple. The `ansi` theme uses only ANSI slots,
+	# so it rides the terminal ladder and follows the green/amber swap.
+	{ url = "*.{csv,tsv}", run = 'piper -- bat -p --color=always --theme=ansi "$1"' },
 ]
 
 prepend_fetchers = [
