@@ -35,6 +35,10 @@
     gnome-themes-extra
     # Dark-mode icon theme; Adwaita above is its declared Inherits fallback.
     matrix-icons
+    # Dark-mode cursor theme. It has to be in the profile, not just named by
+    # gsettings: a cursor-theme value that is not on the icon search path
+    # resolves to nothing and falls back silently.
+    bibata-vt220-cursors
     glib
     gsettings-desktop-schemas
     darkman

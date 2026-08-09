@@ -54,6 +54,14 @@
       };
       customOverlay = final: prev: {
         "115browser" = final.callPackage ./pkgs/115browser.nix { };
+        # Bibata Original rebuilt in custom colours. Only the accent is bound
+        # here: it is the phosphor itself, so it has to follow a palette retune
+        # instead of sitting on a stale hex. The grey body and near-black
+        # outline are not rungs of any ladder -- they exist to keep the pointer
+        # looking like a pointer -- so they stay in the package's own defaults.
+        bibata-vt220-cursors = final.callPackage ./pkgs/bibata-vt220-cursors.nix {
+          accentColor = "#${(import ./home/palettes.nix).active.foreground}";
+        };
         claude-code = final.callPackage ./pkgs/claude-code.nix { };
         claude-science = final.callPackage ./pkgs/claude-science.nix { };
         cli-proxy-api = final.callPackage ./pkgs/cli-proxy-api.nix { };
