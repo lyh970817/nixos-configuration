@@ -70,15 +70,8 @@
         kreuzberg-cli = final.callPackage ./pkgs/kreuzberg-cli.nix { };
         matrix-icons = final.callPackage ./pkgs/matrix-icons.nix { };
         digg-pp-cli = final.callPackage ./pkgs/digg-pp-cli.nix { };
-        # Upstream flake ships the package directly; take it from the pinned
-        # input. The patch makes the pane text selection true reverse video —
-        # upstream mixes the host background 28% toward white, which on a
-        # single-hue phosphor palette produces a grey field no monochrome
-        # terminal could show. herdr exposes no theme token for the selection,
-        # so this cannot be done from dotfiles/herdr/config.toml.
-        herdr = herdr.packages.${system}.default.overrideAttrs (old: {
-          patches = (old.patches or [ ]) ++ [ ./pkgs/patches/herdr-selection-reverse-video.patch ];
-        });
+        # Upstream flake ships the package directly; take it from the pinned input.
+        herdr = herdr.packages.${system}.default;
         hyprwhspr = final.callPackage ./pkgs/hyprwhspr.nix { };
         oh-my-pi = final.callPackage ./pkgs/oh-my-pi.nix { };
         pi-coding-agent = final.callPackage ./pkgs/pi-coding-agent.nix { };
