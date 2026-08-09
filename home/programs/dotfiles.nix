@@ -71,6 +71,16 @@ let
         # suspending. logind ignores the lid; see modules/system/lid.nix.
         bindl = , switch:on:Lid Switch, exec, hyprctl dispatch dpms off
         bindl = , switch:off:Lid Switch, exec, hyprctl dispatch dpms on
+        # Manual escape hatch for the DPMS-off state. Nothing else restores the
+        # panel: there is no idle daemon here, so a bouncy lid sensor that
+        # reports a close without the matching open leaves the screen dark
+        # indefinitely. Fn+F12 is the only Fn combo the X30W-K emits that
+        # nothing binds — it arrives as a plain AT KEY_SCROLLLOCK (code 70)
+        # that keyd forwards untouched, and Scroll_Lock is in no modifier_map
+        # in the us layout, so it cannot latch a modifier. Deliberately "on"
+        # only, never a toggle: a toggle here could blank the screen and would
+        # then be the only way out.
+        bindl = , Scroll_Lock, exec, hyprctl dispatch dpms on
       ''
     else
       ''
