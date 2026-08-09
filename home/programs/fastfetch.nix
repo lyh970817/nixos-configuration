@@ -362,28 +362,48 @@ let
       width_reset5=$(widest "$codex_reset5" "$claude_reset5")
       width_left7=$(widest "$codex_left7" "$claude_left7")
 
+      # The health signal is the remaining quota, so the severity ramp belongs
+      # on the figures -- the same ladder Fastfetch applies to every other
+      # percentage in the greeting (see display.percent.color below). These are
+      # "higher is better" values, so they take Fastfetch's own polarity and
+      # thresholds. ANSI slots rather than hues, so a phosphor switch keeps the
+      # ordering in both terminal palettes.
+      set_rung() {
+        local pct="''${1%\%}"
+        if [[ "$1" != *% ]]; then
+          rung=39 # default foreground -- N/A is absent data, not a health level
+        elif (( pct >= 50 )); then
+          rung=34 # accent, 5.5:1 -- healthy, recedes behind the value
+        elif (( pct >= 20 )); then
+          rung=94 # bright, 9.6:1 -- rises above ordinary text
+        else
+          rung=92 # hot, 13.1:1 -- the top rung, reserved for alarm
+        fi
+      }
+
       row() {
-        local state="$1" name="$2" left5="$3" reset5="$4" left7="$5" reset7="$6" bullet color
-        # Keep the marker's shape semantics (filled means usable, hollow means
-        # not) and give its actual CodexBar state the same severity ladder as
-        # Fastfetch percentages: available is the receding accent; unavailable
-        # is bright so stale/missing data is noticeable; a spent window is hot.
-        # These are ANSI slots rather than hues, so phosphor switching preserves
-        # the health ordering in both terminal palettes.
-        case "$state" in
-          ok) color=34; bullet='●' ;;
-          unavailable) color=94; bullet='○' ;;
-          *) color=92; bullet='○' ;;
-        esac
-        bullet=$(printf '\033[%sm%s\033[0m' "$color" "$bullet")
+        local state="$1" name="$2" left5="$3" reset5="$4" left7="$5" reset7="$6"
+        local bullet rung rung5 rung7
+        # Shape alone carries usable/not, matching the identical glyph in the
+        # Tailnet block above; colouring it here would only make the healthy
+        # marker the dimmest thing on its own line.
+        if [[ "$state" == ok ]]; then
+          bullet='●'
+        else
+          bullet='○'
+        fi
         if [[ "$state" == unavailable ]]; then
-          printf '%s%s %-*s unavailable\n' "$indent" "$bullet" "$name_width" "$name"
+          printf '%s%s %-*s \033[94munavailable\033[m\n' "$indent" "$bullet" "$name_width" "$name"
           return
         fi
-        printf '%s%s %-*s %*s %-*s · %*s %s\n' \
+        set_rung "$left5"; rung5=$rung
+        set_rung "$left7"; rung7=$rung
+        # The SGR wraps each padded field rather than the text inside it, so
+        # %*s still measures printable characters only and columns hold.
+        printf '%s%s %-*s \033[%sm%*s\033[m %-*s · \033[%sm%*s\033[m %s\n' \
           "$indent" "$bullet" "$name_width" "$name" \
-          "$width_left5" "$left5" "$width_reset5" "$reset5" \
-          "$width_left7" "$left7" "$reset7"
+          "$rung5" "$width_left5" "$left5" "$width_reset5" "$reset5" \
+          "$rung7" "$width_left7" "$left7" "$reset7"
       }
 
       printf '\n'
