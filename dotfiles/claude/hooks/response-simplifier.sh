@@ -49,8 +49,15 @@ prompt_file="${CLAUDE_CONFIG_DIR:-$HOME/.config/claude}/response-simplifier.md"
 # and the child spends ~6700 output tokens and 52-70s. With it the same call is
 # 4-8s and ~200 output tokens. Do not add --effort; any level re-enables
 # thinking and costs 50s+ again.
+#
+# The <message> wrapper is a content/instruction boundary the prompt refers to
+# by name. Measured: an undelimited message that reads like a spec — one about
+# this rewriter's own rules — made the child answer conversationally ("I'm
+# Claude, I can't test that for you") instead of rewriting, and that reply is
+# what the user would have seen. Wrapped, the same input rewrites correctly.
+# Keep the tags and the prompt's first paragraph in step.
 rewrite="$(
-  printf '%s' "$message" | MAX_THINKING_TOKENS=0 timeout 120 claude \
+  printf '<message>\n%s\n</message>' "$message" | MAX_THINKING_TOKENS=0 timeout 120 claude \
     --safe-mode \
     --model claude-haiku-4-5-20251001 \
     --system-prompt-file "$prompt_file" \
