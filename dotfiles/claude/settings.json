@@ -13,6 +13,9 @@
   },
   "skipDangerousModePermissionPrompt": true,
   "includeCoAuthoredBy": false,
+  "worktree": {
+    "baseRef": "head"
+  },
   "hooks": {
     "PreToolUse": [
       {

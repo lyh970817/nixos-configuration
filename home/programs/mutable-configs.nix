@@ -521,6 +521,9 @@ in
             .theme = $claude_theme |
             .prefersReducedMotion = true |
             (if ($template.hooks | type) == "object" then .hooks = $template.hooks else . end) |
+            # Same guard as hooks: only profiles whose template declares the
+            # key get it, so the others are not handed a null.
+            (if ($template.worktree | type) == "object" then .worktree = $template.worktree else . end) |
             .extraKnownMarketplaces =
               (
                 if (.extraKnownMarketplaces | type) == "object"
