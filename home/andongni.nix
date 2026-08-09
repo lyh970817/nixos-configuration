@@ -43,6 +43,8 @@
     ./programs/html-open.nix
     ./programs/pre-commit.nix
     ./programs/qutebrowser.nix
+    ./programs/nvim-theme.nix
+    ./programs/yazi-theme.nix
     ./programs/dotfiles.nix
     ./programs/mutable-configs.nix
     ./directories.nix
