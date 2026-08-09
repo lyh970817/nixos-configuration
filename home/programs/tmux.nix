@@ -183,27 +183,38 @@ in
 
       # Light mode is e-ink, and nothing in it is green. The light themes in
       # ../programs/foot.nix and ../programs/alacritty.nix are pure #FFFFFF
-      # glass with #000000 text and one #808080 mid tone, so these lines mirror
-      # the dark branch rung for rung with that three-value ladder substituted:
-      # background -> #FFFFFF, foreground -> #000000, subtleBorder -> #808080.
+      # glass with #000000 text and one #808080 mid tone, so this branch mirrors
+      # the dark one rung for rung against that three-value ladder:
+      # background -> white, foreground -> black, subtleBorder -> brightblack.
       #
-      # They previously carried the pre-phosphor green scheme, which set a
-      # black status bar with #4AB34D text -- i.e. a black-and-green strip
-      # across the bottom of a white terminal, the wrong polarity rather than
-      # a drifted shade.
+      # It previously carried the pre-phosphor green scheme, which set a black
+      # status bar with #4AB34D text -- i.e. a black-and-green strip across the
+      # bottom of a white terminal, the wrong polarity rather than a drifted
+      # shade.
+      #
+      # ANSI names, not hexes, and that is load-bearing rather than stylistic.
+      # copy-mode-selection-style and copy-mode-position-style default to
+      # "#{E:mode-style}", so mode-style's value gets run through format
+      # expansion a second time -- and there "#F" is the legacy window-flags
+      # specifier. A literal fg=#FFFFFF silently becomes fg=*FFFFF and the
+      # selection loses its colour. Dark mode never trips this because its
+      # values start #0 and #4, which are not format characters. Names also
+      # delegate to the terminal's own light palette (regular0/regular7 are
+      # exactly #000000/#FFFFFF there), so this tracks foot and alacritty
+      # instead of duplicating them.
       #
       # Highlights stay reverse video as in dark, just running the other way.
-      # mode-style takes full black here rather than the dampened mid rung the
-      # dark branch uses for accent: e-ink renders grey fills poorly and ghosts
-      # them, so the panel only really has two states worth using.
+      # mode-style takes full black rather than the dampened mid rung the dark
+      # branch uses for accent: e-ink ghosts grey fills, so the panel really
+      # only has two states worth using.
       %if "#{==:#{E:THEME_MODE},light}"
-        set -g status-style bg=#FFFFFF,fg=#000000
-        set -g pane-border-style fg=#808080
-        set -g pane-active-border-style fg=#000000
-        setw -g window-status-style fg=#000000,bg=#FFFFFF
-        setw -g window-status-current-style fg=#FFFFFF,bg=#000000,bold
-        set -g message-style fg=#FFFFFF,bg=#000000,bold
-        set -g mode-style fg=#FFFFFF,bg=#000000
+        set -g status-style bg=white,fg=black
+        set -g pane-border-style fg=brightblack
+        set -g pane-active-border-style fg=black
+        setw -g window-status-style fg=black,bg=white
+        setw -g window-status-current-style fg=white,bg=black,bold
+        set -g message-style fg=white,bg=black,bold
+        set -g mode-style fg=white,bg=black
       %else
         set -g status-style bg=#${p.background},fg=#${p.foreground}
         set -g pane-border-style fg=#${p.subtleBorder}
