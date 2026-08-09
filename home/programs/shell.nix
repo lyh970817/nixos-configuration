@@ -242,8 +242,11 @@ in
       alias clg='claude-gpt56'
 
       # Orchestrator sessions: a model plus its own top-level system prompt.
-      alias co='claude --model claude-opus-5 --append-system-prompt-file "$HOME/.config/claude/orchestrator-opus.md"'
-      alias cf='claude --model claude-fable-5 --append-system-prompt-file "$HOME/.config/claude/orchestrator-fable.md"'
+      # --dangerously-skip-permissions, not --permission-mode bypassPermissions:
+      # the latter silently downgrades to the default mode until the bypass
+      # disclaimer has been accepted interactively at least once.
+      alias co='claude --dangerously-skip-permissions --model claude-opus-5 --append-system-prompt-file "$HOME/.config/claude/orchestrator-opus.md"'
+      alias cf='claude --dangerously-skip-permissions --model claude-fable-5 --append-system-prompt-file "$HOME/.config/claude/orchestrator-fable.md"'
 
       # Claude Code profile launchers bypassing all permission checks.
       alias cly='claude --dangerously-skip-permissions'
