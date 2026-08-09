@@ -17,8 +17,9 @@ for marker in 'done:' 'blocked:' 'needs-decision:' 'failed:'; do
 This is a direct report and its prompt carries no return contract. Append one
 and spawn again:
 
-  Reply with one line — done: / blocked: / needs-decision: / failed: plus one
-  sentence. Put detailed evidence in a file and give the path.
+  Reply with one line — done: / blocked: / needs-decision: / failed: plus
+  one sentence. If you were asked to find something out, include your
+  conclusions as well.
 EOF
       exit 2
       ;;
