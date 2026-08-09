@@ -2,9 +2,12 @@
 # Original Author: Elbullazul <cmedelahumada@gmail.com>
 # Modified by: Alexandr Savca <alexandr.savca89@gmail.com>
 # License: GPL-3.0+
+#
+# Template. Colours are palette rung tokens, substituted from
+# home/palettes.nix by the vt220Theme derivation in home/desktop/theming.nix.
 
-active_text_color=#4BAE55
-inactive_text_color=#008000
+active_text_color=@foreground@
+inactive_text_color=@secondaryText@
 show_app_icon=true
 full_width_title=true
 title_shadow_active=false

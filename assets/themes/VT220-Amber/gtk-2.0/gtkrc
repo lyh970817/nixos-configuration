@@ -1,11 +1,15 @@
-gtk_color_scheme = "bg_color:#050806
-fg_color:#4BAE55
-base_color:#050806
-text_color:#4BAE55
-selected_bg_color:#286731
-selected_fg_color:#86E68C
-tooltip_bg_color:#050806
-tooltip_fg_color:#4BAE55"
+# Template. Colours are palette rung tokens, substituted from
+# home/palettes.nix by the vt220Theme derivation in home/desktop/theming.nix.
+# Do not write phosphor hex here.
+
+gtk_color_scheme = "bg_color:@background@
+fg_color:@foreground@
+base_color:@background@
+text_color:@foreground@
+selected_bg_color:@secondaryText@
+selected_fg_color:@hot@
+tooltip_bg_color:@background@
+tooltip_fg_color:@foreground@"
 
 # gtkRC by delvalle26, GPL'd
 
@@ -14,32 +18,32 @@ style "default"
   GtkWidget::cursor-color = @text_color
   GtkWidget::secondary-cursor-color = "#ff0000"
   GtkWidget::cursor-aspect-ratio = 0.10
-  GtkWidget::link-color = "#65C96D"
+  GtkWidget::link-color = "@bright@"
   GtkWidget::visited-link-color = "#555555"   
 
-  GtkTreeView::odd-row-color = "#050806"
+  GtkTreeView::odd-row-color = "@background@"
   NautilusIconContainer::selection_box_color = @fg_color 
 
   bg[ACTIVE]      = @bg_color 
-  bg[INSENSITIVE] = "#0B120D"
+  bg[INSENSITIVE] = "@raisedBlack@"
   bg[NORMAL]      = @bg_color
   bg[PRELIGHT]    = @selected_bg_color
   bg[SELECTED]    = @selected_bg_color
 
   fg[ACTIVE]      = @fg_color
-  fg[INSENSITIVE] = "#307C3B"
+  fg[INSENSITIVE] = "@secondaryText@"
   fg[NORMAL]      = @fg_color 
   fg[PRELIGHT]    = @selected_fg_color
   fg[SELECTED]    = @fg_color
 
   base[ACTIVE]      = @selected_bg_color #darker?
-  base[INSENSITIVE] = "#0B120D"
+  base[INSENSITIVE] = "@raisedBlack@"
   base[NORMAL]      = @base_color
   base[PRELIGHT]    = @selected_bg_color
   base[SELECTED]    = @selected_bg_color
 
   text[ACTIVE]      = @text_color
-  text[INSENSITIVE] = "#307C3B"
+  text[INSENSITIVE] = "@secondaryText@"
   text[NORMAL]      = @text_color
   text[PRELIGHT]    = @selected_fg_color
   text[SELECTED]    = @selected_fg_color
@@ -61,8 +65,8 @@ widget "gtk-tooltip*" 	style "tooltips"
 
 style "scroll"
 {
-  bg[NORMAL]      = "#4BAE55"
-  fg[NORMAL]      = "#050806"
+  bg[NORMAL]      = "@foreground@"
+  fg[NORMAL]      = "@background@"
   GtkScrollbar::slider-width         = 4
   GtkScrollbar::has-backward-stepper = 0
   GtkScrollbar::has-forward-stepper  = 0
@@ -71,7 +75,7 @@ class "GtkRange"	style "scroll"
 
 style "button" 
 {
-  fg[NORMAL]      = "#4BAE55" #gnome panel unselected
+  fg[NORMAL]      = "@foreground@" #gnome panel unselected
   fg[ACTIVE]      = @selected_fg_color #gnome panel focused  
 }
 class "GtkButton"      	style "button"
@@ -79,7 +83,7 @@ class "GtkButton"      	style "button"
 style "tab" 
 {
   fg[NORMAL]      = @selected_fg_color
-  fg[ACTIVE]      = "#4BAE55" #inactive tab
+  fg[ACTIVE]      = "@foreground@" #inactive tab
 }
 class "GtkNotebook"      style "tab"
 
@@ -90,13 +94,13 @@ style "meta-frame"
 
   fg[NORMAL]      = @text_color
 
-  fg[ACTIVE]      = "#4BAE55" #unselected titlebar text color (sometimes)
-  fg[INSENSITIVE] = "#4BAE55" #unselected titlebar controls color (sometimes text color too)
+  fg[ACTIVE]      = "@foreground@" #unselected titlebar text color (sometimes)
+  fg[INSENSITIVE] = "@foreground@" #unselected titlebar controls color (sometimes text color too)
 }
 class "GtkWindow"      style "meta-frame"
 
 style "border" 
-{ fg[NORMAL]      = "#4BAE55" }
+{ fg[NORMAL]      = "@foreground@" }
 class "GtkContainer"      style "border"
 
 style "menuborder" 
@@ -109,7 +113,7 @@ class "GtkFrame"      style "menuborder"
 
 style "menu"
 {
-  fg[NORMAL]      = "#86E68C"
+  fg[NORMAL]      = "@hot@"
 }
 class "GtkMenuItem"      style "menu"
 class "GtkCheckButton"      style "menu"
@@ -119,7 +123,7 @@ class "GtkTreeView"   style "menu"
 style "sep"
 {
   #fg[NORMAL]      = "#00aaaa"
-  fg[NORMAL]      = "#286731"
+  fg[NORMAL]      = "@secondaryText@"
 }
 class "GtkSeparatorMenuItem" style "sep"
 class "GtkSeparatorToolItem" style "sep"

@@ -12,6 +12,36 @@ let
   lightWallpaper = "$HOME/.local/share/wallpapers/Taiji_mandala.png";
   hyprCurrentTheme = "$HOME/.local/state/hypr/current-theme.conf";
 
+  # VT220-Amber is generated, not stored. assets/themes/VT220-Amber is a
+  # template tree whose phosphor colours are rung tokens spelled @name@; this
+  # substitutes the active profile into a copy of it. Storing hex instead is
+  # what let the theme fall a whole palette retune behind the rungs it was
+  # generated from -- see 015165f9, which corrected one property and left 128
+  # stale hexes in gtk.css. Semantic non-phosphor colours (error red, warning
+  # orange, info blue, the neutral question grey) stay literal in the template.
+  #
+  # All ten rungs are offered even though the theme names only six, so a
+  # template edit can reach any of them without touching this list.
+  themeTokens = pkgs.lib.mapAttrs (_: v: "#${v}") p;
+
+  # PNG assets are the only binaries in the tree; every other file is text that
+  # may name a token. Nothing in the template legitimately contains a bare
+  # @word@, so any survivor is a misspelled rung -- fail the build rather than
+  # ship a theme with "@forground@" in it.
+  vt220Theme = pkgs.runCommand "vt220-amber-theme" { } ''
+    cp -r ${../../assets/themes/VT220-Amber} $out
+    chmod -R u+w $out
+    find $out -type f ! -name '*.png' -print0 | xargs -0 sed -i \
+      ${pkgs.lib.concatStringsSep " \\\n      " (
+        pkgs.lib.mapAttrsToList (n: v: "-e 's/@${n}@/${v}/g'") themeTokens
+      )}
+    if grep -rIn '@[A-Za-z][A-Za-z0-9]*@' $out; then
+      echo "vt220-amber-theme: unsubstituted token above; check the rung name" >&2
+      echo "against home/palettes.nix" >&2
+      exit 1
+    fi
+  '';
+
   # Dark Mode Script
   #
   # This hook only drives Layer A (this machine's own desktop appearance:
@@ -261,5 +291,5 @@ in
   # of the white raster icons HighContrast was falling back to. The cursor
   # stays neutral Adwaita.
   xdg.dataFile."wallpapers/Taiji_mandala.png".source = ../../assets/wallpapers/Taiji_mandala.png;
-  xdg.dataFile."themes/VT220-Amber".source = ../../assets/themes/VT220-Amber;
+  xdg.dataFile."themes/VT220-Amber".source = vt220Theme;
 }
