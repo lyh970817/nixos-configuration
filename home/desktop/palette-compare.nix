@@ -17,7 +17,7 @@ let
     printf '  bright   '; for i in 0 1 2 3 4 5 6 7; do printf '\033[9%dm██████\033[0m' $i; done; printf '\n\n'
     printf '  \033[97mforeground / normal body text\033[0m\n'
     printf '  \033[37msecondary text (SGR 37)\033[0m\n'
-    printf '  \033[90mdim border text (SGR 90)\033[0m\n'
+    printf '  \033[90mmuted text / code comments (SGR 90)\033[0m\n'
     printf '  \033[93maccent emphasis (SGR 93)\033[0m\n'
     printf '  \033[92mbright emphasis (SGR 92)\033[0m\n'
     printf '  \033[7m reverse video / critical \033[0m\n\n'

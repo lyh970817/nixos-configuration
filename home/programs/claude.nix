@@ -49,13 +49,24 @@ let
       *) theme_mode="dark" ;;
     esac
 
+    # Dark mode names the custom theme installed by programs/mutable-configs.nix
+    # rather than dark-ansi itself: it is dark-ansi with the three slab
+    # backgrounds moved off ANSI bright black, which is what lets bright black
+    # carry a readable rung for diff comments. A slug that fails to resolve
+    # falls back to the 24-bit "dark" theme silently, so this string has to
+    # match the theme file name there. Light mode needs no such indirection.
+    case "$theme_mode" in
+      dark) claude_theme="custom:phosphor-dark" ;;
+      *) claude_theme="light-ansi" ;;
+    esac
+
     # The spinner's effort suffix ("thinking with high effort") is drawn in a
     # hardcoded RGB grey that pulses between #999999 and #B9B9B9. It is not a
     # theme key, so no ANSI theme can reach it and it lands as raw grey in the
     # amber palette. Reduced motion selects the spinner branch that colours
     # that text from the theme instead. It also stills the spinner glyph and
     # drops the shimmer, which suits the operator console anyway.
-    claude_flag_settings="{\"theme\":\"''${theme_mode}-ansi\",\"prefersReducedMotion\":true}"
+    claude_flag_settings="{\"theme\":\"$claude_theme\",\"prefersReducedMotion\":true}"
   '';
 
   claudeHostLauncher = pkgs.writeShellApplication {

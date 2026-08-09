@@ -222,12 +222,18 @@ let
   # sounds like the answer and is not: it only chooses between the two 24-bit
   # themes, both of which ignore the terminal palette.
   #
+  # Dark mode names the custom theme installed by programs/mutable-configs.nix,
+  # which is dark-ansi with three slab backgrounds moved off ANSI bright black
+  # so that slot can carry a readable rung. A slug that fails to resolve falls
+  # back to the 24-bit "dark" theme silently, so this string has to match the
+  # theme file name there.
+  #
   # Only newly started sessions pick this up, the same as alacritty windows.
   # Activation writes the same key from the same source (the reconciler in
   # programs/mutable-configs.nix), so the two writers cannot disagree.
   claudeTheme = pkgs.writeShellScriptBin "claude-theme" ''
     case "$1" in
-    dark) theme="dark-ansi" ;;
+    dark) theme="custom:phosphor-dark" ;;
     light) theme="light-ansi" ;;
     *) exit 0 ;;
     esac

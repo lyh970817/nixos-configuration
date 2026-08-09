@@ -64,7 +64,18 @@ let
 
     # Bright colors - the upper half of the ladder, for emphasis
     [colors.bright]
-    black   = '#${p.subtleBorder}'
+    # Claude Code's diff renderer, and the code viewer sharing its scope map,
+    # draw comments and `meta` (shebangs, preprocessor lines) as SGR 90 from a
+    # hardcoded table no theme key reaches. Note this is a different table from
+    # the markdown one normal green serves. At subtleBorder (1.27:1) it was
+    # invisible.
+    # The slot was pinned there because dark-ansi also fills three slabs --
+    # the user message row, the composer sidebar, the memory banner -- with
+    # bright black as a *background*, and those need a near-background rung.
+    # The custom theme in programs/mutable-configs.nix moves those three onto
+    # palette index 236 below, which frees this slot for mutedText. Changing
+    # either without the other breaks one of the two roles.
+    black   = '#${p.mutedText}'
     # redBright is Claude Code's error text, its logo, and the word-level
     # fill inside a removed diff line, which must stay distinct from that
     # line's own fill now that normal red holds mutedText. secondaryText is
@@ -112,6 +123,15 @@ let
     [colors.footer_bar]
     foreground = '#${p.foreground}'
     background = '#${p.deepSurface}'
+
+    # The one 256-colour index this palette pins. It carries the Claude Code
+    # slab backgrounds that bright black used to hold (see [colors.bright]
+    # above), so it must stay on subtleBorder for them to render as they
+    # always have. This is an array of tables, so it has to come after every
+    # other [colors.*] sub-table or it swallows them.
+    [[colors.indexed_colors]]
+    index = 236
+    color = '#${p.subtleBorder}'
   '';
 
   # Geometry, font, and cursor behaviour are palette-independent.

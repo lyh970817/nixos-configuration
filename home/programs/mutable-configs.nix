@@ -23,9 +23,9 @@ let
   # them via a temp-file+rename; if that happens, re-run `nixos-rebuild switch`
   # to restore the link. Claude settings are ordinary mutable files: activation
   # seeds missing files and reconciles only the explicitly owned JSON leaves.
-  # The theme is one of the two ANSI-only Claude Code themes, chosen from this
-  # machine's current mode at activation below and rewritten on a mode switch
-  # by claude-theme (desktop/theming.nix).
+  # The theme is the custom dark theme below in dark mode and stock light-ansi
+  # in light, chosen from this machine's current mode at activation below and
+  # rewritten on a mode switch by claude-theme (desktop/theming.nix).
   link = subpath: config.lib.file.mkOutOfStoreSymlink "${osConfig.portable.configDir}/${subpath}";
   claudeEnvironment = ../../dotfiles/claude/environment.json;
   claudeMarketplaces = ../../dotfiles/claude/marketplaces.json;
@@ -46,6 +46,47 @@ let
       settings = ../../dotfiles/claude-gpt56/settings.json;
     }
   ];
+
+  # Claude Code custom theme, installed into every profile above.
+  #
+  # dark-ansi fills three slabs -- the user message row, the composer sidebar,
+  # and the memory banner -- with ANSI bright black as a *background*. Its
+  # syntax map, which is hardcoded and reads no theme key, draws comments and
+  # `meta` on that same slot as a *foreground*. One rung cannot serve both:
+  # near the background the slabs are right and comments are invisible, high
+  # enough to read comments and the slabs glow. This theme repoints the three
+  # slabs at palette index 236, which foot.nix and alacritty.nix pin to
+  # subtleBorder, so they render exactly as before while bright black is freed
+  # to carry mutedText. Both halves are required; either alone is a regression.
+  #
+  # Only keys already present in `base` are honoured and unknown ones are
+  # dropped in silence. A slug that does not resolve is worse: the theme falls
+  # back to 24-bit "dark" with no error, so the file name here and the `theme`
+  # value written by the three writers (this file, programs/claude.nix, and
+  # claude-theme in desktop/theming.nix) must agree exactly. Claude Code only
+  # writes this directory from its own theme editor, so a read-only link is
+  # safe; the directory itself stays writable for themes saved that way.
+  #
+  # Light mode keeps stock light-ansi: there those three keys are ansi:white,
+  # not bright black, so nothing needs rerouting.
+  claudeThemeSlug = "phosphor-dark";
+  claudeTheme = pkgs.writeText "${claudeThemeSlug}.json" (
+    builtins.toJSON {
+      name = "Phosphor dark";
+      base = "dark-ansi";
+      overrides = {
+        userMessageBackground = "ansi256(236)";
+        composerSidebarBackground = "ansi256(236)";
+        memoryBackgroundColor = "ansi256(236)";
+      };
+    }
+  );
+  claudeThemeFiles = lib.listToAttrs (
+    map (profile: {
+      name = "${lib.removePrefix ".config/" profile.configDir}/themes/${claudeThemeSlug}.json";
+      value.source = claudeTheme;
+    }) claudeProfiles
+  );
 
   codexProfileNames = [
     "last30days"
@@ -425,7 +466,10 @@ in
   # ANSI slots, and so the only ones that follow the phosphor ladder and the
   # e-ink palette respectively. `auto` is not the answer despite its "match
   # terminal" label: it only chooses between the two 24-bit themes, and both
-  # ignore the terminal palette.
+  # ignore the terminal palette. Dark mode names the custom theme above rather
+  # than dark-ansi itself; it is dark-ansi with three slab backgrounds moved
+  # off bright black, and it keeps the ANSI syntax map because that is keyed on
+  # the custom theme's `base`.
   #
   # prefersReducedMotion is the same story. The spinner's effort suffix is
   # drawn in a hardcoded RGB grey that no theme key reaches; reduced motion
@@ -435,14 +479,14 @@ in
     claude_environment=${lib.escapeShellArg (toString claudeEnvironment)}
     claude_marketplaces=${lib.escapeShellArg (toString claudeMarketplaces)}
 
-    # Which of the two ANSI-only themes matches this machine's current mode.
-    # Derived from the hypr current-theme symlink, the same source the
-    # claude-theme helper in desktop/theming.nix uses when a mode switch
-    # rewrites the same key -- so the two writers cannot disagree. Defaults to
-    # dark when the link is missing, matching the btop and nmtui wrappers.
+    # Which ANSI-only theme matches this machine's current mode. Derived from
+    # the hypr current-theme symlink, the same source the claude-theme helper
+    # in desktop/theming.nix uses when a mode switch rewrites the same key --
+    # so the two writers cannot disagree. Defaults to dark when the link is
+    # missing, matching the btop and nmtui wrappers.
     case "$(readlink "$HOME/.local/state/hypr/current-theme.conf" 2>/dev/null)" in
       *light.conf) claude_theme="light-ansi" ;;
-      *) claude_theme="dark-ansi" ;;
+      *) claude_theme="custom:${claudeThemeSlug}" ;;
     esac
 
     claude_reconcile() {
@@ -770,7 +814,8 @@ in
     };
   };
 
-  xdg.configFile = {
+  # The custom theme, read-only in every profile's themes/ directory.
+  xdg.configFile = claudeThemeFiles // {
     # fcitx5 — global config, input-method profile, and per-addon conf/.
     # conf/cached_layouts regenerates here and is git-ignored; the learned
     # pinyin dictionary lives under ~/.local/share/fcitx5 and is untouched.
