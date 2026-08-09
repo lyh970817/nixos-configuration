@@ -42,11 +42,16 @@ let
     [colors.normal]
     black   = '#${p.raisedBlack}'
     red     = '#${p.subtleBorder}'
-    # Claude Code's dark-ansi syntaxComment token is ANSI green (slot 2).
-    # Keep comments below normal text while lifting them out of the palette's
-    # dim rung so they remain readable beside keywords and strings.
+    # Claude Code colours comments from a hardcoded highlight.js/chalk map, not
+    # from its theme (dark-ansi has no syntax tokens at all), so ANSI green is
+    # the only lever: secondaryText keeps comments below body text while
+    # clearing the dim rung (3.9:1 against mutedText's 2.5:1). Yellow has to
+    # move up with it -- that same map puts function names on ANSI yellow, and
+    # slot 7 already sits on secondaryText, so leaving yellow here would render
+    # comments, function names and body text as one colour. See
+    # home/palettes.nix.
     green   = '#${p.secondaryText}'
-    yellow  = '#${p.secondaryText}'
+    yellow  = '#${p.accent}'
     blue    = '#${p.accent}'
     magenta = '#${p.foreground}'
     cyan    = '#${p.accent}'
