@@ -8,10 +8,21 @@
 
 # Messages shorter than this many characters are left alone, without spawning
 # the nested call at all. That call costs 4-8s of wall time and buys nothing on
-# a one-line answer. Tune by editing this number: the hook reaches
-# ~/.config/claude as an out-of-store symlink, so an edit is live with no
-# rebuild.
-min_chars=600
+# a one-line answer.
+#
+# The prompt forces three headers plus, when a section is empty, its
+# empty-state line — roughly 120 words of frame regardless of input. Measured
+# on this session's real messages, inputs under ~1500 chars come back at
+# 82-96% of their original length: the frame eats the whole compression.
+# Above that the same prompt lands at 33-56%. 1500 chars is about 250 words,
+# so the threshold says a message must be at least twice the frame before
+# restructuring it pays. Deliberately not a branch in the prompt letting the
+# model pick plain or sectioned output — that judgement call is what this model
+# tier handles worst.
+#
+# Tune by editing this number: the hook reaches ~/.config/claude as an
+# out-of-store symlink, so an edit is live with no rebuild.
+min_chars=1500
 
 set -uo pipefail
 

@@ -2,58 +2,73 @@ Rewrite the message below into plain, easy English for a reader who is fluent
 but not a native English speaker. They read your rewrite instead of the
 original, so anything you drop is lost to them.
 
-## What you rewrite
+## The shape of your answer
 
-Your rewrite covers the prose only. Everything else is copied exactly,
-character for character:
+Three sections, in this order, every time. Write all three even when one is
+empty. Nothing goes outside them except the summary at the end.
+
+`## Your call` — anything waiting on the reader: a decision, a question, a plan
+waiting for approval, a choice between options. Nothing that needs no answer,
+and never a question the original did not ask. If empty, the section is one
+line: Nothing needs your decision.
+
+`## What happened` — completed actions, findings, results, and the state things
+are in now. If empty, the section is one line: Nothing was done or found.
+
+`## Watch out` — caveats, scope limits, untested paths, risks, work still
+running, and every piece of uncertainty the original carried. If empty, the
+section is one line: No open caveats.
+
+Rules for these sections:
+
+- Every item is a bullet starting with `- `. Never a paragraph. The only line
+  that is not a bullet is an empty-section line.
+- A section holds **five bullets at most**. Count as you write. Once a section
+  has five bullets it is finished: start the next one. If a sixth item belongs
+  there, join the two closest bullets to make room. Copied code or a copied
+  command may sit on its own line under a bullet without counting.
+- Every item belongs to exactly one section, and appears once.
+- Never rename, reorder, merge, or leave out a section.
+
+## Accuracy outranks style
+
+Never sound more certain than the original. If a rule below fights precision,
+keep the precision and break the rule. Three things get lost in rewrites, so
+each one has a fixed home:
+
+- **Open decisions** — anything the reader must choose or answer — go in `Your
+  call`, written as the question you are asking.
+- **Uncertainty** — "probably", "I did not verify this", "this assumes" — goes
+  in `Watch out`, at the strength the original used. Never turn a hedge into a
+  plain statement.
+- **Conditions and scope limits** — "only on the laptop", "if the service is
+  already running" — stay in the same bullet as the fact they limit. If the
+  original said "if X, then Y", your bullet says "if X" too. A number without
+  its condition is worse than no number.
+
+## Copied exactly, character for character
 
 - code, commands, file paths, identifiers, config keys, error messages
 - numbers, dates, measurements, branch and commit names
 - anything the message quotes from a file or another source
 
-Copying these does not count against any length limit below.
+## What you may drop
 
-## The rule that outranks every other rule
+Narration only: reasoning about the reasoning, asides explaining why something
+is being reported, apologies, restating the request back, sentences that only
+join two others. Everything else is a fact, number, condition, hedge or
+decision, and it stays.
 
-Accuracy wins over style. Never drop a fact, a condition, a scope limit, a
-number, or an uncertainty to make a sentence shorter or simpler. If a rule
-below fights precision, keep the precision and break the rule.
+## How to write a bullet
 
-Three things must survive, because these are what rewrites lose:
-
-- **Conditions and scope limits** — "only on the laptop", "if the service is
-  already running", "after the rebuild". A number that survives without its
-  condition is worse than no number.
-- **Uncertainty** — "probably", "I did not verify this", "this assumes".
-  Never turn a hedge into a plain statement. If the original was unsure, the
-  rewrite is unsure.
-- **Open decisions** — anything the reader is being asked to choose or answer.
-
-Your rewrite must never sound more confident than the original. This covers the
-summary at the end too. A summary is where a scope limit dies most easily, so
-check the summary against this rule again before you answer.
-
-## How to simplify
-
-Split, do not compress. When a sentence is hard, cut it into two sentences.
-Do not delete words to make it shorter.
-
-- One idea per sentence. Aim for 20 words, never more than 25.
-- Keep normal grammar. Keep articles and "that". Write "the files that are
-  not backed up", not "files not backed up".
+- One idea, never more than 25 words.
+- Keep normal grammar. Keep articles and "that". Write "the files that are not
+  backed up", not "files not backed up".
 - Put the condition first: "If the test fails, read the log."
-- One word, one meaning. Pick one verb per action and reuse it — "check"
-  every time, not check / verify / confirm / validate.
-- Keep the exact technical term. Use plain words around it. You may explain a
-  general technical term once, in brackets. Never explain a name from this
-  project, and never describe what a tool does. If you are not sure what a
-  term means, leave it alone.
-- At most three words stacked into a noun phrase. Write "the handler that
-  sets task-queue priority", not "the task queue priority handler".
-- The first sentence says what happened or what was found.
-- No idioms, no slang.
-- Stop when done. No introduction. The only text after the rewrite is the
-  summary below.
+- Keep the exact technical term and use plain words around it. Never explain a
+  name from this project, and never describe what a tool does.
+- No idioms, slang, or coined phrases. Say what a thing is, not what it is not.
+  No filler: simply, seamlessly, robust, powerful, leverage, "it is worth noting".
 
 ## The summary at the end
 
@@ -71,28 +86,4 @@ then the summary lines. The reader must see at once where the rewrite stops.
   original said "merged and rebuilt, but light mode is untouched", the summary
   says that too. If the limit does not fit, drop the whole claim instead.
 
-## Do not write like this
-
-- Negation-first framing: "It is not X. It is Y." Just say what it is.
-- Invented aphorisms and coined phrases.
-- "load-bearing", "prose" for text, "hand-waving", "the unlock", framing
-  everything as a "cost" and a "buy".
-- Words carrying no fact: simply, seamlessly, robust, powerful, leverage,
-  "in order to", "it is worth noting".
-
-## Before you answer
-
-Scan your rewrite:
-
-- Every number, path, command, and identifier from the original is present
-  and unchanged.
-- Every condition and every hedge is still there.
-- No sentence is over 25 words.
-- No sentence begins by saying what something is not.
-- If your rewrite reads almost the same as the original, you did not do the
-  work. Rewrite it properly.
-- The summary is the last thing on the page, and it is short.
-- The summary keeps every scope limit and hedge, and it names anything the
-  reader must decide or answer.
-
-Output only the rewrite and the summary. No preamble.
+Output only the three sections and the summary. No preamble.
