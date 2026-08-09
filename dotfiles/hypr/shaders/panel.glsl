@@ -8,10 +8,10 @@ uniform sampler2D tex;
 
 // Optical softness plus a few panel imperfections, for a green phosphor
 // console rendered on a real LCD. Deliberately no CRT geometry, scan raster,
-// vignette, curvature, phosphor persistence, animated noise, or colour
-// separation: those all announce a retro shader. The guiding rule is that
-// broad irregular fields read as hardware while fine per-pixel texture reads
-// as a filter, so every defect here is static and spatially large.
+// concentric vignette, curvature, phosphor persistence, animated noise, or
+// colour separation: those all announce a retro shader. The guiding rule is
+// that broad irregular fields read as hardware while fine per-pixel texture
+// reads as a filter, so every defect here is static and spatially large.
 //
 // Three things this deliberately does NOT do, each removed after measuring:
 //
@@ -30,29 +30,59 @@ uniform sampler2D tex;
 //
 //   LCD ghosting. Not implementable: a Hyprland screen shader receives only
 //   the current frame, with no history buffer.
+//
+// The backlight falloff added below is not the vignette that was rejected. The
+// rejected one was concentric and centred, which is the shape no panel has and
+// every photo filter does. This one is an edge-lit backlight deficit: three
+// unequal sources with unequal reach, none of them centred, none of them
+// mirrored by a partner on the opposite side, with their boundary bent by the
+// same kind of noise field as the mura. It is also multiplicative, so it scales
+// every local contrast *ratio* by the same factor rather than shifting levels;
+// that is the property the raised black floor lacked, and it is why the floor
+// compressed the dark ladder while this does not.
 
 // Optics. The kernel below is normalised, so on a flat field soft == base and
 // both of these contribute exactly nothing; they act only near glyph edges.
 const float DIFFUSION_STRENGTH = 0.130;
 const float BLOOM_STRENGTH = 0.500;
 
-// Panel imperfections. The uneven edge light is meant to be the one flaw
-// noticed without looking for it; the rest sit below a casual glance.
-const float BACKLIGHT_BLEED = 0.034;
-const float MURA_STRENGTH = 0.005;
-const float WASH_STRENGTH = 0.220;
+// Panel imperfections. The panel is meant to read as visibly tired: the uneven
+// edge light and the dark far corner are both noticed without looking for them,
+// and the clouding sits just under that.
+//
+// The bleed is additive and so it does compress the dark ladder where it is
+// strongest, which is the one property the raised black floor was rejected for.
+// Measured on a field of ANSI-black blocks over the background, ANSI black
+// against background falls from 2.24x unshaded to 2.06x mid-screen and 1.64x in
+// the brightest bleed corner. What the floor could not do and this does is keep
+// the absolute separation: the gap stays 8.5 of 255 against 8.93 unshaded, and
+// the worst of it is confined to two corners instead of the whole screen.
+const float BACKLIGHT_BLEED = 0.070;
+const float MURA_STRENGTH = 0.020;
+const float WASH_STRENGTH = 0.450;
+
+// Peak fraction of light lost in the corner furthest from the edge strip.
+// Applied to the whole frame, not gated to dark content, because a backlight
+// deficit dims emitted light regardless of what is being displayed; gating it
+// would have made it a tint over the background instead of a dim panel. It
+// scales R, G and B together, so glyph hue is untouched by construction.
+const float EDGE_FALLOFF = 0.300;
 
 // Colour-temperature nonuniformity rides on the panel's own emission, where it
 // cannot disturb the hue of lit text; only a token fraction gains the
 // transmitted image. Tinting the whole frame instead pulled green glyphs
 // toward yellow on whichever side was warm — measured at a 6.5% loss of green
 // purity on glyph cores, which this palette must not pay.
-const float TEMP_ON_PANEL = 0.250;
-const float TEMP_ON_IMAGE = 0.004;
+const float TEMP_ON_PANEL = 0.450;
+const float TEMP_ON_IMAGE = 0.012;
 
-// How far a washed-out patch pulls colour toward its own luminance. Kept small
-// deliberately: at 0.30 it was not gated to dark content and greyed lit text.
-const float WASH_DESATURATION = 0.080;
+// How far a washed-out patch pulls colour toward its own luminance. The earlier
+// 0.080 ceiling existed because the wash was applied at full strength to lit
+// text and greyed it at 0.30. It is now scaled by WASH_TEXT_SHARE on lit
+// content, so the value below is what dark background receives; glyph cores see
+// 0.220 * 0.35 = 0.077, marginally less than the old ungated 0.080.
+const float WASH_DESATURATION = 0.220;
+const float WASH_TEXT_SHARE = 0.350;
 
 // Edge light tint. Follows the phosphor rather than a fixed warm constant, the
 // way the palette's own dark rungs do. If the active profile in
@@ -110,8 +140,10 @@ void main() {
     vec3 bloom = max(soft - base.rgb, vec3(0.0)) * BLOOM_STRENGTH * glowGate;
     vec3 color = diffused + bloom;
 
-    // Gate the panel imperfections to dark content so lit surfaces keep their
-    // colour and only the large flat background reveals the panel.
+    // Gate the additive panel imperfections to dark content so lit surfaces
+    // keep their colour and only the large flat background reveals the panel.
+    // The backlight falloff below is the one effect deliberately outside this
+    // gate, because it removes light rather than adding it.
     float luminance = dot(color, LUMA);
     float darkness = pow(1.0 - clamp(luminance, 0.0, 1.0), 2.0);
 
@@ -124,14 +156,30 @@ void main() {
     vec3 tempShift = vec3(warmth, 0.0, -warmth);
 
     // Asymmetric edge light from three unequal sources, no radial symmetry.
-    // A conventional radial vignette would read as a filter; this does not,
-    // and it contributes exactly zero at the centre of the screen.
+    // Two sit at the bottom corners and one is a bezel leak at the top right;
+    // all three contribute exactly zero at the centre of the screen.
     float lowerLeft = 1.0 - smoothstep(0.0, 0.62, distance(uv, vec2(0.06, 1.03)));
     float lowerRight = 1.0 - smoothstep(0.0, 0.48, distance(uv, vec2(0.94, 1.04)));
     float upperRight = 1.0 - smoothstep(0.0, 0.38, distance(uv, vec2(1.02, 0.02)));
     float bleedMask = lowerLeft * 0.75 + lowerRight + upperRight * 0.35;
     vec3 panelBleed = (BLEED_TINT + tempShift * TEMP_ON_PANEL)
         * BACKLIGHT_BLEED * bleedMask * darkness;
+
+    // Backlight deficit, the counterpart of the bleed above. All three bleed
+    // sources sit on or near the bottom edge, so the strip is read as running
+    // along the bottom and the light runs out going up and to the left: a wide
+    // weak loss over the top-left corner, a narrower one along the top edge
+    // right of centre, and a mild one at the middle of the left edge. Nothing
+    // is placed at the top-right, where the bezel leak already is. The noise
+    // term bends the boundary so no edge of the shadow is a clean arc, and
+    // every source runs out before the middle of the screen: at uv (0.5, 0.5)
+    // all three are exactly zero, so the reading area is untouched.
+    float darkTopLeft = 1.0 - smoothstep(0.0, 0.66, distance(uv, vec2(-0.08, -0.06)));
+    float darkTopEdge = 1.0 - smoothstep(0.0, 0.40, distance(uv, vec2(0.72, -0.10)));
+    float darkLeftEdge = 1.0 - smoothstep(0.0, 0.34, distance(uv, vec2(-0.04, 0.58)));
+    float falloffMask = darkTopLeft + darkTopEdge * 0.62 + darkLeftEdge * 0.45;
+    falloffMask *= 0.70 + 0.60 * panelField(uv, vec2(8.2, 5.6));
+    color *= 1.0 - EDGE_FALLOFF * clamp(falloffMask, 0.0, 1.25);
 
     // Mura as a handful of broad irregular clouds rather than grain.
     float mura = (panelField(uv, vec2(1.7, 4.3)) - 0.5) * MURA_STRENGTH * darkness;
@@ -148,7 +196,8 @@ void main() {
     // edge light already is.
     float wash = smoothstep(0.55, 0.85, panelField(uv, vec2(2.9, 11.4)))
         * WASH_STRENGTH;
-    vec3 washed = mix(color, vec3(dot(color, LUMA)), WASH_DESATURATION);
+    float washDesat = WASH_DESATURATION * mix(WASH_TEXT_SHARE, 1.0, darkness);
+    vec3 washed = mix(color, vec3(dot(color, LUMA)), washDesat);
     color = mix(color, washed, wash);
 
     fragColor = vec4(clamp(color, 0.0, 1.0), base.a);
