@@ -12,7 +12,6 @@
     "command": "~/.config/claude/statusline.sh"
   },
   "skipDangerousModePermissionPrompt": true,
-  "includeCoAuthoredBy": false,
   "worktree": {
     "baseRef": "head"
   },

@@ -449,7 +449,7 @@ in
     done
   '';
 
-  # Presentation keys written into every profile's settings.json.
+  # Presentation and policy keys written into every profile's settings.json.
   #
   # These are a *fallback*, not the usual path. The launcher in
   # programs/claude.nix themes each session from THEME_MODE and passes it as
@@ -474,6 +474,27 @@ in
   # prefersReducedMotion is the same story. The spinner's effort suffix is
   # drawn in a hardcoded RGB grey that no theme key reaches; reduced motion
   # selects the branch that colours it from the theme instead.
+  #
+  # tui pins the fullscreen renderer. Claude Code ships two; the classic one
+  # never mounts the scroll hook or the virtual scrollbox, so every scroll key
+  # in Ctrl+O transcript mode (k/j/Ctrl+U/Ctrl+B/g/G/arrows/PgUp/PgDn) has no
+  # handler registered at all, while Ctrl+E/q/Escape still work. Left unset the
+  # renderer falls to per-session experiment flags, which is why scrolling
+  # "sometimes" worked. Chosen over CLAUDE_CODE_NO_FLICKER=1 in the launcher so
+  # /tui default stays usable per session. Written here rather than in a
+  # profile template because it is not per-profile and because a template key
+  # with no stage in claude_reconcile below is silently dropped -- exactly how
+  # this setting was lost once already.
+  #
+  # editorMode and includeCoAuthoredBy are user and repo policy rather than
+  # presentation, but they are pinned here for the same reason: both were lost
+  # to that template rewrite too, and neither varies by profile. Vim keys are
+  # wanted everywhere (Codex profiles already enable them), and the no-trailer
+  # rule in CLAUDE.md applies to every profile committing to this repo, so
+  # tying them to one template would only reintroduce the drift. Note
+  # includeCoAuthoredBy is false, so any stage guarding it must test the type
+  # rather than the value -- a bare truthiness test drops it exactly like a
+  # missing key. These are unconditional assignments for that reason.
   home.activation.claudeSettings = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
     claude_jq=${pkgs.jq}/bin/jq
     claude_environment=${lib.escapeShellArg (toString claudeEnvironment)}
@@ -520,6 +541,9 @@ in
             # this jq program, it is inside a single-quoted shell string.
             .theme = $claude_theme |
             .prefersReducedMotion = true |
+            .tui = "fullscreen" |
+            .editorMode = "vim" |
+            .includeCoAuthoredBy = false |
             (if ($template.hooks | type) == "object" then .hooks = $template.hooks else . end) |
             # Same guard as hooks: only profiles whose template declares the
             # key get it, so the others are not handed a null.

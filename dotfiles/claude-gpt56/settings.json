@@ -17,6 +17,5 @@
     "type": "command",
     "command": "~/.config/claude-gpt56/statusline.sh"
   },
-  "skipDangerousModePermissionPrompt": true,
-  "includeCoAuthoredBy": false
+  "skipDangerousModePermissionPrompt": true
 }
