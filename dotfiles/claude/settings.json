@@ -11,5 +11,18 @@
     "type": "command",
     "command": "~/.config/claude/statusline.sh"
   },
-  "skipDangerousModePermissionPrompt": true
+  "skipDangerousModePermissionPrompt": true,
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.config/claude/hooks/delegation-return-contract.sh"
+          }
+        ]
+      }
+    ]
+  }
 }

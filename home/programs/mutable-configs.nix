@@ -433,6 +433,7 @@ in
             .permissions.deny = $template.permissions.deny |
             .skipDangerousModePermissionPrompt = $template.skipDangerousModePermissionPrompt |
             .statusLine = $template.statusLine |
+            (if ($template.hooks | type) == "object" then .hooks = $template.hooks else . end) |
             .extraKnownMarketplaces =
               (
                 if (.extraKnownMarketplaces | type) == "object"
@@ -736,6 +737,13 @@ in
     # Claude Code (CLAUDE_CONFIG_DIR=~/.config/claude) — stable authored config.
     "claude/CLAUDE.md".source = link "dotfiles/claude/CLAUDE.md";
     "claude/statusline.sh".source = link "dotfiles/claude/statusline.sh";
+    "claude/hooks/delegation-return-contract.sh".source =
+      link "dotfiles/claude/hooks/delegation-return-contract.sh";
+    # Orchestrator system prompts, passed by the `co`/`cf` aliases and by the
+    # session-handoff skill with --append-system-prompt-file.
+    "claude/orchestrator-opus.md".source = link "dotfiles/claude/orchestrator-opus.md";
+    "claude/orchestrator-fable.md".source = link "dotfiles/claude/orchestrator-fable.md";
+    "claude/skills/session-handoff".source = link "dotfiles/claude/skills/session-handoff";
     "claude/skills/nix-environment-setup".source = link "dotfiles/claude/skills/nix-environment-setup";
     "claude/skills/agent-config-setup".source = link "dotfiles/claude/skills/agent-config-setup";
     "claude/skills/bro".source = link "dotfiles/claude/skills/bro";

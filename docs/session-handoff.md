@@ -29,14 +29,14 @@ transcript, and lifetime.
 Default case — same directory, no worktree, prompt first:
 
 ```sh
-claude --bg "<handoff briefing>" --append-system-prompt-file ~/.config/claude/append-system-prompt.txt
+claude --bg "<handoff briefing>" --append-system-prompt-file ~/.config/claude/orchestrator-opus.md
 ```
 
 Worktree case — creates or reuses `.claude/worktrees/<name>` on branch
 `worktree-<name>`:
 
 ```sh
-claude --bg "<handoff briefing>" --append-system-prompt-file ~/.config/claude/append-system-prompt.txt -w handoff-auth
+claude --bg "<handoff briefing>" --append-system-prompt-file ~/.config/claude/orchestrator-opus.md -w handoff-auth
 ```
 
 Inline variant, if the prompt text is not kept in a file:
@@ -136,8 +136,9 @@ the new job's transcript. Marker absent confirms the above.
 - **It is not inherited**, so the skill must pass it explicitly. That means the
   prompt text has to exist somewhere the skill can read at launch time.
 
-Recommended either way: keep the text in a file, e.g.
-`~/.config/claude/append-system-prompt.txt`, and have both the user's launcher
+Recommended either way: keep the text in a file —
+`~/.config/claude/orchestrator-{opus,fable}.md`, out-of-store symlinks to
+`dotfiles/claude/` — and have both the user's launcher
 and this skill pass `--append-system-prompt-file <path>`. Reasons: the skill
 never has to reconstruct or quote multi-line text; launcher and handoff cannot
 drift; `/proc/<pid>/cmdline` scraping (fragile, and empty today) is unnecessary;
