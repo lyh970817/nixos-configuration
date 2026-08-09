@@ -119,7 +119,20 @@ let
     ${pkgs.mako}/bin/makoctl mode -a dark
     ${pkgs.mako}/bin/makoctl reload
 
-    hyprctl setcursor ${darkCursorTheme} ${toString darkCursorSize}
+    # Cursor. Two independent consumers, and setting only the first is what
+    # makes a mode switch look half-applied:
+    #   - the compositor's own pointer (desktop, gaps, borders), from setcursor;
+    #   - clients that load an XCursor theme themselves -- foot,
+    #     Chromium/Electron, anything on libwayland-cursor -- which read
+    #     XCURSOR_THEME/XCURSOR_SIZE once, from the environment they started in.
+    # `hyprctl keyword env` rewrites Hyprland's own environment, so every client
+    # spawned after the switch agrees with the compositor. Clients that were
+    # already running keep the cursor they started with until they restart;
+    # nothing can reach into their environment after the fact.
+    ${pkgs.hyprland}/bin/hyprctl setcursor ${darkCursorTheme} ${toString darkCursorSize}
+    ${pkgs.hyprland}/bin/hyprctl keyword env XCURSOR_THEME,${darkCursorTheme}
+    ${pkgs.hyprland}/bin/hyprctl keyword env HYPRCURSOR_THEME,${darkCursorTheme}
+    ${pkgs.hyprland}/bin/hyprctl keyword env XCURSOR_SIZE,${toString darkCursorSize}
 
   '';
 
@@ -173,7 +186,11 @@ let
     ${pkgs.mako}/bin/makoctl mode -r dark
     ${pkgs.mako}/bin/makoctl reload
 
-    hyprctl setcursor ${lightCursorTheme} ${toString lightCursorSize}
+    # See the dark hook for why the environment is rewritten alongside setcursor.
+    ${pkgs.hyprland}/bin/hyprctl setcursor ${lightCursorTheme} ${toString lightCursorSize}
+    ${pkgs.hyprland}/bin/hyprctl keyword env XCURSOR_THEME,${lightCursorTheme}
+    ${pkgs.hyprland}/bin/hyprctl keyword env HYPRCURSOR_THEME,${lightCursorTheme}
+    ${pkgs.hyprland}/bin/hyprctl keyword env XCURSOR_SIZE,${toString lightCursorSize}
   '';
 
   # Peer machine to notify on theme edges, baked from the host config. Empty
