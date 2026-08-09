@@ -26,16 +26,23 @@ BOLD_YELLOW=$'\033[1;33m'
 GIT_ICON=$''
 INVERSE=$'\033[7m'
 # Bright slot 3. Foot leaves bold-text-in-bright off, so "bold red/green/yellow"
-# lands in the *regular* slots; reaching the brighter half of the amber ramp
-# needs an explicit 90-97 code.
+# lands in the *regular* slots; reaching the upper half of the ladder needs an
+# explicit 90-97 code.
 ACCENT=$'\033[93m'
 
-# Severity ramp for the usage meters. The amber palette offers no usable hue
-# axis, so severity rides on luminance instead: muted -> accent -> bright.
-# Measured against the dark palette these are #193F20 -> #3D8E48 -> #86E68C,
-# so the meter always gets brighter as it fills. The stock red/yellow/green
-# resolved to #15261A -> #286731 -> #193F20, which was both near-invisible at
-# the low end and inverted at the top. The light theme flattens all three
+# Severity ramp for the usage meters. A single-hue phosphor palette has no hue
+# axis, so severity rides on luminance instead. 91/93/92 resolve through
+# home/programs/foot.nix to secondaryText -> accent -> hot, which ascends, so
+# the meter always brightens as it fills.
+#
+# Named by rung and not by hex on purpose: home/palettes.nix gets retuned, and
+# an earlier version of this comment quoted hexes that had stopped being true
+# of any rung. Re-derive from foot.nix before assuming the ordering still
+# holds -- the whole point of the ramp is that it never inverts.
+#
+# The stock red/yellow/green (31/33/32) cannot be used here: those land on
+# mutedText -> accent -> secondaryText, which is near-invisible at the low end
+# and inverted between warn and high. The light theme flattens all three
 # bright slots to one grey, which loses the ramp but never re-inverts it.
 USAGE_LOW=$'\033[91m'
 USAGE_WARN=$'\033[93m'
