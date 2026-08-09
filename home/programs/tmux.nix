@@ -198,6 +198,15 @@ in
         setw -g window-status-style fg=#${p.foreground},bg=#${p.background}
         setw -g window-status-current-style fg=#${p.background},bg=#${p.foreground},bold
         set -g message-style fg=#${p.background},bg=#${p.foreground},bold
+        # Reverse video, the only highlight a monochrome VT220 had: background-
+        # coloured glyphs on a lit field, never green text on a green field.
+        # copy-mode-selection-style and copy-mode-position-style both default to
+        # #{E:mode-style}, so this one line is the copy-mode selection too.
+        # accent rather than the foreground rung the message bar and current
+        # window use, because a copy-mode selection is often a whole screen of
+        # scrollback rather than a word: it matches foot's own selection-
+        # background so a drag looks the same inside and outside tmux. Move it
+        # to p.foreground for a full-intensity field.
         set -g mode-style fg=#${p.background},bg=#${p.accent}
       %endif
 

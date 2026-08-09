@@ -1,0 +1,88 @@
+VT220 reverse video for the pane text selection (herdr 0.8.0).
+
+herdr computes the selection highlight in code; there is no theme token for
+it, so config.toml cannot reach it. See src/ui/panes.rs automatic_selection_bg.
+
+Not sent upstream: the fix is only correct for a monochrome palette.
+
+--- a/src/ui/panes.rs
++++ b/src/ui/panes.rs
+@@ -827,14 +827,29 @@
+ 
+ type Rgb = (u8, u8, u8);
+ 
++// Upstream derives the selection field by mixing the host terminal's OSC 11
++// background 28% toward white. On a single-hue phosphor palette that lands on
++// a desaturated grey (#050806 -> #4B4D4C), which is the one colour a
++// monochrome terminal cannot produce, and pairs it with an ANSI-white glyph
++// for a washed-out grey-on-grey block.
++//
++// A real VT220 had exactly two states: dark field with lit glyphs, and reverse
++// video. So emit SGR 7 and let the terminal swap its own default pair. The
++// field becomes the foreground rung and the glyphs the background rung, with
++// no colour named here at all -- so this follows the phosphor switch and the
++// light/dark toggle for free, on any profile.
++//
++// The colour-derivation helpers below are left in place (unused outside
++// #[cfg(test)]) so this patch stays a small, re-appliable diff across version
++// bumps.
+ fn automatic_selection_style(
+-    p: &Palette,
+-    host_theme: crate::terminal_theme::TerminalTheme,
++    _p: &Palette,
++    _host_theme: crate::terminal_theme::TerminalTheme,
+ ) -> Style {
+-    let bg = automatic_selection_bg(p, host_theme);
+-    Style::reset().fg(selection_fg_for_bg(bg, p)).bg(bg)
++    Style::reset().add_modifier(Modifier::REVERSED)
+ }
+ 
++#[allow(dead_code)]
+ fn automatic_selection_bg(p: &Palette, host_theme: crate::terminal_theme::TerminalTheme) -> Color {
+     let Some(background) = host_theme.background.map(terminal_theme_to_rgb) else {
+         return selection_palette_background(p);
+@@ -849,6 +864,7 @@
+     Color::Rgb(selected.0, selected.1, selected.2)
+ }
+ 
++#[allow(dead_code)]
+ fn selection_palette_background(p: &Palette) -> Color {
+     if p.panel_bg == Color::Reset {
+         p.surface_dim
+@@ -857,10 +873,12 @@
+     }
+ }
+ 
++#[allow(dead_code)]
+ fn terminal_theme_to_rgb(color: crate::terminal_theme::RgbColor) -> Rgb {
+     (color.r, color.g, color.b)
+ }
+ 
++#[allow(dead_code)]
+ fn selection_fg_for_bg(bg: Color, p: &Palette) -> Color {
+     color_to_rgb(bg)
+         .map(|bg| {
+@@ -873,6 +891,7 @@
+         .unwrap_or_else(|| panel_contrast_fg(p))
+ }
+ 
++#[allow(dead_code)]
+ fn mix_rgb(base: Rgb, target: Rgb, amount: f32) -> Rgb {
+     fn channel(base: u8, target: u8, amount: f32) -> u8 {
+         (f32::from(base) + (f32::from(target) - f32::from(base)) * amount).round() as u8
+@@ -884,6 +903,7 @@
+     )
+ }
+ 
++#[allow(dead_code)]
+ fn relative_luminance(color: Rgb) -> f32 {
+     fn channel(value: u8) -> f32 {
+         let value = f32::from(value) / 255.0;
+@@ -896,6 +916,7 @@
+     0.2126 * channel(color.0) + 0.7152 * channel(color.1) + 0.0722 * channel(color.2)
+ }
+ 
++#[allow(dead_code)]
+ fn color_to_rgb(color: Color) -> Option<Rgb> {
+     match color {
+         Color::Reset => None,

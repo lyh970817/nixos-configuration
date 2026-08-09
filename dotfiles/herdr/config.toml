@@ -125,6 +125,12 @@ name = "terminal"
 # and `"bright green"` are wrong and `config check` will not tell you.
 # `[theme.custom] accent` also supersedes the legacy `[ui] accent`, which herdr
 # ignores outright once this table sets it.
+#
+# The pane text selection is NOT reachable from here: `[theme.custom]` has no
+# selection token, and `automatic_selection_bg` (src/ui/panes.rs) derives the
+# field by mixing the terminal's OSC 11 background 28% toward white — a grey,
+# whatever the palette. pkgs/patches/herdr-selection-reverse-video.patch
+# replaces that with SGR 7.
 auto_switch = false
 [theme.custom]
 accent = "lightgreen"
