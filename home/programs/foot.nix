@@ -56,7 +56,12 @@ let
     # corrected (3.9:1). See home/palettes.nix.
     selection-background=${p.accent}
     regular0=${p.raisedBlack}
-    regular1=${p.subtleBorder}
+    # Claude Code's hardcoded chalk map (see regular2 below) puts
+    # string/regexp/deletion here, and its ANSI theme fills removed diff
+    # lines with it; at subtleBorder (1.27:1) both were invisible.
+    # mutedText is the only free rung that lifts them, and it also rescues
+    # git's stock red -- diff removals and dirty paths in `git status`.
+    regular1=${p.mutedText}
     # Claude Code colours comments from a hardcoded highlight.js/chalk map, not
     # from its theme (dark-ansi has no syntax tokens at all), so ANSI green is
     # the only lever: secondaryText keeps comments below body text while
@@ -72,7 +77,12 @@ let
     regular6=${p.accent}
     regular7=${p.secondaryText}
     bright0=${p.subtleBorder}
-    bright1=${p.mutedText}
+    # bright1 is Claude Code's error text, its logo, and the word-level fill
+    # inside a removed diff line, which must stay distinct from that line's
+    # own fill now that regular1 holds mutedText. secondaryText is the only
+    # free rung above it and it keeps the usage ramp in
+    # dotfiles/claude/statusline.sh ascending (91/93/92 = 3.9/5.5/13.1).
+    bright1=${p.secondaryText}
     bright2=${p.hot}
     bright3=${p.accent}
     bright4=${p.bright}

@@ -41,7 +41,12 @@ let
     # Normal colors - the intensity ladder standing in for hue
     [colors.normal]
     black   = '#${p.raisedBlack}'
-    red     = '#${p.subtleBorder}'
+    # Claude Code's hardcoded chalk map (see ANSI green below) puts
+    # string/regexp/deletion here, and its ANSI theme fills removed diff
+    # lines with it; at subtleBorder (1.27:1) both were invisible.
+    # mutedText is the only free rung that lifts them, and it also rescues
+    # git's stock red -- diff removals and dirty paths in `git status`.
+    red     = '#${p.mutedText}'
     # Claude Code colours comments from a hardcoded highlight.js/chalk map, not
     # from its theme (dark-ansi has no syntax tokens at all), so ANSI green is
     # the only lever: secondaryText keeps comments below body text while
@@ -60,7 +65,12 @@ let
     # Bright colors - the upper half of the ladder, for emphasis
     [colors.bright]
     black   = '#${p.subtleBorder}'
-    red     = '#${p.mutedText}'
+    # redBright is Claude Code's error text, its logo, and the word-level
+    # fill inside a removed diff line, which must stay distinct from that
+    # line's own fill now that normal red holds mutedText. secondaryText is
+    # the only free rung above it and it keeps the usage ramp in
+    # dotfiles/claude/statusline.sh ascending (91/93/92 = 3.9/5.5/13.1).
+    red     = '#${p.secondaryText}'
     green   = '#${p.hot}'
     yellow  = '#${p.accent}'
     blue    = '#${p.bright}'
