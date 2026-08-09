@@ -181,16 +181,29 @@ in
       # When you release the mouse click after selecting, copy to clipboard automatically
       bind -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-pipe "${osc52Copy}/bin/osc52-copy"
 
-      # Keep the established green tmux colors in light sessions; only dark
-      # sessions become VT220 amber.
+      # Light mode is e-ink, and nothing in it is green. The light themes in
+      # ../programs/foot.nix and ../programs/alacritty.nix are pure #FFFFFF
+      # glass with #000000 text and one #808080 mid tone, so these lines mirror
+      # the dark branch rung for rung with that three-value ladder substituted:
+      # background -> #FFFFFF, foreground -> #000000, subtleBorder -> #808080.
+      #
+      # They previously carried the pre-phosphor green scheme, which set a
+      # black status bar with #4AB34D text -- i.e. a black-and-green strip
+      # across the bottom of a white terminal, the wrong polarity rather than
+      # a drifted shade.
+      #
+      # Highlights stay reverse video as in dark, just running the other way.
+      # mode-style takes full black here rather than the dampened mid rung the
+      # dark branch uses for accent: e-ink renders grey fills poorly and ghosts
+      # them, so the panel only really has two states worth using.
       %if "#{==:#{E:THEME_MODE},light}"
-        set -g status-style bg=black,fg=#4AB34D
-        set -g pane-border-style fg=#126D15
-        set -g pane-active-border-style fg=#4AB34D
-        setw -g window-status-style fg=#4AB34D,bg=black
-        setw -g window-status-current-style fg=black,bg=#4AB34D,bold
-        set -g message-style fg=black,bg=#4AB34D,bold
-        set -g mode-style fg=black,bg=#3CA23F
+        set -g status-style bg=#FFFFFF,fg=#000000
+        set -g pane-border-style fg=#808080
+        set -g pane-active-border-style fg=#000000
+        setw -g window-status-style fg=#000000,bg=#FFFFFF
+        setw -g window-status-current-style fg=#FFFFFF,bg=#000000,bold
+        set -g message-style fg=#FFFFFF,bg=#000000,bold
+        set -g mode-style fg=#FFFFFF,bg=#000000
       %else
         set -g status-style bg=#${p.background},fg=#${p.foreground}
         set -g pane-border-style fg=#${p.subtleBorder}
