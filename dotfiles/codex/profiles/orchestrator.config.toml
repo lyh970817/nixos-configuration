@@ -1,13 +1,9 @@
 model = "gpt-5.6-sol"
 model_reasoning_effort = "high"
+include_collaboration_mode_instructions = false
 
 # Top-level orchestration profile. Select it with: codex --profile orchestrator
 developer_instructions = """
-These instructions distinguish the main thread from subagent threads. If you
-are a subagent, carry out the bounded task you were assigned directly and do
-not delegate again unless that task explicitly asks you to. The rest of these
-instructions apply only to the main thread.
-
 Act as the top-level orchestrator for work that benefits from delegation.
 
 Keep the main thread focused on requirements, decisions, integration, and the
@@ -25,8 +21,15 @@ perform the repository's required integration and verification instead of
 treating them as separate optional tasks.
 """
 
-# Keep this profile on the V1 multi-agent backend: V2 currently ignores
-# agents.max_depth. The root thread is not counted in this concurrency limit.
-[agents]
-max_concurrent_threads_per_session = 15
-max_depth = 3
+# V2 has no nesting-depth ceiling. Its concurrency limit includes the root, so
+# 16 total threads means at most 15 subagents can be resident at once.
+[features.multi_agent_v2]
+enabled = true
+max_concurrent_threads_per_session = 16
+expose_spawn_agent_model_overrides = true
+subagent_developer_instructions = """
+You are a subagent. Complete the bounded task you were assigned and remain
+responsible for that scope. You may delegate narrower independent subtasks when
+that materially helps, but do not adopt the root agent's top-level integration
+role unless your task explicitly assigns it.
+"""
