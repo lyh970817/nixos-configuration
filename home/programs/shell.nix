@@ -18,6 +18,20 @@ in
     enable = true;
     dotDir = config.home.homeDirectory;
 
+    # NO_APPEND_HISTORY (default) makes every cleanly-exiting shell rewrite
+    # the whole history file instead of appending, and NO_EXTENDED_HISTORY
+    # (default) drops timestamps. Pin the good behaviour explicitly so it
+    # doesn't depend on Home Manager defaults, which can change silently on
+    # a flake bump. ignoreSpace is deliberately left unset (its default,
+    # true, already matches the live HIST_IGNORE_SPACE behaviour).
+    history = {
+      append = true;
+      extended = true;
+      share = true;
+      size = 200000;
+      save = 200000;
+    };
+
     initContent = ''
       unsetopt BEEP
       KEYTIMEOUT=1
