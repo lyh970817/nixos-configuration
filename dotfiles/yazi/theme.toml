@@ -2,5 +2,18 @@
 dark = "vt220-amber"
 light = "eink"
 
+# plugins/git.yazi defaults `deleted` to ANSI red, which this palette moved onto
+# mutedText to rescue Claude Code's removed diff lines -- the same rung ANSI
+# bright black now holds, which is where the plugin puts `ignored`. That made
+# deleted and ignored render byte-identically, separable only by two similar
+# boxed octicons. Nothing sits below mutedText that a colour name can reach, so
+# lift deleted instead; a deletion is worth noticing and an ignored file is not.
+# lightblue is bright blue = the `bright` rung (~9.6:1), clear of untracked
+# (foreground), modified/updated (accent) and added (secondaryText). Named, not
+# hex, so it still tracks the phosphor and light/dark switch. The plugin reads
+# th.git before its own defaults, so the vendored dotfile stays unmodified.
+[git]
+deleted = { fg = "lightblue" }
+
 
 
