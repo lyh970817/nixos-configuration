@@ -12,6 +12,24 @@ let
   lightWallpaper = "$HOME/.local/share/wallpapers/Taiji_mandala.png";
   hyprCurrentTheme = "$HOME/.local/state/hypr/current-theme.conf";
 
+  # Dark-mode cursor. Bibata Original rebuilt in a utilitarian grey with a
+  # near-black outline and phosphor green only in the loading spinner, so the
+  # pointer reads as an ordinary pointer on a modern laptop rather than as part
+  # of the terminal. See pkgs/bibata-vt220-cursors.nix; it is installed through
+  # home/packages/desktop.nix, because a cursor-theme name that is not on the
+  # icon search path resolves to nothing and falls back silently.
+  #
+  # The name is taken from the package rather than spelled again, so renaming
+  # the theme cannot leave a dangling reference here.
+  #
+  # Light mode is out of scope and stays on Adwaita at 24; it only gains an
+  # explicit cursor-size write below, because gsettings is global state and
+  # would otherwise inherit dark mode's 22 the next time the mode flips.
+  darkCursorTheme = pkgs.bibata-vt220-cursors.themeName;
+  darkCursorSize = 22;
+  lightCursorTheme = "Adwaita";
+  lightCursorSize = 24;
+
   # VT220-Amber is generated, not stored. assets/themes/VT220-Amber is a
   # template tree whose phosphor colours are rung tokens spelled @name@; this
   # substitutes the active profile into a copy of it. Storing hex instead is
@@ -87,7 +105,8 @@ let
     # (Optional) Force a specific dark GTK theme if you have one installed, e.g., Adwaita-dark
     ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface gtk-theme 'VT220-Amber'
     ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface icon-theme 'Matrix-Icons'
-    ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface cursor-theme 'Adwaita'
+    ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface cursor-theme '${darkCursorTheme}'
+    ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface cursor-size ${toString darkCursorSize}
 
     # Terminals: select the palette used by new windows.
     ln -sf $HOME/.config/alacritty/themes/dark.toml $HOME/.config/alacritty/current.toml
@@ -100,7 +119,7 @@ let
     ${pkgs.mako}/bin/makoctl mode -a dark
     ${pkgs.mako}/bin/makoctl reload
 
-    hyprctl setcursor Adwaita 24
+    hyprctl setcursor ${darkCursorTheme} ${toString darkCursorSize}
 
   '';
 
@@ -137,7 +156,11 @@ let
     # (Optional) Force a specific light GTK theme
     ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface gtk-theme 'HighContrast'
     ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface icon-theme 'HighContrast'
-    ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface cursor-theme 'Adwaita'
+    ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface cursor-theme '${lightCursorTheme}'
+    # Pins what light mode already gets from the schema default. Only dark mode
+    # changed size, but cursor-size is one global key, so without this write
+    # light mode would keep dark mode's 22 and disagree with its own setcursor.
+    ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface cursor-size ${toString lightCursorSize}
 
     # Terminals: select the palette used by new windows.
     ln -sf $HOME/.config/alacritty/themes/light.toml $HOME/.config/alacritty/current.toml
@@ -150,7 +173,7 @@ let
     ${pkgs.mako}/bin/makoctl mode -r dark
     ${pkgs.mako}/bin/makoctl reload
 
-    hyprctl setcursor Adwaita 24
+    hyprctl setcursor ${lightCursorTheme} ${toString lightCursorSize}
   '';
 
   # Peer machine to notify on theme edges, baked from the host config. Empty
@@ -294,8 +317,8 @@ in
   # Managed theme assets. Dark mode pairs VT220-Amber with the Matrix-Icons
   # set (packaged in pkgs/matrix-icons.nix, installed via home/packages);
   # that set is green throughout, so it matches the phosphor palette instead
-  # of the white raster icons HighContrast was falling back to. The cursor
-  # stays neutral Adwaita.
+  # of the white raster icons HighContrast was falling back to. The cursor is
+  # Bibata-Original-VT220 (see darkCursorTheme above); light mode keeps Adwaita.
   xdg.dataFile."wallpapers/Taiji_mandala.png".source = ../../assets/wallpapers/Taiji_mandala.png;
   xdg.dataFile."themes/VT220-Amber".source = vt220Theme;
 }
