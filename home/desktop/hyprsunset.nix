@@ -4,58 +4,14 @@ let
   dayTemperature = 6500;
   dayGamma = 1.0;
 
-  # Night mode is not a warmth filter on this machine. It is the transform that
-  # turns the green phosphor console into an amber one.
+  # >>> The night warmth, and the only knob tuned here. <<<
+  # Gamma stays at hyprsunset's default 1.0 in both profiles, so dialling night
+  # mode in means changing this one number and nothing else.
   #
-  # hyprsunset's CTM is strictly diagonal: each channel is scaled by
-  # gamma * blackbody(T)/255, so every colour on screen gets the *same* three
-  # gains. Green cannot be rotated onto amber exactly, because the two ladders
-  # do not share an internal hue ramp — the red:green ratio that green needs
-  # multiplying by runs from 1.80 at the dark end to 3.66 in the mid tones, and
-  # one CTM can only supply a single value. These numbers are the least bad
-  # compromise, found by sweeping temperature and gamma against the CIELAB
-  # distance from each transformed green rung to its amber counterpart:
-  # mean dE 13.9, and dE 9.9 on the foreground rung. See home/palettes.nix for
-  # the two ladders being matched.
-  #
-  # Keep this a multiple of 100. matrixForKelvin does `temp /= 100` on an
-  # integer, so the temperature is quantised to hundreds: 1100 and 1199 produce
-  # exactly the same matrix, and 1080 would silently behave as 1000.
-  #
-  # 1100 K is below the 1900 K point where hyprsunset's blue term reaches zero,
-  # so the result carries no blue at all. Amber's small blue component is lost
-  # and the transformed palette is a purer orange than the amber profile is.
-  # That is a consequence of the fit rather than an oversight: any temperature
-  # warm enough to make red dominate green has already clamped blue to zero.
-  # Zeroing blue is also the single biggest circadian win available here —
-  # a conventional 2700 K filter still passes some.
-  nightTemperature = 1100;
-
-  # 280%. Amplification is unavoidable, not a preference: at gamma 100% a CTM
-  # can only attenuate, so red can never exceed green and the "amber" comes out
-  # olive. Reaching amber at all requires a red gain above 1, and the vivid
-  # green profile needs 2.89 to reach amber's brightness exactly.
-  #
-  # This exceeds the 200% that hyprsunset's --gamma help text calls a maximum.
-  # Nothing enforces that number — main.cpp parses --gamma_max with no clamp —
-  # so the real limit is the max-gamma value below. Gains above 1.0 clip, so the
-  # top of the ladder compresses, and red is amplified across every other
-  # surface too: photos and video look blown out while night mode is on.
-  #
-  # This is also the circadian lever. Melanopic exposure for a typical terminal
-  # screen, relative to daytime: 0.50x here, against 0.32x for a typical 2700 K
-  # filter. Capping at 200% would reach 0.42x but loosen the amber badly for
-  # this profile (mean dE 18.6), which is why the vivid palette is paired with
-  # the higher gamma instead.
-  nightGamma = 2.80;
-
-  # Ceiling for the gamma above; hyprsunset refuses the profile outright if
-  # gamma exceeds it, and its own default is 100 — so this line is required for
-  # any gamma over 1.0, not merely for exceeding 200%. Expressed in percent,
-  # unlike the per-profile gamma.
-  maxGammaPercent = 300;
-
-  nightGammaPercent = toString (builtins.floor (nightGamma * 100.0));
+  # Keep it a multiple of 100. matrixForKelvin does `temp /= 100` on an integer,
+  # so the temperature is quantised to hundreds: 3500 and 3599 produce exactly
+  # the same matrix, and 3480 would silently behave as 3400.
+  nightTemperature = 3500;
 
   hyprsunsetWarmth = pkgs.writeShellApplication {
     name = "hyprsunset-warmth";
@@ -78,8 +34,7 @@ let
 
       # hyprsunset accepts 1000-20000 K, but 2000-6500 K covers a conventional
       # night-light range through the configured daylight temperature. Its CTM
-      # quantises temperatures to 100 K; send only temperature so the active
-      # profile's gamma is preserved.
+      # quantises temperatures to 100 K.
       hyprctl hyprsunset temperature "$1"
     '';
   };
@@ -92,12 +47,8 @@ let
       pkgs.systemd
     ];
     text = ''
-      # Both halves of the transform have to be sent. Temperature alone would
-      # leave gamma at whatever the time-of-day profile loaded, and at gamma
-      # 100% an 1100 K CTM is a dim olive wash rather than amber.
       apply_night() {
-        hyprctl hyprsunset temperature ${toString nightTemperature} >/dev/null 2>&1 || return 1
-        hyprctl hyprsunset gamma ${nightGammaPercent} >/dev/null 2>&1 || return 1
+        hyprctl hyprsunset temperature ${toString nightTemperature} >/dev/null 2>&1
       }
 
       wait_for_socket() {
@@ -133,12 +84,11 @@ in
   #
   # The CTM lands at scanout rather than in the composited buffer, so it is
   # invisible to wlr-screencopy: a screenshot taken during night mode still
-  # shows untransformed green. Verify this one by eye, or by reading the
+  # shows the untransformed colours. Verify this one by eye, or by reading the
   # "Calculated the CTM to be ..." line the service logs on every profile load.
   services.hyprsunset = {
     enable = true;
     settings = {
-      max-gamma = maxGammaPercent;
       profile = [
         {
           time = "06:00";
@@ -148,7 +98,7 @@ in
         {
           time = "16:00";
           temperature = nightTemperature;
-          gamma = nightGamma;
+          gamma = 1.0;
         }
       ];
     };
