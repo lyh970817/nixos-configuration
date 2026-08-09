@@ -241,6 +241,10 @@ in
       # Claude Code through the isolated local GPT-5.6 gateway profile.
       alias clg='claude-gpt56'
 
+      # Orchestrator sessions: a model plus its own top-level system prompt.
+      alias co='claude --model claude-opus-5 --append-system-prompt-file "$HOME/.config/claude/orchestrator-opus.md"'
+      alias cf='claude --model claude-fable-5 --append-system-prompt-file "$HOME/.config/claude/orchestrator-fable.md"'
+
       # Claude Code profile launchers bypassing all permission checks.
       alias cly='claude --dangerously-skip-permissions'
       alias clty='claude-matt --dangerously-skip-permissions'
