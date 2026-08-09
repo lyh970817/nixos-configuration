@@ -91,12 +91,7 @@ let
     bright7=${p.foreground}
     dim0=${p.deepSurface}
     dim1=${p.deepSurface}
-    # Claude Code dims comments inside its diff view, so code-block comments
-    # land here rather than on regular2. At subtleBorder that put them at
-    # 1.27:1 -- unreadable, and a whole rung below dim3/dim4/dim6 for no
-    # reason. Match regular2 so a comment reads the same in a diff as in a
-    # plain block.
-    dim2=${p.secondaryText}
+    dim2=${p.subtleBorder}
     dim3=${p.mutedText}
     dim4=${p.mutedText}
     dim5=${p.secondaryText}

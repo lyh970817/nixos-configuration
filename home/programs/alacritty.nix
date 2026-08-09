@@ -82,12 +82,7 @@ let
     [colors.dim]
     black   = '#${p.deepSurface}'
     red     = '#${p.deepSurface}'
-    # Claude Code dims comments inside its diff view, so code-block comments
-    # land here rather than on normal green. At subtleBorder that put them at
-    # 1.27:1 -- unreadable, and a whole rung below dim yellow/blue/cyan for no
-    # reason. Match normal green so a comment reads the same in a diff as in a
-    # plain block.
-    green   = '#${p.secondaryText}'
+    green   = '#${p.subtleBorder}'
     yellow  = '#${p.mutedText}'
     blue    = '#${p.mutedText}'
     magenta = '#${p.secondaryText}'
