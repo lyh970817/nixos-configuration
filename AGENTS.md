@@ -14,17 +14,19 @@ The flake exposes a single `.#system` output for both machines; per-machine fact
 
 ## Rebuild Policy
 
-For configuration changes, do not run standalone verification commands before rebuilding. Stage and commit the scoped change first, then apply the committed configuration with `rebuild`.
+For configuration changes, do not run standalone verification commands before committing. Stage and commit the scoped change instead.
 
-`rebuild` is the verification gate: a full evaluation and build catches every syntax, type, missing-attr, and build error, so running separate checks beforehand only duplicates it. The pre-commit hooks are deliberately *not* that gate — they cover only what a rebuild structurally cannot see (nixfmt drift, TOML/JSON parse errors in files Home Manager installs as opaque bytes, merge-conflict markers, private keys). A clean commit therefore does not mean the configuration evaluates; only a successful `rebuild` means that. The hooks install themselves at Home Manager activation (`home/programs/pre-commit.nix`), so a fresh clone picks them up on its first rebuild.
+`rebuild` is the verification gate: a full evaluation and build catches every syntax, type, missing-attr, and build error, so running separate checks beforehand only duplicates it. The pre-commit hooks are deliberately *not* that gate — they cover only what a rebuild structurally cannot see (nixfmt drift, TOML/JSON parse errors in files Home Manager installs as opaque bytes, merge-conflict markers, private keys). A clean commit therefore does not mean the configuration evaluates; only a successful `rebuild` means that. The hooks install themselves at Home Manager activation (`home/programs/pre-commit.nix`) and cover every linked worktree, so a fresh clone picks them up on its first rebuild and needs nothing per worktree.
+
+Who runs `rebuild` is a separate question — see Commit & Integration.
 
 For visual changes, perform visual verification automatically. Treat
 the mode active at task start as the entire change scope; change or inspect the
 other mode only when the user explicitly requests it. Before committing, a
 visual preview may use reliably reversible runtime overrides or isolated
 temporary configs. It must not run an uncommitted Home Manager activation or
-NixOS rebuild. Commit and rebuild the selected result, then visually inspect the
-installed result through `screen-verify`.
+NixOS rebuild. Commit the selected result, and inspect the installed result
+through `screen-verify` once it has been rebuilt.
 
 ## Mihomo Configuration: Safe Apply / Auto-Revert
 
@@ -98,11 +100,11 @@ Use two-space indentation in Nix files. Keep modules focused on one concern and 
 
 `pkgs/hyprwhspr.nix` should package upstream runtime files that shipped commands depend on, including `bin`, `config`, `lib`, `share`, `scripts`, and `utils`. Expose user-facing upstream launchers with wrappers in `$out/bin`; auxiliary tools such as `meeting-recorder` must not live only under `$out/lib/hyprwhspr/bin`. Copy upstream docs, contrib files, and license material to `$out/share/doc/hyprwhspr`. The local host uses hyprwhspr with the REST backend; do not assume local backends such as `pywhispercpp` work unless their Python dependencies are explicitly added to the Nix environment.
 
-## Commit & Pull Request Guidelines
+## Commit & Integration
 
-Recent history uses short imperative subjects such as `Add 115 Browser launcher` and `Fix tmux copy-mode paging keys`. Follow that style: start with a verb, keep the subject specific, and avoid unrelated changes in one commit. Never push branches and never open pull requests, even from an isolated worktree — leave completed work committed on its local branch and let the user push and merge it themselves.
+Recent history uses short imperative subjects such as `Add 115 Browser launcher` and `Fix tmux copy-mode paging keys`. Follow that style: start with a verb, keep the subject specific, and avoid unrelated changes in one commit.
 
-Commit configuration changes before rebuilding, then treat `rebuild` as the verification gate (see Rebuild Policy — the pre-commit hooks are only a formatting and hygiene screen, not a correctness check). If the rebuild fails, make a follow-up fix commit and rebuild again.
+Committing your own work on your own branch or worktree needs no approval. Merging into `master` and running `rebuild` belong to the top-level session: if another session gave you this task, leave the finished work committed on your branch and report it, and expect anything the rebuild catches to come back to you as a follow-up. Never push branches and never open pull requests.
 
 ## Security & Configuration Tips
 
