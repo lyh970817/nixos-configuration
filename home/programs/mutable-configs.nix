@@ -91,7 +91,6 @@ let
   codexProfileNames = [
     "last30days"
     "mattpocock"
-    "orchestrator"
     "superpowers"
     "understand-anything-codegraph"
   ];
@@ -833,6 +832,13 @@ in
     # sessions, caches, marketplaces, and installed payloads stay mutable.
     ".codex/AGENTS.md".source = link "dotfiles/codex/AGENTS.md";
     ".codex/agents/merge.toml".source = link "dotfiles/codex/agents/merge.toml";
+    # This profile has no relative skill paths or runtime-owned state, so keep
+    # it exact and live instead of passing it through the selective profile
+    # reconciler above.
+    ".codex/orchestrator.config.toml" = {
+      source = link "dotfiles/codex/profiles/orchestrator.config.toml";
+      force = true;
+    };
     ".codex/hooks.json" = {
       source = link "dotfiles/codex/hooks.json";
       force = true;
