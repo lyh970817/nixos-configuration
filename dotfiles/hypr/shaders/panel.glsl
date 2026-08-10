@@ -43,8 +43,8 @@ uniform sampler2D tex;
 
 // Optics. The kernel below is normalised, so on a flat field soft == base and
 // both of these contribute exactly nothing; they act only near glyph edges.
-const float DIFFUSION_STRENGTH = 0.130;
-const float BLOOM_STRENGTH = 0.500;
+const float DIFFUSION_STRENGTH = 0.160;
+const float BLOOM_STRENGTH = 0.580;
 
 // Panel imperfections. The panel is meant to read as visibly tired: the uneven
 // edge light and the dark far corner are both noticed without looking for them,
@@ -75,6 +75,12 @@ const float EDGE_FALLOFF = 0.300;
 // purity on glyph cores, which this palette must not pay.
 const float TEMP_ON_PANEL = 0.450;
 const float TEMP_ON_IMAGE = 0.012;
+
+// A weak diagonal viewing-angle wash: dim lit pixels slightly and lift only
+// the dark field, preserving the centre while the top-right loses contrast.
+const float OFF_AXIS_CONTRAST = 0.030;
+const float OFF_AXIS_BLACK_LIFT = 0.006;
+const vec3 OFF_AXIS_TINT = vec3(1.00, 0.96, 0.88);
 
 // How far a washed-out patch pulls colour toward its own luminance. The earlier
 // 0.080 ceiling existed because the wash was applied at full strength to lit
@@ -162,6 +168,7 @@ void main() {
     float lowerRight = 1.0 - smoothstep(0.0, 0.48, distance(uv, vec2(0.94, 1.04)));
     float upperRight = 1.0 - smoothstep(0.0, 0.38, distance(uv, vec2(1.02, 0.02)));
     float bleedMask = lowerLeft * 0.75 + lowerRight + upperRight * 0.35;
+    bleedMask *= mix(0.88, 1.12, panelField(uv, vec2(17.3, 9.1)));
     vec3 panelBleed = (BLEED_TINT + tempShift * TEMP_ON_PANEL)
         * BACKLIGHT_BLEED * bleedMask * darkness;
 
@@ -186,6 +193,15 @@ void main() {
 
     color += panelBleed + vec3(mura);
     color *= 1.0 + tempShift * TEMP_ON_IMAGE;
+
+    // Viewing-angle loss favors the right and top. A decorrelated broad field
+    // bends the diagonal boundary without turning it into visible texture.
+    float offAxisWarp = panelField(uv, vec2(13.7, 2.4)) - 0.5;
+    float rightWash = smoothstep(0.28, 1.02, uv.x + offAxisWarp * 0.06);
+    float topWash = 1.0 - smoothstep(-0.08, 0.72, uv.y + offAxisWarp * 0.04);
+    float offAxis = clamp(rightWash * (0.35 + topWash * 0.65), 0.0, 1.0);
+    color *= 1.0 - OFF_AXIS_CONTRAST * offAxis;
+    color += OFF_AXIS_TINT * OFF_AXIS_BLACK_LIFT * offAxis * darkness;
 
     // Local contrast loss: a couple of patches that read slightly washed out,
     // on a field decorrelated from the mura above. The offset is not
