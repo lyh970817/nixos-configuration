@@ -38,11 +38,11 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
-def run(command: list[str]) -> subprocess.CompletedProcess[str]:
+def run(command: list[str], *, display: str | None = None) -> subprocess.CompletedProcess[str]:
     completed = subprocess.run(command, text=True, capture_output=True, check=False)
     if completed.returncode:
         detail = completed.stderr.strip() or completed.stdout.strip() or "no error output"
-        raise HandoffError(f"{shlex.join(command)} failed: {detail}")
+        raise HandoffError(f"{display or shlex.join(command)} failed: {detail}")
     return completed
 
 
@@ -164,25 +164,27 @@ def launch_in_herdr(
                 *codex_args(mode, cwd, session_id),
             ]
         )
+        prompt_command = [
+            "herdr",
+            "agent",
+            "prompt",
+            agent_name,
+            briefing,
+            "--wait",
+            "--until",
+            "working",
+            "--until",
+            "blocked",
+            "--until",
+            "idle",
+            "--until",
+            "done",
+            "--timeout",
+            PROMPT_TIMEOUT_MS,
+        ]
         run(
-            [
-                "herdr",
-                "agent",
-                "prompt",
-                agent_name,
-                briefing,
-                "--wait",
-                "--until",
-                "working",
-                "--until",
-                "blocked",
-                "--until",
-                "idle",
-                "--until",
-                "done",
-                "--timeout",
-                PROMPT_TIMEOUT_MS,
-            ]
+            prompt_command,
+            display=f"herdr agent prompt {agent_name} <briefing> --wait",
         )
     except HandoffError as error:
         print(f"handoff failed: {error}", file=sys.stderr)
