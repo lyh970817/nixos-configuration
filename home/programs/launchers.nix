@@ -46,13 +46,6 @@ let
     "thunar-settings"
   ];
 
-  disableScreenShader = pkgs.writeShellApplication {
-    name = "disable-screen-shader";
-    runtimeInputs = [ pkgs.hyprland ];
-    text = ''
-      exec hyprctl keyword decoration:screen_shader '[[EMPTY]]'
-    '';
-  };
 in
 {
   xdg.dataFile = builtins.listToAttrs (map hideFromLauncher hiddenLauncherEntries) // {
@@ -282,19 +275,19 @@ in
   };
 
   xdg.desktopEntries = {
-    # Runtime-only override: the dark-mode hook restores its shader the next
-    # time dark mode is applied.
-    disable-screen-shader = {
-      name = "Disable Screen Shader";
+    # The central controller preserves the preference and reconciles it with
+    # the current theme and active laptop output.
+    toggle-screen-shader = {
+      name = "Toggle Screen Shader";
       genericName = "Display";
-      comment = "Temporarily turn off Hyprland's active screen shader";
-      exec = "${disableScreenShader}/bin/disable-screen-shader";
+      comment = "Enable or disable Hyprland's screen shader";
+      exec = "${pkgs.screen-shader-controller}/bin/screen-shader toggle";
       icon = "video-display";
       terminal = false;
       type = "Application";
       categories = [ "Settings" ];
       settings = {
-        Keywords = "shader;screen;display;hyprland;";
+        Keywords = "shader;screen;display;hyprland;toggle;enable;disable;";
       };
     };
 

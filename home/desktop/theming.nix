@@ -71,6 +71,10 @@ let
     export XDG_RUNTIME_DIR="/run/user/$(id -u)"
     mkdir -p "$HOME/.local/state/hypr"
 
+    # Make the mode authoritative before reconciling the output-aware shader.
+    ln -sf "$HOME/.config/hypr/themes/dark.conf" "${hyprCurrentTheme}"
+    ${pkgs.screen-shader-controller}/bin/screen-shader reconcile --mode dark
+
     # 1. WALLPAPER (Kill old, start new)
     pkill swaybg || true
     ${pkgs.util-linux}/bin/setsid -f ${pkgs.swaybg}/bin/swaybg -c ${p.background} >/dev/null 2>&1
@@ -78,14 +82,7 @@ let
 
     # 2. HYPRLAND BACKGROUND COLOR (Misc setting)
     ${pkgs.hyprland}/bin/hyprctl keyword misc:background_color 0x${p.background}
-    # Panel shader. The old global black floor remains removed; panel.glsl uses
-    # localised off-axis washout and dark lift instead. Light mode leaves it empty.
-    ${pkgs.hyprland}/bin/hyprctl keyword decoration:screen_shader "$HOME/.config/hypr/shaders/panel.glsl"
-
-    # 3. HYPRLAND THEME (Symlink + Live Settings)
-    ln -sf "$HOME/.config/hypr/themes/dark.conf" "${hyprCurrentTheme}"
-
-    # Live update gaps/borders
+    # 3. HYPRLAND THEME (Live Settings)
     ${pkgs.hyprland}/bin/hyprctl keyword general:gaps_in 8
     ${pkgs.hyprland}/bin/hyprctl keyword general:gaps_out 12
     ${pkgs.hyprland}/bin/hyprctl keyword general:border_size 1
@@ -138,7 +135,9 @@ let
     export XDG_RUNTIME_DIR="/run/user/$(id -u)"
     mkdir -p "$HOME/.local/state/hypr"
 
+    # Make the mode authoritative before reconciling the output-aware shader.
     ln -sf "$HOME/.config/hypr/themes/light.conf" "${hyprCurrentTheme}"
+    ${pkgs.screen-shader-controller}/bin/screen-shader reconcile --mode light
 
     # WALLPAPER
     ${pkgs.systemd}/bin/systemctl --user stop mandala-wallpaper.service || true
@@ -147,7 +146,6 @@ let
 
     # 2. HYPRLAND BACKGROUND COLOR
     ${pkgs.hyprland}/bin/hyprctl keyword misc:background_color 0xffffff
-    ${pkgs.hyprland}/bin/hyprctl keyword decoration:screen_shader '[[EMPTY]]'
 
     # Live update gaps/borders
     ${pkgs.hyprland}/bin/hyprctl keyword general:gaps_in 4
@@ -311,7 +309,36 @@ in
     themeToggle
     themeMode
     themeHold
+    screen-shader-controller
   ];
+
+  # A separate watcher, rather than the exec-once monitor/theme loop, adopts a
+  # new controller immediately after Home Manager switches generations.
+  systemd.user.services.screen-shader-watch = {
+    Unit = {
+      Description = "Keep the laptop-panel shader reconciled with Hyprland outputs";
+      PartOf = [ "graphical-session.target" ];
+      After = [ "graphical-session.target" ];
+    };
+    Service = {
+      Type = "simple";
+      ExecStart = "${pkgs.screen-shader-controller}/bin/screen-shader watch";
+      Restart = "on-failure";
+      RestartSec = "2s";
+      StandardOutput = "journal";
+      StandardError = "journal";
+    };
+    Install.WantedBy = [ "graphical-session.target" ];
+  };
+
+  # graphical-session.target is already active during a rebuild, so adding a
+  # WantedBy edge alone would not start a newly introduced watcher. Restart it
+  # after the units are reloaded so policy changes take effect in this session.
+  home.activation.restartScreenShaderWatch = lib.hm.dag.entryAfter [ "reloadSystemd" ] ''
+    if ${pkgs.systemd}/bin/systemctl --user is-active --quiet graphical-session.target; then
+      run ${pkgs.systemd}/bin/systemctl --user restart screen-shader-watch.service
+    fi
+  '';
 
   # Monitor presence in hypr/scripts/monitor-switch.sh is the sole automatic
   # theme trigger; it calls switch-light/switch-dark directly. The Darkman
