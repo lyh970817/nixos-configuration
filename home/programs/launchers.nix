@@ -292,10 +292,7 @@ in
       icon = "video-display";
       terminal = false;
       type = "Application";
-      categories = [
-        "Settings"
-        "Display"
-      ];
+      categories = [ "Settings" ];
       settings = {
         Keywords = "shader;screen;display;hyprland;";
       };
