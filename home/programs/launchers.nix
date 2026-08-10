@@ -36,7 +36,6 @@ let
     "htop"
     "kbd-layout-viewer5"
     "nixos-manual"
-    "nmtui"
     "nvim"
     "org.fcitx.Fcitx5"
     "org.fcitx.fcitx5-migrator"
@@ -76,6 +75,42 @@ in
       Name=uuctl
       Hidden=true
     '';
+
+    # Network manager launcher: opens nmtui in a terminal. force = true so it
+    # replaces any hand-made ~/.local/share/applications/nmtui.desktop instead
+    # of showing as a second entry, and it lands on fresh installs too.
+    "applications/nmtui.desktop" = {
+      force = true;
+      text = ''
+        [Desktop Entry]
+        Version=1.0
+        Type=Application
+        Name=Network Manager
+        GenericName=Network Configuration
+        Comment=Text-based network configuration tool
+        Exec=foot --title nmtui zsh -i -c nmtui
+        Icon=network-wired
+        Terminal=false
+        Categories=System;Network;Settings;
+        Keywords=network;wifi;ethernet;connection;nmtui;
+      '';
+    };
+
+    # Rename the graphical connection editor without creating a duplicate.
+    "applications/nm-connection-editor.desktop" = {
+      force = true;
+      text = ''
+        [Desktop Entry]
+        Type=Application
+        Name=Network configuration
+        Comment=Manage and change your network connection settings
+        Icon=preferences-system-network
+        Exec=nm-connection-editor
+        Terminal=false
+        StartupNotify=true
+        Categories=GNOME;GTK;Settings;X-GNOME-NetworkSettings;X-GNOME-Utilities;
+      '';
+    };
 
     # Runtime-only override: the dark-mode hook restores its shader the next
     # time dark mode is applied.
