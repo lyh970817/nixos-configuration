@@ -68,17 +68,21 @@ prevalent any opinion is and did not determine the production selection.
 ## Historical full-body phases
 
 All full-body phases used 15 technical responses from this repository with
-human-auditable checklists. Calls used Codex CLI 0.147.0, an ephemeral
-read-only child, disabled hooks/user configuration, a common `<message>`
-envelope, and a 120-second timeout. Blind judges saw opaque candidates, not
-model or prompt identity.
+human-auditable checklists. The later retained setups standardized on Codex CLI
+0.147.0, an ephemeral read-only child, disabled hooks/user configuration, a
+common `<message>` envelope, and an outer 120-second timeout. Phase 0 does not
+support that universal runner claim: A's retained `run.sh` used parallelism 5
+and no outer 120-second timeout, while B's runner is absent and its Luna/low
+identity comes from the supplied experimental definition rather than
+self-contained output metadata; B's manifest suggests sequential scheduling.
+Blind judges saw opaque candidates, not model or prompt identity.
 
 | Phase | Matrix | Result | Why it was not the final design |
 | --- | --- | --- | --- |
-| 0 | 5 models/prompts × 15 | Luna low/revised was selected for safety | later audit found it expanded all 15 outputs and produced no requested summary |
+| 0 | 5 models/prompts × 15 | Luna low/revised was selected for safety | later audit found it expanded all 15 outputs and produced no separate useful summary; the revised prompt had not encoded that product requirement |
 | 1 | Control + 6 cells × 15 | Luna low/stronger-brief prompt passed retention | only `+1.13` mean body gain, `+1` median, no `+4` case; 8/15 material rewrites |
 | 2 | Control + 6 cells × 15 | historical `**Summary**` contract recovered | every candidate failed retention, safety, Summary, or strict communication gates |
-| 3 | Control + C3 + E1 × 15 | E1 produced clean Summary endings | independent audit found full bodies remained copy-edit level 15/15 and original comparison was `4/11/0`, not the earlier claimed `5/10/0` |
+| 3 | Control + C3 + E1 × 15 | E1 produced clean Summary endings | the blind identity and detailed E1 rows reproduce `4/11/0` and copy-edit-level bodies 15/15; the stored `5/10/0` aggregate is arithmetically inconsistent |
 
 Phase 0's historical five-cell results are retained as context: Luna low with
 the revised retention prompt had `60/60` mean/min retention and was faster than
@@ -90,8 +94,12 @@ Phase 2 showed why direct promotion of the earlier GPT-5.4 full-body candidate
 was unsafe: C3 retained `248/248` body checklist items but invented unsupported
 intent in one Summary, and its runner emitted a literal terminal `\\n` artifact.
 Phase 3 fixed those specific defects but did not cross the material-rewrite
-bar. The architecture, rather than a further synonym-level rewrite prompt, had
-to change.
+bar. Joining its blind identity map to the detailed communication judgments
+gives E1 four wins, 11 ties, and no losses against the original; all 15 E1 rows
+are `copy_edit` with `material_editorial_change=false`. The stored aggregate's
+`5/10/0` field disagrees with those rows, and its validation did not check that
+arithmetic. The row-derived `4/11/0` is therefore the reproducible result. The
+architecture, rather than a further synonym-level rewrite prompt, had to change.
 
 ## Phase 5 — summary-only selection
 
@@ -110,12 +118,15 @@ safety-relevant detail that the shorter alternatives lost while still requiring
 a compact companion. These G outputs are model-selection context, not the final
 Prompt H production evidence.
 
-### Final GPT-5.4 versus GPT-5.5 blind
+### Mixed GPT-5.4-side versus GPT-5.5 blind
 
-An additional blind Prompt H comparison preferred GPT-5.4 in `4/5` fixtures
-and GPT-5.5 in `1/5`. This is model-preference evidence only. The exact
-GPT-5.4 Prompt H rerun below, rather than a mixture of exploratory or
-per-case outputs, is the production-fidelity result.
+The surviving final-blind2 manifest shows that the GPT-5.4 side used Prompt G
+on cases 01, 08, 09, and 12 and Prompt H on case 05, while the GPT-5.5 side used
+Prompt H on all five. After unblinding, the GPT-5.4-side configuration was
+preferred in `3/5` fixtures and GPT-5.5 in `2/5`. Because the GPT-5.4 side mixed
+prompts, this is configuration evidence, not a controlled Prompt H model
+comparison. The exact GPT-5.4 Prompt H rerun below remains the separate
+production-fidelity result.
 
 ### Exact GPT-5.4 Prompt H rerun
 
@@ -127,13 +138,13 @@ required the more specific DOCX-style multi-pass condition. Prompt H is
 therefore `4/5` under this strict audit, not perfect fidelity. The unchanged
 original above the brief remains authoritative.
 
-This case-05 result is an important provenance correction. An earlier final
-case-05 review found a different GPT-5.4 H sample deployable because it kept
-the distinct condition. A stricter earlier audit also recorded selective
-omission of the admission, user credit, registry paradox, and its hedged
-inference. Neither result makes every Prompt H sample perfect; they show why
-the production choice is the best observed companion-brief tradeoff rather
-than a claim of complete summary retention.
+This case-05 result is an important provenance correction. The deployable
+case-05 sample in the earlier mixed comparison was GPT-5.5 with Prompt H, not
+GPT-5.4. A retained GPT-5.4/H audit also recorded selective omission of the
+admission, user credit, registry paradox, and its hedged inference. The retained
+GPT-5.4/H samples therefore do not establish perfect case-05 reliability; they
+show why the production choice is a tradeoff rather than a claim of complete
+summary retention.
 
 ### Rejected Prompt I
 
@@ -161,7 +172,7 @@ ablation. That high-effort configuration took 33.211–84.003 seconds per case
 and passed only `6/10` safety reviews. The configuration did not justify its
 latency or resolve fidelity consistently, so production retained medium effort.
 
-### ASD-STE100 ablation
+### ASD-STE100-instruction replacement
 
 V4 compared the detailed route-aware prompt
 `aea40cb9ad4401ab27afccaef10dffbfca381379a50e5a2168ff1714d67344b8`
@@ -172,10 +183,10 @@ the intended route in `6/6`. The detailed prompt won all `6/6` blind
 communication comparisons and passed safety in `3/6`; the ASD-STE100 prompt
 passed safety in only `1/6`.
 
-ASD-STE100 was useful as a wording constraint but did not supply the missing
-routing and fidelity semantics: which result boundary, choice, evidence limit,
-open question, or pending action must survive compression. It was therefore not
-deployed by itself.
+The minimal instruction addressed surface wording but did not supply the
+missing routing and fidelity semantics: which result boundary, choice, evidence
+limit, open question, or pending action must survive compression. It was
+therefore not deployed by itself.
 
 The packaged runner aborted when it encountered a pre-existing detailed-cell
 run before reaching the ASD-STE100 cell. The same packaged invocation and
