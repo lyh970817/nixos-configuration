@@ -174,27 +174,57 @@ let
         "visualize@openai-bundled",
         "deep-research@openai-bundled",
     ]
+    # Curated remote skills remain blocked even if a future CLI release ignores
+    # remote_plugin for an already-cached plugin.  These names come from the
+    # manifests currently shipped by openai-templates, not its plugin name.
+    OPENAI_TEMPLATE_SKILLS = [
+        "openai-templates:artifact-template-analytics-dashboard",
+        "openai-templates:artifact-template-business-review",
+        "openai-templates:artifact-template-design-report",
+        "openai-templates:artifact-template-experiment-analysis",
+        "openai-templates:artifact-template-financial-budget",
+        "openai-templates:artifact-template-investment-committee-memo",
+        "openai-templates:artifact-template-legal-memorandum",
+        "openai-templates:artifact-template-market-trends-report",
+        "openai-templates:artifact-template-minimal-letterhead",
+        "openai-templates:artifact-template-operating-calendar",
+        "openai-templates:artifact-template-operating-review",
+        "openai-templates:artifact-template-project-kickoff",
+        "openai-templates:artifact-template-project-tracker",
+        "openai-templates:artifact-template-sales-pipeline",
+        "openai-templates:artifact-template-simple-dark-mode",
+        "openai-templates:artifact-template-simple-light-mode",
+        "openai-templates:artifact-template-strategy-memorandum",
+        "openai-templates:artifact-template-system-design",
+        "openai-templates:artifact-template-team-alignment",
+        "openai-templates:artifact-template-three-statement-forecast",
+    ]
     SKILLS = [
+        # Keep the other bundled system skills available, including
+        # openai-docs, skill-creator, skill-installer, and review-agent.
+        "imagegen",
+        "plugin-creator",
         "control-in-app-browser",
         "visualize",
         "sites-hosting",
         "sites-building",
         "deep-research",
-        "openai-templates",
         "google-drive",
         "google-drive:google-drive",
         "google-drive:google-drive-comments",
         "google-drive:google-docs",
         "google-drive:google-sheets",
         "google-drive:google-slides",
-    ]
+    ] + OPENAI_TEMPLATE_SKILLS
     PATH_SKILLS = {
         "control-in-app-browser": "control-in-app-browser",
         "sites-hosting": "sites-hosting",
         "sites-building": "sites-building",
         "deep-research": "deep-research",
-        "openai-templates": "openai-templates",
         "google-drive": "google-drive",
+    } | {
+        skill.removeprefix("openai-templates:"): skill
+        for skill in OPENAI_TEMPLATE_SKILLS
     }
 
     def value(item):

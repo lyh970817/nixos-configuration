@@ -14,16 +14,18 @@ The tracked sources of truth are `/home/andongni/.nixos-config/dotfiles/codex/` 
 - `~/.codex/shared-skills` is a separate out-of-store symlink to `dotfiles/agents/skills` — a Matt Pocock-managed, curated, shared 36-skill pool used across profiles, not Codex-specific or universal. It must not be linked into Claude. It's CLI-only: Codex Desktop's `CODEX_HOME` is `~/.codex-desktop`, which never reads `~/.codex`, so Desktop never sees this symlink.
 - Mutable, not sourced from the repo, not configuration to manage here: `config.toml` (base config), `auth.json`, sqlite state, `history.jsonl`, `sessions/`, shell snapshots, caches.
 
-## How profiles select skills
+## Skill discovery and policy
 
-The engine auto-scans two sources regardless of profile: `$HOME/.agents/skills` as a USER-scope source (independent of `CODEX_HOME`) and bundled `.system` skills under `$CODEX_HOME/skills/.system`. `$HOME/.agents/skills` must never exist on this machine — anything placed there auto-loads into every Codex surface, including Desktop, with no per-skill opt-out. The shared pool instead lives at `dotfiles/agents/skills`, reached only via `~/.codex/shared-skills`.
+The CLI auto-discovers system skills shipped under `$CODEX_HOME/skills/.system` and the skill entries installed under `$CODEX_HOME/skills`; profile selection is not a general allow-list. `$HOME/.agents/skills` is also a USER-scope source independent of `CODEX_HOME`. It must never exist on this machine — anything placed there auto-loads into every Codex surface, including Desktop, with no per-skill opt-out. The shared pool instead lives at `dotfiles/agents/skills`, reached only via `~/.codex/shared-skills`.
 
-Beyond that `.system` auto-scan, a profile enables a skill only by explicitly listing a `[[skills.config]]` stanza whose path is resolved relative to the profile file's own runtime location under `~/.codex`:
+`home.activation.codexPolicy` preserves unknown user state while reconciling its owned base fields in `~/.codex/config.toml` before all five CLI profiles are selected. `features.remote_plugin = false` is the primary barrier for remote plugins. As a durable exception, it also writes exact disabled `[[skills.config]]` names for bundled `imagegen` and `plugin-creator`, the five Google Drive skills, the browser/sites/visualization/deep-research skills, and the 20 exact `openai-templates:artifact-template-*` manifest names currently cached by the OpenAI templates plugin. It deliberately leaves bundled `openai-docs`, `skill-creator`, `skill-installer`, and hidden `review-agent` enabled. Codex Desktop is isolated at `~/.codex-desktop`, so it receives none of this CLI policy.
+
+Profiles use `[[skills.config]]` stanzas only for targeted overrides. A path in such a stanza is resolved relative to the profile file's own runtime location under `~/.codex`:
 
 - `skills/<name>` resolves to `~/.codex/skills/<name>` (from `dotfiles/codex/skills/`; only the five universal bridge names resolve to canonical sources in `dotfiles/universal-skills/`).
 - `shared-skills/<name>` resolves to `~/.codex/shared-skills/<name>` (from `dotfiles/agents/skills/`, the shared pool).
 
-Select a profile with `codex --profile <name>`. To add or drop a skill from a profile, edit the profile's `[[skills.config]]` stanzas in `dotfiles/codex/profiles/<name>.config.toml`.
+Select a profile with `codex --profile <name>`. To add a targeted profile override, edit the profile's `[[skills.config]]` stanzas in `dotfiles/codex/profiles/<name>.config.toml`.
 
 For synchronizing the whole Matt Pocock skill set, see the `sync-mattpocock-skills` skill (`dotfiles/codex/skills/sync-mattpocock-skills`) — it is a plain git-tracked Codex skill, not an externally managed install flow.
 
