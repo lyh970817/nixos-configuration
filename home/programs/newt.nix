@@ -119,8 +119,8 @@ let
     # directly, the same way the btop wrapper does.
     mode="''${THEME_MODE:-}"
     if [ -z "$mode" ]; then
-      case "$(readlink "$HOME/.local/state/hypr/current-theme.conf" 2>/dev/null)" in
-        *dark.conf) mode=dark ;;
+      case "$(readlink "$HOME/.local/state/hypr/current-theme.lua" 2>/dev/null)" in
+        *dark.lua) mode=dark ;;
         *) mode=light ;;
       esac
     fi

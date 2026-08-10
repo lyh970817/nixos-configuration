@@ -60,34 +60,38 @@ let
     '';
   };
 
-  roleConf =
+  # Lua fragment included by dotfiles/hypr/hyprland.lua. The Hyprland .conf
+  # format is removed in 0.57, so this is Lua rather than keyword lines.
+  roleLua =
     if role == "remote" then
       ''
-        # Remote role: Super+Enter and boot connect to the home box; Super+Shift+Enter opens local Herdr.
-        bind = $mainMod, Return, exec, btop-workspace exec foot --app-id foot-float home-terminal
-        bind = $mainMod SHIFT, Return, exec, btop-workspace exec foot --app-id foot-float herdr
-        exec-once = btop-workspace exec foot --app-id foot-float home-terminal
-        # Remote laptop: lid close turns the screen off via DPMS without
-        # suspending. logind ignores the lid; see modules/system/lid.nix.
-        bindl = , switch:on:Lid Switch, exec, hyprctl dispatch dpms off
-        bindl = , switch:off:Lid Switch, exec, hyprctl dispatch dpms on
-        # Manual escape hatch for the DPMS-off state. Nothing else restores the
-        # panel: there is no idle daemon here, so a bouncy lid sensor that
-        # reports a close without the matching open leaves the screen dark
-        # indefinitely. Fn+F12 is the only Fn combo the X30W-K emits that
-        # nothing binds — it arrives as a plain AT KEY_SCROLLLOCK (code 70)
-        # that keyd forwards untouched, and Scroll_Lock is in no modifier_map
-        # in the us layout, so it cannot latch a modifier. Deliberately "on"
-        # only, never a toggle: a toggle here could blank the screen and would
-        # then be the only way out.
-        bindl = , Scroll_Lock, exec, hyprctl dispatch dpms on
+        -- Remote role: Super+Enter and boot connect to the home box; Super+Shift+Enter opens local Herdr.
+        hl.bind("SUPER + Return", hl.dsp.exec_cmd("btop-workspace exec foot --app-id foot-float home-terminal"))
+        hl.bind("SUPER + SHIFT + Return", hl.dsp.exec_cmd("btop-workspace exec foot --app-id foot-float herdr"))
+        hl.on("hyprland.start", function()
+          hl.exec_cmd("btop-workspace exec foot --app-id foot-float home-terminal")
+        end)
+        -- Remote laptop: lid close turns the screen off via DPMS without
+        -- suspending. logind ignores the lid; see modules/system/lid.nix.
+        hl.bind("switch:on:Lid Switch", hl.dsp.dpms({ action = "off" }), { locked = true })
+        hl.bind("switch:off:Lid Switch", hl.dsp.dpms({ action = "on" }), { locked = true })
+        -- Manual escape hatch for the DPMS-off state. Nothing else restores the
+        -- panel: there is no idle daemon here, so a bouncy lid sensor that
+        -- reports a close without the matching open leaves the screen dark
+        -- indefinitely. Fn+F12 is the only Fn combo the X30W-K emits that
+        -- nothing binds — it arrives as a plain AT KEY_SCROLLLOCK (code 70)
+        -- that keyd forwards untouched, and Scroll_Lock is in no modifier_map
+        -- in the us layout, so it cannot latch a modifier. Deliberately "on"
+        -- only, never a toggle: a toggle here could blank the screen and would
+        -- then be the only way out.
+        hl.bind("Scroll_Lock", hl.dsp.dpms({ action = "on" }), { locked = true })
       ''
     else
       ''
-        # Home role: Super+Enter attaches to the 'main' tmux session, Super+Shift+Enter opens 'secondary', Super+Ctrl+Enter attaches the laptop's 'remote' session.
-        bind = $mainMod, Return, exec, btop-workspace exec foot --app-id foot-float tmux new-session -A -s main
-        bind = $mainMod SHIFT, Return, exec, btop-workspace exec foot --app-id foot-float tmux new-session -A -s secondary
-        bind = $mainMod CTRL, Return, exec, btop-workspace exec foot --app-id foot-float attach-remote
+        -- Home role: Super+Enter attaches to the 'main' tmux session, Super+Shift+Enter opens 'secondary', Super+Ctrl+Enter attaches the laptop's 'remote' session.
+        hl.bind("SUPER + Return", hl.dsp.exec_cmd("btop-workspace exec foot --app-id foot-float tmux new-session -A -s main"))
+        hl.bind("SUPER + SHIFT + Return", hl.dsp.exec_cmd("btop-workspace exec foot --app-id foot-float tmux new-session -A -s secondary"))
+        hl.bind("SUPER + CTRL + Return", hl.dsp.exec_cmd("btop-workspace exec foot --app-id foot-float attach-remote"))
       '';
 in
 {
@@ -103,13 +107,13 @@ in
       source = ../../dotfiles/nvim;
       recursive = true;
     };
-    # Recursive so the generated role.conf can live alongside the symlinked tree.
+    # Recursive so the generated role.lua can live alongside the symlinked tree.
     "hypr" = {
       source = ../../dotfiles/hypr;
       recursive = true;
     };
-    "hypr/role.conf".text = roleConf;
-    # Shell-sourceable twin of role.conf so plain dotfile scripts (which are
+    "hypr/role.lua".text = roleLua;
+    # Shell-sourceable twin of role.lua so plain dotfile scripts (which are
     # deployed verbatim and cannot be templated) can branch on the role.
     "hypr/role.env".text = ''
       HYPR_ROLE=${role}

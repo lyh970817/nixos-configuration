@@ -33,7 +33,9 @@ addr=$(
 )
 
 if [ -n "$addr" ]; then
-    exec hyprctl dispatch focuswindow "address:$addr"
+    # `hyprctl dispatch` evaluates its argument as Lua under the Lua config
+    # manager, so the legacy `focuswindow address:...` form is gone.
+    exec hyprctl dispatch "hl.dsp.focus({ window = \"address:$addr\" })"
 fi
 
 exec btop-workspace exec "$@"
