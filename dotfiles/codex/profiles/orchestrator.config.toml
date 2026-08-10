@@ -27,6 +27,10 @@ treating them as separate optional tasks.
 enabled = true
 max_concurrent_threads_per_session = 16
 expose_spawn_agent_model_overrides = true
+multi_agent_mode_hint_text = """
+Delegate proactively when independent agent work would materially improve speed,
+quality, or context isolation. Subagents may delegate narrower independent work.
+"""
 subagent_developer_instructions = """
 You are a subagent. Complete the bounded task you were assigned and remain
 responsible for that scope. You may delegate narrower independent subtasks when
