@@ -194,8 +194,9 @@ in
     name: p: lib.nameValuePair ".config/foot/themes/dark-${name}.ini" { text = mkSoloConfig p; }
   ) (palettes.profiles // palettes.previewProfiles);
 
-  # The theme hooks replace this symlink when the desktop mode changes.
-  systemd.user.tmpfiles.rules = [
-    "L %h/.config/foot/foot.ini - - - - %h/.config/foot/themes/dark.ini"
-  ];
+  # ~/.config/foot/foot.ini is not written here. The theme hooks replace it
+  # when the desktop mode changes, and ../desktop/theming.nix reconciles it at
+  # activation so a freshly linked tree cannot disagree with the mode that is
+  # already applied. Seeding it from here is what broke: a tmpfiles `L` rule
+  # can only name one fixed target, and it named the dark theme.
 }
