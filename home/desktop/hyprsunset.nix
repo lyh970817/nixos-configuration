@@ -4,8 +4,8 @@ let
   dayTemperature = 6500;
   dayGamma = 1.0;
 
-  # Scheduled night warmth. Super+N uses its own deliberately extreme override
-  # below; the schedule returns to this profile at its next transition.
+  # Scheduled night warmth. Super+N toggles the service itself, applying its
+  # own deliberately extreme override when it starts.
   #
   # Keep it a multiple of 100. matrixForKelvin does `temp /= 100` on an integer,
   # so the temperature is quantised to hundreds: 3500 and 3599 produce exactly
@@ -64,7 +64,11 @@ let
       }
 
       if systemctl --user is-active --quiet hyprsunset.service; then
-        apply_night
+        if [ "$(hyprctl hyprsunset temperature)" = 1500 ]; then
+          systemctl --user stop hyprsunset.service
+        else
+          apply_night
+        fi
       else
         systemctl --user start hyprsunset.service
         wait_for_socket

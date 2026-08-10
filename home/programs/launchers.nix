@@ -31,9 +31,12 @@ let
     "cups"
     "darkman"
     "fcitx5-configtool"
+    "foot-server"
+    "footclient"
     "htop"
     "kbd-layout-viewer5"
     "nixos-manual"
+    "nmtui"
     "nvim"
     "org.fcitx.Fcitx5"
     "org.fcitx.fcitx5-migrator"
@@ -73,26 +76,6 @@ in
       Name=uuctl
       Hidden=true
     '';
-
-    # Network configuration launcher: opens nmtui in a terminal. force = true
-    # so it replaces any hand-made ~/.local/share/applications/nmtui.desktop
-    # instead of showing as a second entry, and it lands on fresh installs too.
-    "applications/nmtui.desktop" = {
-      force = true;
-      text = ''
-        [Desktop Entry]
-        Version=1.0
-        Type=Application
-        Name=Network Configuration
-        GenericName=System
-        Comment=Text-based network configuration tool
-        Exec=foot --title nmtui zsh -i -c nmtui
-        Icon=network-wired
-        Terminal=false
-        Categories=System;Network;Settings;
-        Keywords=network;wifi;ethernet;connection;nmtui;
-      '';
-    };
 
     # Runtime-only override: the dark-mode hook restores its shader the next
     # time dark mode is applied.
