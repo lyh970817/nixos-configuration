@@ -89,39 +89,6 @@ def command_preview_gsettings(args: argparse.Namespace) -> dict[str, Any]:
     return {"preview": "gsettings"}
 
 
-def _lua_literal(value: str) -> str:
-    """Render a keyword value as a Lua literal.
-
-    Numbers and booleans go through bare so integer- and float-typed options
-    keep their type; anything else becomes a double-quoted string.
-    """
-    if value in ("true", "false"):
-        return value
-    try:
-        float(value)
-    except ValueError:
-        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
-        return f'"{escaped}"'
-    return value
-
-
-def hypr_keyword_command(keyword: str, value: str) -> list[str]:
-    """`hyprctl keyword <k> <v>` as a Lua eval.
-
-    Hyprland's Lua config manager refuses `hyprctl keyword` outright ("keyword
-    can't work with non-legacy parsers. Use eval."), so a keyword path like
-    `general:col.active_border` is rebuilt as the nested `hl.config` table
-    `{general = {col = {active_border = ...}}}`.
-    """
-    parts = [part for part in keyword.replace(":", ".").split(".") if part]
-    if not parts:
-        raise ScreenError("Empty Hyprland keyword")
-    expression = _lua_literal(value)
-    for part in reversed(parts):
-        expression = f"{{ {part} = {expression} }}"
-    return ["hyprctl", "eval", f"hl.config({expression})"]
-
-
 def command_preview_hypr_keyword(args: argparse.Namespace) -> dict[str, Any]:
     path = session_dir(args.session)
     option = run_json(["hyprctl", "getoption", args.keyword, "-j"])
@@ -136,7 +103,7 @@ def command_preview_hypr_keyword(args: argparse.Namespace) -> dict[str, Any]:
             "original": original,
         },
     )
-    subprocess.run(hypr_keyword_command(args.keyword, args.value), check=True)
+    subprocess.run(["hyprctl", "keyword", args.keyword, args.value], check=True)
     audit("preview", session=args.session)
     return {"preview": "hypr-keyword"}
 
@@ -186,7 +153,12 @@ def restore_preview(preview: dict[str, Any]) -> None:
         return
     if kind == "hypr-keyword":
         subprocess.run(
-            hypr_keyword_command(preview["keyword"], preview["original"]),
+            [
+                "hyprctl",
+                "keyword",
+                preview["keyword"],
+                preview["original"],
+            ],
             check=True,
         )
         return

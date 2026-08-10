@@ -15,7 +15,7 @@
 | 白天 | 06:00 / 6500 K / gamma 1.0 | `home/desktop/hyprsunset.nix` |
 | 夜间 | 16:00 / 3500 K / gamma 1.0（色温仍在实机微调） | `home/desktop/hyprsunset.nix` |
 | 屏幕着色器 | 深色模式使用 `panel.glsl`；可从 Rofi 临时关闭 | `home/desktop/theming.nix`、`home/programs/launchers.nix` |
-| Super+N | 开关：开启时 gamma `100` / 1500 K，关闭时恢复无滤镜画面 | `dotfiles/hypr/hyprland.lua` |
+| Super+N | 开关：开启时 gamma `100` / 1500 K，关闭时恢复无滤镜画面 | `dotfiles/hypr/hyprland.conf` |
 
 命令：
 

@@ -74,8 +74,8 @@ let
       # dotfiles/hypr/scripts/btop-dashboard.sh.
       mode="$THEME_MODE"
       if [ -z "$mode" ]; then
-        case "$(readlink "$HOME/.local/state/hypr/current-theme.lua" 2>/dev/null)" in
-          *dark.lua) mode=dark ;;
+        case "$(readlink "$HOME/.local/state/hypr/current-theme.conf" 2>/dev/null)" in
+          *dark.conf) mode=dark ;;
           *) mode=light ;;
         esac
       fi

@@ -15,13 +15,6 @@ from pathlib import Path
 
 SCRIPT = Path(__file__).parents[1] / "screen_verify.py"
 
-# Hyprland's Lua IPC: `hyprctl dispatch` takes a Lua expression, so the exact
-# field names are pinned here rather than reconstructed from the code under
-# test. An unknown *field* is silently ignored by Hyprland while an unknown
-# *value* is rejected, so a typo here is a bug the compositor would not report.
-FOCUS_MONITOR_DP1 = 'hl.dsp.focus({ monitor = "DP-1" })'
-FOCUS_WINDOW_USER = 'hl.dsp.focus({ window = "address:0xuser" })'
-
 # `stage_position`'s fallbacks are only reachable from a compositor that answers
 # badly, which the CLI-level fake cannot express, so the module is imported for
 # those cases as well as driven through the CLI for everything else.
@@ -35,7 +28,7 @@ from screen_verify_lib.state import ScreenError  # noqa: E402
 # workspace rules, focus, and window spawning, and logs every invocation so
 # tests can assert the order in which screen-verify drives the compositor.
 HYPRCTL_FAKE = r"""
-import json, os, re, subprocess, sys
+import json, os, subprocess, sys
 from pathlib import Path
 
 arguments = sys.argv[1:]
@@ -61,40 +54,8 @@ def emit(value):
     print(json.dumps(value))
 
 
-# Hyprland's Lua IPC: `hyprctl dispatch` and `hyprctl eval` both take a Lua
-# expression now, so the stand-in has to read one. These three cover every
-# shape screen-verify emits -- a single `hl.*` call whose arguments are a
-# string and/or one flat table -- and deliberately no more, so a call that
-# drifts into some richer Lua is not silently understood here.
-def lua_call(expression):
-    match = re.match(r"\s*(hl[\w.]*)\s*\(", expression)
-    return match.group(1) if match else ""
-
-
-def lua_unquote(raw):
-    return raw[1:-1].replace('\\"', '"').replace("\\\\", "\\")
-
-
-def lua_argument(expression):
-    # The first positional string argument, e.g. exec_cmd's command.
-    match = re.match(r'\s*hl[\w.]*\(\s*("(?:[^"\\]|\\.)*")', expression)
-    return lua_unquote(match.group(1)) if match else None
-
-
-def lua_field(expression, name):
-    # Searched from the last table only: exec_cmd's command precedes its rule
-    # table, and a command is arbitrary text that must never be read as a field.
-    start = expression.rfind("{")
-    table = expression[start:] if start >= 0 else ""
-    match = re.search(rf'\b{name}\s*=\s*("(?:[^"\\]|\\.)*"|[-\w.]+)', table)
-    if match is None:
-        return None
-    raw = match.group(1)
-    return lua_unquote(raw) if raw.startswith('"') else raw
-
-
 def rule_geometry(rule):
-    # The rectangle a monitor rule asks for, or None for `auto`/nonsense.
+    # The rectangle a `monitor` keyword asks for, or None for `auto`/nonsense.
     if not rule:
         return None
     resolution, _, _ = rule["resolution"].partition("@")
@@ -183,33 +144,25 @@ elif command == "clients":
 elif command == "getoption":
     emit({"custom": "4"})
 elif command == "keyword":
-    # The Lua config manager refuses this outright, so the stand-in does too:
-    # a regression that reaches for it must fail here rather than pass.
-    print("keyword can't work with non-legacy parsers. Use eval.")
-    sys.exit(1)
-elif command == "eval":
-    expression = arguments[1] if len(arguments) > 1 else ""
-    call = lua_call(expression)
-    if call == "hl.workspace_rule":
-        name = lua_field(expression, "workspace")
-        monitor = lua_field(expression, "monitor")
-        if name and monitor:
-            state.setdefault("workspace_rules", {})[monitor] = name.split(":", 1)[-1]
+    if arguments[1:2] == ["workspace"]:
+        rule = {}
+        for field in arguments[2].split(","):
+            key, _, value = field.partition(":")
+            rule[key] = value
+        if rule.get("name") and rule.get("monitor"):
+            state.setdefault("workspace_rules", {})[rule["monitor"]] = rule["name"]
             save()
-    elif call == "hl.monitor":
-        output = lua_field(expression, "output")
-        mode = lua_field(expression, "mode")
-        position = lua_field(expression, "position")
-        scale = lua_field(expression, "scale")
-        if output and mode and position and scale:
-            state.setdefault("monitor_rules", {})[output] = {
-                "resolution": mode,
-                "position": position,
-                "scale": scale,
+    elif arguments[1:2] == ["monitor"]:
+        fields = arguments[2].split(",")
+        if len(fields) == 4:
+            state.setdefault("monitor_rules", {})[fields[0]] = {
+                "resolution": fields[1],
+                "position": fields[2],
+                "scale": fields[3],
             }
             # A rule for an output that already exists takes effect at once; one
             # for an output that does not is remembered until it appears.
-            apply_monitor_rule(output)
+            apply_monitor_rule(fields[0])
             save()
     print("ok")
 elif command == "output":
@@ -273,12 +226,11 @@ elif command == "output":
     save()
     print("ok")
 elif command == "dispatch":
-    expression = arguments[1] if len(arguments) > 1 else ""
-    call = lua_call(expression)
-    if call == "hl.dsp.exec_cmd":
-        # The workspace/no_initial_focus rules now travel as a second table
-        # rather than as a bracketed prefix, so the command is taken whole.
-        specification = lua_argument(expression)
+    action = arguments[1] if len(arguments) > 1 else ""
+    if action == "exec":
+        specification = arguments[2]
+        if specification.startswith("["):
+            specification = specification[specification.index("]") + 1 :].lstrip()
         # Hyprland 0.53.1 calls neither setsid nor setpgid for exec'd
         # children, so a staged process is never a process-group leader.
         subprocess.Popen(
@@ -287,26 +239,20 @@ elif command == "dispatch":
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-    elif call == "hl.dsp.focus":
-        monitor = lua_field(expression, "monitor")
-        window = lua_field(expression, "window")
-        workspace = lua_field(expression, "workspace")
-        if monitor:
-            for entry in state["monitors"]:
-                entry["focused"] = entry.get("name") == monitor
-            save()
-        elif window:
-            state["focused_window"] = window
-            save()
-        elif workspace and not state.get("ignore_workspace_moves"):
-            # Focusing a workspace shows it on the focused output -- which is
-            # how the stage is put back on its own workspace, because nothing
-            # that merely re-homes a workspace makes it active again.
-            name = workspace.split(":", 1)[-1]
-            for entry in state["monitors"]:
-                if entry.get("focused"):
-                    entry["activeWorkspace"] = {"id": -13, "name": name}
-            save()
+    elif action == "focusmonitor":
+        for monitor in state["monitors"]:
+            monitor["focused"] = monitor.get("name") == arguments[2]
+        save()
+    elif action == "focuswindow":
+        state["focused_window"] = arguments[2]
+        save()
+    elif action == "moveworkspacetomonitor" and not state.get("ignore_workspace_moves"):
+        target, _, destination = arguments[2].partition(" ")
+        name = target.split(":", 1)[-1]
+        for monitor in state["monitors"]:
+            if monitor.get("name") == destination:
+                monitor["activeWorkspace"] = {"id": -13, "name": name}
+        save()
     print("ok")
 else:
     print("ok")
@@ -508,59 +454,19 @@ PY
     def stage_names(self, session: str) -> tuple[str, str]:
         return f"svstage{session[:8]}", f"svws{session[:8]}"
 
-    def window_moves(self, commands: list[list[str]] | None = None) -> list[list[str]]:
-        """Every silent window move, whatever workspace it names."""
-        source = self.hyprctl_calls() if commands is None else commands
-        return [
-            command
-            for command in source
-            if command[1:2] == ["dispatch"]
-            and len(command) > 2
-            and command[2].lstrip().startswith("hl.dsp.window.move(")
-        ]
-
-    def move_silent(self, workspace: str | int, address: str) -> list[str]:
-        """The dispatch that moves a window without following it.
-
-        A workspace *id* is a bare Lua number and a workspace *name* is a
-        string; the two are different lookups, so the distinction is spelled
-        here rather than left to whatever the caller happened to pass.
-        """
-        selector = str(workspace) if isinstance(workspace, int) else f'"{workspace}"'
-        return [
-            "hyprctl",
-            "dispatch",
-            f"hl.dsp.window.move({{ workspace = {selector}, follow = false, "
-            f'window = "address:{address}" }})',
-        ]
-
-    def lua_field(self, expression: str, name: str) -> str:
-        """The value of `name = …` in the last Lua table of an expression."""
-        start = expression.rfind("{")
-        table = expression[start:] if start >= 0 else ""
-        match = re.search(rf'\b{name}\s*=\s*("(?:[^"\\]|\\.)*"|[-\w.]+)', table)
-        if match is None:
-            raise AssertionError(f"no field {name!r} in: {expression}")
-        raw = match.group(1)
-        return raw[1:-1] if raw.startswith('"') else raw
-
-    def stage_monitor_rule(self) -> str:
-        """The `hl.monitor` expression that sized and placed the stage."""
+    def stage_keyword(self) -> str:
+        """The `monitor` keyword argument that sized and placed the stage."""
         command = next(
             command
             for command in self.hyprctl_calls()
-            if command[:2] == ["hyprctl", "eval"]
-            and command[2].lstrip().startswith("hl.monitor(")
+            if command[:3] == ["hyprctl", "keyword", "monitor"]
         )
-        return command[2]
+        return command[3]
 
     def stage_rectangle(self, session: str) -> tuple[int, int, int, int]:
         """(x, y, width, height) the stage was asked to occupy."""
         output, _ = self.stage_names(session)
-        rule = self.stage_monitor_rule()
-        name = self.lua_field(rule, "output")
-        resolution = self.lua_field(rule, "mode")
-        position = self.lua_field(rule, "position")
+        name, resolution, position, _ = self.stage_keyword().split(",")
         self.assertEqual(name, output)
         self.assertNotEqual(
             position,
@@ -868,7 +774,7 @@ if [ "$1" = get ]; then printf "'prefer-dark'\\n"; else printf 'gsettings %s\\n'
         self.fake(
             "hyprctl",
             f"""#!/bin/sh
-if [ "$1" = getoption ]; then printf '%s\\n' '{{"custom":"4"}}'; elif [ "$1" = eval ]; then printf 'hyprctl %s\\n' "$*" >> {actions}; else printf '%s\\n' '{{"monitor":"DP-1"}}'; fi
+if [ "$1" = getoption ]; then printf '%s\\n' '{{"custom":"4"}}'; elif [ "$1" = keyword ]; then printf 'hyprctl %s\\n' "$*" >> {actions}; else printf '%s\\n' '{{"monitor":"DP-1"}}'; fi
 """,
         )
         self.fake(
@@ -928,12 +834,8 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
         action_lines = actions.read_text().splitlines()
         self.assertIn("gsettings set org.example theme 'preview'", action_lines)
         self.assertIn("gsettings set org.example theme 'prefer-dark'", action_lines)
-        self.assertIn(
-            "hyprctl eval hl.config({ general = { gaps_in = 20 } })", action_lines
-        )
-        self.assertIn(
-            "hyprctl eval hl.config({ general = { gaps_in = 4 } })", action_lines
-        )
+        self.assertIn("hyprctl keyword general:gaps_in 20", action_lines)
+        self.assertIn("hyprctl keyword general:gaps_in 4", action_lines)
         self.assertIn("makoctl mode -s dark", action_lines)
         self.assertIn("makoctl mode -s default", action_lines)
 
@@ -987,19 +889,12 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
         workspace_rule = self.call_index(
             [
                 "hyprctl",
-                "eval",
-                f'hl.workspace_rule({{ workspace = "name:{workspace}", '
-                f'monitor = "{output}", default = true }})',
+                "keyword",
+                "workspace",
+                f"name:{workspace},monitor:{output},default:true",
             ]
         )
-        monitor_rule = self.hyprctl_calls().index(
-            next(
-                command
-                for command in self.hyprctl_calls()
-                if command[:2] == ["hyprctl", "eval"]
-                and command[2].lstrip().startswith("hl.monitor(")
-            )
-        )
+        monitor_rule = self.call_index(["hyprctl", "keyword", "monitor"])
         creation = self.call_index(["hyprctl", "output", "create", "headless", output])
         self.assertLess(workspace_rule, creation)
         self.assertLess(
@@ -1049,7 +944,7 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
             for index, command in enumerate(calls)
             if command[:2] == ["hyprctl", "monitors"] and index > window
         )
-        first_rule = self.call_index(["hyprctl", "eval"])
+        first_rule = self.call_index(["hyprctl", "keyword"])
         self.assertLess(focus_query, first_rule)
         queries = [
             index
@@ -1069,15 +964,8 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
 
         self.cli("stage", "--session", session)
 
-        rule = self.stage_monitor_rule()
-        self.assertEqual(
-            [
-                self.lua_field(rule, "output"),
-                self.lua_field(rule, "mode"),
-                self.lua_field(rule, "scale"),
-            ],
-            [output, "2560x1440@60", "1.25"],
-        )
+        name, resolution, _, scale = self.stage_keyword().split(",")
+        self.assertEqual([name, resolution, scale], [output, "2560x1440@60", "1.25"])
 
     def test_stage_is_placed_up_and_left_of_the_users_monitor(self) -> None:
         session = self.begin()
@@ -1223,10 +1111,10 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
 
         creation = self.call_index(["hyprctl", "output", "create", "headless", output])
         focus_monitor = self.call_index(
-            ["hyprctl", "dispatch", FOCUS_MONITOR_DP1]
+            ["hyprctl", "dispatch", "focusmonitor", "DP-1"]
         )
         focus_window = self.call_index(
-            ["hyprctl", "dispatch", FOCUS_WINDOW_USER]
+            ["hyprctl", "dispatch", "focuswindow", "address:0xuser"]
         )
         self.assertLess(creation, focus_monitor)
         self.assertLess(focus_monitor, focus_window)
@@ -1246,7 +1134,7 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
 
         self.cli("stage", "--session", session)
 
-        self.assertIn(["hyprctl", "dispatch", FOCUS_MONITOR_DP1], self.commands())
+        self.assertIn(["hyprctl", "dispatch", "focusmonitor", "DP-1"], self.commands())
         state = json.loads(self.hypr_state.read_text())
         focused = [
             monitor["name"] for monitor in state["monitors"] if monitor["focused"]
@@ -1317,7 +1205,7 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
         creation = self.call_index(["hyprctl", "output", "create", "headless", output])
         # The wait ends where focus is handed back, so the polls that belong to
         # it are the `monitors` queries between creation and that restore.
-        restore = self.call_index(["hyprctl", "dispatch", FOCUS_MONITOR_DP1])
+        restore = self.call_index(["hyprctl", "dispatch", "focusmonitor", "DP-1"])
         polls = [
             index
             for index, command in enumerate(self.hyprctl_calls())
@@ -1341,7 +1229,7 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
         self.assertNotIn("Traceback", result.stderr)
         self.assertIn(["hyprctl", "output", "remove", output], self.commands())
         self.assertNotIn(output, self.hypr_monitors())
-        self.assertIn(["hyprctl", "dispatch", FOCUS_MONITOR_DP1], self.commands())
+        self.assertIn(["hyprctl", "dispatch", "focusmonitor", "DP-1"], self.commands())
         self.assertFalse(self.cli("status", "--session", session)["stage"])
         self.assertNotIn("stage", json.loads(self.session_file(session).read_text()))
 
@@ -1357,7 +1245,7 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
         self.assertEqual(result["workspace"], workspace)
         # The workspace wait is everything after focus is handed back, which is
         # the last thing the output wait does.
-        restore = self.call_index(["hyprctl", "dispatch", FOCUS_MONITOR_DP1])
+        restore = self.call_index(["hyprctl", "dispatch", "focusmonitor", "DP-1"])
         polls = [
             index
             for index, command in enumerate(self.hyprctl_calls())
@@ -1390,14 +1278,13 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
             dispatch = next(
                 command
                 for command in self.hyprctl_calls()
-                if command[1:2] == ["dispatch"]
-                and len(command) > 2
-                and command[2].lstrip().startswith("hl.dsp.exec_cmd(")
+                if command[:3] == ["hyprctl", "dispatch", "exec"]
             )
-            self.assertEqual(
-                self.lua_field(dispatch[2], "workspace"), f"name:{workspace} silent"
+            self.assertTrue(
+                dispatch[3].startswith(f"[workspace name:{workspace} silent"),
+                dispatch[3],
             )
-            self.assertEqual(self.lua_field(dispatch[2], "no_initial_focus"), "true")
+            self.assertIn("noinitialfocus", dispatch[3])
             recorded = self.eventually(
                 lambda: pid_file.read_text() if pid_file.exists() else "",
                 "the staged process never reported its pid",
@@ -1848,7 +1735,14 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
             result = self.cli("end", "--session", session)
 
             self.assertIn("could not be moved", result["warning"])
-            self.assertEqual(self.window_moves(), [])
+            self.assertEqual(
+                [
+                    command
+                    for command in self.hyprctl_calls()
+                    if command[1:3] == ["dispatch", "movetoworkspacesilent"]
+                ],
+                [],
+            )
         finally:
             os.kill(launch["pid"], 15)
             os.kill(int(self.child_pid_file(pid_file).read_text()), 15)
@@ -1888,7 +1782,14 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
             result = self.cli("end", "--session", session)
 
             self.assertIn("could not be moved", result["warning"])
-            self.assertEqual(self.window_moves(), [])
+            self.assertEqual(
+                [
+                    command
+                    for command in self.hyprctl_calls()
+                    if command[1:3] == ["dispatch", "movetoworkspacesilent"]
+                ],
+                [],
+            )
         finally:
             os.kill(launch["pid"], 15)
             os.kill(int(self.child_pid_file(pid_file).read_text()), 15)
@@ -1937,7 +1838,14 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
             result = self.cli("end", "--session", session)
 
             self.assertIn("could not be moved", result["warning"])
-            self.assertEqual(self.window_moves(), [])
+            self.assertEqual(
+                [
+                    command
+                    for command in self.hyprctl_calls()
+                    if command[1:3] == ["dispatch", "movetoworkspacesilent"]
+                ],
+                [],
+            )
         finally:
             os.kill(launch["pid"], 15)
             os.kill(int(self.child_pid_file(pid_file).read_text()), 15)
@@ -1976,7 +1884,14 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
             result = self.cli("end", "--session", session)
 
             self.assertNotIn("warning", result)
-            self.assertEqual(self.window_moves(self.commands()[before:]), [])
+            self.assertEqual(
+                [
+                    command
+                    for command in self.commands()[before:]
+                    if command[1:3] == ["dispatch", "movetoworkspacesilent"]
+                ],
+                [],
+            )
         finally:
             os.kill(launch["pid"], 15)
             os.kill(int(self.child_pid_file(pid_file).read_text()), 15)
@@ -2055,7 +1970,7 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
 
             self.assertIn("kept window", result["warning"])
             self.assertIn(
-                self.move_silent(1, "0xkept"),
+                ["hyprctl", "dispatch", "movetoworkspacesilent", "1,address:0xkept"],
                 self.commands(),
             )
         finally:
@@ -2094,7 +2009,12 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
             self.assertEqual(result["terminated"], 0)
             self.assertIn("kept window", result["warning"])
             moved = self.call_index(
-                self.move_silent(1, "0xkept")
+                [
+                    "hyprctl",
+                    "dispatch",
+                    "movetoworkspacesilent",
+                    "1,address:0xkept",
+                ]
             )
             removed = self.call_index(["hyprctl", "output", "remove", output])
             self.assertLess(moved, removed)
@@ -2229,9 +2149,7 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
             [
                 command
                 for command in self.hyprctl_calls()
-                if command[1:2] == ["dispatch"]
-                and len(command) > 2
-                and command[2].lstrip().startswith("hl.dsp.exec_cmd(")
+                if command[:3] == ["hyprctl", "dispatch", "exec"]
             ],
             [],
         )
@@ -2283,7 +2201,13 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
             # still off the stage after a real recovery attempt.
             _, workspace = self.stage_names(session)
             self.assertIn(
-                self.move_silent(f"name:{workspace}", "0xstray"), self.commands()
+                [
+                    "hyprctl",
+                    "dispatch",
+                    "movetoworkspacesilent",
+                    f"name:{workspace},address:0xstray",
+                ],
+                self.commands(),
             )
         finally:
             self.cli("end", "--session", session)
@@ -2300,11 +2224,9 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
             dispatch = next(
                 command
                 for command in self.hyprctl_calls()
-                if command[1:2] == ["dispatch"]
-                and len(command) > 2
-                and command[2].lstrip().startswith("hl.dsp.exec_cmd(")
+                if command[:3] == ["hyprctl", "dispatch", "exec"]
             )
-            self.assertIn(f"export SCREEN_VERIFY_STAGE={session}; ", dispatch[2])
+            self.assertIn(f"export SCREEN_VERIFY_STAGE={session}; ", dispatch[3])
             self.eventually(
                 lambda: pid_file.exists(), "the staged process never reported its pid"
             )
@@ -2363,15 +2285,27 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
             # The primary window sits on the stage, so the leaked child must
             # not surface as a warning about the launch itself.
             self.assertNotIn("warning", launch)
-            moves = self.window_moves()
-            self.assertIn(self.move_silent(f"name:{workspace}", "0xleak"), moves)
+            moves = [
+                command
+                for command in self.hyprctl_calls()
+                if command[1:3] == ["dispatch", "movetoworkspacesilent"]
+            ]
+            self.assertIn(
+                [
+                    "hyprctl",
+                    "dispatch",
+                    "movetoworkspacesilent",
+                    f"name:{workspace},address:0xleak",
+                ],
+                moves,
+            )
             # A window already on the stage is never re-dispatched, and an
             # unowned window is never swept however far off the stage it is.
             self.assertEqual(
                 [
                     command
                     for command in moves
-                    if "0xmain" in command[2] or "0xbystander" in command[2]
+                    if "0xmain" in command[3] or "0xbystander" in command[3]
                 ],
                 [],
             )
@@ -2451,7 +2385,12 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
                 b"openwindow>>bbb2,4,SecretApp,Secret Document\n"
                 b"openwindow>>ccc3,4,imgpreview_y,preview\n"
             )
-            expected = self.move_silent(f"name:{workspace}", "0xccc3")
+            expected = [
+                "hyprctl",
+                "dispatch",
+                "movetoworkspacesilent",
+                f"name:{workspace},address:0xccc3",
+            ]
             # The events are handled in order, so once the last one has been
             # acted on the middle one has provably been decided too.
             self.eventually(
@@ -2459,14 +2398,21 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
                 "the watcher never moved the escaped window",
             )
             self.assertIn(
-                self.move_silent(f"name:{workspace}", "0xaaa1"), self.commands()
+                [
+                    "hyprctl",
+                    "dispatch",
+                    "movetoworkspacesilent",
+                    f"name:{workspace},address:0xaaa1",
+                ],
+                self.commands(),
             )
             # The unowned window between them was left exactly where it was.
             self.assertEqual(
                 [
                     command
-                    for command in self.window_moves()
-                    if "0xbbb2" in command[2]
+                    for command in self.hyprctl_calls()
+                    if command[1:3] == ["dispatch", "movetoworkspacesilent"]
+                    and "0xbbb2" in command[3]
                 ],
                 [],
             )
@@ -2487,7 +2433,12 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
             connection.sendall(b"openwindow>>ddd4,4,ueber")
             time.sleep(0.3)
             connection.sendall(b"zugpp_z,preview\n")
-            split = self.move_silent(f"name:{workspace}", "0xddd4")
+            split = [
+                "hyprctl",
+                "dispatch",
+                "movetoworkspacesilent",
+                f"name:{workspace},address:0xddd4",
+            ]
             self.eventually(
                 lambda: split in self.commands(),
                 "the split event was never reassembled",
@@ -2604,13 +2555,9 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
             dispatch = next(
                 command
                 for command in self.hyprctl_calls()
-                if command[1:2] == ["dispatch"]
-                and len(command) > 2
-                and command[2].lstrip().startswith("hl.dsp.exec_cmd(")
+                if command[:3] == ["hyprctl", "dispatch", "exec"]
             )
-            self.assertEqual(
-                self.lua_field(dispatch[2], "workspace"), f"name:{workspace} silent"
-            )
+            self.assertIn(f"[workspace name:{workspace} silent", dispatch[3])
             self.eventually(
                 lambda: pid_file.exists(), "the foot adapter never started"
             )
@@ -2657,9 +2604,7 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
                 [
                     command
                     for command in self.hyprctl_calls()
-                    if command[1:2] == ["dispatch"]
-                and len(command) > 2
-                and command[2].lstrip().startswith("hl.dsp.exec_cmd(")
+                    if command[:3] == ["hyprctl", "dispatch", "exec"]
                 ],
                 [],
             )
@@ -2858,18 +2803,12 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
         result = self.cli("capture", "--session", session)
 
         self.assertEqual(result["target"], "stage")
-        # The repair focuses the stage output and then its workspace: nothing
-        # that only re-homes a workspace makes it active again, so this pair is
-        # the whole mechanism and both halves have to be dispatched.
-        self.assertIn(
-            ["hyprctl", "dispatch", f'hl.dsp.focus({{ monitor = "{output}" }})'],
-            self.commands(),
-        )
         self.assertIn(
             [
                 "hyprctl",
                 "dispatch",
-                f'hl.dsp.focus({{ workspace = "name:{workspace}" }})',
+                "moveworkspacetomonitor",
+                f"name:{workspace} {output}",
             ],
             self.commands(),
         )
@@ -3021,8 +2960,7 @@ class StageWatchDecisionTests(unittest.TestCase):
     def test_an_owned_window_off_the_stage_is_moved(self) -> None:
         self.assertEqual(
             self.decide("openwindow>>5601ab,4,imgpreview_x,preview"),
-            'hl.dsp.window.move({ workspace = "name:%s", follow = false, '
-            'window = "address:0x5601ab" })' % self.WORKSPACE,
+            f"name:{self.WORKSPACE},address:0x5601ab",
         )
 
     def test_an_unowned_window_is_left_alone(self) -> None:
@@ -3043,8 +2981,7 @@ class StageWatchDecisionTests(unittest.TestCase):
                 roots=lambda: [10],
                 descendants=lambda root: {10, 4242},
             ),
-            'hl.dsp.window.move({ workspace = "name:%s", follow = false, '
-            'window = "address:0x5601ab" })' % self.WORKSPACE,
+            f"name:{self.WORKSPACE},address:0x5601ab",
         )
 
     def test_a_window_already_on_the_stage_is_not_even_resolved(self) -> None:
@@ -3078,8 +3015,7 @@ class StageWatchDecisionTests(unittest.TestCase):
     def test_commas_in_the_title_never_shift_the_workspace_field(self) -> None:
         self.assertEqual(
             self.decide("openwindow>>5601ab,4,App,a title, with, commas"),
-            'hl.dsp.window.move({ workspace = "name:%s", follow = false, '
-            'window = "address:0x5601ab" })' % self.WORKSPACE,
+            f"name:{self.WORKSPACE},address:0x5601ab",
         )
 
 

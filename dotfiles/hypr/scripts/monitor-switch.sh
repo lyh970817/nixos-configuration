@@ -43,7 +43,7 @@ printf '%s\n' "$mode" > "$STATE_FILE"
 
 # Launch terminal at boot if in Dark Mode (no DSC monitor), but only on the
 # home role: the remote role already gets its own startup terminal via
-# role.lua's startup hook, so this would otherwise double up on it.
+# role.conf's exec-once, so this would otherwise double up on it.
 # shellcheck source=/dev/null
 . "${XDG_CONFIG_HOME:-$HOME/.config}/hypr/role.env" 2>/dev/null || true
 if [ "$mode" = "dark" ] && [ "${HYPR_ROLE:-}" != "remote" ]; then

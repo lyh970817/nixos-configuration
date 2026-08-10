@@ -151,9 +151,9 @@ writeShellApplication {
         return 0
       fi
 
-      target="$(readlink "''${XDG_STATE_HOME:-$HOME/.local/state}/hypr/current-theme.lua" 2> /dev/null || true)"
+      target="$(readlink "''${XDG_STATE_HOME:-$HOME/.local/state}/hypr/current-theme.conf" 2> /dev/null || true)"
       case "$target" in
-      *dark.lua) mode=dark ;;
+      *dark.conf) mode=dark ;;
       *) mode=light ;;
       esac
     }
@@ -230,16 +230,13 @@ writeShellApplication {
       ' 2> /dev/null)" || return 2
     }
 
-    # `hyprctl keyword` is refused outright under Hyprland's Lua config manager
-    # ("keyword can't work with non-legacy parsers. Use eval."), so the live
-    # option is set by evaluating a Lua string. The value is escaped for a
-    # double-quoted Lua literal; a long-bracket literal is not an option here
-    # because the sentinel is itself `[[EMPTY]]`.
     set_live_shader() {
-      local desired="$1" escaped
-      escaped="''${desired//\\/\\\\}"
-      escaped="''${escaped//\"/\\\"}"
-      hyprctl eval "hl.config({ decoration = { screen_shader = \"$escaped\" } })" > /dev/null 2>&1
+      local desired="$1"
+      if [[ "$desired" == "$empty_shader" ]]; then
+        hyprctl keyword decoration:screen_shader '[[EMPTY]]' > /dev/null 2>&1
+      else
+        hyprctl keyword decoration:screen_shader "$desired" > /dev/null 2>&1
+      fi
     }
 
     reconcile_locked() {

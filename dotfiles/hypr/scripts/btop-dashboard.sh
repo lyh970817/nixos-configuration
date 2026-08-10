@@ -14,11 +14,9 @@
         dashboard_address=$(hyprctl clients -j | jq -r --argjson pid "$PPID" \
             '.[] | select(.pid == $pid) | .address' | head -1)
         if [ -n "$dashboard_address" ]; then
-            # `hyprctl dispatch` evaluates its argument as Lua under the Lua
-            # config manager; the legacy dispatcher names no longer parse.
-            hyprctl dispatch "hl.dsp.focus({ window = \"address:$dashboard_address\" })"
-            hyprctl dispatch 'hl.dsp.window.fullscreen({ mode = "maximized" })'
-            hyprctl dispatch "hl.dsp.focus({ workspace = $starting_workspace })"
+            hyprctl dispatch focuswindow "address:$dashboard_address"
+            hyprctl dispatch fullscreen 1
+            hyprctl dispatch workspace "$starting_workspace"
             exit 0
         fi
         sleep 0.1

@@ -25,14 +25,8 @@ else
   label="enabled"
 fi
 
-# `hyprctl keyword` is refused under the Lua config manager ("keyword can't
-# work with non-legacy parsers. Use eval."), so re-declare the device with
-# `hl.device` through `hyprctl eval`. Device names come from hyprctl's JSON and
-# can contain quotes/backslashes in principle, so escape them for a Lua literal.
 for dev in "${touchpads[@]}"; do
-  escaped="${dev//\\/\\\\}"
-  escaped="${escaped//\"/\\\"}"
-  hyprctl eval "hl.device({ name = \"$escaped\", enabled = $target })"
+  hyprctl keyword "device[$dev]:enabled" "$target"
 done
 
 printf '%s\n' "$([ "$target" = true ] && echo 1 || echo 0)" > "$state"
