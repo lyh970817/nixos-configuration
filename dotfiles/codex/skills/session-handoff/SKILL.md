@@ -49,11 +49,18 @@ Run the bundled helper directly; do not route it through the broad Herdr skill:
 python3 "${CODEX_HOME:-$HOME/.codex}/skills/session-handoff/scripts/launch_handoff.py" \
   --mode fresh \
   --cwd "$(pwd -P)" \
+  --consume-briefing \
   --briefing-file "$briefing_path"
 ```
 
 For the other modes, replace `fresh` with `resume` or `fork` and append
 `--session-id "$session_id"`.
+
+Always pass `--consume-briefing` for the disposable temp draft created above.
+The helper first makes its own mode-`0600` copy, then removes only that explicitly
+supplied draft. Without the flag it never removes the caller's file. The copied
+briefing is retained for manual fallback or Herdr failure recovery and removed
+after a successful Herdr prompt.
 
 The helper always launches Codex with `--profile orchestrator` and
 `--dangerously-bypass-approvals-and-sandbox`. Under Herdr it:

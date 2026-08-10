@@ -29,6 +29,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--mode", choices=("fresh", "resume", "fork"), default="fresh")
     parser.add_argument("--session-id")
     parser.add_argument("--cwd", default=os.getcwd())
+    parser.add_argument("--consume-briefing", action="store_true")
     parser.add_argument("--briefing-file", required=True)
     args = parser.parse_args()
     if args.mode in {"resume", "fork"} and not args.session_id:
@@ -76,6 +77,16 @@ def secure_briefing_copy(source: Path) -> Path:
         os.unlink(raw_path)
         raise
     return Path(raw_path)
+
+
+def consume_briefing_source(source: Path, preserved_copy: Path) -> None:
+    try:
+        source.unlink()
+    except OSError as error:
+        raise HandoffError(
+            f"cannot consume briefing {source}: {error}; "
+            f"secure copy preserved at {preserved_copy}"
+        ) from error
 
 
 def codex_args(mode: str, cwd: Path, session_id: str | None) -> list[str]:
@@ -210,7 +221,10 @@ def main() -> int:
     cwd = Path(args.cwd).expanduser().resolve()
     if not cwd.is_dir():
         raise HandoffError(f"cwd is not a directory: {cwd}")
-    briefing_path = secure_briefing_copy(Path(args.briefing_file).expanduser())
+    briefing_source = Path(args.briefing_file).expanduser()
+    briefing_path = secure_briefing_copy(briefing_source)
+    if args.consume_briefing:
+        consume_briefing_source(briefing_source, briefing_path)
     briefing = briefing_path.read_text(encoding="utf-8")
 
     if os.environ.get("HERDR_ENV") == "1":
