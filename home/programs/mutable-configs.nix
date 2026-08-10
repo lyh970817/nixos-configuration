@@ -110,6 +110,7 @@ let
     "session-handoff"
     "superpowers-domain-context"
     "visual-verification"
+    "writing-agent-instructions"
   ];
 
   codexMattpocockSkillNames = [
@@ -979,6 +980,8 @@ in
     "claude/skills/domain-modeling".source = link "dotfiles/claude/skills/domain-modeling";
     "claude/skills/herdr".source = link "dotfiles/claude/skills/herdr";
     "claude/skills/r-dev-shell".source = link "dotfiles/claude/skills/r-dev-shell";
+    "claude/skills/writing-agent-instructions".source =
+      link "dotfiles/claude/skills/writing-agent-instructions";
     "claude/commands".source = link "dotfiles/claude/commands";
     "claude/output-styles".source = link "dotfiles/claude/output-styles";
     "claude/agents".source = link "dotfiles/claude/agents";
