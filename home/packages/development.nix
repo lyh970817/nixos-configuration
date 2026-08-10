@@ -26,7 +26,7 @@
         rustc
         go
         nodejs_latest
-        nodePackages.neovim
+        neovim-node-client
         sqlite
         (python3.withPackages (
           ps: with ps; [
@@ -62,7 +62,7 @@
         curl
         lua
         luarocks
-        nodePackages.vscode-langservers-extracted
+        vscode-langservers-extracted
         yaml-language-server
         hunspell
         hunspellDicts.en_GB-large
