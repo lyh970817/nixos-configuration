@@ -134,7 +134,7 @@ in
 
   xdg.dataFile."wallpapers/Mandala_braille.txt".source = wallpaperArt;
 
-  # Sourced from hyprland.conf, so the file must exist even while the
+  # Included by hyprland.lua, so the file must exist even while the
   # wallpaper is disabled. hyprwinwrap was dropped from hyprland-plugins
   # upstream in v0.56.0 ("all: drop unmaintained plugins") and its last fix
   # targeted Hyprland 0.54.3, so no build of it can load into Hyprland 0.56.
@@ -142,14 +142,14 @@ in
   # ported to a native layer-shell surface (`kitten panel --edge=background`);
   # the theming hooks tolerate the missing unit. The windowrule stays so a
   # manually launched viewer still renders frameless.
-  xdg.configFile."hypr/wallpaper.conf".text = ''
-    windowrule {
-        name = mandala-wallpaper
-        match:class = ^(${wallpaperClass})$
-        opacity = 1.0 override
-        border_size = 0
-        rounding = 0
-        no_focus = true
-    }
+  xdg.configFile."hypr/wallpaper.lua".text = ''
+    hl.window_rule({
+      name = "mandala-wallpaper",
+      match = { class = "^(${wallpaperClass})$" },
+      opacity = "1.0 override",
+      border_size = 0,
+      rounding = 0,
+      no_focus = true,
+    })
   '';
 }

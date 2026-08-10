@@ -1,0 +1,477 @@
+-- Hyprland configuration, Lua format.
+--
+-- The .conf format is deprecated and support for it is removed in Hyprland
+-- 0.57. There is no incremental path: the moment this file exists it replaces
+-- hyprland.conf wholesale, and there is no `source`/`keyword` helper in the Lua
+-- API. See share/hypr/hyprland.lua and share/hypr/stubs/hl.meta.lua in the
+-- hyprland package for the reference config and the typed API stub.
+--
+-- Validate any edit before it goes live -- ~/.config/hypr is an out-of-store
+-- symlink, so an edit here reaches the compositor with no rebuild:
+--   Hyprland --verify-config --config ~/.config/hypr/hyprland.lua
+
+local home = os.getenv("HOME")
+
+-- Lua's `dofile` throws when the file is missing. The theme link is created by
+-- systemd-tmpfiles and the generated fragments by Home Manager, so all three
+-- normally exist -- but a missing include must not take the whole config down
+-- with it, because a config that raises before any bind is registered drops
+-- Hyprland into emergency mode with only SUPER+Q bound.
+local function include(path)
+  local chunk, err = loadfile(path)
+  if not chunk then
+    print("[hyprland.lua] skipping " .. path .. ": " .. tostring(err))
+    return
+  end
+  local ok, ferr = pcall(chunk)
+  if not ok then
+    print("[hyprland.lua] error in " .. path .. ": " .. tostring(ferr))
+  end
+end
+
+-- Include order matters and mirrors the old hyprland.conf: the theme comes
+-- first, so the general/decoration blocks further down override whatever it
+-- set. That is deliberate and long-standing -- switch-dark/switch-light push
+-- the mode's real values in at runtime; the theme file's own general block only
+-- matters for keys nothing below re-states (misc.background_color, env,
+-- startup commands).
+include(home .. "/.local/state/hypr/current-theme.lua")
+-- hyprwinwrap plugin and window rules for the dark-mode terminal wallpaper.
+include(home .. "/.config/hypr/wallpaper.lua")
+
+------------------
+---- MONITORS ----
+------------------
+
+hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
+hl.monitor({
+  output = "desc:DSC Paperlike H D",
+  mode = "2200x1650@40",
+  position = "0x0",
+  scale = 1.666667,
+})
+
+---------------------
+---- MY PROGRAMS ----
+---------------------
+
+local terminal = "foot"
+local fileManager = "thunar"
+local fileManagerCli = "foot $SHELL -l -c yazi"
+local menu = "rofi -show drun -location 2"
+local windowSelect = "rofi -show window -location 2"
+
+-------------------
+---- AUTOSTART ----
+-------------------
+
+-- `hyprland.start` fires once per compositor start and not on reload, which is
+-- exactly what `exec-once` meant.
+hl.on("hyprland.start", function()
+  hl.exec_cmd("nm-applet &")
+  hl.exec_cmd("mako &")
+  hl.exec_cmd("fcitx5 -d --replace")
+  hl.exec_cmd(home .. "/.config/hypr/scripts/monitor-switch.sh")
+  hl.exec_cmd(
+    "dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE XMODIFIERS && systemctl --user start hyprland-session.target"
+  )
+  hl.exec_cmd("systemctl --user start hyprwhspr.service")
+end)
+
+-------------------------------
+---- ENVIRONMENT VARIABLES ----
+-------------------------------
+
+-- XCURSOR_THEME / XCURSOR_SIZE / HYPRCURSOR_THEME are deliberately NOT set
+-- here. They belong to the mode themes, and this file includes the theme near
+-- the top, so anything set here would silently win over it -- which is what a
+-- stray `XCURSOR_SIZE = 24` did, pinning every client-drawn cursor to 24 while
+-- the compositor drew dark mode's 22.
+
+-- pam_env (linux-pam >= 1.7.1) drops values starting with a bare "@" from
+-- /etc/pam/environment, so sessionVariables' XMODIFIERS never reaches the
+-- session. Restore it here so Hyprland-spawned XWayland clients attach fcitx5.
+hl.env("XMODIFIERS", "@im=fcitx")
+
+-----------------------
+---- LOOK AND FEEL ----
+-----------------------
+
+hl.config({
+  general = {
+    gaps_in = 4,
+    gaps_out = 15,
+
+    border_size = 2,
+
+    col = {
+      -- Transparent (no border) for unfocused. The active border is owned by
+      -- the mode themes and switch-dark/switch-light.
+      inactive_border = "rgba(00000000)",
+    },
+
+    -- Set to true to enable resizing windows by clicking and dragging on
+    -- borders and gaps
+    resize_on_border = false,
+
+    allow_tearing = false,
+
+    layout = "dwindle",
+  },
+
+  cursor = {
+    inactive_timeout = 0.1,
+    hide_on_key_press = true,
+  },
+
+  animations = {
+    enabled = false,
+  },
+
+  -- pseudotile master switch was removed in Hyprland 0.56; the mainMod + P
+  -- pseudo dispatcher and per-window pseudo rules work without it now.
+  dwindle = {
+    preserve_split = true,
+  },
+
+  master = {
+    new_status = "master",
+  },
+
+  misc = {
+    force_default_wallpaper = 1, -- Set to 0 or 1 to disable the anime mascot wallpapers
+    disable_hyprland_logo = true, -- If true disables the random hyprland logo / anime girl background. :(
+  },
+
+  input = {
+    kb_layout = "us",
+
+    follow_mouse = 3,
+    float_switch_override_focus = 0,
+
+    sensitivity = 0, -- -1.0 - 1.0, 0 means no modification.
+
+    touchpad = {
+      natural_scroll = true,
+    },
+  },
+})
+
+-- Curves and animations are still declared even though animations.enabled is
+-- false, so flipping that switch at runtime gives the same result as before.
+hl.curve("easeOutQuint", { type = "bezier", points = { { 0.23, 1 }, { 0.32, 1 } } })
+hl.curve("easeInOutCubic", { type = "bezier", points = { { 0.65, 0.05 }, { 0.36, 1 } } })
+hl.curve("linear", { type = "bezier", points = { { 0, 0 }, { 1, 1 } } })
+hl.curve("almostLinear", { type = "bezier", points = { { 0.5, 0.5 }, { 0.75, 1.0 } } })
+hl.curve("quick", { type = "bezier", points = { { 0.15, 0 }, { 0.1, 1 } } })
+
+hl.animation({ leaf = "global", enabled = true, speed = 10, bezier = "default" })
+hl.animation({ leaf = "border", enabled = true, speed = 5.39, bezier = "easeOutQuint" })
+hl.animation({ leaf = "windows", enabled = true, speed = 4.79, bezier = "easeOutQuint" })
+hl.animation({ leaf = "windowsIn", enabled = true, speed = 4.1, bezier = "easeOutQuint", style = "popin 87%" })
+hl.animation({ leaf = "windowsOut", enabled = true, speed = 1.49, bezier = "linear", style = "popin 87%" })
+hl.animation({ leaf = "fadeIn", enabled = true, speed = 1.73, bezier = "almostLinear" })
+hl.animation({ leaf = "fadeOut", enabled = true, speed = 1.46, bezier = "almostLinear" })
+hl.animation({ leaf = "fade", enabled = true, speed = 3.03, bezier = "quick" })
+hl.animation({ leaf = "layers", enabled = true, speed = 3.81, bezier = "easeOutQuint" })
+hl.animation({ leaf = "layersIn", enabled = true, speed = 4, bezier = "easeOutQuint", style = "fade" })
+hl.animation({ leaf = "layersOut", enabled = true, speed = 1.5, bezier = "linear", style = "fade" })
+hl.animation({ leaf = "fadeLayersIn", enabled = true, speed = 1.79, bezier = "almostLinear" })
+hl.animation({ leaf = "fadeLayersOut", enabled = true, speed = 1.39, bezier = "almostLinear" })
+hl.animation({ leaf = "workspaces", enabled = true, speed = 1.94, bezier = "almostLinear", style = "fade" })
+hl.animation({ leaf = "workspacesIn", enabled = true, speed = 1.21, bezier = "almostLinear", style = "fade" })
+hl.animation({ leaf = "workspacesOut", enabled = true, speed = 1.94, bezier = "almostLinear", style = "fade" })
+
+---------------
+---- INPUT ----
+---------------
+
+hl.device({
+  name = "epic-mouse-v1",
+  sensitivity = -0.5,
+})
+
+hl.device({
+  name = "363030314b424e44:00-06cb:cddb-touchpad",
+  -- Touchpad disabled by default; every reload/rebuild restores this. Fn+F9
+  -- (touchpad-toggle.sh via code:202) enables it, and a missing state file is
+  -- treated as disabled so the first press enables.
+  enabled = false,
+})
+
+---------------------
+---- KEYBINDINGS ----
+---------------------
+
+local mainMod = "SUPER" -- Sets "Windows" key as main modifier
+
+local scripts = home .. "/.config/hypr/scripts"
+local protect = scripts .. "/protected-dispatch.sh "
+
+-- Per-role terminal/connect binds (Super+Enter, Super+Shift+Enter) and boot
+-- terminal. Generated by Home Manager based on portable.role; see
+-- home/programs/dotfiles.nix.
+include(home .. "/.config/hypr/role.lua")
+
+-- Manual theme toggle (both roles)
+hl.bind(mainMod .. " + SHIFT + T", hl.dsp.exec_cmd("theme-toggle"))
+-- Toggle the manual gamma 100 / 1500 K hyprsunset override (Super+N).
+hl.bind(mainMod .. " + N", hl.dsp.exec_cmd("hyprsunset-night"))
+hl.bind(mainMod .. " + W", hl.dsp.exec_cmd("btop-workspace exec brave"))
+hl.bind(mainMod .. " + Q", hl.dsp.exec_cmd(protect .. "killactive"))
+hl.bind(mainMod .. " + SHIFT + Q", hl.dsp.exec_cmd(protect .. "forcekillactive"))
+hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(scripts .. "/raise-or-launch.sh foot " .. fileManagerCli))
+hl.bind(mainMod .. " + SHIFT + E", hl.dsp.exec_cmd(scripts .. "/raise-or-launch.sh Thunar " .. fileManager))
+hl.bind(mainMod .. " + S", hl.dsp.exec_cmd(protect .. "togglefloating"))
+hl.bind(mainMod .. " + F", hl.dsp.exec_cmd(protect .. "fullscreen 1"))
+hl.bind(mainMod .. " + R", hl.dsp.exec_cmd("btop-workspace exec " .. menu))
+hl.bind(mainMod .. " + SHIFT + R", hl.dsp.exec_cmd("btop-workspace exec " .. windowSelect))
+hl.bind(mainMod .. " + P", hl.dsp.exec_cmd(protect .. "pseudo"))
+hl.bind(mainMod .. " + SHIFT + P", hl.dsp.exec_cmd('wtype -s 500 "Green0day" -k Return'))
+-- togglesplit became a layoutmsg in Hyprland 0.54; the bare dispatcher is gone
+hl.bind(mainMod .. " + V", hl.dsp.exec_cmd(protect .. "layoutmsg togglesplit"))
+hl.bind(mainMod .. " + D", hl.dsp.exec_cmd(scripts .. "/show-datetime.sh"))
+-- Screenshots: save to ~/Pictures/Screenshots and copy to the clipboard.
+hl.bind("Print", hl.dsp.exec_cmd(scripts .. "/screenshot.sh full"))
+hl.bind(mainMod .. " + SHIFT + S", hl.dsp.exec_cmd(scripts .. "/screenshot.sh region"))
+hl.bind("SUPER + O", hl.dsp.exec_cmd("hyprwhispr-record toggle"), { description = "Speech-to-text" })
+hl.bind("CTRL + SHIFT + L", hl.dsp.exec_cmd("hyprwhspr-longform toggle"), { description = "Long-form dictation" })
+hl.bind("CTRL + SHIFT + P", hl.dsp.exec_cmd("hyprwhispr-profile toggle"), { description = "Toggle dictation profile" })
+hl.bind("SUPER + ESCAPE", hl.dsp.exec_cmd("hyprwhspr-longform cancel"))
+
+hl.bind("ALT + SHIFT + B", hl.dsp.exec_cmd(protect .. "alterzorder bottom"))
+
+-- Move focus with mainMod + hjkl
+hl.bind(mainMod .. " + H", hl.dsp.focus({ direction = "left" }))
+hl.bind(mainMod .. " + L", hl.dsp.focus({ direction = "right" }))
+hl.bind(mainMod .. " + K", hl.dsp.focus({ direction = "up" }))
+hl.bind(mainMod .. " + J", hl.dsp.focus({ direction = "down" }))
+hl.bind(mainMod .. " + Tab", hl.dsp.window.cycle_next())
+hl.bind(mainMod .. " + SHIFT + Tab", hl.dsp.window.cycle_next({ prev = true }))
+
+-- Move window with mainMod + SHIFT + hjkl. Both a swap and a nudge are bound
+-- to each combo, exactly as in the .conf version: the swap applies to tiled
+-- windows and the move to floating ones.
+hl.bind(mainMod .. " + SHIFT + H", hl.dsp.exec_cmd(protect .. "swapwindow l"))
+hl.bind(mainMod .. " + SHIFT + L", hl.dsp.exec_cmd(protect .. "swapwindow r"))
+hl.bind(mainMod .. " + SHIFT + K", hl.dsp.exec_cmd(protect .. "swapwindow u"))
+hl.bind(mainMod .. " + SHIFT + J", hl.dsp.exec_cmd(protect .. "swapwindow d"))
+hl.bind(mainMod .. " + SHIFT + H", hl.dsp.exec_cmd(protect .. "moveactive -30 0"))
+hl.bind(mainMod .. " + SHIFT + L", hl.dsp.exec_cmd(protect .. "moveactive 30 0"))
+hl.bind(mainMod .. " + SHIFT + K", hl.dsp.exec_cmd(protect .. "moveactive 0 -30"))
+hl.bind(mainMod .. " + SHIFT + J", hl.dsp.exec_cmd(protect .. "moveactive 0 30"))
+
+-- Move to workspace 10 as a "minimized" area
+hl.bind("SUPER + M", hl.dsp.exec_cmd(scripts .. "/move-and-tile.sh"))
+
+-- Switch workspaces with mainMod + [0-9]
+-- Move active window to a workspace with mainMod + SHIFT + [0-9]
+for i = 1, 10 do
+  local key = i % 10 -- 10 maps to key 0
+  hl.bind(mainMod .. " + " .. key, hl.dsp.focus({ workspace = i }))
+  hl.bind(mainMod .. " + SHIFT + " .. key, hl.dsp.exec_cmd(protect .. "movetoworkspace " .. i))
+end
+
+-- Scroll through existing workspaces with mainMod + scroll
+hl.bind(mainMod .. " + mouse_down", hl.dsp.focus({ workspace = "e+1" }))
+hl.bind(mainMod .. " + mouse_up", hl.dsp.focus({ workspace = "e-1" }))
+
+-- Move/resize windows with mainMod + LMB/RMB and dragging
+hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(), { mouse = true })
+hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
+
+-- Resize active window with Super + Arrow Keys
+hl.bind("SUPER + right", hl.dsp.exec_cmd(protect .. "resizeactive 10 0"), { repeating = true })
+hl.bind("SUPER + left", hl.dsp.exec_cmd(protect .. "resizeactive -10 0"), { repeating = true })
+hl.bind("SUPER + up", hl.dsp.exec_cmd(protect .. "resizeactive 0 -10"), { repeating = true })
+hl.bind("SUPER + down", hl.dsp.exec_cmd(protect .. "resizeactive 0 10"), { repeating = true })
+
+-- Laptop multimedia keys for volume and LCD brightness
+-- Dynabook X30W-K Fn-row actions that have stable Linux/XF86 events. The
+-- firmware may expose these labels differently; keep the bindings on the
+-- standard events rather than on model-specific F-row names.
+-- Verified on X30W-K: Fn+Esc/3/4 = mute/volume (standard keysyms); Fn+F6/F7 =
+-- brightness via the ACPI quirk module; Fn+F3 = XF86Sleep; Fn+F12 = ScrollLock;
+-- Fn+F1/F5/S emit Windows chords Super+L/Super+P/Super+Q, already bound
+-- elsewhere; Fn+F9 = raw Ctrl+Super+F24/keycode202 (bound below).
+-- Fn+F2/F4/F8/Space/Z used to reach only an EC FIFO nothing drained; the
+-- toshiba_acpi_dnbk quirk module now drains it via INFO(), so these emit real
+-- evdev keys: Fn+F2 = XF86Battery (power-profile cycle), Fn+F4 =
+-- XF86AudioMicMute (KEY_SUSPEND remapped to micmute in hwdb to avoid
+-- suspending), Fn+F8 = XF86WLAN (mihomo proxy toggle), Fn+Z =
+-- XF86KbdLightOnOff (keyboard backlight cycle), Fn+Space = monitor scale cycle.
+-- Its native KEY_ZOOMRESET can't pass through keyd's virtual keyboard, so a
+-- hwdb rule remaps it to KEY_F21 and the bind is on that keycode (191 + 8 =
+-- 199). The XF86WLAN and monitor keys are laptop-only, so these shared binds
+-- are inert on the desktop.
+hl.bind("XF86ScreenSaver", hl.dsp.exec_cmd("loginctl lock-session"), { locked = true })
+hl.bind("XF86Sleep", hl.dsp.exec_cmd("systemctl suspend"), { locked = true })
+hl.bind("XF86WLAN", hl.dsp.exec_cmd(scripts .. "/mihomo-toggle.sh"), { locked = true })
+hl.bind("XF86Search", hl.dsp.exec_cmd("rofi -show drun -location 2"))
+-- No XF86TouchpadToggle bind: FK21/keycode 199 maps to that keysym in
+-- xkeyboard-config, and Fn+Space (remapped to KEY_F21) claims code:199 for the
+-- monitor-scale cycle below. The physical touchpad toggle is Fn+F9, handled via
+-- code:202. touchpad-toggle.sh stays; it's invoked from that keycode bind.
+-- Fn+F2 cycles power-profiles-daemon profiles; Fn+Z cycles keyboard backlight;
+-- Fn+Space cycles the focused monitor's scale.
+hl.bind("XF86Battery", hl.dsp.exec_cmd(scripts .. "/power-profile-cycle.sh"))
+hl.bind("XF86KbdLightOnOff", hl.dsp.exec_cmd(scripts .. "/kbd-backlight-cycle.sh"))
+-- Fn+Space arrives as KEY_F21 (hwdb-remapped from KEY_ZOOMRESET, which keyd
+-- can't forward); bind by keycode 199 (evdev 191 + 8).
+hl.bind("code:199", hl.dsp.exec_cmd(scripts .. "/monitor-scale-cycle.sh"))
+-- X30W-K Fn+F9 emits Ctrl+Super+F24. Linux 6.17 corrected this PS/2 scancode
+-- from Zenkaku_Hankaku (keycode 93) to F24 (keycode 202), so bind the corrected
+-- raw keycode instead of the colliding XF86TouchpadToggle keysym.
+hl.bind("CTRL + SUPER + code:202", hl.dsp.exec_cmd(scripts .. "/touchpad-toggle.sh"))
+hl.bind(
+  "XF86AudioRaiseVolume",
+  hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"),
+  { locked = true, repeating = true }
+)
+hl.bind(
+  "XF86AudioLowerVolume",
+  hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"),
+  { locked = true, repeating = true }
+)
+hl.bind(
+  "CTRL + SHIFT + U",
+  hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SOURCE@ 5%+"),
+  { locked = true, repeating = true }
+)
+hl.bind(
+  "CTRL + SHIFT + D",
+  hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SOURCE@ 5%-"),
+  { locked = true, repeating = true }
+)
+hl.bind("XF86AudioMute", hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"), { locked = true })
+hl.bind(
+  "XF86AudioMicMute",
+  hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"),
+  { locked = true, repeating = true }
+)
+hl.bind("XF86MonBrightnessUp", hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%+"), { locked = true, repeating = true })
+hl.bind("XF86MonBrightnessDown", hl.dsp.exec_cmd("brightnessctl -e4 -n2 set 5%-"), { locked = true, repeating = true })
+
+-- Requires playerctl
+hl.bind("XF86AudioNext", hl.dsp.exec_cmd("playerctl next"), { locked = true })
+hl.bind("XF86AudioPause", hl.dsp.exec_cmd("playerctl play-pause"), { locked = true })
+hl.bind("XF86AudioPlay", hl.dsp.exec_cmd("playerctl play-pause"), { locked = true })
+hl.bind("XF86AudioPrev", hl.dsp.exec_cmd("playerctl previous"), { locked = true })
+
+--------------------------------
+---- WINDOWS AND WORKSPACES ----
+--------------------------------
+
+-- --- State-Based Rules ---
+
+-- Fullscreen behavior: No borders, no rounding, full opacity
+hl.window_rule({
+  name = "fullscreen-state",
+  match = { fullscreen = 1 },
+  border_size = 0,
+  rounding = 0,
+  opacity = "1.0 1.0",
+})
+
+-- --- Application Rules ---
+
+-- Brave: Fix maximize events
+hl.window_rule({
+  name = "brave",
+  match = { class = "^(brave-browser)$" },
+  border_size = 0,
+  suppress_event = "maximize",
+})
+
+-- ChatGPT desktop
+hl.window_rule({
+  name = "chatgpt-desktop",
+  match = { class = "^(codex-desktop)$" },
+  border_size = 0,
+})
+
+-- File Managers (Thunar)
+hl.window_rule({
+  name = "thunar",
+  match = { class = "^(Thunar|thunar)$" },
+  float = true,
+})
+
+-- Terminal (Foot) - floating windows launched via keybindings
+hl.window_rule({
+  name = "foot-float",
+  match = { class = "^(foot-float)$" },
+  float = true,
+  size = "1000 700",
+  center = true,
+})
+
+-- Main Terminal (Startup) - tile (not fullscreen)
+hl.window_rule({
+  name = "foot-main",
+  match = { class = "^(foot-main)$" },
+  float = false,
+})
+
+-- Network Manager (nmtui)
+-- Note: Ensure you launch with `foot --title nmtui nmtui`
+hl.window_rule({
+  name = "nmtui-tile",
+  match = { title = "^(nmtui)$" },
+  float = false,
+  pseudo = true,
+})
+
+-- LocalSend
+hl.window_rule({
+  name = "localsend",
+  match = { class = "^(localsend_app)$" },
+  float = true,
+  size = "800 600",
+  center = true,
+})
+
+-- --- Workspace Specific Rules ---
+
+-- Force tiling on Workspace 10
+hl.window_rule({
+  name = "workspace-10-force-tile",
+  match = { workspace = 10 },
+  float = false,
+})
+
+-- Persistent full-screen btop dashboard on Super+0 / workspace 10. Keep this
+-- after the general workspace-10 rule so its fullscreen state takes precedence.
+hl.window_rule({
+  name = "btop-dashboard",
+  match = { class = "^(foot-btop)$" },
+  workspace = "10 silent",
+  float = false,
+  border_size = 0,
+  rounding = 0,
+  no_initial_focus = true,
+})
+
+-- --- Global Defaults ---
+
+-- Ignore maximize requests from all apps (Global fallback)
+hl.window_rule({
+  name = "global-no-maximize",
+  match = { class = ".*" },
+  suppress_event = "maximize",
+})
+
+hl.window_rule({
+  -- Fix some dragging issues with XWayland
+  name = "fix-xwayland-drags",
+  match = {
+    class = "^$",
+    title = "^$",
+    xwayland = true,
+    float = true,
+    fullscreen = false,
+    pin = false,
+  },
+
+  no_focus = true,
+})

@@ -774,7 +774,7 @@ if [ "$1" = get ]; then printf "'prefer-dark'\\n"; else printf 'gsettings %s\\n'
         self.fake(
             "hyprctl",
             f"""#!/bin/sh
-if [ "$1" = getoption ]; then printf '%s\\n' '{{"custom":"4"}}'; elif [ "$1" = keyword ]; then printf 'hyprctl %s\\n' "$*" >> {actions}; else printf '%s\\n' '{{"monitor":"DP-1"}}'; fi
+if [ "$1" = getoption ]; then printf '%s\\n' '{{"custom":"4"}}'; elif [ "$1" = eval ]; then printf 'hyprctl %s\\n' "$*" >> {actions}; else printf '%s\\n' '{{"monitor":"DP-1"}}'; fi
 """,
         )
         self.fake(
@@ -834,8 +834,12 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
         action_lines = actions.read_text().splitlines()
         self.assertIn("gsettings set org.example theme 'preview'", action_lines)
         self.assertIn("gsettings set org.example theme 'prefer-dark'", action_lines)
-        self.assertIn("hyprctl keyword general:gaps_in 20", action_lines)
-        self.assertIn("hyprctl keyword general:gaps_in 4", action_lines)
+        self.assertIn(
+            "hyprctl eval hl.config({ general = { gaps_in = 20 } })", action_lines
+        )
+        self.assertIn(
+            "hyprctl eval hl.config({ general = { gaps_in = 4 } })", action_lines
+        )
         self.assertIn("makoctl mode -s dark", action_lines)
         self.assertIn("makoctl mode -s default", action_lines)
 
