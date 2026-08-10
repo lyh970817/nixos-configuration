@@ -14,8 +14,8 @@
 | 备用色板 | `amber`（前景 `#D99B32`） | `home/palettes.nix` |
 | 白天 | 06:00 / 6500 K / gamma 1.0 | `home/desktop/hyprsunset.nix` |
 | 夜间 | 16:00 / 3500 K / gamma 1.0（色温仍在实机微调） | `home/desktop/hyprsunset.nix` |
-| 屏幕着色器 | 已关闭（两种模式都是 `[[EMPTY]]`） | `home/desktop/theming.nix`、`dotfiles/hypr/themes/dark.conf` |
-| Super+N | `hyprsunset-toggle` | `dotfiles/hypr/hyprland.conf` |
+| 屏幕着色器 | 深色模式使用 `panel.glsl`；可从 Rofi 临时关闭 | `home/desktop/theming.nix`、`home/programs/launchers.nix` |
+| Super+N | gamma `100` / 1500 K | `dotfiles/hypr/hyprland.conf` |
 
 命令：
 
@@ -23,7 +23,7 @@
 phosphor                # 在绿色/琥珀色板之间即时切换
 phosphor amber          # 或 phosphor green / phosphor status
 hyprsunset-warmth 3200  # 手动覆盖当前色温（2000-6500，100 K 步进）
-hyprsunset-toggle       # 开关夜间模式
+hyprsunset-night        # 应用 gamma 100 / 1500 K 覆盖
 ```
 
 ---

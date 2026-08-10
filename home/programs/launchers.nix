@@ -74,17 +74,17 @@ in
       Hidden=true
     '';
 
-    # Network manager launcher: opens nmtui in a terminal. force = true so it
-    # replaces any hand-made ~/.local/share/applications/nmtui.desktop instead
-    # of showing as a second entry, and it lands on fresh installs too.
+    # Network configuration launcher: opens nmtui in a terminal. force = true
+    # so it replaces any hand-made ~/.local/share/applications/nmtui.desktop
+    # instead of showing as a second entry, and it lands on fresh installs too.
     "applications/nmtui.desktop" = {
       force = true;
       text = ''
         [Desktop Entry]
         Version=1.0
         Type=Application
-        Name=Network Manager
-        GenericName=Network Configuration
+        Name=Network Configuration
+        GenericName=System
         Comment=Text-based network configuration tool
         Exec=foot --title nmtui zsh -i -c nmtui
         Icon=network-wired
@@ -93,6 +93,22 @@ in
         Keywords=network;wifi;ethernet;connection;nmtui;
       '';
     };
+
+    # Runtime-only override: the dark-mode hook restores its shader the next
+    # time dark mode is applied.
+    "applications/disable-screen-shader.desktop".text = ''
+      [Desktop Entry]
+      Version=1.0
+      Type=Application
+      Name=Disable Screen Shader
+      GenericName=Display
+      Comment=Temporarily turn off Hyprland's active screen shader
+      Exec=${pkgs.hyprland}/bin/hyprctl keyword decoration:screen_shader [[EMPTY]]
+      Icon=video-display
+      Terminal=false
+      Categories=Settings;Display;
+      Keywords=shader;screen;display;hyprland;
+    '';
 
     # Visible customizations of a package's own entry (renamed / simplified),
     # kept via a same-basename force override so they replace the package's
