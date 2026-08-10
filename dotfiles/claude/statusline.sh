@@ -198,6 +198,60 @@ if [ -n "$used" ]; then
   output+=" ${DIM}|${RESET} ${bar}"
 fi
 
+# --- 5-hour rate limit segment (from codexbar's cache) ---
+# Claude Code's own stdin payload only carries the 7-day window, so the 5-hour
+# one comes from the cache codexbar writes. That file is owned by another tool:
+# treat every part of it as optional and never let it break the status line.
+#
+# The window is selected by provider == "claude" *and* windowMinutes == 300,
+# scanning primary/secondary/tertiary/extraRateWindows rather than trusting a
+# key name -- the codex entry also has a "secondary", and which slot holds the
+# 5-hour window is codexbar's business, not ours.
+#
+# Staleness: codexbar refreshes on the order of a minute, so anything older
+# than 15 minutes means its poller is wedged or the machine was asleep. A
+# 5-hour window can move tens of points in that time, and a confidently wrong
+# number is worse than a missing one, so the segment simply disappears.
+usage_file="${CODEXBAR_USAGE_FILE:-${XDG_CACHE_HOME:-$HOME/.cache}/codexbar/usage.json}"
+five_pct=""
+five_reset=0
+if [ -r "$usage_file" ]; then
+  five_data=$(jq -r '
+    first(.[]? | select(.provider? == "claude") | .usage) as $u
+    | ($u.updatedAt | fromdateiso8601? // -1) as $updated
+    | select($updated > 0 and (now - $updated) < 900)
+    | ([$u.primary, $u.secondary, $u.tertiary] + [$u.extraRateWindows[]?.window]
+       | map(select(type == "object"
+                    and .windowMinutes? == 300
+                    and (.usedPercent | type) == "number"))
+       | first) as $w
+    | select($w != null)
+    | "\($w.usedPercent | floor) \((($w.resetsAt | fromdateiso8601? // 0) - now) | floor)"
+  ' "$usage_file" 2>/dev/null || true)
+  read -r five_pct five_reset <<< "${five_data:-}" || true
+  case "${five_pct:-}" in
+    ''|*[!0-9]*) five_pct="" ;;
+  esac
+  case "${five_reset:-}" in
+    ''|*[!0-9]*) five_reset=0 ;;
+  esac
+fi
+
+if [ -n "$five_pct" ]; then
+  five_color=$(usage_color "$five_pct")
+  five_segment=" ${DIM}|${RESET} ${DIM}5h${RESET} $(usage_label "$five_pct" "$five_color")"
+  if [ "$five_reset" -gt 0 ]; then
+    reset_h=$(( five_reset / 3600 ))
+    reset_m=$(( (five_reset % 3600) / 60 ))
+    if [ "$reset_h" -gt 0 ]; then
+      five_segment+=" ${DIM}↺${reset_h}h${reset_m}m${RESET}"
+    else
+      five_segment+=" ${DIM}↺${reset_m}m${RESET}"
+    fi
+  fi
+  output+="$five_segment"
+fi
+
 # --- weekly (7-day) rate limit segment ---
 if [ -n "$weekly" ]; then
   weekly_int=${weekly%.*}
