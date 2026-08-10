@@ -186,22 +186,24 @@ everything else. Never at the top.
 Start it with a line holding only `---`, then a line holding only `**Summary**`,
 then the summary lines. The reader must see at once where the rewrite stops.
 
-The summary is the same sections you just wrote, in the same order, compressed
-to one line each and labelled with the same names:
+The summary is not a recap. The reader has just read the rewrite, so do not
+repeat `Done`, `In progress`, `The options`, or `Recommendation` here. The
+summary carries only the two things that decide what the reader does next:
 
 - **Your call** — …
-- **Done** — …
+- **Watch out** — …
 
-and so on for every section of the shape you chose, in that order.
-
-- One line per section: one sentence, at most 20 words, holding the outcome and
-  not the steps. When a section holds several items, name the ones that matter
-  and leave the rest to the rewrite above. The summary is the short view; the
-  rewrite above is where the detail lives.
-- `Your call` is the one exception: every item waiting on the reader gets its
-  own line, and a question the message asked is asked again here as a question.
-- An empty section keeps its line and repeats the same empty sentence its
-  section used above.
+- Write both labels, in that order, every time, even when one is empty. An
+  empty one keeps its line and repeats the same empty sentence its section used
+  above.
+- `Your call` gets one line for every separate thing still waiting on the
+  reader. Four open decisions means four `Your call` lines. Never merge two
+  decisions into one line, and never leave one out to keep the summary short.
+  Losing a decision is the worst thing this summary can do, and a summary that
+  runs long because the reader really does have five things to answer is
+  correct. A question the message asked is asked again here as a question.
+- `Watch out` carries the caveats that would change what the reader does. When
+  there are several, keep the ones that would change a decision.
 - Every claim keeps the scope limit and the hedge that came with it. If the
   original said "merged and rebuilt, but light mode is untouched", the summary
   says that too. If the limit does not fit on the line, drop the whole claim
