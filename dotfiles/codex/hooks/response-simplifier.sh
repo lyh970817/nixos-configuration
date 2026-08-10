@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stop hook. Generate a short First Mate companion brief below the unchanged
+# Stop hook. Generate a short route-aware companion brief below the unchanged
 # original response. Every failure path exits successfully without output so
 # the brief generator cannot disturb the parent turn.
 

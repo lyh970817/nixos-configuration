@@ -1,17 +1,23 @@
-# Stop-hook First Mate model comparison
+# Stop-hook companion brief evaluation
 
 ## Current decision
 
-Use `gpt-5.4` at `medium` reasoning effort with Prompt H. The hook leaves the
-finished assistant response unchanged and adds only a compact `**First Mate**`
-brief as the system message below it. The original remains visible and
-authoritative; the brief is orientation, not a replacement report.
+Use `gpt-5.4` at `medium` reasoning effort with the route-aware prompt whose
+SHA-256 is
+`f4e6999c696a55829d708d5bc4266605efe86930a7644e6c1e3818f4716f5f29`.
+The hook leaves the finished assistant response unchanged and adds only a short
+companion brief below it. The brief has no heading or role-play vocabulary and
+uses one to four one-sentence bullets by default, adding bullets only when
+needed to retain distinct answers, actions, or choices. It has no numeric word
+cap.
 
-Prompt H has SHA-256
-`ea14bc7ac6ff2d0264bde337a60aed81ba722812bc7ca8ef5ae9e800b286369e`.
-It permits one to four bullets and at most 120 words, requires the outcome,
-the highest-impact boundary, and each outstanding reader action or choice, and
-keeps recommendations with different conditions separate.
+The prompt routes each response as Result, Decision, Research, Brainstorming,
+or Progress. That routing changes what the brief prioritizes: an outcome and
+boundary; an answer or choice; a finding, evidence limit, and implication;
+unselected possibilities, tradeoffs, and open questions; or completed, current,
+pending, and required action. It does not scrape the last user message or the
+conversation transcript. The completed assistant response is the sole source,
+and the original remains visible and authoritative.
 
 The production guardrails are unchanged: the hook acts only at 1,500 or more
 characters, has a 120-second timeout, invokes an ephemeral read-only child
@@ -26,9 +32,11 @@ were either near-copy edits of already strong originals or introduced retention
 losses. A short companion brief gives the reader an outcome-first orientation
 without hiding the source evidence, commands, caveats, or detailed reasoning.
 
-This does not make the brief complete. It may selectively omit lower-priority
-background while the original remains directly above it. The brief must not
-distort conditions, ownership, scope, or safety boundaries.
+This does not make the brief complete. It may omit lower-priority background
+while the original remains directly above it, but it must cover each distinct
+reader-facing choice or action or direct the reader to the complete exact set in
+the original. It must not distort conditions, ownership, scope, verification,
+or safety boundaries.
 
 ## Community research context
 
@@ -137,14 +145,67 @@ dropped the required `done +` prefix from the `done + unchanged` reporting
 alternative. Stronger condition wording did not compensate for those exact
 status losses.
 
+## Route-aware summary-only evaluation
+
+The later evaluation simplified the question to prompt design with one selected
+generator model: GPT-5.4. It did not run another model tournament. The baseline
+corpus had ten route-balanced cases, two each for Result, Decision, Research,
+Brainstorming, and Progress. Eight were audited real top-level responses. Two
+Brainstorming cases were explicitly synthetic because the available history had
+no suitable genuine top-level examples of that route.
+
+The medium-effort v1 and v2 prompts established that GPT-5.4 could select the
+correct route but still lose conditions or broaden scope under compression. A
+v3 iteration changed the prompt and effort together, so it was not an effort
+ablation. That high-effort configuration took 33.211–84.003 seconds per case
+and passed only `6/10` safety reviews. The configuration did not justify its
+latency or resolve fidelity consistently, so production retained medium effort.
+
+### ASD-STE100 ablation
+
+V4 compared the detailed route-aware prompt
+`aea40cb9ad4401ab27afccaef10dffbfca381379a50e5a2168ff1714d67344b8`
+with a minimal “Speak in ASD-STE100 Simplified Technical English” prompt
+`46a45af3f9f794b378b1cb850ec650be18e004fc4aee987994fb146d2a7df557`.
+Both cells used GPT-5.4 at medium effort on the same six cases. Both selected
+the intended route in `6/6`. The detailed prompt won all `6/6` blind
+communication comparisons and passed safety in `3/6`; the ASD-STE100 prompt
+passed safety in only `1/6`.
+
+ASD-STE100 was useful as a wording constraint but did not supply the missing
+routing and fidelity semantics: which result boundary, choice, evidence limit,
+open question, or pending action must survive compression. It was therefore not
+deployed by itself.
+
+The packaged runner aborted when it encountered a pre-existing detailed-cell
+run before reaching the ASD-STE100 cell. The same packaged invocation and
+schema were replayed cell-only into the distinct ASD-STE100 namespace, and
+output integrity was validated before blind review.
+
+### Focused v5 correction
+
+V5 tested the deployed prompt on the three remaining targeted regressions. Its
+SHA-256 is
+`f4e6999c696a55829d708d5bc4266605efe86930a7644e6c1e3818f4716f5f29`.
+It passed communication in `3/3` and safety in `2/3`.
+
+The residual failure was a dense orchestrator Progress report. Its brief lost
+the plugin/no-plugin decision and the safer `--approve-for-me` launcher, and it
+broadened the scope of the project `AGENTS.md`. The candidate therefore failed
+the focused zero-failure production-acceptance criterion. Deployment
+deliberately accepts this residual because the unchanged original remains
+visible and authoritative; this is the best observed tradeoff, not a claim of
+perfect retention.
+
 ## Evaluation limits
 
-- Five final fixtures are a difficult technical slice, not a representative
-  sample of every user, language, or conversation style.
-- Each model/fixture pair was sampled once; output variance and latency tails
-  were not measured.
-- The blind final review compared opaque candidates. Its model mapping is made
-  only after the evaluation; the preference result is still a small sample.
+- The five historical final fixtures, ten route-balanced baseline cases, and
+  focused regression cases are technical slices, not representative samples of
+  every user, language, or conversation style.
+- Each evaluation cell and fixture pair was sampled once; output variance and
+  latency tails were not measured.
+- Blind reviews compared opaque candidates. Their model or prompt mappings were
+  disclosed only after evaluation; the results are still small samples.
 - A concise brief cannot carry every supporting detail. The original response
   is therefore intentionally retained above it and remains authoritative.
 
@@ -154,8 +215,8 @@ status losses.
   sets the 1,500-character gate, `gpt-5.4`, `medium` effort, 120-second
   timeout, isolated child execution, and fail-open behavior.
 - [`dotfiles/codex/response-simplifier.md`](../dotfiles/codex/response-simplifier.md)
-  is Prompt H. It produces only a compact `**First Mate**` brief and never a
-  replacement body rewrite.
+  is the route-aware production prompt. It produces only an unheaded companion
+  brief and never a replacement body rewrite.
 
 The hook measures the original response before generation. A 1,494-character
 message remains bypassed by the 1,500-character gate; measuring the brief
