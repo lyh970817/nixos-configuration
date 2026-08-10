@@ -24,7 +24,7 @@ is required: a `--bg` session inherits nothing from this one.
 
 Add `-w <name>` only when the user asks for a worktree. It create-or-reuses
 `.claude/worktrees/<name>` on branch `worktree-<name>`, branched from
-`origin/<default>` rather than local HEAD.
+the local HEAD, as configured by `worktree.baseRef: "head"`.
 
 ## Briefing
 

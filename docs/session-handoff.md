@@ -1,7 +1,10 @@
-# Session handoff skill (design)
+# Session handoff behavior and implementation notes
 
-Design for a planned Claude Code skill. This is a specification, not the skill.
-All command behaviour below was measured on Claude Code 2.1.226.
+This document records the measured Claude Code behavior that the Claude
+session-handoff skill relies on, alongside the implemented Codex
+session-handoff skill. The Claude command behavior below was measured on
+Claude Code 2.1.226; the Codex skill lives at
+`dotfiles/codex/skills/session-handoff/SKILL.md`.
 
 ## Purpose
 
@@ -93,9 +96,11 @@ git worktree remove --force .claude/worktrees/<name>
   `--add-dir` take optional or variadic arguments and will swallow a trailing
   prompt. Put the prompt first, or use `=` forms. A `--bg` banner ending in
   `(idle — send a prompt to start)` means the prompt was eaten and nothing runs.
-- **Worktree base ref.** With an origin present, a new worktree branches from
-  `origin/<default>`, not local HEAD, because `worktree.baseRef` defaults to
-  `fresh`. Uncommitted or unpushed parent work is not there.
+- **Worktree base ref.** This checkout configures Claude's
+  `worktree.baseRef` as `head`, so a requested new worktree branches from the
+  local HEAD. Uncommitted changes still are not copied into the worktree, but
+  commits on the local branch are available; do not describe this as branching
+  from `origin/<default>`.
 
 ## append-system-prompt inheritance
 
