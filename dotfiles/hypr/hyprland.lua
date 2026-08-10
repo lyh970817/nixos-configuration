@@ -247,7 +247,9 @@ hl.bind(mainMod .. " + L", hl.dsp.focus({ direction = "right" }))
 hl.bind(mainMod .. " + K", hl.dsp.focus({ direction = "up" }))
 hl.bind(mainMod .. " + J", hl.dsp.focus({ direction = "down" }))
 hl.bind(mainMod .. " + Tab", hl.dsp.window.cycle_next())
-hl.bind(mainMod .. " + SHIFT + Tab", hl.dsp.window.cycle_next({ prev = true }))
+-- The legacy `cyclenext, prev` argument became `next = false`; there is no
+-- `prev` field, and an unknown field is silently ignored rather than rejected.
+hl.bind(mainMod .. " + SHIFT + Tab", hl.dsp.window.cycle_next({ next = false }))
 
 -- Move window with mainMod + SHIFT + hjkl. Both a swap and a nudge are bound
 -- to each combo, exactly as in the .conf version: the swap applies to tiled

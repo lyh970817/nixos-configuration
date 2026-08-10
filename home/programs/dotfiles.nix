@@ -73,8 +73,8 @@ let
         end)
         -- Remote laptop: lid close turns the screen off via DPMS without
         -- suspending. logind ignores the lid; see modules/system/lid.nix.
-        hl.bind("switch:on:Lid Switch", hl.dsp.exec_cmd("hyprctl dispatch dpms off"), { locked = true })
-        hl.bind("switch:off:Lid Switch", hl.dsp.exec_cmd("hyprctl dispatch dpms on"), { locked = true })
+        hl.bind("switch:on:Lid Switch", hl.dsp.dpms({ action = "off" }), { locked = true })
+        hl.bind("switch:off:Lid Switch", hl.dsp.dpms({ action = "on" }), { locked = true })
         -- Manual escape hatch for the DPMS-off state. Nothing else restores the
         -- panel: there is no idle daemon here, so a bouncy lid sensor that
         -- reports a close without the matching open leaves the screen dark
@@ -84,7 +84,7 @@ let
         -- in the us layout, so it cannot latch a modifier. Deliberately "on"
         -- only, never a toggle: a toggle here could blank the screen and would
         -- then be the only way out.
-        hl.bind("Scroll_Lock", hl.dsp.exec_cmd("hyprctl dispatch dpms on"), { locked = true })
+        hl.bind("Scroll_Lock", hl.dsp.dpms({ action = "on" }), { locked = true })
       ''
     else
       ''
