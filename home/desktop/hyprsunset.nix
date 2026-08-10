@@ -4,8 +4,8 @@ let
   dayTemperature = 6500;
   dayGamma = 1.0;
 
-  # Scheduled night warmth. Super+N toggles the service itself, applying its
-  # own deliberately extreme override when it starts.
+  # Scheduled night warmth. Super+N keeps the service running while toggling
+  # its own deliberately extreme override against an unfiltered identity CTM.
   #
   # Keep it a multiple of 100. matrixForKelvin does `temp /= 100` on an integer,
   # so the temperature is quantised to hundreds: 3500 and 3599 produce exactly
@@ -42,6 +42,7 @@ let
     name = "hyprsunset-night";
     runtimeInputs = [
       pkgs.coreutils
+      pkgs.gawk
       pkgs.hyprland
       pkgs.systemd
     ];
@@ -49,6 +50,16 @@ let
       apply_night() {
         hyprctl hyprsunset gamma 100 >/dev/null 2>&1 &&
           hyprctl hyprsunset temperature 1500 >/dev/null 2>&1
+      }
+
+      numeric_equals() {
+        awk -v actual="$1" -v expected="$2" 'BEGIN { exit !(actual == expected) }'
+      }
+
+      manual_night_is_active() {
+        [ "$(hyprctl hyprsunset identity get)" = false ] &&
+          numeric_equals "$(hyprctl hyprsunset gamma)" 100 &&
+          numeric_equals "$(hyprctl hyprsunset temperature)" 1500
       }
 
       wait_for_socket() {
@@ -64,8 +75,8 @@ let
       }
 
       if systemctl --user is-active --quiet hyprsunset.service; then
-        if [ "$(hyprctl hyprsunset temperature)" = 1500 ]; then
-          systemctl --user stop hyprsunset.service
+        if manual_night_is_active; then
+          hyprctl hyprsunset identity true >/dev/null
         else
           apply_night
         fi
