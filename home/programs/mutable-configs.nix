@@ -603,8 +603,8 @@ in
     # in desktop/theming.nix uses when a mode switch rewrites the same key --
     # so the two writers cannot disagree. Defaults to dark when the link is
     # missing, matching the btop and nmtui wrappers.
-    case "$(readlink "$HOME/.local/state/hypr/current-theme.conf" 2>/dev/null)" in
-      *light.conf) claude_theme="light-ansi" ;;
+    case "$(readlink "$HOME/.local/state/hypr/current-theme.lua" 2>/dev/null)" in
+      *light.lua) claude_theme="light-ansi" ;;
       *) claude_theme="custom:${claudeThemeSlug}" ;;
     esac
 

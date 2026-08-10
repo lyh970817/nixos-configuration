@@ -33,7 +33,12 @@ addr=$(
 )
 
 if [ -n "$addr" ]; then
-    exec hyprctl dispatch focuswindow "address:$addr"
+    # `hyprctl dispatch` evaluates its argument as Lua under the Lua config
+    # manager, so the legacy `focuswindow address:...` form is gone; hypr-ipc
+    # sends whichever dialect the running compositor speaks. The legacy argv
+    # after `--` is TRANSITIONAL (see pkgs/hypr-ipc.nix).
+    exec hypr-ipc dispatch "hl.dsp.focus({ window = \"address:$addr\" })" \
+        -- focuswindow "address:$addr"
 fi
 
 exec btop-workspace exec "$@"

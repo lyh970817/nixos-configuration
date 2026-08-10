@@ -15,10 +15,15 @@ window=$(hyprctl activewindow -j | jq -r '.address')
 # Check if window is floating
 is_floating=$(hyprctl activewindow -j | jq -r '.floating')
 
-# If it was floating, make it tiled
+# If it was floating, make it tiled. `hyprctl dispatch` evaluates its argument
+# as Lua under the Lua config manager, so the legacy dispatcher names are gone;
+# hypr-ipc sends whichever dialect the running compositor speaks. The legacy
+# argv after `--` is TRANSITIONAL (see pkgs/hypr-ipc.nix).
 if [ "$is_floating" = "true" ]; then
-    hyprctl dispatch togglefloating address:$window
+    hypr-ipc dispatch "hl.dsp.window.float({ action = \"toggle\", window = \"address:$window\" })" \
+        -- togglefloating "address:$window"
 fi
 
-# Move to workspace 10
-hyprctl dispatch movetoworkspacesilent 10
+# Move to workspace 10 without following it (the legacy "silent" variant).
+hypr-ipc dispatch 'hl.dsp.window.move({ workspace = 10, follow = false })' \
+    -- movetoworkspacesilent 10

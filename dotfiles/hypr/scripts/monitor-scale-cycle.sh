@@ -36,7 +36,14 @@ done
 n="${#scales[@]}"
 for step in $(seq 1 "$n"); do
   cand="${scales[$(((idx + step) % n))]}"
-  hyprctl keyword monitor "$name,preferred,auto,$cand" > /dev/null 2>&1 || true
+  # `hyprctl keyword` is refused under the Lua config manager ("keyword can't
+  # work with non-legacy parsers. Use eval."); `hl.monitor` is its analogue.
+  # hypr-ipc sends whichever dialect the running compositor speaks; the legacy
+  # argv after `--` is TRANSITIONAL (see pkgs/hypr-ipc.nix).
+  hypr-ipc keyword \
+    "hl.monitor({ output = \"$name\", mode = \"preferred\", position = \"auto\", scale = $cand })" \
+    -- monitor "$name,preferred,auto,$cand" \
+    > /dev/null 2>&1 || true
   sleep 0.2
   applied="$(hyprctl monitors -j | jq -r --arg n "$name" 'first(.[] | select(.name == $n)) | .scale')"
   if awk -v a="$applied" -v b="$cand" 'BEGIN { exit !(a > b - 0.01 && a < b + 0.01) }'; then

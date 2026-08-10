@@ -66,18 +66,29 @@ restore_dashboard() {
     local fullscreen
 
     starting_workspace=$(active_workspace)
-    hyprctl dispatch movetoworkspacesilent "$protected_workspace,address:$address" >/dev/null
+    # `hyprctl dispatch` evaluates its argument as Lua under the Lua config
+    # manager; the legacy dispatcher names no longer parse. `follow = false` is
+    # the movetoworkspacesilent variant. hypr-ipc sends whichever dialect the
+    # running compositor speaks; the legacy argv after `--` is TRANSITIONAL
+    # (see pkgs/hypr-ipc.nix).
+    hypr-ipc dispatch \
+        "hl.dsp.window.move({ workspace = $protected_workspace, follow = false, window = \"address:$address\" })" \
+        -- movetoworkspacesilent "$protected_workspace,address:$address" \
+        > /dev/null
     fullscreen=$(hyprctl clients -j | jq -r --arg address "$address" \
         '.[] | select(.address == $address) | .fullscreen')
 
     if [ "$starting_workspace" = "$protected_workspace" ] || [ "$fullscreen" != "1" ]; then
-        hyprctl dispatch focuswindow "address:$address" >/dev/null
+        hypr-ipc dispatch "hl.dsp.focus({ window = \"address:$address\" })" \
+            -- focuswindow "address:$address" > /dev/null
     fi
     if [ "$fullscreen" != "1" ]; then
-        hyprctl dispatch fullscreen 1 >/dev/null
+        hypr-ipc dispatch 'hl.dsp.window.fullscreen({ mode = "maximized" })' \
+            -- fullscreen 1 > /dev/null
     fi
     if [ "$starting_workspace" != "$protected_workspace" ]; then
-        hyprctl dispatch workspace "$starting_workspace" >/dev/null
+        hypr-ipc dispatch "hl.dsp.focus({ workspace = $starting_workspace })" \
+            -- workspace "$starting_workspace" > /dev/null
     fi
 }
 
@@ -139,9 +150,13 @@ reject_window() {
         read -r dashboard_address < "$dashboard_file"
     fi
 
-    hyprctl dispatch movetoworkspacesilent "$destination,address:$address" >/dev/null
+    hypr-ipc dispatch \
+        "hl.dsp.window.move({ workspace = $destination, follow = false, window = \"address:$address\" })" \
+        -- movetoworkspacesilent "$destination,address:$address" \
+        > /dev/null
     if [ -n "$dashboard_address" ] && [ "$(active_workspace)" = "$protected_workspace" ]; then
-        hyprctl dispatch focuswindow "address:$dashboard_address" >/dev/null
+        hypr-ipc dispatch "hl.dsp.focus({ window = \"address:$dashboard_address\" })" \
+            -- focuswindow "address:$dashboard_address" > /dev/null
     fi
 }
 
