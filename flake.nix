@@ -106,7 +106,7 @@
         codex-desktop-isolated = final.callPackage ./pkgs/codex-desktop-isolated.nix {
           codexDesktopPackage = codex-desktop-linux.packages.${system}.codex-desktop;
         };
-        kreuzberg-cli = final.callPackage ./pkgs/kreuzberg-cli.nix { };
+        xberg-cli = final.callPackage ./pkgs/xberg-cli.nix { };
         matrix-icons = final.callPackage ./pkgs/matrix-icons.nix { };
         digg-pp-cli = final.callPackage ./pkgs/digg-pp-cli.nix { };
         # Upstream flake ships the package directly; take it from the pinned input.

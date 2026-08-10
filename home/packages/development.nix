@@ -67,7 +67,7 @@
         hunspell
         hunspellDicts.en_GB-large
         gemini-cli
-        kreuzberg-cli
+        xberg-cli
         digg-pp-cli
         (writeShellScriptBin "zcf" ''
           # Set npm prefix to user's home to avoid read-only errors
