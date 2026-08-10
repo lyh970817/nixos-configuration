@@ -98,7 +98,10 @@ def codex_args(mode: str, cwd: Path, session_id: str | None) -> list[str]:
 
 
 def manual_command(mode: str, cwd: Path, session_id: str | None, briefing: Path) -> str:
-    prompt = f"Read the session handoff briefing at {briefing} and continue the work."
+    prompt = (
+        f"Read the session handoff briefing at {briefing}, delete that briefing file "
+        "after reading it, then continue the work."
+    )
     return shlex.join(["codex", *codex_args(mode, cwd, session_id), "--", prompt])
 
 
