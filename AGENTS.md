@@ -106,6 +106,8 @@ Recent history uses short imperative subjects such as `Add 115 Browser launcher`
 
 Committing your own work on your own branch or worktree needs no approval. Merging into `master` and running `rebuild` belong to the top-level session: if another session gave you this task, leave the finished work committed on your branch and report it, and expect anything the rebuild catches to come back to you as a follow-up. In the top-level session, don't take on work the user didn't ask for; once they have asked, merging and rebuilding is part of delivering it, not a separate thing to ask about. Never push branches and never open pull requests.
 
+Cleanup is the last step of merging, and the condition is that the branch is fully merged — `git branch --merged master`, or `git cherry master <branch>` when it was rebased or squashed — not that the agent finished. Then drop the checkout with `git worktree remove` and the branch with `git branch -d`; otherwise `git worktree list` silts up with stale entries under `.claude/worktrees/` (agent worktrees) and `~/.cache/codex-worktrees/` (Codex ones).
+
 ## Security & Configuration Tips
 
 Do not commit secrets, private SSH material, generated result symlinks, or machine-local credentials. Keep sensitive settings manual unless already represented safely in the flake. Be careful with `hardware-configuration.nix`, network modules, boot settings, and service definitions because they affect bootability or connectivity.
