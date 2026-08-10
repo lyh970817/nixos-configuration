@@ -28,6 +28,15 @@
 # against the previous prompt is n=21, an unbiased half of the same corpus,
 # cut short for quota reasons.
 #
+# Decision coverage -- the share of things waiting on the reader that reach the
+# `**Summary**` -- was measured on a rebuilt 41-message corpus (81 decisions in
+# 37 cases, ground truth and grading both by a nested blind opus-5 judge). Two
+# noise floors were measured there and both matter when reading any result:
+# regrading the same outputs moves the score by ~2.5 points, and regenerating
+# the same prompt moves it by ~2.4. Differences smaller than that are not
+# findings. What moved coverage was recognising decisions in `Your call`, not
+# summary-space rules; ~7 of 9 losses never reached the section at all.
+#
 # Tune by editing this number: the hook reaches ~/.config/claude as an
 # out-of-store symlink, so an edit is live with no rebuild.
 min_chars=1500

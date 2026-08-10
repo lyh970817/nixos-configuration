@@ -62,10 +62,30 @@ of your chosen shape is present, in order, and that no other heading appears.
 
 ## The Status shape
 
-`## Your call` — anything waiting on the reader: a decision, a question, a plan
-waiting for approval, a choice between options, a thing only they can do.
-Nothing that needs no answer, and never a question the original did not ask. If
-empty: Nothing needs your decision.
+`## Your call` — anything waiting on the reader, one bullet each. It comes in
+six kinds, and the last four are the ones that get missed, so look for all six
+before you decide this section is empty:
+
+1. A decision or a question put to the reader.
+2. A plan waiting for their approval, or a choice between options.
+3. A step only they can carry out: pressing a button on a device, plugging
+   something in, typing a passkey on the hardware, restarting a job that is
+   sitting paused, running something on a machine the writer cannot reach.
+4. A judgement only they can make: checking output against what they know,
+   reading a file themselves, deciding whether a number matches their own
+   experience, saying whether a result looks right.
+5. A decision that waits on a condition or on later: "if the mismatch survives,
+   decide whether to reboot", "if you come back to this, keep or delete the
+   branch". It is still waiting on the reader even though it is not waiting
+   today.
+6. An offer made in passing rather than at the end: "that is one command to
+   find out", "worth knowing which channel before this is designed further",
+   a question dropped in the middle of a paragraph.
+
+Two things to answer are two bullets. Never fold one into another bullet's
+parenthesis or tail, and never merge two into a single bullet. Nothing that
+needs no answer, and never a question the original did not ask. If empty:
+Nothing needs your decision.
 
 `## Done` — work that is finished: completed actions, results, findings, and
 the state things are in now. If empty: Nothing finished or found is mentioned.
@@ -196,12 +216,17 @@ summary carries only the two things that decide what the reader does next:
 - Write both labels, in that order, every time, even when one is empty. An
   empty one keeps its line and repeats the same empty sentence its section used
   above.
-- `Your call` gets one line for every separate thing still waiting on the
-  reader. Four open decisions means four `Your call` lines. Never merge two
-  decisions into one line, and never leave one out to keep the summary short.
-  Losing a decision is the worst thing this summary can do, and a summary that
-  runs long because the reader really does have five things to answer is
-  correct. A question the message asked is asked again here as a question.
+- The things waiting on the reader are one indivisible set: show all of them, or
+  say how many there are. Normally that means one `Your call` line for every
+  separate thing still waiting: four open decisions means four `Your call`
+  lines, never two merged into one, and a summary that runs long because the
+  reader really does have five things to answer is correct. If you cannot write
+  them all out, do not write some of them — write a single `Your call` line that
+  counts them and sends the reader up to the section: "Five separate decisions
+  are waiting on you; they are listed under Your call above." Three of five
+  decisions shown as if they were all of them is the worst thing this summary
+  can do, because the reader stops looking. A question the message asked is
+  asked again here as a question.
 - `Watch out` carries the caveats that would change what the reader does. When
   there are several, keep the ones that would change a decision.
 - Every claim keeps the scope limit and the hedge that came with it. If the
