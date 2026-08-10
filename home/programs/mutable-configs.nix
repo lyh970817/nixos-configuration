@@ -412,18 +412,6 @@ let
                     if "/" + marker + "/" in skill_path or skill_path.endswith("/" + marker + "/SKILL.md"):
                         selected = stable
                         break
-            # Apply the same narrow migration to a legacy path selector. A
-            # path resolving to a current manifest selector is retained and
-            # normalized above; unrelated unknown paths are preserved.
-            generic_template_path = skill_path and (
-                "/openai-templates/" in skill_path
-                or skill_path.startswith("openai-templates/")
-                or skill_path.endswith("/openai-templates/SKILL.md")
-            )
-            if selected is None and generic_template_path:
-                del lines[start:end]
-                changed = True
-                continue
             if selected is None:
                 continue
             present.add(selected)
