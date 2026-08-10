@@ -116,7 +116,7 @@ obvious temporary proof shader when verifying that the mechanism is active.
 
 Apply the complete amber palette and terminal interaction grammar to:
 
-- Alacritty and Foot;
+- Foot;
 - shell prompts and Tmux;
 - FZF and Newt/nmtui;
 - Neovim;

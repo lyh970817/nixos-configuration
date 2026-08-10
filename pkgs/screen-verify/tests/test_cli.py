@@ -758,9 +758,9 @@ if [ "$1" = clients ]; then pid=$(cat {pid_file} 2>/dev/null || printf 0); print
 
     def test_reversible_preview_adapters_restore_state_on_end(self) -> None:
         actions = self.root / "actions"
-        target = self.root / "home/.config/alacritty/current.toml"
-        original = self.root / "original.toml"
-        preview = self.root / "preview.toml"
+        target = self.root / "home/.config/foot/foot.ini"
+        original = self.root / "original.ini"
+        preview = self.root / "preview.ini"
         target.parent.mkdir(parents=True)
         original.write_text("original")
         preview.write_text("preview")
@@ -2381,9 +2381,9 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
                 ]
             )
             connection.sendall(
-                b"openwindow>>aaa1,4,ueberzugpp_x,preview\n"
+                b"openwindow>>aaa1,4,imgpreview_x,preview\n"
                 b"openwindow>>bbb2,4,SecretApp,Secret Document\n"
-                b"openwindow>>ccc3,4,ueberzugpp_y,preview\n"
+                b"openwindow>>ccc3,4,imgpreview_y,preview\n"
             )
             expected = [
                 "hyprctl",
@@ -2541,12 +2541,12 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
     def test_window_adapter_launches_onto_the_stage(self) -> None:
         session = self.begin()
         output, workspace = self.stage_names(session)
-        pid_file = self.root / "alacritty-pid"
-        argv_file = self.root / "alacritty-argv"
-        self.sleeper("alacritty", pid_file, argv_file)
+        pid_file = self.root / "foot-pid"
+        argv_file = self.root / "foot-argv"
+        self.sleeper("foot", pid_file, argv_file)
 
         result = self.cli(
-            "adapter", "--session", session, "--wait-seconds", "0", "alacritty"
+            "adapter", "--session", session, "--wait-seconds", "0", "foot"
         )
         try:
             self.assertEqual(result["spawn"], "stage")
@@ -2559,11 +2559,11 @@ if [ "$1" = mode ] && [ "$#" = 1 ]; then printf 'default\\n'; else printf 'makoc
             )
             self.assertIn(f"[workspace name:{workspace} silent", dispatch[3])
             self.eventually(
-                lambda: pid_file.exists(), "the alacritty adapter never started"
+                lambda: pid_file.exists(), "the foot adapter never started"
             )
             self.assertEqual(
                 self.recorded_argv(argv_file),
-                ["--class", "screen-verify-alacritty"],
+                ["--app-id=screen-verify-foot"],
             )
         finally:
             self.cli("end", "--session", session)
@@ -2959,7 +2959,7 @@ class StageWatchDecisionTests(unittest.TestCase):
 
     def test_an_owned_window_off_the_stage_is_moved(self) -> None:
         self.assertEqual(
-            self.decide("openwindow>>5601ab,4,ueberzugpp_x,preview"),
+            self.decide("openwindow>>5601ab,4,imgpreview_x,preview"),
             f"name:{self.WORKSPACE},address:0x5601ab",
         )
 
@@ -2990,7 +2990,7 @@ class StageWatchDecisionTests(unittest.TestCase):
 
         self.assertIsNone(
             self.decide(
-                f"openwindow>>5601ab,{self.WORKSPACE},ueberzugpp_x,preview",
+                f"openwindow>>5601ab,{self.WORKSPACE},imgpreview_x,preview",
                 resolve=resolve,
             )
         )

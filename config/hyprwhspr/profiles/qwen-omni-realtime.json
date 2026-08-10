@@ -13,9 +13,6 @@
   "primary_shortcut": "SUPER+O",
   "cancel_shortcut": "SUPER+ESCAPE",
   "applications": {
-    "alacritty": { "auto_paste": "ctrl+shift+v" },
-    "alacritty-float": { "auto_paste": "ctrl+shift+v" },
-    "alacritty-main": { "auto_paste": "ctrl+shift+v" },
     "foot": { "auto_paste": "ctrl+shift+v" },
     "foot-float": { "auto_paste": "ctrl+shift+v" },
     "foot-main": { "auto_paste": "ctrl+shift+v" }

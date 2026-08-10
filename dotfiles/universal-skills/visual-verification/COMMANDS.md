@@ -48,7 +48,7 @@ screen-verify launch --session ID -- executable arg1 arg2
 screen-verify launch --session ID --keep-open -- executable arg1
 screen-verify launch --session ID --no-stage -- executable arg1
 screen-verify adapter --session ID desktop
-screen-verify adapter --session ID alacritty
+screen-verify adapter --session ID foot
 screen-verify adapter --session ID neovim
 screen-verify adapter --session ID btop
 screen-verify adapter --session ID rofi
@@ -78,7 +78,7 @@ reused PID or pre-existing window.
 ## Reversible previews
 
 ```sh
-screen-verify preview symlink --session ID --target ~/.config/alacritty/current.toml --source /path/to/preview.toml
+screen-verify preview symlink --session ID --target ~/.config/foot/foot.ini --source /path/to/preview.ini
 screen-verify preview gsettings --session ID --schema org.gnome.desktop.interface --key gtk-theme --value "'PreviewTheme'"
 screen-verify preview hypr-keyword --session ID --keyword general:gaps_in --value 20
 screen-verify preview mako-mode --session ID --mode dark

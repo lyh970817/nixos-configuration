@@ -3,7 +3,7 @@
 {
   # Configuration Management Strategy:
   # - Simple configs: Managed by home-manager (git, tmux, htop, starship, etc.)
-  # - Theme-aware: Home-manager + darkman hooks (alacritty, rofi, mako, fzf)
+  # - Theme-aware: Home-manager + darkman hooks (foot, rofi, mako, fzf)
   # - Complex/Active: Symlinked from ~/.nixos-config/dotfiles (nvim, yazi, hypr)
   # - Sensitive: Manual (ssh)
 
@@ -17,7 +17,6 @@
     ./programs/tmux.nix
     ./programs/htop.nix
     ./programs/btop.nix
-    ./programs/alacritty.nix
     ./programs/foot.nix
     ./programs/mako.nix
     ./programs/rofi.nix

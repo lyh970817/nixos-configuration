@@ -66,14 +66,6 @@ in
         # two would disagree the moment a new terminal opens.
         ln -sfn "$link" "$HOME/.config/foot/foot.ini"
 
-        # Alacritty watches its config and reloads on change; the symlink swap
-        # alone does not always trip the watcher, so touch the target too.
-        if [ -d "$HOME/.config/alacritty/themes" ]; then
-          ln -sfn "$HOME/.config/alacritty/themes/dark-$target.toml" \
-            "$HOME/.config/alacritty/current.toml"
-          touch -h "$HOME/.config/alacritty/current.toml" 2>/dev/null || true
-        fi
-
         # -x so this never matches footclient or an unrelated command line.
         pkill -"$signal" -x foot 2>/dev/null || true
 

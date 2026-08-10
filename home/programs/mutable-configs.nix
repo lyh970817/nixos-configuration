@@ -55,7 +55,7 @@ let
   # `meta` on that same slot as a *foreground*. One rung cannot serve both:
   # near the background the slabs are right and comments are invisible, high
   # enough to read comments and the slabs glow. This theme repoints the three
-  # slabs at palette index 236, which foot.nix and alacritty.nix pin to
+  # slabs at palette index 236, which foot.nix pins to
   # subtleBorder, so they render exactly as before while bright black is freed
   # to carry mutedText. Both halves are required; either alone is a regression.
   #

@@ -1,5 +1,5 @@
 # Foot Terminal Configuration
-# Managed by Home Manager alongside Alacritty.
+# The only terminal on both machines; managed by Home Manager.
 { lib, pkgs, ... }:
 
 let
