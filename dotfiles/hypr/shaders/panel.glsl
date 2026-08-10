@@ -5,6 +5,12 @@ in vec2 v_texcoord;
 layout(location = 0) out vec4 fragColor;
 
 uniform sampler2D tex;
+uniform int wl_output;
+
+// The controller replaces this unique, deliberately invalid output ID in its
+// runtime copy. The installed source therefore passes every output through if
+// it is ever loaded directly, instead of accidentally shading an external one.
+const int TARGET_WL_OUTPUT = -2147483647;
 
 // Optical softness plus a few panel imperfections, for a green phosphor
 // console rendered on a real LCD. Deliberately no CRT geometry, scan raster,
@@ -122,8 +128,17 @@ float panelField(vec2 uv, vec2 offset) {
 
 void main() {
     vec2 uv = v_texcoord;
-    vec2 pixel = 1.0 / vec2(textureSize(tex, 0));
     vec4 base = texture(tex, uv);
+
+    // Output selection happens before any neighbour sampling. External
+    // displays receive the compositor texture unchanged; every workspace on
+    // the target laptop panel receives the panel treatment below.
+    if (wl_output != TARGET_WL_OUTPUT) {
+        fragColor = base;
+        return;
+    }
+
+    vec2 pixel = 1.0 / vec2(textureSize(tex, 0));
     vec2 x = vec2(pixel.x, 0.0);
     vec2 y = vec2(0.0, pixel.y);
 
