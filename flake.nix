@@ -111,6 +111,7 @@
         digg-pp-cli = final.callPackage ./pkgs/digg-pp-cli.nix { };
         # Upstream flake ships the package directly; take it from the pinned input.
         herdr = herdr.packages.${system}.default;
+        hypr-ipc = final.callPackage ./pkgs/hypr-ipc.nix { };
         hyprwhspr = final.callPackage ./pkgs/hyprwhspr.nix { };
         oh-my-pi = final.callPackage ./pkgs/oh-my-pi.nix { };
         pi-coding-agent = final.callPackage ./pkgs/pi-coding-agent.nix { };

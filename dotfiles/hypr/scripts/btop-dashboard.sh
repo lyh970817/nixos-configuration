@@ -16,9 +16,14 @@
         if [ -n "$dashboard_address" ]; then
             # `hyprctl dispatch` evaluates its argument as Lua under the Lua
             # config manager; the legacy dispatcher names no longer parse.
-            hyprctl dispatch "hl.dsp.focus({ window = \"address:$dashboard_address\" })"
-            hyprctl dispatch 'hl.dsp.window.fullscreen({ mode = "maximized" })'
-            hyprctl dispatch "hl.dsp.focus({ workspace = $starting_workspace })"
+            # hypr-ipc sends whichever dialect the running compositor speaks;
+            # the legacy argv after `--` is TRANSITIONAL (see pkgs/hypr-ipc.nix).
+            hypr-ipc dispatch "hl.dsp.focus({ window = \"address:$dashboard_address\" })" \
+                -- focuswindow "address:$dashboard_address"
+            hypr-ipc dispatch 'hl.dsp.window.fullscreen({ mode = "maximized" })' \
+                -- fullscreen 1
+            hypr-ipc dispatch "hl.dsp.focus({ workspace = $starting_workspace })" \
+                -- workspace "$starting_workspace"
             exit 0
         fi
         sleep 0.1

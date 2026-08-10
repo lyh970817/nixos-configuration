@@ -278,9 +278,26 @@ end
 hl.bind(mainMod .. " + mouse_down", hl.dsp.focus({ workspace = "e+1" }))
 hl.bind(mainMod .. " + mouse_up", hl.dsp.focus({ workspace = "e-1" }))
 
--- Move/resize windows with mainMod + LMB/RMB and dragging
-hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(), { mouse = true })
-hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
+-- Move/resize windows with mainMod + LMB/RMB and dragging.
+--
+-- `{ drag = true }`, not `{ mouse = true }`. These are the legacy `bindm`
+-- binds, and `mouse` is not a field of HL.BindOptions at all (see
+-- share/hypr/stubs/hl.meta.lua: the flags are `drag` and `click`); an unknown
+-- key in a Lua options table is silently ignored. Measured on 0.56.1 by
+-- reading the returned keybind back: `{ mouse = true }` yields
+-- drag=false click=false -- byte-identical to passing `{}` -- while
+-- `{ drag = true }` yields drag=true, and is the only spelling besides
+-- `click` that changes anything (both also flip the bind's release flag, which
+-- is how a press-and-hold mouse bind is modelled). Hyprland's own shipped
+-- reference config (share/hypr/hyprland.lua) has the same mistake, which is
+-- where it came from.
+--
+-- Caveat: `hyprctl binds -j` reports mouse=false for every Lua spelling, while
+-- the legacy `bindm` line reports mouse=true, so that view cannot confirm the
+-- two are equivalent. Dragging a window by Super+LMB is the check, and it
+-- fails visibly and harmlessly if this is still wrong.
+hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(), { drag = true })
+hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { drag = true })
 
 -- Resize active window with Super + Arrow Keys
 hl.bind("SUPER + right", hl.dsp.exec_cmd(protect .. "resizeactive 10 0"), { repeating = true })
@@ -310,21 +327,49 @@ hl.bind("XF86ScreenSaver", hl.dsp.exec_cmd("loginctl lock-session"), { locked = 
 hl.bind("XF86Sleep", hl.dsp.exec_cmd("systemctl suspend"), { locked = true })
 hl.bind("XF86WLAN", hl.dsp.exec_cmd(scripts .. "/mihomo-toggle.sh"), { locked = true })
 hl.bind("XF86Search", hl.dsp.exec_cmd("rofi -show drun -location 2"))
--- No XF86TouchpadToggle bind: FK21/keycode 199 maps to that keysym in
--- xkeyboard-config, and Fn+Space (remapped to KEY_F21) claims code:199 for the
--- monitor-scale cycle below. The physical touchpad toggle is Fn+F9, handled via
--- code:202. touchpad-toggle.sh stays; it's invoked from that keycode bind.
+-- Both Fn+Space and Fn+F9 land on the XF86TouchpadToggle keysym and are told
+-- apart by modmask; see the block above the two binds below for why they can
+-- no longer be bound by keycode. Bare XF86TouchpadToggle is Fn+Space (the
+-- monitor-scale cycle); Ctrl+Super is Fn+F9 (the actual touchpad toggle).
 -- Fn+F2 cycles power-profiles-daemon profiles; Fn+Z cycles keyboard backlight;
 -- Fn+Space cycles the focused monitor's scale.
 hl.bind("XF86Battery", hl.dsp.exec_cmd(scripts .. "/power-profile-cycle.sh"))
 hl.bind("XF86KbdLightOnOff", hl.dsp.exec_cmd(scripts .. "/kbd-backlight-cycle.sh"))
+-- The two laptop keys below used to be bound by raw keycode (`code:199`,
+-- `code:202`). THAT DOES NOT WORK UNDER THE LUA CONFIG MANAGER. Measured on
+-- 0.56.1: `hl.bind("code:199", ...)` returns "ok" and registers a bind with an
+-- empty keysym *and* keycode 0, so it can never match a key event; the legacy
+-- hyprlang parser registers the same line with keycode 199. Every other
+-- spelling was tried and none sets a keycode -- "CODE:199" and "code199" are
+-- rejected as unknown keysyms, and `{ keycode = 199 }` in the options table is
+-- ignored (HL.BindOptions has no such field). So there is no keycode form in
+-- this Hyprland version and these have to go through keysyms.
+--
+-- From the compiled `us` keymap (xkbcli compile-keymap --layout us):
+--   keycode 199 = <FK21>, symbols [ XF86TouchpadToggle ]
+--   keycode 202 = <FK24>, type PC_CONTROL_SUPER_LEVEL2,
+--                         symbols [ F24, XF86TouchpadToggle ]
+-- so Fn+Space (199, no mods) is XF86TouchpadToggle, and Fn+F9 (202 with
+-- Ctrl+Super held) resolves to level 2 -- also XF86TouchpadToggle. The two are
+-- told apart by their modmask, which is exactly the collision the old comment
+-- here warned about; binding by keycode was how it used to be dodged.
+--
 -- Fn+Space arrives as KEY_F21 (hwdb-remapped from KEY_ZOOMRESET, which keyd
--- can't forward); bind by keycode 199 (evdev 191 + 8).
-hl.bind("code:199", hl.dsp.exec_cmd(scripts .. "/monitor-scale-cycle.sh"))
+-- can't forward).
+hl.bind("XF86TouchpadToggle", hl.dsp.exec_cmd(scripts .. "/monitor-scale-cycle.sh"))
 -- X30W-K Fn+F9 emits Ctrl+Super+F24. Linux 6.17 corrected this PS/2 scancode
--- from Zenkaku_Hankaku (keycode 93) to F24 (keycode 202), so bind the corrected
--- raw keycode instead of the colliding XF86TouchpadToggle keysym.
-hl.bind("CTRL + SUPER + code:202", hl.dsp.exec_cmd(scripts .. "/touchpad-toggle.sh"))
+-- from Zenkaku_Hankaku (keycode 93) to F24 (keycode 202).
+--
+-- Both level-1 and level-2 spellings are bound because which one Hyprland
+-- matches against depends on whether it compares the modifier-resolved keysym
+-- or the base one, and that cannot be settled without pressing the key on this
+-- hardware -- headless verification proves registration, not matching. The two
+-- binds carry the same modmask (68) and the same action, nothing else emits
+-- either keysym on this machine, so whichever one matches, Fn+F9 toggles the
+-- touchpad exactly once. Drop the one that turns out to be dead after the
+-- first laptop boot confirms which fires.
+hl.bind("CTRL + SUPER + XF86TouchpadToggle", hl.dsp.exec_cmd(scripts .. "/touchpad-toggle.sh"))
+hl.bind("CTRL + SUPER + F24", hl.dsp.exec_cmd(scripts .. "/touchpad-toggle.sh"))
 hl.bind(
   "XF86AudioRaiseVolume",
   hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"),

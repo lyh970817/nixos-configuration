@@ -43,6 +43,10 @@
     # drop these two lines once a variant has been chosen.
     bibata-vt220-cursors-darker
     bibata-vt220-cursors-muted
+    # TRANSITIONAL: dual-dialect Hyprland IPC shim, on PATH because the
+    # dotfiles/hypr/scripts/* files are deployed verbatim and can only call
+    # bare names. Delete with pkgs/hypr-ipc.nix; see the note there.
+    hypr-ipc
     glib
     gsettings-desktop-schemas
     darkman

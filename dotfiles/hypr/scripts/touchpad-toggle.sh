@@ -29,10 +29,13 @@ fi
 # work with non-legacy parsers. Use eval."), so re-declare the device with
 # `hl.device` through `hyprctl eval`. Device names come from hyprctl's JSON and
 # can contain quotes/backslashes in principle, so escape them for a Lua literal.
+# hypr-ipc sends whichever dialect the running compositor speaks; the legacy
+# argv after `--` is TRANSITIONAL (see pkgs/hypr-ipc.nix).
 for dev in "${touchpads[@]}"; do
   escaped="${dev//\\/\\\\}"
   escaped="${escaped//\"/\\\"}"
-  hyprctl eval "hl.device({ name = \"$escaped\", enabled = $target })"
+  hypr-ipc keyword "hl.device({ name = \"$escaped\", enabled = $target })" \
+    -- "device[$dev]:enabled" "$target"
 done
 
 printf '%s\n' "$([ "$target" = true ] && echo 1 || echo 0)" > "$state"
