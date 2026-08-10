@@ -357,6 +357,17 @@ route v1–v4 prompt bodies are not tracked here. Their summarized results remai
 useful design evidence, but repository-only reproduction stops at the recorded
 hashes, history, and report.
 
+One evidence bundle is retained off to the side of that boundary. It covers the
+Stop-hook response rewriter on the Claude prompt track, not the Codex track this
+document describes, and it lives at `~/.local/share/stop-hook-rewriter-corpus`
+on the portable laptop. It is kept outside the repository deliberately, because
+it quotes real working sessions verbatim, which makes it untracked by
+construction rather than by a `.gitignore` entry that a later forced add could
+defeat; it is machine-local and is not synchronised anywhere. Its corpus is a
+rebuilt one, regenerated on 2026-08-10 from the local session transcripts after
+the original was lost, so its case ids do not map to the historical ones and its
+numbers must not be compared against figures recorded before that date.
+
 Some surviving archives contradict themselves or later prose summaries. In
 Phase 3 the detailed rows reproduce `4/11/0`, while the stored aggregate says
 `5/10/0` and its validation misses the arithmetic defect. The mixed-prompt final
