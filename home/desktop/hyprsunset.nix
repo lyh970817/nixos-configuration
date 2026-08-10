@@ -4,9 +4,8 @@ let
   dayTemperature = 6500;
   dayGamma = 1.0;
 
-  # >>> The night warmth, and the only knob tuned here. <<<
-  # Gamma stays at hyprsunset's default 1.0 in both profiles, so dialling night
-  # mode in means changing this one number and nothing else.
+  # Scheduled night warmth. Super+N uses its own deliberately extreme override
+  # below; the schedule returns to this profile at its next transition.
   #
   # Keep it a multiple of 100. matrixForKelvin does `temp /= 100` on an integer,
   # so the temperature is quantised to hundreds: 3500 and 3599 produce exactly
@@ -39,8 +38,8 @@ let
     '';
   };
 
-  hyprsunsetToggle = pkgs.writeShellApplication {
-    name = "hyprsunset-toggle";
+  hyprsunsetNight = pkgs.writeShellApplication {
+    name = "hyprsunset-night";
     runtimeInputs = [
       pkgs.coreutils
       pkgs.hyprland
@@ -48,7 +47,8 @@ let
     ];
     text = ''
       apply_night() {
-        hyprctl hyprsunset temperature ${toString nightTemperature} >/dev/null 2>&1
+        hyprctl hyprsunset gamma 100 >/dev/null 2>&1 &&
+          hyprctl hyprsunset temperature 1500 >/dev/null 2>&1
       }
 
       wait_for_socket() {
@@ -64,12 +64,7 @@ let
       }
 
       if systemctl --user is-active --quiet hyprsunset.service; then
-        current_temperature=$(hyprctl hyprsunset temperature)
-        if [ "$current_temperature" = "${toString nightTemperature}" ]; then
-          systemctl --user stop hyprsunset.service
-        else
-          apply_night
-        fi
+        apply_night
       else
         systemctl --user start hyprsunset.service
         wait_for_socket
@@ -105,7 +100,7 @@ in
   };
 
   home.packages = [
-    hyprsunsetToggle
+    hyprsunsetNight
     hyprsunsetWarmth
   ];
 }
