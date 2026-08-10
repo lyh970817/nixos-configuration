@@ -72,6 +72,93 @@ def hyprctl_quiet(*arguments: str) -> None:
         pass
 
 
+# Hyprland's config is Lua as of the 0.57 deprecation, and that changed the IPC
+# vocabulary, not just the config file: `hyprctl keyword` is refused outright
+# ("keyword can't work with non-legacy parsers. Use eval.") and `hyprctl
+# dispatch` now *evaluates its argument as Lua*, so a legacy dispatcher name is
+# a syntax error rather than an action. Everything Hyprland is asked to *do* is
+# therefore built here, in one place, rather than spelled at each call site.
+#
+# `hyprctl monitors`, `clients`, `activewindow`, `getoption` and `output
+# create`/`output remove` are unaffected and still take their own arguments.
+
+
+def lua_string(value: str) -> str:
+    """A Lua double-quoted literal.
+
+    Every value reaching this is derived from the session identifier or read
+    back out of Hyprland, but escaping is unconditional: a quote or backslash
+    that slipped through would otherwise close the literal and let the rest of
+    the value be evaluated as Lua.
+    """
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def lua_workspace(workspace: str | int) -> str:
+    """A workspace selector: a bare integer id, or a quoted name."""
+    if isinstance(workspace, int):
+        return str(workspace)
+    return lua_string(workspace)
+
+
+def focus_monitor_lua(monitor: str) -> str:
+    return f"hl.dsp.focus({{ monitor = {lua_string(monitor)} }})"
+
+
+def focus_window_lua(address: str) -> str:
+    return f"hl.dsp.focus({{ window = {lua_string(f'address:{address}')} }})"
+
+
+def workspace_rule_lua(output: str, workspace: str) -> str:
+    """The former `keyword workspace name:W,monitor:O,default:true`."""
+    return (
+        f"hl.workspace_rule({{ workspace = {lua_string(f'name:{workspace}')}, "
+        f"monitor = {lua_string(output)}, default = true }})"
+    )
+
+
+def monitor_rule_lua(
+    output: str, width: int, height: int, position: str, scale: float
+) -> str:
+    """The former `keyword monitor O,WxH@60,XxY,S`."""
+    return (
+        f"hl.monitor({{ output = {lua_string(output)}, "
+        f"mode = {lua_string(f'{width}x{height}@60')}, "
+        f"position = {lua_string(position)}, scale = {scale:g} }})"
+    )
+
+
+def focus_workspace_lua(workspace: str) -> str:
+    return f"hl.dsp.focus({{ workspace = {lua_string(f'name:{workspace}')} }})"
+
+
+def move_window_silent_lua(workspace: str | int, address: str) -> str:
+    """The former `dispatch movetoworkspacesilent W,address:A`.
+
+    `follow = false` is the "silent" half: the window moves and the active
+    workspace does not, which is the whole point of staging.
+    """
+    return (
+        f"hl.dsp.window.move({{ workspace = {lua_workspace(workspace)}, "
+        f"follow = false, window = {lua_string(f'address:{address}')} }})"
+    )
+
+
+def stage_exec_lua(command: str, workspace: str) -> str:
+    """The former `dispatch exec [workspace name:W silent; noinitialfocus] CMD`.
+
+    `hl.dsp.exec_cmd` takes the window-rule effects as a second table rather
+    than as a bracketed prefix on the command string, so the rules can no
+    longer be confused with the command itself.
+    """
+    return (
+        f"hl.dsp.exec_cmd({lua_string(command)}, "
+        f"{{ workspace = {lua_string(f'name:{workspace} silent')}, "
+        f"no_initial_focus = true }})"
+    )
+
+
 def monitors() -> list[dict[str, Any]]:
     data = run_json(["hyprctl", "monitors", "-j"])
     if not isinstance(data, list):
@@ -158,10 +245,10 @@ def restore_focus(snapshot: Any) -> None:
         return
     monitor = snapshot.get("monitor")
     if isinstance(monitor, str) and monitor:
-        hyprctl_quiet("dispatch", "focusmonitor", monitor)
+        hyprctl_quiet("dispatch", focus_monitor_lua(monitor))
     window = snapshot.get("window")
     if isinstance(window, str) and window:
-        hyprctl_quiet("dispatch", "focuswindow", f"address:{window}")
+        hyprctl_quiet("dispatch", focus_window_lua(window))
 
 
 def placement_snapshot() -> list[dict[str, Any]]:
@@ -308,10 +395,6 @@ def wait_for_workspace(
         time.sleep(POLL_SECONDS)
 
 
-def workspace_rule(output: str, workspace: str) -> str:
-    return f"name:{workspace},monitor:{output},default:true"
-
-
 def ensure_stage_workspace(output: str, workspace: str) -> None:
     """Fail unless the staging output is showing its own workspace right now.
 
@@ -325,10 +408,21 @@ def ensure_stage_workspace(output: str, workspace: str) -> None:
     # Both names derive from the session identifier, so nothing caller-supplied
     # is ever spliced into a hyprctl argument here.
     focus = focus_snapshot(output)
-    hyprctl_quiet("keyword", "workspace", workspace_rule(output, workspace))
-    hyprctl_quiet("dispatch", "moveworkspacetomonitor", f"name:{workspace} {output}")
-    # Moving a workspace can carry focus with it, and the stage is never a
-    # place to leave the user typing.
+    hyprctl_quiet("eval", workspace_rule_lua(output, workspace))
+    # Re-showing the workspace has to go through focus, and that is not what
+    # the obvious translation does. The legacy `moveworkspacetomonitor` both
+    # re-homed a workspace and made it active there; its Lua counterpart
+    # `hl.dsp.workspace.move` only re-homes it. The stage's workspace never
+    # left this output -- the output merely switched away from it -- so that
+    # call answers `ok` and changes nothing, as does
+    # `hl.get_monitor(...):set_workspace(...)`. Both were tried against a live
+    # compositor and both are silent no-ops here. Focusing the output and then
+    # the workspace is the only form observed to actually put it back.
+    hyprctl_quiet("dispatch", focus_monitor_lua(output))
+    hyprctl_quiet("dispatch", focus_workspace_lua(workspace))
+    # Focusing the stage is exactly what must not outlive this repair, and a
+    # workspace change can carry focus anyway: the stage is never a place to
+    # leave the user typing.
     restore_focus(focus)
     # Bounded to a few poll intervals: this is a repair, not a wait for a
     # compositor that is not going to answer.
@@ -480,12 +574,16 @@ def ensure_stage(path: Path, session: str) -> dict[str, Any]:
     #
     # Neither rule can be removed at runtime, so two inert rules leak per
     # session; session-unique names keep that harmless.
-    hyprctl("keyword", "workspace", workspace_rule(output, workspace))
+    hyprctl("eval", workspace_rule_lua(output, workspace))
     hyprctl(
-        "keyword",
-        "monitor",
-        f"{output},{reference['width']}x{reference['height']}@60,"
-        f"{position},{reference['scale']:g}",
+        "eval",
+        monitor_rule_lua(
+            output,
+            reference["width"],
+            reference["height"],
+            position,
+            reference["scale"],
+        ),
     )
     # The record is persisted before the output exists so that a crash between
     # creating the output and finishing the stage still leaves `end` and
@@ -561,7 +659,7 @@ def remove_stage(path: Path) -> bool:
     return monitor_presence(name) == "absent"
 
 
-def rescue_workspace(stage_output: str, focus: Any) -> str | None:
+def rescue_workspace(stage_output: str, focus: Any) -> int | None:
     try:
         entries = monitors()
     except ScreenError:
@@ -581,10 +679,12 @@ def rescue_workspace(stage_output: str, focus: Any) -> str | None:
     identifier = active.get("id") if isinstance(active, dict) else None
     # Hyprland reads a leading "-" as a relative workspace shift, so the
     # negative id a special or named workspace reports would move the window
-    # somewhere nobody asked for. Only an absolute id may be dispatched.
+    # somewhere nobody asked for. Only an absolute id may be dispatched. The
+    # id stays an int so it is emitted as a bare Lua number: a quoted "-13"
+    # would be a workspace *name* selector, which is a different lookup again.
     if not isinstance(identifier, int) or identifier <= 0:
         return None
-    return str(identifier)
+    return identifier
 
 
 def staged_windows(
@@ -663,18 +763,17 @@ def release_stage_windows(path: Path) -> tuple[int, int]:
     if workspace is None:
         return 0, len(surviving)
     for address in surviving:
-        hyprctl_quiet(
-            "dispatch",
-            "movetoworkspacesilent",
-            f"{workspace},address:{address}",
-        )
+        hyprctl_quiet("dispatch", move_window_silent_lua(workspace, address))
     return len(surviving), 0
 
 
 def stage_spawn(path: Path, session: str, command: list[str]) -> int:
     # The rule is built from the session identifier rather than from anything
-    # read back out of session.json, so no stored value can ever escape the
-    # rule block and become a second Hyprland dispatch.
+    # read back out of session.json. Under the Lua IPC the rules travel as
+    # `exec_cmd`'s second argument instead of as a bracketed prefix on the
+    # command string, so they can no longer be confused with the command --
+    # but the derivation stays as it was, because the rule table is still Lua
+    # that Hyprland evaluates.
     workspace = stage_workspace_name(session)
     pidfile = path / f"launch-{secrets.token_hex(4)}.pid"
     # Hyprland hands the whole exec string to /bin/sh, so every caller-supplied
@@ -688,11 +787,10 @@ def stage_spawn(path: Path, session: str, command: list[str]) -> int:
         f"echo $$ > {shlex.quote(str(pidfile))}; exec "
         + " ".join(shlex.quote(argument) for argument in command)
     )
-    rules = f"[workspace name:{workspace} silent; noinitialfocus]"
-    spawn = f"{rules} /bin/sh -c {shlex.quote(inner)}"
+    spawn = f"/bin/sh -c {shlex.quote(inner)}"
     try:
         subprocess.run(
-            ["hyprctl", "dispatch", "exec", spawn],
+            ["hyprctl", "dispatch", stage_exec_lua(spawn, workspace)],
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -749,7 +847,5 @@ def sweep_stage_windows(session: str, pid: int, workspace: str) -> None:
         if client_pid not in owned and not has_stage_marker(client_pid, session):
             continue
         hyprctl_quiet(
-            "dispatch",
-            "movetoworkspacesilent",
-            f"name:{workspace},address:{address}",
+            "dispatch", move_window_silent_lua(f"name:{workspace}", address)
         )
