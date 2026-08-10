@@ -1,17 +1,34 @@
-# Stop-hook rewrite model comparison
+# Stop-hook First Mate model comparison
 
-## Decision
+## Current decision
 
-Use `gpt-5.6-luna` at `low` reasoning effort with the revised response
-simplifier prompt. This was cell B, blind variant R5. It retained all `227/227`
-checklist items across the 15 fixtures, had no invention or hard cap, achieved
-the best holistic result (`99.400` mean, `99` minimum), and was the fastest of
-the three production-safe revised-prompt cells on observed mean, median, and
-maximum latency.
+Use `gpt-5.4` at `medium` reasoning effort with Prompt H. The hook leaves the
+finished assistant response unchanged and adds only a compact `**First Mate**`
+brief as the system message below it. The original remains visible and
+authoritative; the brief is orientation, not a replacement report.
 
-The revised prompt has SHA-256
-`04decca9b2d1f7bbace81e4df6bd078ef5bcd4092e060aba8245b817e2cdade6`.
-It was adopted in commit `053080f1` (`Preserve stop hook response details`).
+Prompt H has SHA-256
+`ea14bc7ac6ff2d0264bde337a60aed81ba722812bc7ca8ef5ae9e800b286369e`.
+It permits one to four bullets and at most 120 words, requires the outcome,
+the highest-impact boundary, and each outstanding reader action or choice, and
+keeps recommendations with different conditions separate.
+
+The production guardrails are unchanged: the hook acts only at 1,500 or more
+characters, has a 120-second timeout, invokes an ephemeral read-only child
+with hooks disabled, and fails open.
+
+## Why this is a brief, not a full rewrite
+
+The stop hook's `systemMessage` appears below the original completed response.
+The reader can already inspect that original, so a second long report creates
+duplication rather than better communication. The full-body experiments below
+were either near-copy edits of already strong originals or introduced retention
+losses. A short companion brief gives the reader an outcome-first orientation
+without hiding the source evidence, commands, caveats, or detailed reasoning.
+
+This does not make the brief complete. It may selectively omit lower-priority
+background while the original remains directly above it. The brief must not
+distort conditions, ownership, scope, or safety boundaries.
 
 ## Community research context
 
@@ -19,165 +36,127 @@ A `last30days` v3.18.4 run on 2026-08-10 gathered 139 items: 16 Reddit
 threads, 26 X posts, 7 YouTube videos with transcripts, 16 TikToks, 5
 Instagram reels, 32 Hacker News stories, 13 GitHub items, 23 Digg clusters,
 and 1 Techmeme headline. Reddit coverage was partial after HTTP 429 responses.
-The directly ranked clusters were poorly focused on communication style, so
-the synthesis relied heavily on web supplements and a prior focused Opus 5
-artifact.
+The directly ranked clusters were weakly focused on communication style, so the
+synthesis also used web supplements and an earlier focused Opus 5 artifact.
 
-That research supplied candidates, not proof of model quality:
+The research provided candidates, not a model-quality measurement:
 
-- GPT-5.4 was most often described as warmer, more vivid, and more
-  conversational, with a counter-warning that it can sound better while
-  thinking worse.
-- GPT-5.6 criticism centered mainly on Sol over-engineering, carrying
-  superseded constraints, unnecessary elaboration, and exceeding user intent.
-  Terra-specific tone evidence was thin and mixed.
+- GPT-5.4 was often described as warmer, more vivid, and more conversational,
+  with a counter-warning that it can sound better while thinking worse.
+- GPT-5.6 criticism centered on over-engineering, stale constraints,
+  unnecessary elaboration, and exceeding the request; Terra-specific evidence
+  was thin and mixed.
 - GPT-5.5 had little recent preference evidence. Luna had almost no
-  family-specific communication evidence and remained the speed baseline.
-- GPT-4o and GPT-5.1 still received praise for natural conversation, but they
-  were absent from the locally selectable Codex model cache.
-- Claude Opus 5 received praise for depth, but criticism emphasized verbosity,
-  jargon, argumentativeness, and burying information.
+  family-specific communication evidence and initially served as the speed
+  baseline.
+- GPT-4o and GPT-5.1 still received praise for natural conversation but were
+  unavailable in the local Codex cache. Claude Opus 5 received both depth
+  praise and criticism for verbosity, jargon, argumentativeness, and buried
+  conclusions.
 
-This was self-selected community evidence across mixed tasks. It cannot
-estimate how prevalent any opinion is, and its sentiment did not determine the
-production choice.
+This is self-selected evidence across mixed tasks. It cannot estimate how
+prevalent any opinion is and did not determine the production selection.
 
-## Controlled evaluation
+## Historical full-body phases
 
-The corpus contained 15 recent technical responses from this repository,
-spanning 1,040 to 7,279 characters. It covered diagnoses, implementation and
-rebuild outcomes, corrections, design recommendations, external research,
-network and security-sensitive explanations, exact commands and tables,
-uncertainty, pending work, and near-threshold responses. Each source had a
-human-auditable checklist of material facts, decisions, instructions, exact
-tokens, qualifications, and status claims.
+All full-body phases used 15 technical responses from this repository with
+human-auditable checklists. Calls used Codex CLI 0.147.0, an ephemeral
+read-only child, disabled hooks/user configuration, a common `<message>`
+envelope, and a 120-second timeout. Blind judges saw opaque candidates, not
+model or prompt identity.
 
-Five cells each rewrote all 15 fixtures once, producing 75 runs:
+| Phase | Matrix | Result | Why it was not the final design |
+| --- | --- | --- | --- |
+| 0 | 5 models/prompts × 15 | Luna low/revised was selected for safety | later audit found it expanded all 15 outputs and produced no requested summary |
+| 1 | Control + 6 cells × 15 | Luna low/stronger-brief prompt passed retention | only `+1.13` mean body gain, `+1` median, no `+4` case; 8/15 material rewrites |
+| 2 | Control + 6 cells × 15 | historical `**Summary**` contract recovered | every candidate failed retention, safety, Summary, or strict communication gates |
+| 3 | Control + C3 + E1 × 15 | E1 produced clean Summary endings | independent audit found full bodies remained copy-edit level 15/15 and original comparison was `4/11/0`, not the earlier claimed `5/10/0` |
 
-| Cell | Model | Effort | Prompt | Blind variant |
-| --- | --- | --- | --- | --- |
-| A | `gpt-5.6-luna` | `low` | current | R3 |
-| B | `gpt-5.6-luna` | `low` | revised | R5 |
-| C | `gpt-5.6-terra` | `medium` | revised | R4 |
-| D | `gpt-5.4` | `medium` | revised | R1 |
-| E | `gpt-5.5` | `medium` | revised | R2 |
+Phase 0's historical five-cell results are retained as context: Luna low with
+the revised retention prompt had `60/60` mean/min retention and was faster than
+the other safe cells; GPT-5.4 medium had a critical exact-title failure. That
+was evidence about retention under a different prompt, not evidence that Luna
+communicated best.
 
-The cells used Codex CLI 0.147.0 with the same `<message>` envelope, ephemeral
-read-only execution, hooks and user configuration disabled, and a 120-second
-timeout. Cell A used the then-current prompt, SHA-256
-`d1032e9718e4228349c06ae04310f570fbb8170f40f7f26cd0672003df320417`;
-the other four used the revised prompt.
+Phase 2 showed why direct promotion of the earlier GPT-5.4 full-body candidate
+was unsafe: C3 retained `248/248` body checklist items but invented unsupported
+intent in one Summary, and its runner emitted a literal terminal `\\n` artifact.
+Phase 3 fixed those specific defects but did not cross the material-rewrite
+bar. The architecture, rather than a further synonym-level rewrite prompt, had
+to change.
 
-Before judging, the outputs were copied under randomized opaque IDs R1–R5.
-Judges were given source responses, checklists, the common rubric, and the
-opaque rewrites, but not the cell identities. They evaluated one fixture across
-all five variants at a time. All 75 blind-output checksums passed, every cell
-had 15 outputs, and each output matched its later-unblinded source cell
-byte-for-byte.
+## Phase 5 — summary-only selection
 
-## Rubric and decision rule
+Phase 5 used the five hardest fixtures: orchestrator installation, plugin
+registry correction, reciprocal SSHFS deadlock, Screen Verify focus issue, and
+the Fn+Esc mute trace. The original was retained in place for every comparison;
+only the companion brief changed.
 
-The 100-point rubric assigned 40 points to factual retention, 20 to instruction
-and decision retention, 15 to clarity and naturalness, 15 to concision, and 10
-to formatting. Checklist items received `2` for full retention, `1` for a
-weakened non-critical detail, or `0` for omission, contradiction, distortion,
-or attachment to the wrong subject.
+### Exploratory GPT-5.4 versus Luna
 
-Penalties and caps guarded against fluent but unsafe rewrites: each invention
-lost 10 points; contradictions or reversed recommendations capped the score at
-50; one omitted critical item capped it at 70 and two at 50; false completion
-claims capped it at 40; and a rewrite requiring missing context capped it at
-60.
+The first blind comparison used exploratory Prompt G with `gpt-5.4` medium
+against Luna low. GPT-5.4 was preferred for communication and retention in all
+`5/5` fixtures. Its winning briefs were 80, 107, 114, 105, and 71 words. The
+three over-100 results motivated the final 120-word Prompt H ceiling: it allows
+safety-relevant detail that the shorter alternatives lost while still requiring
+a compact companion. These G outputs are model-selection context, not the final
+Prompt H production evidence.
 
-A dedicated retention judge scored the first 60 points, including invention
-penalties and caps. A separate communication judge scored the remaining 40.
-Their split composite was reported alongside an independent holistic 100-point
-audit instead of averaging the two overlapping views. A cell was production
-eligible only if it had no invention, no critical-omission cap, and no fixture
-below 90 in the holistic audit.
+### Final GPT-5.4 versus GPT-5.5 blind
 
-## Results
+An additional blind Prompt H comparison preferred GPT-5.4 in `4/5` fixtures
+and GPT-5.5 in `1/5`. This is model-preference evidence only. The exact
+GPT-5.4 Prompt H rerun below, rather than a mixture of exploratory or
+per-case outputs, is the production-fidelity result.
 
-| Rank | Cell / blind ID | Configuration | Retention mean / min (`/60`) | Holistic mean / min (`/100`) | Latency mean / median / max |
-| ---: | --- | --- | ---: | ---: | ---: |
-| 1 | B / R5 | Luna low, revised | 60.000 / 60.00 | 99.400 / 99 | 32.225 / 27.408 / 54.434 s |
-| 2 | C / R4 | Terra medium, revised | 59.879 / 58.18 | 99.147 / 97.2 | 32.310 / 28.593 / 56.279 s |
-| 3 | E / R2 | GPT-5.5 medium, revised | 60.000 / 60.00 | 99.333 / 99 | 33.357 / 29.689 / 55.588 s |
-| 4 | D / R1 | GPT-5.4 medium, revised | 59.704 / 55.56 | 97.067 / 70 | 34.066 / 27.734 / 55.068 s |
-| 5 | A / R3 | Luna low, current | 49.670 / 8.00 | 73.500 / 39.8 | 30.007 / 29.333 / 51.281 s |
+### Exact GPT-5.4 Prompt H rerun
 
-B, C, and E were production-safe. D changed an exact required issue title on
-fixture 14 and received a critical cap, making its otherwise high mean
-insufficient. A had seven capped fixtures and one invented pending-apply
-question; it repeatedly removed exact commands, measurements, evidence,
-matrices, and conditional rationale.
+The exact production prompt was rerun with GPT-5.4 medium on all five hard
+fixtures. Cases 01, 08, 09, and 12 were deployable under the strict
+zero-distortion review. Case 05 was not: its third bullet transferred the
+generic “actively use” condition to `deep-research`, where the source instead
+required the more specific DOCX-style multi-pass condition. Prompt H is
+therefore `4/5` under this strict audit, not perfect fidelity. The unchanged
+original above the brief remains authoritative.
 
-### Prompt effect
+This case-05 result is an important provenance correction. An earlier final
+case-05 review found a different GPT-5.4 H sample deployable because it kept
+the distinct condition. A stricter earlier audit also recorded selective
+omission of the admission, user credit, registry paradox, and its hedged
+inference. Neither result makes every Prompt H sample perfect; they show why
+the production choice is the best observed companion-brief tradeoff rather
+than a claim of complete summary retention.
 
-A and B held the model and effort constant, isolating the prompt change. The
-revised prompt increased retention mean by `10.330/60`, split-composite mean by
-`29.775/100`, split minimum by `70`, holistic mean by `25.900`, and holistic
-minimum by `59.2`. It reduced capped fixtures from seven to zero and inventions
-from one to zero. Mean latency rose by `2.218 s`, while median latency fell by
-`1.925 s`. The prompt, rather than the model choice, was the decisive
-intervention.
+### Rejected Prompt I
 
-### Model effect and runner-ups
+Prompt I strengthened condition binding and was also tested with GPT-5.4
+medium on all five fixtures. It was deployable in only `3/5`, so it was not
+promoted. In case 08 it changed “no mount **access** was performed” to “no
+**mount** was performed,” altering the denied event and status. In case 12 it
+dropped the required `done +` prefix from the `done + unchanged` reporting
+alternative. Stronger condition wording did not compensate for those exact
+status losses.
 
-With the revised prompt held constant, the three safe cells were close. Terra
-medium was the communication and split-composite winner, but omitted the exact
-qualifier `single` from fixture 13's authorized rebuild claim. That lowered its
-retention mean and holistic minimum, so C is the runner-up rather than the
-selection.
+## Evaluation limits
 
-GPT-5.5 medium is the close third and the alternate if perfect observed
-checklist retention is treated as the sole criterion after safety. It matched
-B's `60/60` retention but did not improve communication, was marginally lower
-holistically, and was slower. The controlled result did not support preferring
-GPT-5.4 on reputation: its single critical failure disqualified it.
-
-## Timeout result
-
-All `75/75` calls succeeded with no timeout or empty output. The largest
-observed wall time was `56.279 s`, leaving `63.721 s` below the production
-timeout. The 120-second limit was therefore not binding on this corpus.
-
-This does not establish tail behavior: there was only one timing observation
-per cell and fixture, so the evaluation did not measure run-to-run variance.
-The `0.085 s` mean difference between B and C is too small to treat as a stable
-general model-speed estimate.
-
-## Limitations
-
-- The 15 fixtures are technical responses from one repository. They stress
-  exact retention well but do not represent every conversation style or
-  language.
-- Each cell ran each fixture once. There was no repeated or randomized trial
-  design for output variability or latency tails.
-- The judges applied a detailed common rubric, but clarity and materiality
-  judgments still contain human judgment. The independent holistic audit
-  reduces, rather than removes, that limitation.
-- Cell B did not retain self-contained invocation metadata. Its model and
-  effort identity came from the predefined experimental cell, while its prompt
-  hash, output hashes, blind mapping, success status, and timings were
-  independently verified.
-- The findings compare only these five cells, this prompt pair, this model
-  availability snapshot, and Codex CLI 0.147.0. They are not a general model
-  ranking.
+- Five final fixtures are a difficult technical slice, not a representative
+  sample of every user, language, or conversation style.
+- Each model/fixture pair was sampled once; output variance and latency tails
+  were not measured.
+- The blind final review compared opaque candidates. Its model mapping is made
+  only after the evaluation; the preference result is still a small sample.
+- A concise brief cannot carry every supporting detail. The original response
+  is therefore intentionally retained above it and remains authoritative.
 
 ## Tracked implementation
 
-The production behavior is defined by two tracked files:
-
 - [`dotfiles/codex/hooks/response-simplifier.sh`](../dotfiles/codex/hooks/response-simplifier.sh)
-  sets the 1,500-character gate, `gpt-5.6-luna`, `low` effort, the 120-second
+  sets the 1,500-character gate, `gpt-5.4`, `medium` effort, 120-second
   timeout, isolated child execution, and fail-open behavior.
-- [`dotfiles/claude/response-simplifier.md`](../dotfiles/claude/response-simplifier.md)
-  is the revised prompt source adopted in `053080f1`. It makes fidelity more
-  important than brevity, requires exact technical content and status to be
-  preserved, and permits only genuine filler and repetition to be removed.
+- [`dotfiles/codex/response-simplifier.md`](../dotfiles/codex/response-simplifier.md)
+  is Prompt H. It produces only a compact `**First Mate**` brief and never a
+  replacement body rewrite.
 
-The hook measures the original response before generation. In particular, the
-1,494-character fixture near the threshold remains bypassed by the
-1,500-character gate; measuring the generated rewrite would change that
-behavior.
+The hook measures the original response before generation. A 1,494-character
+message remains bypassed by the 1,500-character gate; measuring the brief
+instead would change that behavior.
