@@ -895,9 +895,11 @@ in
       force = true;
     };
     ".codex/hooks/response-simplifier.sh".source = link "dotfiles/codex/hooks/response-simplifier.sh";
-    # The rewrite contract is runtime-neutral and already tuned against real
-    # responses, so Claude Code and Codex deliberately share one source.
-    ".codex/response-simplifier.md".source = link "dotfiles/claude/response-simplifier.md";
+    # The two rewrite prompts were tuned against different models and no longer
+    # share a source: the Claude one is cut for `claude-sonnet-5`, this one is
+    # the preservation-first text validated against `gpt-5.6-luna` in
+    # docs/stop-hook-model-comparison.md.
+    ".codex/response-simplifier.md".source = link "dotfiles/codex/response-simplifier.md";
     ".codex/rules/default.rules".source = link "dotfiles/codex/rules/default.rules";
 
     # Curated agent skill pool, shared with Codex profiles via relative

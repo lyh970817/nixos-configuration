@@ -1,24 +1,23 @@
 #!/usr/bin/env bash
-# Stop hook. Takes the turn's finished assistant message, has a cheap nested
-# model rewrite it into plain English, and shows the rewrite under the
+# Stop hook. Takes the turn's finished assistant message, has a nested model
+# rewrite it into plain English, and shows the rewrite under the
 # original. `systemMessage` is the only stdout channel that reaches the user;
 # plain stdout/stderr on exit 0 are discarded, and `additionalContext` or a
 # blocking decision would go to the model instead. Never blocks: every failure
 # path exits 0 with no output, so a broken rewriter cannot disturb the session.
 
 # Messages shorter than this many characters are left alone, without spawning
-# the nested call at all. That call costs 4-8s of wall time and buys nothing on
-# a one-line answer.
+# the nested call at all. That call costs 11-43s of wall time and buys nothing
+# on a one-line answer.
 #
-# The prompt forces three headers plus, when a section is empty, its
-# empty-state line — roughly 120 words of frame regardless of input. Measured
-# on this session's real messages, inputs under ~1500 chars come back at
-# 82-96% of their original length: the frame eats the whole compression.
-# Above that the same prompt lands at 33-56%. 1500 chars is about 250 words,
-# so the threshold says a message must be at least twice the frame before
-# restructuring it pays. Deliberately not a branch in the prompt letting the
-# model pick plain or sectioned output — that judgement call is what this model
-# tier handles worst.
+# The threshold no longer buys compression. Measured on 41 real messages from
+# this project, this model returns 101-162% of the original length at every
+# input size, against the previous Haiku setup's 55%. What it buys is the
+# three-way split, and that only pays when the input carries enough distinct
+# material to fill it: at 1500 chars and above, 36 of those 41 rewrites filled
+# all three sections and only 5 used any empty-state line at all. Below 1500 an
+# expanding rewrite plus the frame is longer than the original with nothing
+# sorted.
 #
 # Tune by editing this number: the hook reaches ~/.config/claude as an
 # out-of-store symlink, so an edit is live with no rebuild.
@@ -46,9 +45,9 @@ prompt_file="${CLAUDE_CONFIG_DIR:-$HOME/.config/claude}/response-simplifier.md"
 # --system-prompt-file replaces Claude Code's default system prompt, which is
 # dead weight for a rewrite. MAX_THINKING_TOKENS=0 is what makes that pay off:
 # measured, replacing the default prompt without it turns extended thinking on
-# and the child spends ~6700 output tokens and 52-70s. With it the same call is
-# 4-8s and ~200 output tokens. Do not add --effort; any level re-enables
-# thinking and costs 50s+ again.
+# and the child burns thousands of output tokens and most of a minute before it
+# writes anything. With it, 41 measured calls ran 11-43s, median 20s. Do not
+# add --effort; any level re-enables thinking.
 #
 # The <message> wrapper is a content/instruction boundary the prompt refers to
 # by name. Measured: an undelimited message that reads like a spec — one about
@@ -59,7 +58,7 @@ prompt_file="${CLAUDE_CONFIG_DIR:-$HOME/.config/claude}/response-simplifier.md"
 rewrite="$(
   printf '<message>\n%s\n</message>' "$message" | MAX_THINKING_TOKENS=0 timeout 120 claude \
     --safe-mode \
-    --model claude-haiku-4-5-20251001 \
+    --model claude-sonnet-5 \
     --system-prompt-file "$prompt_file" \
     --tools "" \
     -p 2>/dev/null
