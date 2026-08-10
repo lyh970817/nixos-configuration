@@ -91,6 +91,7 @@ let
   codexProfileNames = [
     "last30days"
     "mattpocock"
+    "orchestrator"
     "superpowers"
     "understand-anything-codegraph"
   ];
@@ -162,6 +163,9 @@ let
     import tomllib
 
     HEADER = re.compile(r"^\s*(\[\[?)([^\]]+)(\]\]?)\s*(?:#.*)?$")
+    ASSIGNMENT = re.compile(
+        r"^\s*(?:[A-Za-z0-9_-]+|\"(?:[^\"\\]|\\.)*\"|'[^']*')\s*="
+    )
     PLUGINS = [
         "browser@openai-bundled",
         "computer-use@openai-bundled",
@@ -195,11 +199,45 @@ let
     def value(item):
         return json.dumps(item, separators=(",", ":"))
 
+    def assignment_end(lines, index, limit):
+        line = lines[index]
+        if not ASSIGNMENT.match(line):
+            return index + 1
+        rendered = line.split("=", 1)[1].lstrip()
+        delimiter = next(
+            (candidate for candidate in ('"""', "'" * 3) if rendered.startswith(candidate)),
+            None,
+        )
+        if delimiter is None:
+            return index + 1
+        fragments = [rendered[len(delimiter):]] + lines[index + 1:limit]
+        for offset, fragment in enumerate(fragments):
+            cursor = 0
+            while True:
+                closing = fragment.find(delimiter, cursor)
+                if closing < 0:
+                    break
+                if delimiter == "'" * 3:
+                    return index + offset + 1
+                backslashes = 0
+                before = closing - 1
+                while before >= 0 and fragment[before] == "\\":
+                    backslashes += 1
+                    before -= 1
+                if backslashes % 2 == 0:
+                    return index + offset + 1
+                cursor = closing + 1
+        return index + 1
+
     def headers(lines):
-        for index, line in enumerate(lines):
+        index = 0
+        while index < len(lines):
+            line = lines[index]
             match = HEADER.match(line.rstrip("\n"))
             if match:
                 yield index, match.group(1), match.group(2).strip()
+            end = assignment_end(lines, index, len(lines))
+            index = end if end > index + 1 else index + 1
 
     def bounds(lines, index):
         end = len(lines)
@@ -219,15 +257,21 @@ let
     def table_key(lines, table, key, rendered):
         pattern = re.compile(r"^\s*%s\s*=" % re.escape(key))
         if not table:
-            for index, line in enumerate(lines):
+            index = 0
+            header_index = next((header for header, _, _ in headers(lines)), len(lines))
+            while index < header_index:
+                line = lines[index]
                 if HEADER.match(line.rstrip("\n")):
                     break
                 if pattern.match(line):
                     replacement = "%s = %s\n" % (key, rendered)
-                    if line == replacement:
+                    end = assignment_end(lines, index, len(lines))
+                    if lines[index:end] == [replacement]:
                         return False
-                    lines[index] = replacement
+                    lines[index:end] = [replacement]
                     return True
+                end = assignment_end(lines, index, header_index)
+                index = end if end > index + 1 else index + 1
             lines.insert(0, "%s = %s\n" % (key, rendered))
             return True
         table_index = None
@@ -240,23 +284,24 @@ let
             return True
         start, end = bounds(lines, table_index)
         pattern = re.compile(r"^\s*%s\s*=" % re.escape(key))
-        for index in range(start + 1, end):
+        index = start + 1
+        while index < end:
             if pattern.match(lines[index]):
                 replacement = "%s = %s\n" % (key, rendered)
-                if lines[index] == replacement:
+                assignment_stop = assignment_end(lines, index, len(lines))
+                if lines[index:assignment_stop] == [replacement]:
                     return False
-                lines[index] = replacement
+                lines[index:assignment_stop] = [replacement]
                 return True
+            assignment_stop = assignment_end(lines, index, end)
+            index = assignment_stop if assignment_stop > index + 1 else index + 1
         lines.insert(start + 1, "%s = %s\n" % (key, rendered))
         return True
 
     def skill_blocks(lines):
-        starts = [
-            index for index, opening, name in headers(lines)
-            if opening == "[[" and name == "skills.config"
-        ]
-        for offset, start in enumerate(starts):
-            yield start, starts[offset + 1] if offset + 1 < len(starts) else len(lines)
+        for index, opening, name in headers(lines):
+            if opening == "[[" and name == "skills.config":
+                yield bounds(lines, index)
 
     def quoted_field(lines, start, end, field):
         pattern = re.compile(r"^\s*%s\s*=\s*([\"'])(.*?)\1" % field)
@@ -279,10 +324,12 @@ let
         lines.insert(start + 1, "enabled = %s\n" % rendered)
         return True
 
-    def atomic_write(path, content):
+    def atomic_write(path, content, requested_mode=None):
         directory = os.path.dirname(path) or "."
         os.makedirs(directory, mode=0o700, exist_ok=True)
-        mode = stat.S_IMODE(os.stat(path).st_mode) if os.path.exists(path) else 0o600
+        mode = requested_mode
+        if mode is None:
+            mode = stat.S_IMODE(os.stat(path).st_mode) if os.path.exists(path) else 0o600
         fd, temporary = tempfile.mkstemp(prefix=".%s." % os.path.basename(path), dir=directory)
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
@@ -317,7 +364,7 @@ let
         for plugin in PLUGINS:
             changed = table_key(lines, 'plugins."%s"' % plugin, "enabled", "false") or changed
         present = set()
-        for start, end in skill_blocks(lines):
+        for start, end in reversed(list(skill_blocks(lines))):
             name_index, name = quoted_field(lines, start, end, "name")
             path_index, skill_path = quoted_field(lines, start, end, "path")
             selected = name if name in SKILLS else None
@@ -364,13 +411,33 @@ let
         else:
             old = ""
         if not old:
-            atomic_write(path, policy_text)
+            atomic_write(path, policy_text, 0o600)
             return
         lines = old.splitlines(True)
         changed = False
-        for key in ("model", "model_reasoning_effort"):
+        for key in (
+            "model",
+            "model_reasoning_effort",
+            "include_collaboration_mode_instructions",
+            "developer_instructions",
+        ):
             if key in policy:
                 changed = table_key(lines, "", key, value(policy[key])) or changed
+        multi_agent_policy = policy.get("features", {}).get("multi_agent_v2", {})
+        for key in (
+            "enabled",
+            "max_concurrent_threads_per_session",
+            "expose_spawn_agent_model_overrides",
+            "multi_agent_mode_hint_text",
+            "subagent_developer_instructions",
+        ):
+            if key in multi_agent_policy:
+                changed = table_key(
+                    lines,
+                    "features.multi_agent_v2",
+                    key,
+                    value(multi_agent_policy[key]),
+                ) or changed
         for plugin, settings in policy.get("plugins", {}).items():
             for key, setting in settings.items():
                 changed = table_key(lines, 'plugins."%s"' % plugin, key, value(setting)) or changed
@@ -380,11 +447,11 @@ let
         desired = policy.get("skills", {}).get("config", [])
         desired_names = {entry.get("name") for entry in desired}
         existing = set()
-        stale_blocks = []
-        for start, end in skill_blocks(lines):
+        for start, end in reversed(list(skill_blocks(lines))):
             _, name = quoted_field(lines, start, end, "name")
             if name == "last30days" and name not in desired_names:
-                stale_blocks.append((start, end))
+                del lines[start:end]
+                changed = True
                 continue
             if name is None:
                 continue
@@ -394,17 +461,6 @@ let
                     if "enabled" in entry:
                         changed = set_enabled(lines, start, end, bool(entry["enabled"])) or changed
                     break
-        if stale_blocks:
-            stale_lines = {
-                index
-                for start, end in stale_blocks
-                for index in range(start, end)
-            }
-            lines = [
-                line for index, line in enumerate(lines)
-                if index not in stale_lines
-            ]
-            changed = True
         for entry in desired:
             if entry.get("name") not in existing:
                 append_block(lines, [
@@ -414,9 +470,11 @@ let
                 ])
                 changed = True
         new = "".join(lines)
-        if changed and new != old:
+        if (changed and new != old) or os.path.islink(path):
             tomllib.loads(new)
-            atomic_write(path, new)
+            atomic_write(path, new, 0o600)
+        elif stat.S_IMODE(os.stat(path).st_mode) != 0o600:
+            os.chmod(path, 0o600)
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--base")
@@ -832,13 +890,6 @@ in
     # sessions, caches, marketplaces, and installed payloads stay mutable.
     ".codex/AGENTS.md".source = link "dotfiles/codex/AGENTS.md";
     ".codex/agents/merge.toml".source = link "dotfiles/codex/agents/merge.toml";
-    # This profile has no relative skill paths or runtime-owned state, so keep
-    # it exact and live instead of passing it through the selective profile
-    # reconciler above.
-    ".codex/orchestrator.config.toml" = {
-      source = link "dotfiles/codex/profiles/orchestrator.config.toml";
-      force = true;
-    };
     ".codex/hooks.json" = {
       source = link "dotfiles/codex/hooks.json";
       force = true;
