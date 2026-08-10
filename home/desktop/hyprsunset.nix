@@ -42,6 +42,7 @@ let
     name = "hyprsunset-night";
     runtimeInputs = [
       pkgs.coreutils
+      pkgs.gawk
       pkgs.hyprland
       pkgs.systemd
     ];
@@ -51,10 +52,14 @@ let
           hyprctl hyprsunset temperature 1500 >/dev/null 2>&1
       }
 
+      numeric_equals() {
+        awk -v actual="$1" -v expected="$2" 'BEGIN { exit !(actual == expected) }'
+      }
+
       manual_night_is_active() {
         [ "$(hyprctl hyprsunset identity get)" = false ] &&
-          [ "$(hyprctl hyprsunset gamma)" = 100 ] &&
-          [ "$(hyprctl hyprsunset temperature)" = 1500 ]
+          numeric_equals "$(hyprctl hyprsunset gamma)" 100 &&
+          numeric_equals "$(hyprctl hyprsunset temperature)" 1500
       }
 
       wait_for_socket() {
