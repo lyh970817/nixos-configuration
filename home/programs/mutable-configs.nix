@@ -398,12 +398,32 @@ let
         for start, end in reversed(list(skill_blocks(lines))):
             name_index, name = quoted_field(lines, start, end, "name")
             path_index, skill_path = quoted_field(lines, start, end, "path")
+            # Before template manifests had individual selectors, the generic
+            # plugin name was written here. It cannot disable any manifest and
+            # is the sole stale skill block we remove; every other unknown
+            # user-owned block stays untouched.
+            if name == "openai-templates":
+                del lines[start:end]
+                changed = True
+                continue
             selected = name if name in SKILLS else None
             if selected is None and skill_path:
                 for marker, stable in PATH_SKILLS.items():
                     if "/" + marker + "/" in skill_path or skill_path.endswith("/" + marker + "/SKILL.md"):
                         selected = stable
                         break
+            # Apply the same narrow migration to a legacy path selector. A
+            # path resolving to a current manifest selector is retained and
+            # normalized above; unrelated unknown paths are preserved.
+            generic_template_path = skill_path and (
+                "/openai-templates/" in skill_path
+                or skill_path.startswith("openai-templates/")
+                or skill_path.endswith("/openai-templates/SKILL.md")
+            )
+            if selected is None and generic_template_path:
+                del lines[start:end]
+                changed = True
+                continue
             if selected is None:
                 continue
             present.add(selected)
