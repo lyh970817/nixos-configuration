@@ -78,11 +78,8 @@ let
 
     # 2. HYPRLAND BACKGROUND COLOR (Misc setting)
     ${pkgs.hyprland}/bin/hyprctl keyword misc:background_color 0x${p.background}
-    # Panel shader. Its predecessor was disabled because a warm-tinted bloom
-    # and black lift cast amber over the green phosphor and contaminated any
-    # colour measured from a screenshot; the lift is gone and the surviving
-    # tints follow the phosphor, so that objection no longer applies. Light
-    # mode still leaves it empty.
+    # Panel shader. The old global black floor remains removed; panel.glsl uses
+    # localised off-axis washout and dark lift instead. Light mode leaves it empty.
     ${pkgs.hyprland}/bin/hyprctl keyword decoration:screen_shader "$HOME/.config/hypr/shaders/panel.glsl"
 
     # 3. HYPRLAND THEME (Symlink + Live Settings)
