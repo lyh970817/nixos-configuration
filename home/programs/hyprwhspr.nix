@@ -17,7 +17,6 @@ let
   chatEndpoint = "https://api.siliconflow.cn/v1/chat/completions";
   chatModel = "deepseek-ai/DeepSeek-V4-Flash";
 
-
   recorderPort = 8765;
   recorderChunkSecs = 120;
   longformArchiveDir = "${homeDir}/.local/share/hyprwhspr/longform";
@@ -28,14 +27,10 @@ let
   shortArchiveRetentionDays = "30d";
 
   terminalPasteKeys = {
-    alacritty = "ctrl+shift+v";
-    alacritty-float = "ctrl+shift+v";
-    alacritty-main = "ctrl+shift+v";
     foot = "ctrl+shift+v";
     foot-float = "ctrl+shift+v";
     foot-main = "ctrl+shift+v";
   };
-
 
   hyprwhsprLongform = pkgs.writeTextFile {
     name = "hyprwhspr-longform";
@@ -561,7 +556,6 @@ let
     ];
     text = builtins.readFile ../../scripts/hyprwhispr-record;
   };
-
 
   # Best-effort dismissal of stale "hyprwhspr" notifications (e.g. an
   # orphaned "transcribing" status bubble left behind when the daemon exits

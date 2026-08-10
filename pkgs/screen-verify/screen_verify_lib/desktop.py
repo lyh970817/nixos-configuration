@@ -15,16 +15,16 @@ from .state import ScreenError
 # on the staging workspace by a Hyprland workspace rule; layer surfaces cannot,
 # so they are pinned to the staging output with their own monitor flag instead.
 ADAPTER_COMMANDS: dict[str, dict[str, Any]] = {
-    "alacritty": {
-        "command": ["alacritty", "--class", "screen-verify-alacritty"],
+    "foot": {
+        "command": ["foot", "--app-id=screen-verify-foot"],
         "surface": "window",
     },
     "neovim": {
-        "command": ["alacritty", "--class", "screen-verify-neovim", "-e", "nvim"],
+        "command": ["foot", "--app-id=screen-verify-neovim", "nvim"],
         "surface": "window",
     },
     "btop": {
-        "command": ["alacritty", "--class", "screen-verify-btop", "-e", "btop"],
+        "command": ["foot", "--app-id=screen-verify-btop", "btop"],
         "surface": "window",
     },
     "rofi": {

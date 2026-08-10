@@ -64,7 +64,7 @@ let
   # Dark Mode Script
   #
   # This hook only drives Layer A (this machine's own desktop appearance:
-  # wallpaper, Hyprland, GTK, rofi, alacritty, mako, cursor). fzf, newt, btop,
+  # wallpaper, Hyprland, GTK, rofi, foot, mako, cursor). fzf, newt, btop,
   # nvim, and Claude Code no longer follow it — they now read the per-session
   # THEME_MODE variable set by theme-hold instead (see below).
   darkModeHook = pkgs.writeShellScript "dark-mode-hook" ''
@@ -109,8 +109,7 @@ let
     ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface cursor-theme '${darkCursorTheme}'
     ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface cursor-size ${toString darkCursorSize}
 
-    # Terminals: select the palette used by new windows.
-    ln -sf $HOME/.config/alacritty/themes/dark.toml $HOME/.config/alacritty/current.toml
+    # Terminal: select the palette used by new windows.
     ln -sf $HOME/.config/foot/themes/dark.ini $HOME/.config/foot/foot.ini
 
     # Claude Code: rewrite the theme in each profile's settings.json.
@@ -176,8 +175,7 @@ let
     # light mode would keep dark mode's 22 and disagree with its own setcursor.
     ${pkgs.glib}/bin/gsettings set org.gnome.desktop.interface cursor-size ${toString lightCursorSize}
 
-    # Terminals: select the palette used by new windows.
-    ln -sf $HOME/.config/alacritty/themes/light.toml $HOME/.config/alacritty/current.toml
+    # Terminal: select the palette used by new windows.
     ln -sf $HOME/.config/foot/themes/light.ini $HOME/.config/foot/foot.ini
 
     # Claude Code: rewrite the theme in each profile's settings.json.
@@ -269,7 +267,7 @@ let
   # back to the 24-bit "dark" theme silently, so this string has to match the
   # theme file name there.
   #
-  # Only newly started sessions pick this up, the same as alacritty windows.
+  # Only newly started sessions pick this up, the same as foot windows.
   # Activation writes the same key from the same source (the reconciler in
   # programs/mutable-configs.nix), so the two writers cannot disagree.
   claudeTheme = pkgs.writeShellScriptBin "claude-theme" ''

@@ -2,7 +2,7 @@
 #
 # Neovim is a truecolor consumer: with termguicolors set it paints from gui hex
 # and never touches the terminal's ANSI slots, so it cannot follow the phosphor
-# ladder the way foot.nix and alacritty.nix let the ANSI-only TUIs follow it.
+# ladder the way foot.nix lets the ANSI-only TUIs follow it.
 # The scheme below is therefore generated from ../palettes.nix so a profile
 # swap or a rung retune reaches it too. It used to be a hand-maintained file in
 # dotfiles/nvim/colors/ and had drifted a full palette generation behind:

@@ -48,7 +48,7 @@ background < deepSurface < raisedBlack < subtleBorder < mutedText
 
 ### 覆盖范围
 
-- **已参数化（改 `activeName` 一行 + rebuild 即可全部跟随）**：foot、alacritty、fzf、newt、btop、mako、rofi、tmux、theming.nix（Hyprland 边框/背景/壁纸）
+- **已参数化（改 `activeName` 一行 + rebuild 即可全部跟随）**：foot、fzf、newt、btop、mako、rofi、tmux、theming.nix（Hyprland 边框/背景/壁纸）
 - **静态替换（一次性改了 792 处十六进制）**：Yazi flavor + tmtheme、nvim 配色、hypr 配置、herdr、pi 主题、GTK/xfwm 主题、statusline 注释
 - **通过 ANSI 槽位自动跟随**：shell、Starship、Claude Code、man page、tmux 内容
 

@@ -4,9 +4,9 @@ onboarding = false
 #
 # `theme.name = "terminal"` selects the one built-in palette that emits plain
 # ANSI slots instead of hardcoded RGB, so herdr inherits whatever palette
-# Alacritty is currently importing and follows `theme-toggle` between dark and
+# foot is currently importing and follows `theme-toggle` between dark and
 # light for free. This repo has no shared palette to reference; see
-# home/programs/alacritty.nix for the two ANSI palettes and
+# home/programs/foot.nix for the two ANSI palettes and
 # home/desktop/theming.nix for the switch.
 #
 # This file is live-linked to ~/.config/herdr/config.toml (see

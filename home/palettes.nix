@@ -56,9 +56,9 @@ let
     # under, mutedText landed at 0.119 where amber's is 0.238, and
     # secondaryText at 0.320 where amber's is 0.469, while both ends of the
     # ladder stayed within 1.02-1.18x of amber. Every role that has to be dim
-    # but still readable broke at once — nmtui body text, the rofi, foot and
-    # alacritty selections, btop's selected process, mako's low-urgency
-    # notifications, fastfetch's parenthesised values.
+    # but still readable broke at once — nmtui body text, the rofi and foot
+    # selections, btop's selected process, mako's low-urgency notifications,
+    # fastfetch's parenthesised values.
     #
     # These reproduce amber's rung-to-rung spacing to within 0.02: 1.95x,
     # 1.53x and 1.38x against amber's 1.97x, 1.53x and 1.39x. Note the fix

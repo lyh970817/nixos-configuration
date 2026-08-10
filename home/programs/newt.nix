@@ -25,9 +25,9 @@ let
   # dropped nmtui to newt's built-in blue defaults.
   #
   # So the names below are chosen for the *index* they resolve to, not for the
-  # hue they read as: the terminal themes in programs/foot.nix and
-  # programs/alacritty.nix lay the phosphor ladder over ANSI 0-15, and these
-  # pick the slots holding the rungs each role needs.
+  # hue they read as: the terminal theme in programs/foot.nix lays the
+  # phosphor ladder over ANSI 0-15, and these pick the slots holding the
+  # rungs each role needs.
   #
   #   black       0   raisedBlack     the backdrop, and the text on reversed rows
   #   brown       3   secondaryText   receded, for disabled entries
@@ -38,7 +38,7 @@ let
   # Backgrounds are restricted to 0-7: slang emits reversed fills as SGR 40-47
   # and clamps a bright name down to its regular counterpart, so a fill can
   # never reach `bright` or `hot`. `blue` (accent) is the brightest rung a fill
-  # can actually land on, which is also what the rofi, foot, alacritty and btop
+  # can actually land on, which is also what the rofi, foot and btop
   # selections use.
   #
   # An earlier revision instead named green/brightgreen and corrected the slots

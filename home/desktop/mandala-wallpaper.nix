@@ -114,15 +114,18 @@ let
 
   wallpaperTerminal = pkgs.writeShellApplication {
     name = "mandala-terminal-wallpaper";
-    runtimeInputs = [ pkgs.alacritty ];
+    runtimeInputs = [ pkgs.foot ];
     text = ''
-      exec alacritty \
-        --class ${wallpaperClass} \
-        -o window.dynamic_padding=false \
-        -o window.padding.x=0 \
-        -o window.padding.y=0 \
-        -o window.opacity=1.0 \
-        --command ${wallpaperViewer}/bin/mandala-wallpaper-viewer ${wallpaperArt}
+      # --app-id is what the Hyprland windowrule below matches on Wayland
+      # (`match:class` reads the app id). pad=0x0 keeps the art flush to the
+      # window edge; alpha is set in both palette slots because foot never
+      # inherits one into the other (see ../programs/foot.nix).
+      exec foot \
+        --app-id=${wallpaperClass} \
+        -o main.pad=0x0 \
+        -o colors-dark.alpha=1.0 \
+        -o colors-light.alpha=1.0 \
+        ${wallpaperViewer}/bin/mandala-wallpaper-viewer ${wallpaperArt}
     '';
   };
 in

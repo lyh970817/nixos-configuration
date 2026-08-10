@@ -4,7 +4,7 @@
 # dialogs -- with ANSI *indices* rather than RGB, deliberately: its style guide
 # forbids custom colours so the TUI inherits whatever palette the terminal is
 # carrying. So the chrome already follows the phosphor ladder through
-# programs/foot.nix and programs/alacritty.nix with nothing configured here.
+# programs/foot.nix with nothing configured here.
 #
 # What it does not inherit is the syntax highlighter. `[tui] theme` selects a
 # TextMate .tmTheme -- by default one of the bundled `bat` themes, every one of

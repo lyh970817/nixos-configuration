@@ -27,7 +27,6 @@
     file-roller
     imagemagick
     imv
-    ueberzugpp
     ffmpegthumbnailer
     poppler-utils
     whisper-cpp

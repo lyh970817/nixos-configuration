@@ -36,8 +36,8 @@ in
              middle rungs sit at 0.42-0.58x the luminance of their amber
              counterparts, and on secondaryText the selected row measured
              2.12:1 against its own label. accent restores 4.94:1, nearest
-             the 4.42:1 amber gave. Same substitution in foot, alacritty,
-             btop and mako. Note rasi comments are C-style: a '#' here is a
+             the 4.42:1 amber gave. Same substitution in foot, btop and
+             mako. Note rasi comments are C-style: a '#' here is a
              colour literal, not a comment, and breaks the parser. */
           selected: #${p.accent};
           background-color: transparent;

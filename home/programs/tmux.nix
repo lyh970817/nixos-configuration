@@ -109,7 +109,7 @@ in
       bind -n C-1 run-shell -b "${scratchNote} horizontal #{q:pane_id} #{q:pane_current_path}"
       bind -n C-S-1 run-shell -b "${scratchNote} vertical #{q:pane_id} #{q:pane_current_path}"
 
-      # Enable extended keys so tmux recognizes the code sent by Alacritty
+      # Enable extended keys so tmux recognizes the CSI-u codes sent by foot
       set -s extended-keys on
       set -as terminal-features 'xterm*:extkeys'
 
@@ -182,7 +182,7 @@ in
       bind -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-pipe "${osc52Copy}/bin/osc52-copy"
 
       # Light mode is e-ink, and nothing in it is green. The light themes in
-      # ../programs/foot.nix and ../programs/alacritty.nix are pure #FFFFFF
+      # ../programs/foot.nix is pure #FFFFFF
       # glass with #000000 text and one #808080 mid tone, so this branch mirrors
       # the dark one rung for rung against that three-value ladder:
       # background -> white, foreground -> black, subtleBorder -> brightblack.
@@ -200,8 +200,8 @@ in
       # selection loses its colour. Dark mode never trips this because its
       # values start #0 and #4, which are not format characters. Names also
       # delegate to the terminal's own light palette (regular0/regular7 are
-      # exactly #000000/#FFFFFF there), so this tracks foot and alacritty
-      # instead of duplicating them.
+      # exactly #000000/#FFFFFF there), so this tracks foot instead of
+      # duplicating it.
       #
       # Highlights stay reverse video as in dark, just running the other way.
       # mode-style takes full black rather than the dampened mid rung the dark
@@ -234,7 +234,7 @@ in
         set -g mode-style fg=#${p.background},bg=#${p.accent}
       %endif
 
-      set -ag terminal-overrides ",alacritty:RGB"
+      set -ag terminal-overrides ",foot*:RGB"
     '';
   };
 }

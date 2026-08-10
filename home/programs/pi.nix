@@ -81,7 +81,7 @@ in
 
     # pi never writes into its custom themes directory, so a live symlink is
     # safe here too. Colors are ANSI palette indices (0-15), not hex, so this
-    # theme tracks whatever dark.toml in home/programs/alacritty.nix defines.
+    # theme tracks whatever dark.ini in home/programs/foot.nix defines.
     ".pi/agent/themes/vt220-amber.json".source = link "dotfiles/pi/themes/vt220-amber.json";
   };
 }

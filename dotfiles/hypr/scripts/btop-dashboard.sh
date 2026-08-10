@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Keep the workspace dashboard alive if btop is exited with q, Ctrl+C, or a
-# process signal. Killing the containing Alacritty process remains an explicit
+# process signal. Killing the containing foot process remains an explicit
 # administrative escape hatch.
 
 # Hyprland does not apply a static fullscreen rule to this silently-created,
