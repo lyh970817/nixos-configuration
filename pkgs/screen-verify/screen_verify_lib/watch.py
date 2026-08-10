@@ -19,6 +19,7 @@ from .desktop import descendant_pids, has_stage_marker, process_start_time
 from .stage import (
     hyprctl_quiet,
     lookup_clients,
+    move_window_silent_lua,
     stage_record,
     stage_workspace_name,
 )
@@ -111,7 +112,7 @@ def event_dispatch(
     roots: Callable[[], list[int]],
     descendants: Callable[[int], set[int]],
 ) -> str | None:
-    """The movetoworkspacesilent argument one event line calls for, or None.
+    """The `hyprctl dispatch` argument one event line calls for, or None.
 
     Every collaborator is injected so the decision is testable without a
     socket or a compositor. A window is only ever moved on positive ownership:
@@ -133,7 +134,7 @@ def event_dispatch(
         pid in descendants(root) for root in roots()
     ):
         return None
-    return f"name:{workspace},address:0x{address}"
+    return move_window_silent_lua(f"name:{workspace}", f"0x{address}")
 
 
 def session_watchable(path: Path, session: str) -> bool:
@@ -185,4 +186,4 @@ def watch_stage(path: Path, session: str) -> None:
                     descendant_pids,
                 )
                 if target is not None:
-                    hyprctl_quiet("dispatch", "movetoworkspacesilent", target)
+                    hyprctl_quiet("dispatch", target)
