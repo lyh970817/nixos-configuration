@@ -10,14 +10,23 @@
 # the nested call at all. That call costs 11-43s of wall time and buys nothing
 # on a one-line answer.
 #
-# The threshold no longer buys compression. Measured on 41 real messages from
-# this project, this model returns 101-162% of the original length at every
-# input size, against the previous Haiku setup's 55%. What it buys is the
-# three-way split, and that only pays when the input carries enough distinct
-# material to fill it: at 1500 chars and above, 36 of those 41 rewrites filled
-# all three sections and only 5 used any empty-state line at all. Below 1500 an
-# expanding rewrite plus the frame is longer than the original with nothing
-# sorted.
+# The threshold is not about compression, and length is not a goal here: the
+# rewrite is meant to unpack. Measured on 41 real messages from this project,
+# it returns ~152% of the original length. What the call buys is the sort into
+# one of two shapes -- a status report, or a decision with its options and the
+# recommendation -- plus a short labelled summary. That only pays when the
+# input carries enough distinct material to fill the sections, which at 1500
+# chars and above it does: 5.4 of 5.5 sections filled on average, empty-state
+# lines rare.
+#
+# 1500 is inherited from the earlier, compression-based derivation and has NOT
+# been revalidated against this one. The corpus was built at >=1500 chars, so
+# it holds no evidence at all about what happens below the line.
+#
+# Sample sizes differ by measurement, and only these apply to this prompt:
+# length and shape-selection accuracy are n=41; the blind retention comparison
+# against the previous prompt is n=21, an unbiased half of the same corpus,
+# cut short for quota reasons.
 #
 # Tune by editing this number: the hook reaches ~/.config/claude as an
 # out-of-store symlink, so an edit is live with no rebuild.
