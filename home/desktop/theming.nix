@@ -1,5 +1,6 @@
 {
   config,
+  lib,
   pkgs,
   osConfig,
   ...
@@ -330,6 +331,38 @@ in
     "L+ %h/.local/share/dark-mode.d/10-nixos-hook.sh - - - - ${darkModeHook}"
     "L+ %h/.local/share/light-mode.d/10-nixos-hook.sh - - - - ${lightModeHook}"
   ];
+
+  # Foot reads its palette from ~/.config/foot/foot.ini once, when the window
+  # opens, so that symlink has to exist before the first mode switch of a
+  # session -- and it has to agree with the mode already applied. It used to be
+  # seeded by a tmpfiles `L` rule in ../programs/foot.nix, which can only name
+  # one fixed target and named the dark theme: when the foot module first
+  # landed on a desktop that had been in light mode since the previous
+  # generation, `L` filled the missing path with the dark phosphor palette and
+  # every foot window came up dark until the next manual switch. The hooks
+  # above only run on a mode *change*, so nothing corrected it.
+  #
+  # Reconcile it here instead, from the same current-theme symlink theme-mode
+  # reads, and on every activation rather than only when missing, so a rebuild
+  # cannot leave the terminal disagreeing with the desktop. Dark mode keeps
+  # whichever dark-*.ini is linked so an active `phosphor` selection survives.
+  home.activation.footThemeLink = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+    themes="$HOME/.config/foot/themes"
+    link="$HOME/.config/foot/foot.ini"
+    current="$(readlink "$link" 2>/dev/null || true)"
+
+    case "$(readlink "${hyprCurrentTheme}" 2>/dev/null || true)" in
+    *light.conf) want="$themes/light.ini" ;;
+    *)
+      case "$current" in
+      "$themes"/dark-*.ini) want="$current" ;;
+      *) want="$themes/dark.ini" ;;
+      esac
+      ;;
+    esac
+
+    [ "$current" = "$want" ] || run ln -sfn "$want" "$link"
+  '';
 
   # Managed theme assets. Dark mode pairs VT220-Amber with the Matrix-Icons
   # set (packaged in pkgs/matrix-icons.nix, installed via home/packages);
