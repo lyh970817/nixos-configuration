@@ -45,6 +45,14 @@ let
     "thunar-bulk-rename"
     "thunar-settings"
   ];
+
+  disableScreenShader = pkgs.writeShellApplication {
+    name = "disable-screen-shader";
+    runtimeInputs = [ pkgs.hyprland ];
+    text = ''
+      exec hyprctl keyword decoration:screen_shader '[[EMPTY]]'
+    '';
+  };
 in
 {
   xdg.dataFile = builtins.listToAttrs (map hideFromLauncher hiddenLauncherEntries) // {
@@ -111,22 +119,6 @@ in
         Categories=GNOME;GTK;Settings;X-GNOME-NetworkSettings;X-GNOME-Utilities;
       '';
     };
-
-    # Runtime-only override: the dark-mode hook restores its shader the next
-    # time dark mode is applied.
-    "applications/disable-screen-shader.desktop".text = ''
-      [Desktop Entry]
-      Version=1.0
-      Type=Application
-      Name=Disable Screen Shader
-      GenericName=Display
-      Comment=Temporarily turn off Hyprland's active screen shader
-      Exec=${pkgs.hyprland}/bin/hyprctl keyword decoration:screen_shader [[EMPTY]]
-      Icon=video-display
-      Terminal=false
-      Categories=Settings;Display;
-      Keywords=shader;screen;display;hyprland;
-    '';
 
     # Visible customizations of a package's own entry (renamed / simplified),
     # kept via a same-basename force override so they replace the package's
@@ -290,6 +282,25 @@ in
   };
 
   xdg.desktopEntries = {
+    # Runtime-only override: the dark-mode hook restores its shader the next
+    # time dark mode is applied.
+    disable-screen-shader = {
+      name = "Disable Screen Shader";
+      genericName = "Display";
+      comment = "Temporarily turn off Hyprland's active screen shader";
+      exec = "${disableScreenShader}/bin/disable-screen-shader";
+      icon = "video-display";
+      terminal = false;
+      type = "Application";
+      categories = [
+        "Settings"
+        "Display"
+      ];
+      settings = {
+        Keywords = "shader;screen;display;hyprland;";
+      };
+    };
+
     "115browser" = {
       name = "115 Browser";
       genericName = "Web Browser";
