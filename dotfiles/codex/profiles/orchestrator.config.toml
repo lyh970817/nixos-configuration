@@ -55,3 +55,7 @@ Return a concise report starting with the outcome: done, blocked, needs-decision
 or failed. Include evidence and files changed, verification performed, blockers,
 and the final commit and branch when applicable.
 """
+
+[[skills.config]]
+name = "session-handoff"
+enabled = true
