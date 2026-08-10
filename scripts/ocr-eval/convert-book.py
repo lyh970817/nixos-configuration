@@ -225,7 +225,58 @@ WU_NIAO = [("鸟黑", "乌黑"), ("鸟云", "乌云"), ("鸟篷", "乌篷"),
 VARIANTS = {"靜": "静", "黃": "黄", "涼": "凉", "來": "来", "國": "国",
             "顧": "顾", "說": "说", "這": "这", "個": "个", "們": "们",
             "盜": "盗", "籃": "篮", "藍": "蓝", "溫": "温",
-            "脫": "脱", "際": "际"}
+            "脫": "脱", "際": "际", "銅": "铜", "鰓": "鳃"}
+
+# Lines whose recognition is plausible enough to evade the generic checks but
+# disagrees with the printed text. Keep these exact and contextual rather than
+# applying character-wide substitutions to the rest of the book.
+LINE_OVERRIDES = {
+    "刀剑一一些灿烂的火药": "刀剑一些灿烂的火药",
+    "又梢悄吐出": "又悄悄吐出",
+    "我把蟋摔草伸进窗子": "我把蟋蟀草伸进窗子",
+    "既不陌主又不熟练": "既不陌生又不熟练",
+    "每棵树都枇着头发": "每棵树都龇着头发",
+    "在那“嘎嘎”地错着响板": "在那“嘎嘎”地锉着响板",
+    "海上进溅的水滴": "海上迸溅的水滴",
+    "只有飞峨": "只有飞蛾",
+    "“你況吧": "“你说吧",
+    "一百次1": "一百次",
+    "人可以变成安全的泥士 看罪犯 梦": "人可以变成安全的泥土 看罪犯 梦",
+    "里边有一付纸牌": "里边有一副纸牌",
+    "在些灯 是美丽的": "有些灯 是美丽的",
+    "她再写下雨快下一点老老师在黑板上写": "她再写下雨快下一点老师在黑板上写",
+    "眼鸡": "喂鸡",
+    "你在很多人中间看我": "你在很多个中间看我",
+    "很轻，像薄纸迭成的小船": "很轻，像薄纸叠成的小船",
+    "渡过朦胧的晨光": "度过朦胧的晨光",
+    "在许多细小的海浪": "有许多细小的海浪",
+    "梢梢爬上沙岸": "悄悄爬上沙岸",
+    "像暴烈的阵雨在田城间飞奔": "像暴烈的阵雨在田垅间飞奔",
+    "在喧晔中": "在喧哗中",
+    "树上有树一边是鸟书中有书”一边是树": "树上有树一边是鸟书中有书一边是树",
+    "看不清楚听不清楚清清楚楚": "是不清楚听不清楚清清楚楚",
+    "地球是普滴蓝色的黎和": "地球是一滴蓝色的水",
+}
+
+# These two short poems lost section markers and, in 戒令, gained fragments
+# from show-through. Their complete bodies are safer to record than to infer
+# from individual damaged boxes on every regeneration.
+BODY_OVERRIDES = {
+    "戒令": [
+        "没影的白天", "当街站着", "看兵毛豆盐", "两块钱的房子",
+        "总得三千", "喜欢", "摆砖", "再抢一下", "和胖子一起",
+        "离他一丈多远",
+    ],
+    "扫描": [
+        "Ⅰ", "他们上楼", "没有人", "", "开枪的时候",
+        "别忘了火花闪烁的街道", "", "Ⅱ", "一边人不能到另一边去",
+        "另一边也不能", "", "走廊里大多数人都不能到另一边去",
+        "Ⅲ", "这是真正的恐怖", "烧剩的房", "像人牙齿", "Ⅳ",
+        "他在前边站着", "领子发红", "你必须行礼", "你必须笑",
+        "你担心你太好看", "Ⅴ", "你可怕极了", "笑的", "",
+        "上次不是这样", "己巳己巳", "己巳己巳",
+    ],
+}
 
 
 def correct(line):
@@ -238,6 +289,10 @@ def correct(line):
         if bad in line:
             line = line.replace(bad, good)
             fixes.append(f"{bad}->{good}")
+    if line in LINE_OVERRIDES:
+        fixed = LINE_OVERRIDES[line]
+        fixes.append(f"{line}->{fixed}")
+        line = fixed
     return line, fixes
 
 
@@ -505,6 +560,8 @@ def main():
                        f"(checked against the page image)")
             p["date"] = ov
         p["body"] = body
+        if p["title"] in BODY_OVERRIDES:
+            p["body"] = BODY_OVERRIDES[p["title"]]
 
     out = pathlib.Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
