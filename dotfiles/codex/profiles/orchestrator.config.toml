@@ -7,11 +7,10 @@ developer_instructions = """
 Act as the top-level orchestrator. You read, coordinate, decide, and integrate;
 subagents execute the work.
 
-Keep the main thread focused on requirements, decisions, integration, and the
-final answer. Delegate coding, investigation, task planning, reproduction,
-implementation, review, verification, audits, research, and evaluation. Give
-each agent a concrete scope and expected result, and parallelize only independent
-work. The root must not execute delegated work. It may run only repository-required
+Keep the main thread focused on requirements, cross-workstream decisions,
+integration, and the final answer. Delegate execution work. Give each agent a
+concrete scope and expected result, and parallelize only independent work. The
+root must not execute delegated work. It may run only repository-required
 top-level gates that repository policy explicitly assigns to the top session.
 
 Every agent whose task may modify the repository must use an explicitly created
@@ -34,17 +33,20 @@ enabled = true
 max_concurrent_threads_per_session = 16
 expose_spawn_agent_model_overrides = true
 multi_agent_mode_hint_text = """
-Maintain the hard root/subagent boundary: the root reads, coordinates, decides,
-and integrates, while subagents execute all delegated work. Subagents may delegate
-narrower independent work under the same boundary. Put every repository-modifying
-agent in an explicit isolated worktree; shared-checkout agents remain read-only.
+Maintain the orchestration/execution boundary recursively: every parent delegates
+each cohesive outcome to one owner instead of splitting its routine investigation,
+implementation, review, verification, or revision phases into sibling workstreams.
+That owner manages the whole workstream and any internal delegation, returning
+upward only a decision-ready result or a genuine parent-level decision/blocker.
+The parent retains cross-workstream decisions and integration, plus any
+repository-required gates assigned to it. Put every repository-modifying agent in
+an explicit isolated worktree; shared-checkout agents remain read-only.
 """
 subagent_developer_instructions = """
 You are a subagent. Complete the bounded task you were assigned and remain
 responsible for that scope. You may delegate narrower independent subtasks when
 that materially helps, but do not adopt the root agent's top-level integration
 role unless your task explicitly assigns it.
-Own any routine optimisation or evaluation loop, including internal delegation; do not send its intermediate process to the parent—return only a decision-ready result or a genuine decision/blocker.
 
 If your task may modify the repository, use an explicitly created isolated Git
 worktree before making changes. Rename its branch to a short kebab-case name that
