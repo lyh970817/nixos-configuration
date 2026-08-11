@@ -1,0 +1,1066 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Dark Window Border Concepts — Brave + ChatGPT</title>
+  <style>
+    :root {
+      --bg: #050806;
+      --deep: #080c09;
+      --raised: #0b120d;
+      --subtle: #15261a;
+      --muted: #245a2e;
+      --secondary: #307c3b;
+      --accent: #40964c;
+      --foreground: #4bae55;
+      --bright: #65c96d;
+      --hot: #86e68c;
+      --neutral-1: #161a18;
+      --neutral-2: #292e2b;
+      --neutral-3: #505752;
+      --paper: #d8dfd9;
+      --radius-card: 20px;
+      --radius-window: 12px;
+      --ease: cubic-bezier(.2, .8, .2, 1);
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      background:
+        radial-gradient(circle at 10% -10%, rgba(64, 150, 76, .12), transparent 32rem),
+        radial-gradient(circle at 90% 8%, rgba(48, 124, 59, .08), transparent 26rem),
+        var(--bg);
+      color: var(--paper);
+      font: 15px/1.55 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button { font: inherit; }
+
+    button:focus-visible,
+    a:focus-visible {
+      outline: 2px solid var(--hot);
+      outline-offset: 3px;
+    }
+
+    .shell {
+      width: min(1500px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 64px 0 72px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 36px;
+      align-items: end;
+      margin-bottom: 28px;
+    }
+
+    .eyebrow,
+    .kicker,
+    .metric-label,
+    .recommend-label {
+      color: var(--accent);
+      font: 700 11px/1.2 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      margin-bottom: 16px;
+    }
+
+    .eyebrow::before {
+      width: 25px;
+      height: 1px;
+      background: var(--accent);
+      content: "";
+    }
+
+    h1 {
+      max-width: 820px;
+      margin: 0;
+      color: #f0f4f1;
+      font-size: clamp(34px, 5vw, 66px);
+      font-weight: 640;
+      letter-spacing: -.045em;
+      line-height: .98;
+    }
+
+    .hero p {
+      max-width: 760px;
+      margin: 22px 0 0;
+      color: #9ca69f;
+      font-size: 17px;
+    }
+
+    .palette {
+      display: grid;
+      grid-template-columns: repeat(4, 18px);
+      gap: 6px;
+      padding: 11px;
+      border: 1px solid var(--subtle);
+      border-radius: 999px;
+      background: rgba(8, 12, 9, .84);
+    }
+
+    .palette i {
+      width: 18px;
+      height: 18px;
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 50%;
+    }
+
+    .palette i:nth-child(1) { background: var(--bg); }
+    .palette i:nth-child(2) { background: var(--subtle); }
+    .palette i:nth-child(3) { background: var(--accent); }
+    .palette i:nth-child(4) { background: var(--foreground); }
+
+    .control-bar {
+      position: sticky;
+      z-index: 20;
+      top: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 26px;
+      padding: 12px;
+      border: 1px solid rgba(75, 174, 85, .16);
+      border-radius: 16px;
+      background: rgba(8, 12, 9, .88);
+      box-shadow: 0 18px 50px rgba(0,0,0,.28);
+      backdrop-filter: blur(18px);
+    }
+
+    .control-cluster {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .control-label {
+      margin: 0 7px 0 5px;
+      color: #718077;
+      font-size: 12px;
+    }
+
+    .segmented {
+      display: inline-flex;
+      gap: 4px;
+      padding: 4px;
+      border: 1px solid #1b231e;
+      border-radius: 11px;
+      background: #080b09;
+    }
+
+    .segmented button,
+    .pick-button,
+    .copy-button {
+      border: 0;
+      border-radius: 8px;
+      color: #818c85;
+      background: transparent;
+      cursor: pointer;
+      transition: color 150ms ease, background 150ms ease, transform 150ms ease;
+    }
+
+    .segmented button {
+      padding: 7px 11px;
+      font-size: 12px;
+    }
+
+    .segmented button:hover { color: #c6cec8; }
+
+    .segmented button[aria-pressed="true"] {
+      color: #e7ede8;
+      background: #172019;
+      box-shadow: inset 0 0 0 1px #25372a;
+    }
+
+    .gallery {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 22px;
+      transition: all 260ms var(--ease);
+    }
+
+    .gallery.detail .concept:not(.selected) { display: none; }
+    .gallery.detail { grid-template-columns: minmax(0, 1fr); }
+    .gallery.detail .concept { padding: 26px; }
+    .gallery.detail .preview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+    .concept {
+      position: relative;
+      overflow: hidden;
+      padding: 20px;
+      border: 1px solid #172019;
+      border-radius: var(--radius-card);
+      background: linear-gradient(160deg, rgba(11, 18, 13, .92), rgba(7, 10, 8, .97));
+      transition: border-color 220ms ease, transform 220ms var(--ease), box-shadow 220ms ease;
+    }
+
+    .concept::after {
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: radial-gradient(circle at 90% 0, rgba(64,150,76,.08), transparent 34%);
+      content: "";
+      pointer-events: none;
+    }
+
+    .concept:hover {
+      border-color: #26382a;
+      transform: translateY(-2px);
+    }
+
+    .concept.selected {
+      border-color: rgba(64,150,76,.58);
+      box-shadow: 0 0 0 1px rgba(64,150,76,.08), 0 24px 70px rgba(0,0,0,.24);
+    }
+
+    .concept.selected::before {
+      position: absolute;
+      z-index: 3;
+      top: 0;
+      right: 22px;
+      width: 44px;
+      height: 3px;
+      border-radius: 0 0 3px 3px;
+      background: var(--accent);
+      content: "";
+    }
+
+    .concept-head,
+    .concept-footer,
+    .recommendation {
+      position: relative;
+      z-index: 2;
+    }
+
+    .concept-head {
+      display: flex;
+      gap: 18px;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+
+    .concept-title {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .concept-number {
+      display: grid;
+      width: 34px;
+      height: 34px;
+      flex: 0 0 auto;
+      place-items: center;
+      border: 1px solid #26352a;
+      border-radius: 10px;
+      color: var(--foreground);
+      background: #0c120e;
+      font: 600 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    h2 {
+      margin: 0;
+      color: #e1e7e2;
+      font-size: 19px;
+      font-weight: 620;
+      letter-spacing: -.02em;
+    }
+
+    .concept-subtitle {
+      margin: 3px 0 0;
+      color: #718077;
+      font-size: 12px;
+    }
+
+    .tag {
+      flex: 0 0 auto;
+      padding: 5px 8px;
+      border: 1px solid #25352a;
+      border-radius: 999px;
+      color: #87958b;
+      font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+
+    .preview-grid {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 13px;
+      margin-bottom: 18px;
+    }
+
+    .preview-grid[data-app="brave"] .chatgpt,
+    .preview-grid[data-app="chatgpt"] .brave { display: none; }
+
+    .stage {
+      position: relative;
+      min-width: 0;
+      padding: 25px 18px 18px;
+      border: 1px solid #141b16;
+      border-radius: 14px;
+      background:
+        linear-gradient(rgba(255,255,255,.012) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.012) 1px, transparent 1px),
+        #060907;
+      background-size: 22px 22px;
+    }
+
+    .stage-label {
+      position: absolute;
+      top: 7px;
+      left: 18px;
+      color: #566259;
+      font: 600 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .window {
+      position: relative;
+      overflow: hidden;
+      min-height: 210px;
+      border-radius: var(--radius-window);
+      color: #aab5ad;
+      background: #0e1210;
+      transition: filter 180ms ease, opacity 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+    }
+
+    body.resting .window { opacity: .82; filter: saturate(.56); }
+
+    .chrome {
+      display: flex;
+      height: 34px;
+      gap: 8px;
+      align-items: center;
+      padding: 0 10px;
+      border-bottom: 1px solid #212622;
+      background: #171b18;
+    }
+
+    .app-mark {
+      display: grid;
+      width: 18px;
+      height: 18px;
+      flex: 0 0 auto;
+      place-items: center;
+      border: 1px solid #39403b;
+      border-radius: 6px;
+      color: #b4bdb7;
+      font: 700 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .address {
+      display: flex;
+      height: 21px;
+      min-width: 0;
+      flex: 1;
+      align-items: center;
+      padding: 0 10px;
+      border: 1px solid #2c322e;
+      border-radius: 999px;
+      color: #747d77;
+      background: #101310;
+      font-size: 8px;
+    }
+
+    .dot-menu {
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: #69736c;
+      box-shadow: 0 -5px #69736c, 0 5px #69736c;
+    }
+
+    .browser-body {
+      display: grid;
+      grid-template-columns: 64px 1fr;
+      min-height: 176px;
+    }
+
+    .browser-side,
+    .chat-side {
+      border-right: 1px solid #1b211d;
+      background: #0b0e0c;
+    }
+
+    .browser-side { padding: 14px 10px; }
+
+    .nav-line,
+    .text-line {
+      height: 4px;
+      margin-bottom: 8px;
+      border-radius: 9px;
+      background: #2b342e;
+    }
+
+    .nav-line:nth-child(2) { width: 72%; }
+    .nav-line:nth-child(3) { width: 88%; }
+
+    .browser-page { padding: 22px; }
+
+    .hero-shape {
+      width: 54%;
+      height: 11px;
+      margin-bottom: 13px;
+      border-radius: 4px;
+      background: #68736c;
+    }
+
+    .text-line { width: 86%; background: #283029; }
+    .text-line.short { width: 58%; }
+
+    .content-card {
+      height: 50px;
+      margin-top: 20px;
+      border: 1px solid #222a24;
+      border-radius: 7px;
+      background: #111612;
+    }
+
+    .chat-layout {
+      display: grid;
+      grid-template-columns: 76px 1fr;
+      min-height: 210px;
+    }
+
+    .chat-side { padding: 13px 10px; }
+
+    .new-chat {
+      height: 21px;
+      margin-bottom: 18px;
+      border: 1px solid #2a322c;
+      border-radius: 5px;
+    }
+
+    .chat-main {
+      position: relative;
+      padding: 19px 16px 46px;
+      background: #101411;
+    }
+
+    .chat-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 19px;
+      color: #77827a;
+      font-size: 9px;
+    }
+
+    .avatar {
+      display: grid;
+      width: 18px;
+      height: 18px;
+      place-items: center;
+      border: 1px solid #39413b;
+      border-radius: 50%;
+      color: #919c94;
+      font: 700 8px ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .message {
+      width: 72%;
+      margin: 0 0 13px auto;
+      padding: 10px;
+      border-radius: 10px 10px 3px 10px;
+      background: #202622;
+    }
+
+    .message.answer {
+      width: 86%;
+      margin: 0 auto 0 0;
+      padding-left: 0;
+      background: transparent;
+    }
+
+    .message .text-line { height: 3px; margin-bottom: 5px; }
+
+    .composer {
+      position: absolute;
+      right: 14px;
+      bottom: 12px;
+      left: 14px;
+      height: 30px;
+      border: 1px solid #313a33;
+      border-radius: 9px;
+      background: #181d19;
+    }
+
+    /* Option 1 — neutral and quiet. */
+    .option-graphite .window {
+      border: 1px solid #48504b;
+      box-shadow: 0 15px 35px rgba(0,0,0,.46), inset 0 1px rgba(255,255,255,.035);
+    }
+
+    body.resting .option-graphite .window {
+      border-color: #282e2a;
+      box-shadow: 0 8px 20px rgba(0,0,0,.28);
+    }
+
+    /* Option 2 — a dark outer boundary plus a palette-native inner signal. */
+    .option-phosphor .window {
+      border: 1px solid #28352c;
+      box-shadow: 0 0 0 1px var(--accent), 0 18px 42px rgba(0,0,0,.48), inset 0 0 0 1px rgba(134,230,140,.08);
+    }
+
+    body.resting .option-phosphor .window {
+      border-color: #18231b;
+      box-shadow: 0 0 0 1px var(--subtle), 0 8px 24px rgba(0,0,0,.3);
+    }
+
+    /* Option 3 — weight is concentrated at the top, leaving the sides quiet. */
+    .option-rail .window {
+      border: 1px solid #242c26;
+      border-top: 3px solid var(--accent);
+      border-radius: 9px 9px 12px 12px;
+      box-shadow: 0 17px 40px rgba(0,0,0,.46);
+    }
+
+    .option-rail .window::after {
+      position: absolute;
+      top: 0;
+      left: 18%;
+      width: 28%;
+      height: 2px;
+      background: var(--hot);
+      box-shadow: 0 0 12px rgba(134,230,140,.28);
+      content: "";
+    }
+
+    body.resting .option-rail .window {
+      border-top-color: var(--subtle);
+      box-shadow: 0 8px 20px rgba(0,0,0,.28);
+    }
+
+    body.resting .option-rail .window::after { display: none; }
+
+    /* Option 4 — dark frame plus four precise corner registrations. */
+    .option-corners .window {
+      overflow: visible;
+      border: 1px solid #303833;
+      border-radius: 4px;
+      box-shadow: 0 18px 44px rgba(0,0,0,.5);
+    }
+
+    .option-corners .window > * { overflow: hidden; }
+    .option-corners .window .chrome { border-radius: 3px 3px 0 0; }
+    .option-corners .window .chat-layout { border-radius: 3px; }
+
+    .corner {
+      position: absolute;
+      z-index: 4;
+      width: 13px;
+      height: 13px;
+      border-color: var(--foreground);
+      pointer-events: none;
+    }
+
+    .corner.tl { top: -3px; left: -3px; border-top: 2px solid; border-left: 2px solid; }
+    .corner.tr { top: -3px; right: -3px; border-top: 2px solid; border-right: 2px solid; }
+    .corner.bl { bottom: -3px; left: -3px; border-bottom: 2px solid; border-left: 2px solid; }
+    .corner.br { right: -3px; bottom: -3px; border-right: 2px solid; border-bottom: 2px solid; }
+
+    body.resting .option-corners .corner { border-color: var(--subtle); }
+
+    .concept-footer {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 16px;
+      align-items: end;
+      padding-top: 16px;
+      border-top: 1px solid #18201a;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .metric-value {
+      display: block;
+      margin-top: 4px;
+      color: #a7b1aa;
+      font-size: 12px;
+    }
+
+    .tradeoff {
+      grid-column: 1 / -1;
+      margin: 4px 0 0;
+      color: #747f77;
+      font-size: 12px;
+    }
+
+    .tradeoff strong { color: #99a59d; font-weight: 600; }
+
+    .pick-button,
+    .copy-button {
+      padding: 9px 12px;
+      border: 1px solid #28362c;
+      color: #9ca79f;
+      background: #0c120e;
+      font-size: 12px;
+    }
+
+    .pick-button:hover,
+    .copy-button:hover {
+      color: #d9e0db;
+      background: #131b15;
+      transform: translateY(-1px);
+    }
+
+    .selected .pick-button {
+      border-color: var(--accent);
+      color: #071009;
+      background: var(--foreground);
+    }
+
+    .recommendation {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 22px;
+      align-items: center;
+      margin-top: 24px;
+      padding: 22px 24px;
+      border: 1px solid #243529;
+      border-radius: 16px;
+      background: linear-gradient(100deg, #0b120d, #080c09);
+    }
+
+    .recommendation h3 {
+      margin: 4px 0 4px;
+      color: #dce4de;
+      font-size: 18px;
+      font-weight: 620;
+    }
+
+    .recommendation p {
+      max-width: 900px;
+      margin: 0;
+      color: #7d8981;
+      font-size: 13px;
+    }
+
+    .copy-status {
+      min-width: 96px;
+      margin-top: 6px;
+      color: #69756d;
+      font-size: 10px;
+      text-align: center;
+    }
+
+    .artifact-note {
+      margin: 28px 4px 0;
+      color: #546058;
+      font-size: 11px;
+      text-align: center;
+    }
+
+    @media (max-width: 980px) {
+      .gallery { grid-template-columns: 1fr; }
+      .gallery.detail .preview-grid { grid-template-columns: 1fr; }
+      .hero { grid-template-columns: 1fr; }
+      .palette { display: none; }
+    }
+
+    @media (max-width: 660px) {
+      .shell { width: min(100% - 22px, 1500px); padding-top: 34px; }
+      .control-bar { position: static; align-items: flex-start; }
+      .control-cluster { flex-wrap: wrap; }
+      .control-label { width: 100%; margin-bottom: 2px; }
+      .concept { padding: 14px; }
+      .concept-head { flex-direction: column; gap: 10px; }
+      .tag { margin-left: 46px; }
+      .metrics { grid-template-columns: 1fr 1fr; }
+      .concept-footer { grid-template-columns: 1fr; }
+      .pick-button { width: 100%; }
+      .recommendation { grid-template-columns: 1fr; }
+      .browser-body { grid-template-columns: 50px 1fr; }
+      .browser-page { padding: 17px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div>
+        <div class="eyebrow">Window study 01 · dark mode</div>
+        <h1>A sharper frame for<br>Brave + ChatGPT.</h1>
+        <p>Four compositor-border directions, drawn against the current P1 phosphor desktop. Every option preserves the near-black base and uses focus—not decoration—as the reason to introduce contrast.</p>
+      </div>
+      <div class="palette" aria-label="Current dark-mode palette: background, subtle border, accent, foreground">
+        <i title="#050806 background"></i>
+        <i title="#15261A subtle border"></i>
+        <i title="#40964C accent"></i>
+        <i title="#4BAE55 foreground"></i>
+      </div>
+    </header>
+
+    <section class="control-bar" aria-label="Preview controls">
+      <div class="control-cluster">
+        <span class="control-label">Layout</span>
+        <div class="segmented" data-control="layout">
+          <button type="button" aria-pressed="true" data-value="gallery">Compare</button>
+          <button type="button" aria-pressed="false" data-value="detail">Selected only</button>
+        </div>
+      </div>
+      <div class="control-cluster">
+        <span class="control-label">Application</span>
+        <div class="segmented" data-control="app">
+          <button type="button" aria-pressed="true" data-value="both">Both</button>
+          <button type="button" aria-pressed="false" data-value="brave">Brave</button>
+          <button type="button" aria-pressed="false" data-value="chatgpt">ChatGPT</button>
+        </div>
+      </div>
+      <div class="control-cluster">
+        <span class="control-label">Window state</span>
+        <div class="segmented" data-control="state">
+          <button type="button" aria-pressed="true" data-value="focused">Focused</button>
+          <button type="button" aria-pressed="false" data-value="resting">Resting</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="gallery" id="gallery" aria-label="Border concepts">
+      <article class="concept option-graphite" data-option="graphite">
+        <header class="concept-head">
+          <div class="concept-title">
+            <span class="concept-number">01</span>
+            <div>
+              <h2>Quiet Graphite</h2>
+              <p class="concept-subtitle">Neutral, architectural, application-first</p>
+            </div>
+          </div>
+          <span class="tag">lowest visual noise</span>
+        </header>
+
+        <div class="preview-grid" data-app="both">
+          <div class="stage brave">
+            <span class="stage-label">Brave</span>
+            <div class="window">
+              <div class="chrome">
+                <span class="app-mark">B</span>
+                <span class="address">chat.openai.com</span>
+                <span class="dot-menu"></span>
+              </div>
+              <div class="browser-body">
+                <aside class="browser-side"><div class="nav-line"></div><div class="nav-line"></div><div class="nav-line"></div></aside>
+                <div class="browser-page"><div class="hero-shape"></div><div class="text-line"></div><div class="text-line short"></div><div class="content-card"></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="stage chatgpt">
+            <span class="stage-label">ChatGPT</span>
+            <div class="window">
+              <div class="chat-layout">
+                <aside class="chat-side"><div class="new-chat"></div><div class="nav-line"></div><div class="nav-line"></div><div class="nav-line"></div></aside>
+                <div class="chat-main">
+                  <div class="chat-top"><span>ChatGPT</span><span class="avatar">A</span></div>
+                  <div class="message"><div class="text-line"></div><div class="text-line short"></div></div>
+                  <div class="message answer"><div class="text-line"></div><div class="text-line"></div><div class="text-line short"></div></div>
+                  <div class="composer"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <footer class="concept-footer">
+          <div class="metrics">
+            <div><span class="metric-label">Edge</span><span class="metric-value">1 px neutral</span></div>
+            <div><span class="metric-label">Radius</span><span class="metric-value">12 px</span></div>
+            <div><span class="metric-label">Focus cue</span><span class="metric-value">Luminance</span></div>
+            <div><span class="metric-label">Build fit</span><span class="metric-value">Native frame</span></div>
+            <p class="tradeoff"><strong>Tradeoff:</strong> beautifully calm, but less tied to the phosphor identity and easiest to miss across a dark multi-window layout.</p>
+          </div>
+          <button class="pick-button" type="button">Choose 01</button>
+        </footer>
+      </article>
+
+      <article class="concept option-phosphor selected" data-option="phosphor">
+        <header class="concept-head">
+          <div class="concept-title">
+            <span class="concept-number">02</span>
+            <div>
+              <h2>Phosphor Double-Line</h2>
+              <p class="concept-subtitle">A modern edge with native palette logic</p>
+            </div>
+          </div>
+          <span class="tag">recommended</span>
+        </header>
+
+        <div class="preview-grid" data-app="both">
+          <div class="stage brave">
+            <span class="stage-label">Brave</span>
+            <div class="window">
+              <div class="chrome">
+                <span class="app-mark">B</span>
+                <span class="address">chat.openai.com</span>
+                <span class="dot-menu"></span>
+              </div>
+              <div class="browser-body">
+                <aside class="browser-side"><div class="nav-line"></div><div class="nav-line"></div><div class="nav-line"></div></aside>
+                <div class="browser-page"><div class="hero-shape"></div><div class="text-line"></div><div class="text-line short"></div><div class="content-card"></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="stage chatgpt">
+            <span class="stage-label">ChatGPT</span>
+            <div class="window">
+              <div class="chat-layout">
+                <aside class="chat-side"><div class="new-chat"></div><div class="nav-line"></div><div class="nav-line"></div><div class="nav-line"></div></aside>
+                <div class="chat-main">
+                  <div class="chat-top"><span>ChatGPT</span><span class="avatar">A</span></div>
+                  <div class="message"><div class="text-line"></div><div class="text-line short"></div></div>
+                  <div class="message answer"><div class="text-line"></div><div class="text-line"></div><div class="text-line short"></div></div>
+                  <div class="composer"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <footer class="concept-footer">
+          <div class="metrics">
+            <div><span class="metric-label">Edge</span><span class="metric-value">1 + 1 px</span></div>
+            <div><span class="metric-label">Radius</span><span class="metric-value">12 px</span></div>
+            <div><span class="metric-label">Focus cue</span><span class="metric-value">Accent ring</span></div>
+            <div><span class="metric-label">Build fit</span><span class="metric-value">Native-ish</span></div>
+            <p class="tradeoff"><strong>Tradeoff:</strong> clearest focus and strongest system fit; slightly more luminous than the current one-pixel border.</p>
+          </div>
+          <button class="pick-button" type="button">Selected</button>
+        </footer>
+      </article>
+
+      <article class="concept option-rail" data-option="rail">
+        <header class="concept-head">
+          <div class="concept-title">
+            <span class="concept-number">03</span>
+            <div>
+              <h2>Signal Rail</h2>
+              <p class="concept-subtitle">Focus information concentrated at the crown</p>
+            </div>
+          </div>
+          <span class="tag">most contemporary</span>
+        </header>
+
+        <div class="preview-grid" data-app="both">
+          <div class="stage brave">
+            <span class="stage-label">Brave</span>
+            <div class="window">
+              <div class="chrome">
+                <span class="app-mark">B</span>
+                <span class="address">chat.openai.com</span>
+                <span class="dot-menu"></span>
+              </div>
+              <div class="browser-body">
+                <aside class="browser-side"><div class="nav-line"></div><div class="nav-line"></div><div class="nav-line"></div></aside>
+                <div class="browser-page"><div class="hero-shape"></div><div class="text-line"></div><div class="text-line short"></div><div class="content-card"></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="stage chatgpt">
+            <span class="stage-label">ChatGPT</span>
+            <div class="window">
+              <div class="chat-layout">
+                <aside class="chat-side"><div class="new-chat"></div><div class="nav-line"></div><div class="nav-line"></div><div class="nav-line"></div></aside>
+                <div class="chat-main">
+                  <div class="chat-top"><span>ChatGPT</span><span class="avatar">A</span></div>
+                  <div class="message"><div class="text-line"></div><div class="text-line short"></div></div>
+                  <div class="message answer"><div class="text-line"></div><div class="text-line"></div><div class="text-line short"></div></div>
+                  <div class="composer"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <footer class="concept-footer">
+          <div class="metrics">
+            <div><span class="metric-label">Edge</span><span class="metric-value">3 px top</span></div>
+            <div><span class="metric-label">Radius</span><span class="metric-value">9 / 12 px</span></div>
+            <div><span class="metric-label">Focus cue</span><span class="metric-value">Top rail</span></div>
+            <div><span class="metric-label">Build fit</span><span class="metric-value">Custom decor</span></div>
+            <p class="tradeoff"><strong>Tradeoff:</strong> instantly readable and very current, but visually merges with Brave's own tab strip more than with ChatGPT's frameless shell.</p>
+          </div>
+          <button class="pick-button" type="button">Choose 03</button>
+        </footer>
+      </article>
+
+      <article class="concept option-corners" data-option="corners">
+        <header class="concept-head">
+          <div class="concept-title">
+            <span class="concept-number">04</span>
+            <div>
+              <h2>Registered Corners</h2>
+              <p class="concept-subtitle">Minimal frame, precise terminal character</p>
+            </div>
+          </div>
+          <span class="tag">most distinctive</span>
+        </header>
+
+        <div class="preview-grid" data-app="both">
+          <div class="stage brave">
+            <span class="stage-label">Brave</span>
+            <div class="window">
+              <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+              <div class="chrome">
+                <span class="app-mark">B</span>
+                <span class="address">chat.openai.com</span>
+                <span class="dot-menu"></span>
+              </div>
+              <div class="browser-body">
+                <aside class="browser-side"><div class="nav-line"></div><div class="nav-line"></div><div class="nav-line"></div></aside>
+                <div class="browser-page"><div class="hero-shape"></div><div class="text-line"></div><div class="text-line short"></div><div class="content-card"></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="stage chatgpt">
+            <span class="stage-label">ChatGPT</span>
+            <div class="window">
+              <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+              <div class="chat-layout">
+                <aside class="chat-side"><div class="new-chat"></div><div class="nav-line"></div><div class="nav-line"></div><div class="nav-line"></div></aside>
+                <div class="chat-main">
+                  <div class="chat-top"><span>ChatGPT</span><span class="avatar">A</span></div>
+                  <div class="message"><div class="text-line"></div><div class="text-line short"></div></div>
+                  <div class="message answer"><div class="text-line"></div><div class="text-line"></div><div class="text-line short"></div></div>
+                  <div class="composer"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <footer class="concept-footer">
+          <div class="metrics">
+            <div><span class="metric-label">Edge</span><span class="metric-value">1 px + marks</span></div>
+            <div><span class="metric-label">Radius</span><span class="metric-value">4 px</span></div>
+            <div><span class="metric-label">Focus cue</span><span class="metric-value">Four corners</span></div>
+            <div><span class="metric-label">Build fit</span><span class="metric-value">Custom decor</span></div>
+            <p class="tradeoff"><strong>Tradeoff:</strong> has real character without a bright perimeter, but the square geometry deliberately pulls away from modern soft-corner app chrome.</p>
+          </div>
+          <button class="pick-button" type="button">Choose 04</button>
+        </footer>
+      </article>
+    </section>
+
+    <aside class="recommendation" aria-live="polite">
+      <div>
+        <span class="recommend-label">Current selection</span>
+        <h3 id="selection-title">02 · Phosphor Double-Line</h3>
+        <p id="selection-copy">Best overall balance: it keeps the frame dark, makes focus unmistakable, and uses the desktop's existing accent hierarchy instead of adding a new visual language.</p>
+      </div>
+      <div>
+        <button class="copy-button" id="copy-button" type="button">Copy design tokens</button>
+        <div class="copy-status" id="copy-status" aria-live="polite"></div>
+      </div>
+    </aside>
+
+    <p class="artifact-note">Concept study only · no compositor configuration is changed by this page · fully offline</p>
+  </main>
+
+  <script>
+    const gallery = document.querySelector('#gallery');
+    const concepts = [...document.querySelectorAll('.concept')];
+    const previewGrids = [...document.querySelectorAll('.preview-grid')];
+    const title = document.querySelector('#selection-title');
+    const copy = document.querySelector('#selection-copy');
+    const copyButton = document.querySelector('#copy-button');
+    const copyStatus = document.querySelector('#copy-status');
+
+    const options = {
+      graphite: {
+        title: '01 · Quiet Graphite',
+        copy: 'The calmest choice: a neutral edge keeps attention on each app and adds modern depth without making the phosphor palette feel ornamental.',
+        tokens: 'Quiet Graphite — active #48504B / inactive #282E2A / 1px border / 12px radius / soft black depth'
+      },
+      phosphor: {
+        title: '02 · Phosphor Double-Line',
+        copy: 'Best overall balance: it keeps the frame dark, makes focus unmistakable, and uses the desktop\'s existing accent hierarchy instead of adding a new visual language.',
+        tokens: 'Phosphor Double-Line — outer #28352C / active ring #40964C / inactive ring #15261A / 1px + 1px / 12px radius'
+      },
+      rail: {
+        title: '03 · Signal Rail',
+        copy: 'The most contemporary silhouette. It concentrates the focus cue at the crown, which is elegant but competes a little with Brave\'s own top chrome.',
+        tokens: 'Signal Rail — body #242C26 1px / active top #40964C 3px / inactive top #15261A / 9px top radius / 12px lower radius'
+      },
+      corners: {
+        title: '04 · Registered Corners',
+        copy: 'The strongest identity: a nearly invisible dark frame with phosphor registration marks. Best if a precise instrument-panel feel is more important than soft app-native geometry.',
+        tokens: 'Registered Corners — frame #303833 1px / active corners #4BAE55 13px / inactive corners #15261A / 4px radius'
+      }
+    };
+
+    let selected = 'phosphor';
+
+    document.querySelectorAll('.segmented').forEach(group => {
+      group.addEventListener('click', event => {
+        const button = event.target.closest('button');
+        if (!button) return;
+        group.querySelectorAll('button').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+
+        if (group.dataset.control === 'layout') {
+          gallery.classList.toggle('detail', button.dataset.value === 'detail');
+        }
+        if (group.dataset.control === 'app') {
+          previewGrids.forEach(grid => { grid.dataset.app = button.dataset.value; });
+        }
+        if (group.dataset.control === 'state') {
+          document.body.classList.toggle('resting', button.dataset.value === 'resting');
+        }
+      });
+    });
+
+    concepts.forEach(concept => {
+      concept.querySelector('.pick-button').addEventListener('click', () => {
+        selected = concept.dataset.option;
+        concepts.forEach(item => {
+          const isSelected = item === concept;
+          item.classList.toggle('selected', isSelected);
+          item.querySelector('.pick-button').textContent = isSelected
+            ? 'Selected'
+            : `Choose ${String(concepts.indexOf(item) + 1).padStart(2, '0')}`;
+        });
+        title.textContent = options[selected].title;
+        copy.textContent = options[selected].copy;
+        copyStatus.textContent = '';
+      });
+    });
+
+    copyButton.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(options[selected].tokens);
+        copyStatus.textContent = 'Copied';
+      } catch {
+        copyStatus.textContent = options[selected].tokens;
+      }
+    });
+  </script>
+</body>
+</html>
