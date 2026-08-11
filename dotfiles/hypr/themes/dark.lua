@@ -2,14 +2,16 @@
 -- ~/.local/state/hypr/current-theme.lua symlink, which switch-dark/switch-light
 -- repoint. See home/desktop/theming.nix.
 
+_G.quiet_graphite_dark = true
+
 hl.config({
   general = {
     gaps_in = 8,
     gaps_out = 12,
     border_size = 1,
     col = {
-      active_border = "rgba(48504Bff)",
-      inactive_border = "rgba(282E2Aff)",
+      active_border = "rgba(3D8E48ff)",
+      inactive_border = "rgba(15261Aff)",
     },
   },
 
@@ -18,7 +20,7 @@ hl.config({
   },
 
   decoration = {
-    rounding = 12,
+    rounding = 4,
     -- screen-shader owns the live shader setting so cold starts, monitor IDs,
     -- theme mode, and the manual preference all follow one policy.
 

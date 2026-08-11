@@ -94,60 +94,28 @@ let
 
     # 2/3. HYPRLAND BACKGROUND COLOR + LIVE THEME SETTINGS
     #
-    # `hyprctl keyword` is refused outright under the Lua config manager
-    # ("keyword can't work with non-legacy parsers. Use eval."), so every live
-    # setting goes through `hyprctl eval`, which runs a Lua string against the
-    # running config. One eval per hook keeps the mode switch atomic.
-    #
-    # The whole block is branched rather than routed through `hypr-ipc keyword`
-    # per setting, because that atomicity is the point: one eval sets nine
-    # values at once. The legacy arm is the pre-migration run of `hyprctl
-    # keyword` calls, restored verbatim. TRANSITIONAL -- delete the legacy arm
-    # with pkgs/hypr-ipc.nix.
+    # The Lua manager reloads the complete mode fragment; the legacy manager
+    # still needs individual keyword writes. TRANSITIONAL -- delete the legacy
+    # arm with pkgs/hypr-ipc.nix.
     if [ "$(${pkgs.hypr-ipc}/bin/hypr-ipc manager)" = legacy ]; then
       ${pkgs.hyprland}/bin/hyprctl keyword misc:background_color 0x${p.background}
       ${pkgs.hyprland}/bin/hyprctl keyword general:gaps_in 8
       ${pkgs.hyprland}/bin/hyprctl keyword general:gaps_out 12
       ${pkgs.hyprland}/bin/hyprctl keyword general:border_size 1
-      ${pkgs.hyprland}/bin/hyprctl keyword general:col.active_border "rgba(48504Bff)"
-      ${pkgs.hyprland}/bin/hyprctl keyword general:col.inactive_border "rgba(282E2Aff)"
-      ${pkgs.hyprland}/bin/hyprctl keyword decoration:rounding 12
+      ${pkgs.hyprland}/bin/hyprctl keyword general:col.active_border "rgba(3D8E48ff)"
+      ${pkgs.hyprland}/bin/hyprctl keyword general:col.inactive_border "rgba(15261Aff)"
+      ${pkgs.hyprland}/bin/hyprctl keyword decoration:rounding 4
       ${pkgs.hyprland}/bin/hyprctl keyword decoration:active_opacity 1
       ${pkgs.hyprland}/bin/hyprctl keyword decoration:inactive_opacity 1
-      ${pkgs.hyprland}/bin/hyprctl keyword decoration:shadow:enabled true
-      ${pkgs.hyprland}/bin/hyprctl keyword decoration:shadow:range 35
-      ${pkgs.hyprland}/bin/hyprctl keyword decoration:shadow:render_power 2
-      ${pkgs.hyprland}/bin/hyprctl keyword decoration:shadow:sharp false
-      ${pkgs.hyprland}/bin/hyprctl keyword decoration:shadow:color "rgba(00000075)"
-      ${pkgs.hyprland}/bin/hyprctl keyword decoration:shadow:color_inactive "rgba(00000047)"
-      ${pkgs.hyprland}/bin/hyprctl keyword decoration:shadow:offset "0 10"
+      # The legacy manager cannot express reload-safe rule handles, so retain
+      # the ordinary dark window treatment instead of leaking the app shadow
+      # to every window.
+      ${pkgs.hyprland}/bin/hyprctl keyword decoration:shadow:enabled false
     else
-      ${pkgs.hyprland}/bin/hyprctl eval 'hl.config({
-        general = {
-          gaps_in = 8,
-          gaps_out = 12,
-          border_size = 1,
-          col = {
-            active_border = "rgba(48504Bff)",
-            inactive_border = "rgba(282E2Aff)",
-          },
-        },
-        decoration = {
-          rounding = 12,
-          active_opacity = 1,
-          inactive_opacity = 1,
-          shadow = {
-            enabled = true,
-            range = 35,
-            render_power = 2,
-            sharp = false,
-            color = "rgba(00000075)",
-            color_inactive = "rgba(00000047)",
-            offset = { 0, 10 },
-          },
-        },
-        misc = { background_color = "0x${p.background}" },
-      })'
+      # The marker now points at the complete mode-specific Lua config. Reload
+      # once so its settings and named-rule state change together; Hyprland's
+      # startup handlers do not rerun on config reload.
+      ${pkgs.hyprland}/bin/hyprctl reload
     fi
 
     ln -sf $HOME/.config/rofi/themes/dark.rasi $HOME/.config/rofi/current.rasi
@@ -216,9 +184,8 @@ let
     pkill swaybg || true
     ${pkgs.util-linux}/bin/setsid -f ${pkgs.swaybg}/bin/swaybg -i "${lightWallpaper}" -m fit -c ffffff >/dev/null 2>&1
 
-    # 2. HYPRLAND BACKGROUND COLOR + live gaps/borders. See the dark hook for
-    # why this is one `hyprctl eval` rather than a run of `hyprctl keyword`,
-    # and why the legacy arm exists at all.
+    # 2. HYPRLAND BACKGROUND COLOR + live theme settings. See the dark hook for
+    # why the legacy arm exists.
     if [ "$(${pkgs.hypr-ipc}/bin/hypr-ipc manager)" = legacy ]; then
       ${pkgs.hyprland}/bin/hyprctl keyword misc:background_color 0xffffff
       ${pkgs.hyprland}/bin/hyprctl keyword general:gaps_in 4
@@ -229,20 +196,11 @@ let
       ${pkgs.hyprland}/bin/hyprctl keyword decoration:rounding 4
       ${pkgs.hyprland}/bin/hyprctl keyword decoration:active_opacity 1
       ${pkgs.hyprland}/bin/hyprctl keyword decoration:inactive_opacity 0.7
+      ${pkgs.hyprland}/bin/hyprctl keyword decoration:shadow:enabled false
     else
-      ${pkgs.hyprland}/bin/hyprctl eval 'hl.config({
-        general = {
-          gaps_in = 4,
-          gaps_out = 15,
-          border_size = 2,
-          col = {
-            active_border = "rgba(000000ff)",
-            inactive_border = "rgba(00000000)",
-          },
-        },
-        decoration = { rounding = 4, active_opacity = 1, inactive_opacity = 0.7 },
-        misc = { background_color = "0xffffff" },
-      })'
+      # See the dark hook: the light theme owns the same complete setting set,
+      # so one reload applies it without an intermediate visual state.
+      ${pkgs.hyprland}/bin/hyprctl reload
     fi
 
     ln -sf $HOME/.config/rofi/themes/light.rasi $HOME/.config/rofi/current.rasi
