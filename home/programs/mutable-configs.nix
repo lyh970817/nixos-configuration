@@ -678,15 +678,12 @@ in
 
   # Presentation and policy keys written into every profile's settings.json.
   #
-  # These are a *fallback*, not the usual path. The launcher in
+  # These are a *machine-mode fallback*, not the usual path. The launcher in
   # programs/claude.nix themes each session from THEME_MODE and passes it as
-  # --settings, which lands in flagSettings and outranks settings.json, so
-  # anything started through it is already correct in both modes. What it
-  # cannot reach are the sessions it never runs: Claude Code's agent view and
-  # background daemon re-exec the binary directly. Those fell through to a
-  # settings.json carrying no theme at all, which resolves to the 24-bit "dark"
-  # palette in either mode -- the reason an agent-view session came up
-  # non-monochromatic.
+  # --settings, which lands in flagSettings and outranks settings.json. Its
+  # CLAUDE_CODE_PROCESS_WRAPPER does the same for Claude's agent-view,
+  # background, and other self-execs while preserving the inherited session
+  # mode. Only a truly direct, unwrapped binary launch reads this fallback.
   #
   # Written per mode rather than pinned, so the fallback is also right in light
   # mode. dark-ansi and light-ansi are the only two themes drawn purely from

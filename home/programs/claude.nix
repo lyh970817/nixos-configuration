@@ -36,6 +36,7 @@ let
     # Launcher-only process wiring; these values are intentionally not persisted
     # in settings.json or environment.json.
     export CLAUDE_CODE_ALT_SCREEN_FULL_REPAINT="1"
+    export CLAUDE_CODE_PROCESS_WRAPPER="${claudeProcessWrapper}/bin/claude-process-wrapper"
   '';
 
   claudeThemeSettings = ''
@@ -68,6 +69,28 @@ let
     # drops the shimmer, which suits the operator console anyway.
     claude_flag_settings="{\"theme\":\"$claude_theme\",\"prefersReducedMotion\":true}"
   '';
+
+  # Claude Code uses this supported launcher prefix for its own re-execs and
+  # background processes. Its argv contract is the real target followed by
+  # that target's arguments, so execute the target directly: invoking either
+  # user-facing launcher here would wrap the wrapper recursively. Keep the
+  # process-wrapper variable inherited so every descendant Claude process uses
+  # the same path for any later self-exec.
+  claudeProcessWrapper = pkgs.writeShellApplication {
+    name = "claude-process-wrapper";
+    text = ''
+      if [ "$#" -eq 0 ]; then
+        echo "claude-process-wrapper: missing target" >&2
+        exit 64
+      fi
+
+      claude_target="$1"
+      shift
+
+      ${claudeThemeSettings}
+      exec "$claude_target" --settings "$claude_flag_settings" "$@"
+    '';
+  };
 
   claudeHostLauncher = pkgs.writeShellApplication {
     name = "claude";
@@ -175,9 +198,9 @@ in
 
     # Commands, agents, and runtime profile state stay mutable under each
     # CLAUDE_CONFIG_DIR. settings.json is reconciled from tracked policy
-    # fields by activation. The session theme is still launcher-owned --
-    # flagSettings outranks settings.json -- but activation now also writes a
-    # mode-matched theme into settings.json as the fallback for sessions this
-    # launcher never sees, such as the ones the agent view spawns itself.
+    # fields by activation. The session theme is launcher-owned -- both the
+    # initial command and Claude's supported process wrapper pass flagSettings,
+    # which outranks settings.json. Activation also writes a machine-mode theme
+    # there as a fallback for a truly direct, unwrapped binary launch.
   };
 }

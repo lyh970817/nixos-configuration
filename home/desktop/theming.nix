@@ -301,12 +301,11 @@ let
   # claude-theme: usage `claude-theme <dark|light>`. Writes the matching theme
   # into every Claude Code profile's settings.json.
   #
-  # This keeps the *fallback* theme in step with the mode. Sessions started
-  # through the launcher in programs/claude.nix are already themed from
-  # THEME_MODE via --settings, which outranks settings.json; the ones that skip
-  # it -- Claude Code's agent view and background daemon re-exec the binary
-  # directly -- read settings.json instead, so that copy has to track the mode
-  # rather than sit on one value.
+  # This keeps the *machine-mode fallback* theme in step with the mode. Sessions
+  # started through the launcher in programs/claude.nix, including Claude's
+  # own re-execs through CLAUDE_CODE_PROCESS_WRAPPER, are already themed from
+  # their inherited THEME_MODE via --settings, which outranks settings.json.
+  # Only a truly direct, unwrapped binary launch needs the on-disk copy.
   #
   # `dark-ansi` and `light-ansi` are the only two themes that draw purely
   # through ANSI slots, and so the only ones that follow the phosphor ladder in
