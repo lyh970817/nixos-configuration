@@ -249,8 +249,8 @@ in
         Exec=yazi %u
         # Resolve through the active desktop icon theme. The Yazi package does
         # not install a yazi-named icon, while both Matrix and HighContrast
-        # provide this standard file-manager name.
-        Icon=file-manager
+        # provide the standard system-file-manager icon name.
+        Icon=system-file-manager
         MimeType=inode/directory
         Categories=Utility;Core;System;FileTools;FileManager;ConsoleOnly;
         Keywords=File;Manager;Explorer;Browser;Launcher
