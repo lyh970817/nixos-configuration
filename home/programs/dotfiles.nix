@@ -9,14 +9,14 @@ let
   role = osConfig.portable.role;
   peerHost = osConfig.portable.peerHost;
 
-  # Wrapper baked with the peer host. Retries a mosh Herdr session to the home
+  # Wrapper baked with the peer host. Retries an SSH Herdr session to the home
   # box a few times; if home is unreachable (or no peer configured) it falls
   # back to a local shell so the floating window lands at a usable prompt
   # instead of closing.
   homeTerminal = pkgs.writeShellApplication {
     name = "home-terminal";
     runtimeInputs = [
-      pkgs.mosh
+      pkgs.openssh
       pkgs.coreutils
     ];
     text = ''
@@ -27,15 +27,8 @@ let
       fi
 
       for _ in 1 2 3; do
-        # Adaptive prediction disables local echo on fast links; force it on.
-        # mosh-server never times out by default and nothing else reaps it,
-        # so this bounds orphans from SIGKILL-class client deaths (crash,
-        # OOM, terminal window closed while offline). Deliberate exits don't
-        # need it: mosh-client does a real shutdown handshake on
-        # SIGHUP/SIGTERM and mosh-server exits in well under a second. 24h is
-        # long enough that a suspended laptop reconnects fine.
         # shellcheck disable=SC2016 # The single-quoted script expands $SHELL on the remote host.
-        if mosh --server 'MOSH_SERVER_NETWORK_TMOUT=86400 mosh-server' --predict=always --predict-overwrite "$PEER" -- sh -lc '
+        if ssh -t "$PEER" sh -lc '
           if command -v remote-herdr-client >/dev/null 2>&1 && remote-herdr-client; then
             exit 0
           fi
@@ -55,7 +48,7 @@ let
     '';
   };
 
-  # Attaches (or creates) the local 'remote' Herdr session — the one mosh
+  # Attaches (or creates) the local 'remote' Herdr session — the one SSH
   # sessions from the laptop land in — from a terminal launched right here on
   # home. Non-modal: Super+Enter keeps meaning "my local session"; this is a
   # separate, deliberate action for the rare occasion of walking over to the
