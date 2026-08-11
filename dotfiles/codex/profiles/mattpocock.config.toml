@@ -1,6 +1,6 @@
 model = "gpt-5.6-terra"
 model_reasoning_effort = "medium"
-# Profile for the Matt Pocock/user workflow skill set.
+# Profile for the Matt Pocock/user workflow.
 # Select it with: codex --profile mattpocock
 [plugins."browser@openai-bundled"]
 enabled = false
@@ -36,100 +36,3 @@ enabled = false
 [[skills.config]]
 name = "google-drive:google-slides"
 enabled = false
-
-# Skill group dotfiles/codex/skills/mattpocock/ (symlinks into the pool);
-# disabled in base config.toml, enabled here. Only name selectors work in
-# Codex 0.144.5.
-
-[[skills.config]]
-name = "ask-matt"
-enabled = true
-
-[[skills.config]]
-name = "codebase-design"
-enabled = true
-
-[[skills.config]]
-name = "wayfinder"
-enabled = true
-
-[[skills.config]]
-name = "loop-me"
-enabled = true
-
-[[skills.config]]
-name = "diagnosing-bugs"
-enabled = true
-
-[[skills.config]]
-name = "grill-me"
-enabled = true
-
-[[skills.config]]
-name = "grill-with-docs"
-enabled = true
-
-[[skills.config]]
-name = "grilling"
-enabled = true
-
-[[skills.config]]
-name = "handoff"
-enabled = true
-
-[[skills.config]]
-name = "implement"
-enabled = true
-
-[[skills.config]]
-name = "improve-codebase-architecture"
-enabled = true
-
-[[skills.config]]
-name = "prototype"
-enabled = true
-
-[[skills.config]]
-name = "resolving-merge-conflicts"
-enabled = true
-
-[[skills.config]]
-name = "setup-matt-pocock-skills"
-enabled = true
-
-[[skills.config]]
-name = "setup-pre-commit"
-enabled = true
-
-[[skills.config]]
-name = "tdd"
-enabled = true
-
-[[skills.config]]
-name = "to-tickets"
-enabled = true
-
-[[skills.config]]
-name = "to-spec"
-enabled = true
-
-[[skills.config]]
-name = "triage"
-enabled = true
-
-[[skills.config]]
-name = "writing-great-skills"
-enabled = true
-
-[[skills.config]]
-name = "code-review"
-enabled = true
-
-[[skills.config]]
-name = "research"
-enabled = true
-
-[[skills.config]]
-name = "wizard"
-enabled = true
-

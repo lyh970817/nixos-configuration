@@ -107,35 +107,8 @@ let
     "herdr"
     "r-dev-shell"
     "session-handoff"
-    "superpowers-domain-context"
     "visual-verification"
     "writing-agent-instructions"
-  ];
-
-  codexMattpocockSkillNames = [
-    "ask-matt"
-    "code-review"
-    "codebase-design"
-    "diagnosing-bugs"
-    "grill-me"
-    "grill-with-docs"
-    "grilling"
-    "handoff"
-    "implement"
-    "improve-codebase-architecture"
-    "loop-me"
-    "prototype"
-    "research"
-    "resolving-merge-conflicts"
-    "setup-matt-pocock-skills"
-    "setup-pre-commit"
-    "tdd"
-    "to-spec"
-    "to-tickets"
-    "triage"
-    "wayfinder"
-    "wizard"
-    "writing-great-skills"
   ];
 
   codexSkillLinks = lib.listToAttrs (
@@ -146,13 +119,6 @@ let
         force = true;
       };
     }) codexSkillNames)
-    ++ (map (name: {
-      name = ".codex/skills/mattpocock/${name}";
-      value = {
-        source = link "dotfiles/codex/skills/mattpocock/${name}";
-        force = true;
-      };
-    }) codexMattpocockSkillNames)
   );
   codexReconcile = pkgs.writeText "codex-reconcile.py" ''
     import argparse
@@ -225,6 +191,37 @@ let
     } | {
         skill.removeprefix("openai-templates:"): skill
         for skill in OPENAI_TEMPLATE_SKILLS
+    }
+    # These selectors named local bridges that were removed from the tracked
+    # skill set. Existing copied profiles retain unknown blocks by design, so
+    # migrate only these known obsolete entries while preserving all others.
+    OBSOLETE_PROFILE_SKILLS = {
+        "mattpocock": {
+            "ask-matt",
+            "code-review",
+            "codebase-design",
+            "diagnosing-bugs",
+            "grill-me",
+            "grill-with-docs",
+            "grilling",
+            "handoff",
+            "implement",
+            "improve-codebase-architecture",
+            "loop-me",
+            "prototype",
+            "research",
+            "resolving-merge-conflicts",
+            "setup-matt-pocock-skills",
+            "setup-pre-commit",
+            "tdd",
+            "to-spec",
+            "to-tickets",
+            "triage",
+            "wayfinder",
+            "wizard",
+            "writing-great-skills",
+        },
+        "superpowers": {"superpowers-domain-context"},
     }
 
     def value(item):
@@ -336,10 +333,13 @@ let
 
     def quoted_field(lines, start, end, field):
         pattern = re.compile(r"^\s*%s\s*=\s*([\"'])(.*?)\1" % field)
-        for index in range(start + 1, end):
+        index = start + 1
+        while index < end:
             match = pattern.match(lines[index])
             if match:
                 return index, match.group(2)
+            assignment_stop = assignment_end(lines, index, end)
+            index = assignment_stop if assignment_stop > index + 1 else index + 1
         return None, None
 
     def set_enabled(lines, start, end, enabled):
@@ -435,7 +435,7 @@ let
                 raise SystemExit("Codex policy reconciliation produced invalid TOML: %s" % error)
             atomic_write(path, new)
 
-    def reconcile_profile(template_path, path):
+    def reconcile_profile(profile_name, template_path, path):
         with open(template_path, encoding="utf-8") as handle:
             policy_text = handle.read()
         policy = tomllib.loads(policy_text)
@@ -485,9 +485,14 @@ let
                 changed = table_key(lines, "mcp_servers.%s" % server, key, value(setting)) or changed
         desired = policy.get("skills", {}).get("config", [])
         desired_names = {entry.get("name") for entry in desired}
+        obsolete_names = OBSOLETE_PROFILE_SKILLS.get(profile_name, set())
         existing = set()
         for start, end in reversed(list(skill_blocks(lines))):
             _, name = quoted_field(lines, start, end, "name")
+            if name in obsolete_names:
+                del lines[start:end]
+                changed = True
+                continue
             if name == "last30days" and name not in desired_names:
                 del lines[start:end]
                 changed = True
@@ -517,12 +522,12 @@ let
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--base")
-    parser.add_argument("--profile", nargs=2, action="append", default=[])
+    parser.add_argument("--profile", nargs=3, action="append", default=[])
     args = parser.parse_args()
     if args.base:
         reconcile_base(args.base)
-    for template, target in args.profile:
-        reconcile_profile(template, target)
+    for profile, template, target in args.profile:
+        reconcile_profile(profile, template, target)
   '';
 in
 {
@@ -903,7 +908,7 @@ in
       --base "$codex_home/config.toml"
     ${lib.concatMapStringsSep "\n" (name: ''
       run ${pkgs.python3}/bin/python3 ${codexReconcile} \
-        --profile ${lib.escapeShellArg (toString ../../dotfiles/codex/profiles/${name}.config.toml)} \
+        --profile ${lib.escapeShellArg name} ${lib.escapeShellArg (toString ../../dotfiles/codex/profiles/${name}.config.toml)} \
         "$codex_home/${name}.config.toml"
     '') codexProfileNames}
   '';
