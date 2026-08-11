@@ -57,10 +57,11 @@ in
       # Sources:
       #   Desktop/voice/hardware: dotfiles/hypr/hyprland.lua and the remote
       #     role fragment in home/programs/dotfiles.nix.
-      #   Tmux: custom root/copy-mode bindings in home/programs/tmux.nix.
+      #   Herdr: direct custom bindings in dotfiles/herdr/config.toml.
+      #   MPV: built-in input map; home/programs/mpv.nix leaves it unchanged.
       #   Shell: aliases and ZLE bindings in home/programs/shell.nix.
-      # This is the compact daily-driver set, not the defaults inherited from
-      # Hyprland, tmux, zsh, or Oh My Zsh.
+      # This is the compact daily-driver set, not an exhaustive list of the
+      # defaults inherited from Hyprland, MPV, zsh, or Oh My Zsh.
       "keyb/shortcuts.yml".text = ''
         - name: DESKTOP · LAUNCH
           keybinds:
@@ -162,50 +163,59 @@ in
             - name: Microphone volume down / up
               key: Ctrl + Shift + d / u
 
-        - name: TMUX · PANES
+        - name: HERDR · PANES
           keybinds:
-            - name: Split horizontally
-              key: Alt + Enter
-            - name: Split vertically
-              key: Shift + F10
             - name: Focus left / down / up / right
               key: Alt + h / j / k / l
             - name: Swap left / down / up / right
               key: Alt + Shift + h / j / k / l
-            - name: Zoom pane
+            - name: Split pane side by side
+              key: Alt + Enter
+            - name: Toggle pane zoom
               key: Alt + f
-            - name: Close pane
+            - name: Close pane and any empty tab / workspace
               key: Alt + q
-            - name: New scratch note in horizontal split
-              key: Ctrl + 1
-            - name: New scratch note in vertical split
-              key: Ctrl + Shift + 1
-
-        - name: TMUX · WINDOWS
-          keybinds:
-            - name: Select or create window 1–10
-              key: Alt + 1…0
-            - name: Tmux command prefix
-              key: Ctrl + a
-            - name: Send Shift+Enter through to agent TUI
-              key: Shift + Enter
-
-        - name: TMUX · COPY MODE
-          keybinds:
-            - name: Enter copy mode
+            - name: Enter keyboard copy mode
               key: Alt + v
-            - name: Move cursor
-              key: h / j / k / l
-            - name: Start selection
-              key: v
-            - name: Copy selection to local clipboard
-              key: y
-            - name: Pick visible token with tmux-thumbs
-              key: f
-            - name: Page up / down
-              key: Ctrl + b or u / Ctrl + d or f
-            - name: Leave copy mode
-              key: q
+
+        - name: HERDR · TABS
+          keybinds:
+            - name: Previous / next tab
+              key: Alt + Shift + Tab / Alt + Tab
+            - name: Focus or create persistent tab slot 1–9
+              key: Alt + 1…9
+
+        - name: HERDR · WORKSPACES
+          keybinds:
+            - name: Open session navigator
+              key: Alt + g
+            - name: Open workspace picker
+              key: Alt + w
+            - name: Previous / next workspace
+              key: Alt + Left / Right
+            - name: Create workspace
+              key: Alt + n
+
+        - name: HERDR · AGENTS
+          keybinds:
+            - name: Toggle agent sidebar
+              key: Alt + e
+            - name: Previous / next agent
+              key: Alt + Up / Down
+
+        - name: MPV · AUDIO
+          keybinds:
+            - name: Volume down / up
+              key: 9 / 0
+            - name: Cycle audio track
+              key: "#"
+
+        - name: MPV · SUBTITLES
+          keybinds:
+            - name: Next / previous subtitle track
+              key: j / Shift + j
+            - name: Subtitle 100 ms earlier / later
+              key: z / Shift + z
 
         - name: SHELL · KEYS
           keybinds:
@@ -266,12 +276,12 @@ in
       Type=Application
       Name=Shortcut Cheat Sheet
       GenericName=Keyboard and Alias Reference
-      Comment=Search configured desktop, tmux, shell, and alias shortcuts
+      Comment=Search configured desktop, Herdr, MPV, shell, and alias shortcuts
       Exec=${pkgs.foot}/bin/foot --app-id foot-float --title "Shortcut Cheat Sheet" ${shortcutCheatsheet}/bin/shortcut-cheatsheet
       Icon=input-keyboard
       Terminal=false
       Categories=Utility;System;
-      Keywords=shortcut;keybinding;hotkey;alias;tmux;hyprland;
+      Keywords=shortcut;keybinding;hotkey;alias;herdr;mpv;hyprland;
       StartupNotify=false
     '';
   };
