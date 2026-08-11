@@ -12,6 +12,11 @@
 
 local home = os.getenv("HOME")
 
+-- Theme fragments set this before the window rules are declared. Defaulting
+-- here keeps a missing or broken fragment from leaking dark-only rules across
+-- a reload.
+_G.quiet_graphite_dark = false
+
 -- Lua's `dofile` throws when the file is missing. The theme link is created by
 -- systemd-tmpfiles and the generated fragments by Home Manager, so all three
 -- normally exist -- but a missing include must not take the whole config down
@@ -29,10 +34,9 @@ local function include(path)
   end
 end
 
--- Include order matters and mirrors the old hyprland.conf: the theme comes
--- first, so the general block further down overrides its shared gap settings.
--- Mode-specific borders and decoration remain owned by the theme; the switch
--- hooks push the same values at runtime.
+-- Mode-specific gaps, borders, and decoration are owned by the theme. Keeping
+-- them out of later global blocks lets a config reload apply a mode change and
+-- its window-rule state together.
 include(home .. "/.local/state/hypr/current-theme.lua")
 -- hyprwinwrap plugin and window rules for the dark-mode terminal wallpaper.
 include(home .. "/.config/hypr/wallpaper.lua")
@@ -97,9 +101,6 @@ hl.env("XMODIFIERS", "@im=fcitx")
 
 hl.config({
   general = {
-    gaps_in = 4,
-    gaps_out = 15,
-
     -- Set to true to enable resizing windows by clicking and dragging on
     -- borders and gaps
     resize_on_border = false,
@@ -474,6 +475,47 @@ hl.window_rule({
   border_size = 0,
   rounding = 0,
   no_initial_focus = true,
+})
+
+-- Quiet Graphite is deliberately an application treatment, not the dark
+-- desktop's default window chrome. The shadow engine itself is global, so the
+-- first rule suppresses it everywhere and the target rule opts Brave and
+-- ChatGPT Desktop back in. State-specific exceptions come last so fullscreen
+-- targets and the btop dashboard remain undecorated.
+local function quiet_graphite_rule(spec)
+  spec.enabled = quiet_graphite_dark
+  hl.window_rule(spec)
+end
+
+quiet_graphite_rule({
+  name = "quiet-graphite-default-no-shadow",
+  match = { class = ".*" },
+  no_shadow = true,
+})
+
+quiet_graphite_rule({
+  name = "quiet-graphite-apps",
+  match = { class = "^(brave-browser|codex-desktop)$" },
+  border_size = 2,
+  border_color = "rgba(48504Bff) rgba(282E2Aff)",
+  rounding = 12,
+  no_shadow = false,
+})
+
+quiet_graphite_rule({
+  name = "quiet-graphite-fullscreen",
+  match = { fullscreen = 1 },
+  border_size = 0,
+  rounding = 0,
+  no_shadow = true,
+})
+
+quiet_graphite_rule({
+  name = "quiet-graphite-btop",
+  match = { class = "^(foot-btop)$" },
+  border_size = 0,
+  rounding = 0,
+  no_shadow = true,
 })
 
 -- --- Global Defaults ---

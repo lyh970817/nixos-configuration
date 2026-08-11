@@ -2,6 +2,8 @@
 -- ~/.local/state/hypr/current-theme.lua symlink, which switch-dark/switch-light
 -- repoint. See home/desktop/theming.nix.
 
+_G.quiet_graphite_dark = false
+
 hl.config({
   general = {
     gaps_in = 4,
