@@ -34,6 +34,7 @@ let
         # need it: mosh-client does a real shutdown handshake on
         # SIGHUP/SIGTERM and mosh-server exits in well under a second. 24h is
         # long enough that a suspended laptop reconnects fine.
+        # shellcheck disable=SC2016 # The single-quoted script expands $SHELL on the remote host.
         if mosh --server 'MOSH_SERVER_NETWORK_TMOUT=86400 mosh-server' --predict=always --predict-overwrite "$PEER" -- sh -lc '
           if command -v remote-herdr-client >/dev/null 2>&1 && remote-herdr-client; then
             exit 0
