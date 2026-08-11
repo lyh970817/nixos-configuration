@@ -328,6 +328,91 @@ let
         lines.insert(start + 1, "%s = %s\n" % (key, rendered))
         return True
 
+    def map_key(lines, table, key, rendered, case_insensitive=False):
+        table_index = next(
+            (
+                index
+                for index, opening, name in headers(lines)
+                if opening == "[" and name == table
+            ),
+            None,
+        )
+        if table_index is None:
+            return None
+        start, end = bounds(lines, table_index)
+        matches = []
+        index = start + 1
+        while index < end:
+            if ASSIGNMENT.match(lines[index]):
+                left = lines[index].split("=", 1)[0].strip()
+                try:
+                    parsed = tomllib.loads("%s = 0" % left)
+                except tomllib.TOMLDecodeError:
+                    parsed = {}
+                if len(parsed) == 1:
+                    existing = next(iter(parsed))
+                    matched = existing == key
+                    if case_insensitive:
+                        matched = existing.casefold() == key.casefold()
+                    if matched:
+                        stop = assignment_end(lines, index, end)
+                        matches.append((index, stop))
+            stop = assignment_end(lines, index, end)
+            index = stop if stop > index + 1 else index + 1
+        if matches:
+            replacement = "%s = %s\n" % (key, rendered)
+            first_start, first_stop = matches[0]
+            changed = lines[first_start:first_stop] != [replacement] or len(matches) > 1
+            for duplicate_start, duplicate_stop in reversed(matches[1:]):
+                del lines[duplicate_start:duplicate_stop]
+            lines[first_start:first_stop] = [replacement]
+            return changed
+        lines.insert(start + 1, "%s = %s\n" % (key, rendered))
+        return True
+
+    def reconcile_no_color_filter(lines, policy, path):
+        environment = policy.get("shell_environment_policy", {})
+        if not isinstance(environment, dict):
+            print(
+                "warning: leaving incompatible Codex shell environment policy untouched: %s"
+                % path
+            )
+            return False
+        if "exclude" in environment or "include_only" in environment:
+            print(
+                "warning: leaving legacy Codex shell environment filters untouched: %s"
+                % path
+            )
+            return False
+        filters = environment.get("filters")
+        if filters is not None and not isinstance(filters, dict):
+            print(
+                "warning: leaving incompatible Codex shell environment filters untouched: %s"
+                % path
+            )
+            return False
+        if filters is not None:
+            changed = map_key(
+                lines,
+                "shell_environment_policy.filters",
+                "NO_COLOR",
+                '"exclude"',
+                case_insensitive=True,
+            )
+            if changed is None:
+                print(
+                    "warning: leaving inline Codex shell environment filters untouched: %s"
+                    % path
+                )
+                return False
+            return changed
+        return table_key(
+            lines,
+            "shell_environment_policy.filters",
+            "NO_COLOR",
+            '"exclude"',
+        )
+
     def skill_blocks(lines):
         for index, opening, name in headers(lines):
             if opening == "[[" and name == "skills.config":
@@ -381,9 +466,10 @@ let
         except OSError as error:
             print("warning: cannot read Codex config %s: %s" % (path, error))
             return
+        policy = {}
         if old:
             try:
-                tomllib.loads(old)
+                policy = tomllib.loads(old)
             except tomllib.TOMLDecodeError as error:
                 print("warning: leaving malformed Codex config untouched: %s: %s" % (path, error))
                 return
@@ -394,6 +480,7 @@ let
         # own RGB, so a stray /theme silently strands code blocks and the
         # status line on a scheme that fights the rest of the terminal.
         changed = table_key(lines, "tui", "theme", '"vt220-phosphor"') or changed
+        changed = reconcile_no_color_filter(lines, policy, path) or changed
         for plugin in PLUGINS:
             changed = table_key(lines, 'plugins."%s"' % plugin, "enabled", "false") or changed
         present = set()
