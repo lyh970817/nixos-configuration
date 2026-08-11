@@ -11,6 +11,18 @@
 --   Hyprland --verify-config --config ~/.config/hypr/hyprland.lua
 
 local home = os.getenv("HOME")
+local backends = "," .. (os.getenv("WLR_BACKENDS") or "") .. ","
+local headlessOnly = os.getenv("AQ_HEADLESS_ONLY") == "1" or backends:find(",headless,", 1, true) ~= nil
+
+-- Nested compositors are for config inspection only. Registering startup hooks
+-- there would let commands such as `fcitx5 --replace`, `pkill swaybg`, and
+-- systemd environment imports alter the live desktop outside the nested
+-- compositor.
+local function onHyprlandStart(callback)
+  if not headlessOnly then
+    hl.on("hyprland.start", callback)
+  end
+end
 
 -- Theme fragments set this before the window rules are declared. Defaulting
 -- here keeps a missing or broken fragment from leaking dark-only rules across
@@ -28,7 +40,7 @@ local function include(path)
     print("[hyprland.lua] skipping " .. path .. ": " .. tostring(err))
     return
   end
-  local ok, ferr = pcall(chunk)
+  local ok, ferr = pcall(chunk, onHyprlandStart)
   if not ok then
     print("[hyprland.lua] error in " .. path .. ": " .. tostring(ferr))
   end
@@ -69,7 +81,7 @@ local windowSelect = "rofi -show window -location 2"
 
 -- `hyprland.start` fires once per compositor start and not on reload, which is
 -- exactly what `exec-once` meant.
-hl.on("hyprland.start", function()
+onHyprlandStart(function()
   hl.exec_cmd("nm-applet &")
   hl.exec_cmd("mako &")
   hl.exec_cmd("fcitx5 -d --replace")

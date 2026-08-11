@@ -2,6 +2,8 @@
 -- ~/.local/state/hypr/current-theme.lua symlink, which switch-dark/switch-light
 -- repoint. See home/desktop/theming.nix.
 
+local onHyprlandStart = ...
+
 _G.quiet_graphite_dark = false
 
 hl.config({
@@ -48,7 +50,7 @@ hl.env("HYPRCURSOR_THEME", "Adwaita")
 hl.env("XCURSOR_THEME", "Adwaita")
 hl.env("XCURSOR_SIZE", "24")
 
-hl.on("hyprland.start", function()
+onHyprlandStart(function()
   hl.exec_cmd("hyprctl setcursor Adwaita 24")
   -- Wallpaper for startup
   hl.exec_cmd(
