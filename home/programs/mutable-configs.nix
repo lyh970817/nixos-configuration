@@ -106,7 +106,6 @@ let
     "domain-context"
     "herdr"
     "r-dev-shell"
-    "root-browser-control"
     "session-handoff"
     "superpowers-domain-context"
     "visual-verification"
