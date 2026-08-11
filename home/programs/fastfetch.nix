@@ -363,8 +363,16 @@ let
             { valid = 0 }
             END {
               if (NR != 1 || !valid) exit 1
-              if (amount <= 0) print "out"
-              else if (amount < 3) print "low"
+              negative = sub(/^-/, "", amount)
+              part_count = split(amount, decimal_parts, /[.]/)
+              integer_part = decimal_parts[1]
+              fraction_part = part_count == 2 ? decimal_parts[2] : ""
+              sub(/^0+/, "", integer_part)
+              sub(/^0+/, "", fraction_part)
+
+              if (integer_part == "" && fraction_part == "") print "out"
+              else if (negative) print "out"
+              else if (integer_part == "" || integer_part == "1" || integer_part == "2") print "low"
             }
           ' "$qwen_cache" 2>/dev/null); then
             if [[ "$balance_state" == out ]]; then
