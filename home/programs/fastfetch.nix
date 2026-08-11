@@ -330,6 +330,7 @@ let
     name = "fastfetch-status";
     runtimeInputs = [
       pkgs.coreutils
+      pkgs.gawk
       pkgs.systemd
     ];
     text = ''
@@ -341,7 +342,47 @@ let
       cache="$cache_dir/$name.txt"
       error="$cache_dir/$name.error"
       if [ -r "$cache" ]; then
-        if [[ "$name" == qwen && -e "$error" ]]; then
+        if [[ "$name" == audio ]]; then
+          audio=$(cat "$cache")
+          qwen_cache="$cache_dir/qwen.txt"
+          qwen_alert=""
+          # The producer caps the amount at 64 ASCII characters, so the whole
+          # cache is at most 74 bytes including its fixed text and newline.
+          if qwen_size=$(stat -Lc '%s' "$qwen_cache" 2>/dev/null) \
+             && [[ "$qwen_size" =~ ^[0-9]+$ ]] \
+             && ((qwen_size <= 74)) \
+             && balance_state=$(LC_ALL=C awk '
+            NR == 1 && /^CNY -?[0-9]+([.][0-9]+)? cash$/ {
+              valid = 1
+              amount = $0
+              sub(/^CNY /, "", amount)
+              sub(/ cash$/, "", amount)
+              if (length(amount) > 64) valid = 0
+              next
+            }
+            { valid = 0 }
+            END {
+              if (NR != 1 || !valid) exit 1
+              if (amount <= 0) print "out"
+              else if (amount < 3) print "low"
+            }
+          ' "$qwen_cache" 2>/dev/null); then
+            if [[ "$balance_state" == out ]]; then
+              qwen_alert=$'\033[92m(Qwen Out)\033[m'
+            elif [[ "$balance_state" == low ]]; then
+              qwen_alert=$'\033[94m(Qwen Low)\033[m'
+            fi
+          fi
+
+          # Only the shared-device layout has this exact delimiter. Keep all
+          # other Audio output byte-for-byte apart from its trailing newline.
+          if [[ -n "$qwen_alert" && "$audio" == *' | In '* ]]; then
+            printf '%s | In %s %s\n' \
+              "''${audio%%' | In '*}" "$qwen_alert" "''${audio#*' | In '}"
+          else
+            printf '%s\n' "$audio"
+          fi
+        elif [[ "$name" == qwen && -e "$error" ]]; then
           printf '%s · stale\n' "$(cat "$cache")"
         else
           cat "$cache"
@@ -361,12 +402,10 @@ let
     runtimeInputs = with pkgs; [
       coreutils
       jq
-      fastfetchStatus
     ];
     text = ''
       # Renders one indented row per provider, in the same shape as the Tailnet
-      # block. Coding-agent rows show remaining quota and reset countdowns;
-      # Qwen shows the China billing account's current cash balance.
+      # block, with remaining quota and reset countdowns.
       cache_path=${lib.escapeShellArg codexbarCachePath}
       indent='                     '
 
@@ -437,7 +476,6 @@ let
 
       mapfile -t codex < <(query codex)
       mapfile -t claude < <(query claude)
-      qwen=$(fastfetch-status qwen)
 
       # A window the provider does not report reads as N/A in both of its
       # columns, so the row keeps its shape instead of leaving a gap.
@@ -466,7 +504,7 @@ let
         done
         printf '%d' "$result"
       }
-      name_width=$(widest codex claude Qwen)
+      name_width=$(widest codex claude)
       width_left5=$(widest "$codex_left5" "$claude_left5")
       width_reset5=$(widest "$codex_reset5" "$claude_reset5")
       width_left7=$(widest "$codex_left7" "$claude_left7")
@@ -514,36 +552,9 @@ let
           "$rung7" "$width_left7" "$left7" "$reset7"
       }
 
-      qwen_row() {
-        local value="$1" amount balance_state
-        if [[ "$value" == unavailable ]]; then
-          printf '%s○ %-*s \033[94munavailable\033[m\n' "$indent" "$name_width" Qwen
-          return
-        fi
-        if [[ "$value" == "…" ]]; then
-          printf '%s○ %-*s %s\n' "$indent" "$name_width" Qwen "$value"
-          return
-        fi
-        amount="''${value#CNY }"
-        amount="''${amount%% cash*}"
-        balance_state=$(jq -ern --arg amount "$amount" '
-          $amount
-          | select(test("^-?[0-9]+([.][0-9]+)?$"))
-          | if tonumber > 0 then "positive" else "nonpositive" end
-        ' 2>/dev/null || true)
-        if [[ "$balance_state" == positive ]]; then
-          printf '%s\033[34m●\033[m %-*s %s\n' "$indent" "$name_width" Qwen "$value"
-        elif [[ "$balance_state" == nonpositive ]]; then
-          printf '%s\033[92m●\033[m %-*s %s\n' "$indent" "$name_width" Qwen "$value"
-        else
-          printf '%s○ %-*s \033[94munavailable\033[m\n' "$indent" "$name_width" Qwen
-        fi
-      }
-
       printf '\n'
       row "''${codex[0]}" codex "$codex_left5" "$codex_reset5" "$codex_left7" "$codex_reset7"
       row "''${claude[0]}" claude "$claude_left5" "$claude_reset5" "$claude_left7" "$claude_reset7"
-      qwen_row "$qwen"
     '';
   };
 
