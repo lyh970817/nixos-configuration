@@ -35,8 +35,8 @@ let
   escapeMarkup = lib.replaceStrings [ "&" "<" ">" ] [ "&amp;" "&lt;" "&gt;" ];
   renderRofiDisplay =
     section: binding:
-    "<b>${escapeMarkup (padTo 24 section.name)}</b> │ "
-    + "${escapeMarkup (padTo 38 binding.key)} │ "
+    "<b>${escapeMarkup (padTo 22 section.name)}</b> │ "
+    + "${escapeMarkup (padTo 26 binding.key)} │ "
     + escapeMarkup binding.description;
   renderRofiBinding = section: binding: ''
     ${pkgs.coreutils}/bin/printf '%s\0display\x1f%s\x1fmeta\x1f%s\n' \
@@ -138,6 +138,10 @@ in
       # matching the keyb popup's 1000x700 centered footprint.
       "rofi/shortcut-cheatsheet.rasi".text = ''
         @theme "current"
+
+        * {
+            font: "Hack Nerd Font 10";
+        }
 
         window {
             width: 1000px;
