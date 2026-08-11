@@ -24,6 +24,8 @@ let
       # Optional: other useful shortcuts on this layer
       u = "pageup";
       d = "pagedown";
+      y = "scrollup";
+      e = "scrolldown";
       w = "C-right";
       b = "C-left";
       v = "S-right";
