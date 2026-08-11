@@ -4,14 +4,14 @@
 
 Use `gpt-5.4` at `medium` reasoning effort with the grouped route-aware prompt
 whose SHA-256 is
-`8eb8c0a49137d3199ed579372f4973a793cb2361cab9318dc9e3408f1ba12f8a`.
+`423b5b3526c6e077072339986438f60a2442f1975774b4934bd04b750fda0c5c`.
 The hook leaves the finished assistant response unchanged and adds only a short
 companion brief below it. The brief gives each selected route its own heading,
 then places local `Category:` bullets beneath it in the declared route and
-category order. It uses one to four one-sentence prose bullets by default,
-adding bullets only when needed to retain distinct answers, actions, or choices;
-it has no numeric word cap. This explicit route-and-category format makes the
-former nautical/roleplay negative redundant, so it was removed.
+category order. Within Result, it requires exactly one Outcome and partitions
+implementation details, checks, and limits into Changes, Verification, and
+Boundary without repeating facts. Multiple independent items may use one
+category label with numbered entries; the prompt has no numeric word cap.
 
 The prompt routes each response as Result, Decision, Research, Brainstorming,
 or Progress. That routing changes what the brief prioritizes: an outcome and
@@ -235,6 +235,32 @@ with the control's `3/5`. The candidate was selected as a deliberate
 communication tradeoff because route headings and route-local `Category:`
 bullets improve orientation while the original remains visible and authoritative,
 not because the candidate is certified free of distortion or reliable generally.
+
+### Focused Result-partition correction
+
+A user-reported live regression produced three nested Outcome entries instead
+of partitioning the result. A focused six-case comparison then evaluated only
+`gpt-5.4` at `medium` effort with the current, v1, v2, and v3 prompts; it was a
+prompt comparison, not a model or effort comparison. V3 was preferred in all
+`6/6` blind communication comparisons against current and produced no sampled
+invention, contradiction, false completion, unsafe reader action, or false
+option selection.
+
+On the observed case, v3 restored exactly one Outcome, distinct Changes,
+Verification, and Boundary entries, and the explicit implemented, committed,
+synced, rebuilt, and verified lifecycle statuses. It did not clear a
+zero-failure gate: the relationship between the interactive composer and its
+verification was not explicit, the documentation case emitted Research before
+Result and compressed row-level reasons and exact classification labels, and a
+separate dense Result still omitted exact evidence details without pointing to
+the complete original. The literal final adjudication was therefore `3/6`, not
+a certification of complete retention.
+
+The selected v3 prompt has SHA-256
+`423b5b3526c6e077072339986438f60a2442f1975774b4934bd04b750fda0c5c`.
+Its non-distorting sampled failures were accepted as a communication tradeoff
+because the unchanged source remains visible and authoritative above every
+brief; that condition remains part of the design's safety boundary.
 
 ## Evaluation limits
 

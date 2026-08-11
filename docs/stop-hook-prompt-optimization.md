@@ -11,13 +11,14 @@ only source and as the authoritative report.
 
 The brief silently routes the source as Result, Decision, Research,
 Brainstorming, or Progress, then emits each selected route as a heading with
-route-local `Category:` bullets beneath it. It normally emits one to four
-one-sentence prose bullets, can add bullets when distinct answers or actions
-require them, and has no numeric word cap. The explicit grouped format made the
-former nautical/roleplay negative redundant, so it was removed. The hook still
-has a 1,500-character input gate, a 120-second timeout, isolated read-only
-execution, disabled child hooks, and fail-open behavior. The current prompt
-SHA-256 is `8eb8c0a49137d3199ed579372f4973a793cb2361cab9318dc9e3408f1ba12f8a`.
+route-local `Category:` bullets beneath it. Result requires exactly one Outcome
+and partitions details, checks, and limits into Changes, Verification, and
+Boundary without repeating facts. The prompt can use numbered items beneath one
+category label when independent facts require them and has no numeric word cap.
+The hook still has a 1,500-character input gate, a 120-second timeout, isolated
+read-only execution, disabled child hooks, and fail-open behavior. The current
+prompt SHA-256 is
+`423b5b3526c6e077072339986438f60a2442f1975774b4934bd04b750fda0c5c`.
 
 What was optimized was therefore not the quality of the original assistant
 answer. It was the reader's ability to orient quickly after a long answer while
@@ -50,6 +51,7 @@ companion brief.
 | V4 ASD-STE100-instruction replacement | Replace the detailed prompt with one sentence requesting ASD-STE100 Simplified Technical English on six cases | Both cells routed `6/6`, but the detailed prompt won communication `6/6` and safety `3/6` versus `1/6`. Wording guidance did not replace semantic selection policy. |
 | Focused v5 | Target the remaining known regressions and retest three cases | Communication passed `3/3` and safety `2/3`. The retained original made the residual loss acceptable as a known tradeoff, not as perfect fidelity. |
 | Grouped route labels | Compare a route-heading and route-local-category candidate with the flat-bullet prompt on cases 01, 13, 14, 15, and a synthetic handoff exploration, distinct from the earlier five-hard-fixture set | The later pairwise gate preferred the grouped candidate `5/5`, with critical safety `PASS/PASS` in all five and retention `5/5` versus `3/5` for the control; a stricter independent audit rejected the exact candidate for table/scope and route defects. |
+| Focused Result partition | Correct a user-reported three-Outcome regression and compare current, v1, v2, and v3 on six cases with GPT-5.4 medium only | V3 won `6/6` blind communication comparisons and fixed the observed Outcome/Changes/Verification/Boundary partition without inventions, contradictions, or false completions, but literal adjudication remained `3/6` because explicit composer-verification scope, exact dense evidence, and documentation order/classification detail were not all retained. |
 
 The historical full-body packages and the later route-aware series used
 different numbering schemes: the former jumps from Phase 3 to Phase 5, while
