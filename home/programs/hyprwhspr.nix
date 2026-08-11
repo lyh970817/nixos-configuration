@@ -650,13 +650,16 @@ in
       ```json
       {
         "dashscope": "YOUR_DASHSCOPE_API_KEY",
-        "custom": "YOUR_SILICONFLOW_API_KEY"
+        "custom": "YOUR_SILICONFLOW_API_KEY",
+        "aliyun_access_key_id": "YOUR_ALIYUN_ACCESS_KEY_ID",
+        "aliyun_access_key_secret": "YOUR_ALIYUN_ACCESS_KEY_SECRET"
       }
       ```
 
       Both managed profiles read the `dashscope` key from this file via
       `qwen-asr-shim.service`. The `custom` key is used for independent
-      long-form polishing.
+      long-form polishing. Fastfetch reads the two `aliyun_access_key_*`
+      fields to query the China billing account's current cash balance.
 
       Short dictation uses `Super+O`. The daemon keeps transient profile
       selection under `$XDG_RUNTIME_DIR/hyprwhspr-config`, separate from the
