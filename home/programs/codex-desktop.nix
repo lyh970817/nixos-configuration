@@ -9,10 +9,10 @@ let
 
 in
 {
-  # Keep terminal Apps disabled without changing the CLI Desktop launches.
-  # The Desktop launcher also keeps GUI state out of ~/.codex.
+  # Keep terminal and Desktop CLI behavior aligned with Apps enabled.
+  # Desktop still keeps GUI state out of ~/.codex.
   home.packages = [
-    pkgs.codex
+    (pkgs.codex.override { disableApps = false; })
   ];
 
   home.file.".codex-desktop/skills/herdr".source = link "dotfiles/universal-skills/herdr";
