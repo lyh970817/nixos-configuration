@@ -251,9 +251,8 @@ in
       # Codex with unrestricted filesystem access.
       alias cdy='codex --yolo'
 
-      # Codex top-level orchestrator, with a yolo variant.
-      alias cdo='codex --profile orchestrator'
-      alias cdoy='codex --profile orchestrator --yolo'
+      # Codex top-level orchestrator, bypassing all approval checks.
+      alias cdo='codex --profile orchestrator --yolo'
 
       # Claude Code with the mattpocock skills profile (separate CLAUDE_CONFIG_DIR).
       alias claude-matt='CLAUDE_CONFIG_DIR="$HOME/.config/claude-mattpocock" claude'
@@ -265,8 +264,7 @@ in
       # --dangerously-skip-permissions, not --permission-mode bypassPermissions:
       # the latter silently downgrades to the default mode until the bypass
       # disclaimer has been accepted interactively at least once.
-      alias co='claude --dangerously-skip-permissions --model claude-opus-5 --append-system-prompt-file "$HOME/.config/claude/orchestrator-opus.md"'
-      alias cf='claude --dangerously-skip-permissions --model claude-fable-5 --append-system-prompt-file "$HOME/.config/claude/orchestrator-fable.md"'
+      alias clo='claude --dangerously-skip-permissions --model claude-opus-5 --append-system-prompt-file "$HOME/.config/claude/orchestrator-opus.md"'
 
       # Claude Code profile launchers bypassing all permission checks.
       alias cly='claude --dangerously-skip-permissions'

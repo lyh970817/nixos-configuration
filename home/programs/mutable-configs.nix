@@ -1088,7 +1088,7 @@ in
     "claude/CLAUDE.md".source = link "dotfiles/claude/CLAUDE.md";
     "claude/statusline.sh".source = link "dotfiles/claude/statusline.sh";
     "claude/hooks/response-simplifier.sh".source = link "dotfiles/claude/hooks/response-simplifier.sh";
-    # Orchestrator system prompts, passed by the `co`/`cf` aliases and by the
+    # Orchestrator system prompts, passed by the `clo` alias and by the
     # session-handoff skill with --append-system-prompt-file.
     "claude/orchestrator-opus.md".source = link "dotfiles/claude/orchestrator-opus.md";
     "claude/orchestrator-fable.md".source = link "dotfiles/claude/orchestrator-fable.md";
