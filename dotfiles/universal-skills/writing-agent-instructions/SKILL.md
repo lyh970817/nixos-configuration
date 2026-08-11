@@ -14,12 +14,13 @@ Everything else is context you pay for every turn and get nothing back.
 - Don't defend a rule against misreadings. State it and stop. A guard clause
   spends its words on what might go wrong instead of on what to do; let the rare
   misreading happen and fix it when it does.
-- Don't restate what the codebase already shows. Point at the file or command.
+- Don't restate code, commands, or structure; it rots when they change — point
+  at the file. A finding or measurement stays true: state it inline.
 - Numeric caps buy obedience, not the behaviour you wanted: the model that
   honours "under 200 words" is not the one you were writing for, and the model
   that ignores it is unaffected. Take brevity from structure instead — named
-  sections, one item per line. Measured in
-  `docs/firstmate-reporting-architecture.md`.
+  sections, one item per line. The same capped prompt returned 55% of input
+  length from Haiku, 94% from Sonnet 5.
 
 ## Keep
 
@@ -39,11 +40,10 @@ that owns it; deleting it is a different act with a different result. Prose a
 mechanism can enforce — a hook, a wrapper, a generated file — moves into the
 mechanism. Never say the same thing in two files; you will edit one of them.
 
-## Trim empirically
+## Name what you cut
 
-Trimming has a floor and you find it by hitting it: remove, watch the next few
-runs, restore what regresses. A file that has never been over-trimmed has
-probably not been trimmed enough.
+Trimming has a floor you will not see — a regression surfaces sessions later, to
+the user. Cut anyway, git holds the restore, but name the cut in your report.
 
 ## Descriptions
 
@@ -54,6 +54,6 @@ subject is broad enough that half the repo could be argued into it.
 
 ## The history behind this
 
-`dotfiles/claude/orchestrator-opus.md`: `088bbd99` restored an over-trimmed
-line, `0b9ef951` moved rules to `AGENTS.md` instead of dropping them, `c68c1913`
-dropped one only once a hook enforced it.
+`dotfiles/claude/orchestrator-opus.md`: `0b9ef951` moved rules to `AGENTS.md`
+instead of dropping them; `088bbd99` restored the delegation return contract
+that trim had cut; `c68c1913` dropped a rule only once a Stop hook enforced it.
