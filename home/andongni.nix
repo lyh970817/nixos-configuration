@@ -20,6 +20,7 @@
     ./programs/foot.nix
     ./programs/mako.nix
     ./programs/rofi.nix
+    ./programs/shortcut-cheatsheet.nix
     ./programs/fzf.nix
     ./programs/newt.nix
     ./programs/r.nix
