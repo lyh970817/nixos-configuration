@@ -2,6 +2,8 @@
 -- ~/.local/state/hypr/current-theme.lua symlink, which switch-dark/switch-light
 -- repoint. See home/desktop/theming.nix.
 
+local onHyprlandStart = ...
+
 _G.quiet_graphite_dark = true
 
 hl.config({
@@ -68,7 +70,7 @@ hl.env("HYPRCURSOR_THEME", "Bibata-Original-VT220")
 hl.env("XCURSOR_THEME", "Bibata-Original-VT220")
 hl.env("XCURSOR_SIZE", "22")
 
-hl.on("hyprland.start", function()
+onHyprlandStart(function()
   -- Brown-black CRT glass background for startup.
   hl.exec_cmd("pkill swaybg || true; setsid -f swaybg -c 050806")
   hl.exec_cmd("hyprctl setcursor Bibata-Original-VT220 22")

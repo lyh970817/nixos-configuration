@@ -80,9 +80,10 @@ let
     if role == "remote" then
       ''
         -- Remote role: Super+Enter and boot connect to the home box; Super+Shift+Enter opens local Herdr.
+        local onHyprlandStart = ...
         hl.bind("SUPER + Return", hl.dsp.exec_cmd("btop-workspace exec foot --app-id foot-float home-terminal"))
         hl.bind("SUPER + SHIFT + Return", hl.dsp.exec_cmd("btop-workspace exec foot --app-id foot-float herdr"))
-        hl.on("hyprland.start", function()
+        onHyprlandStart(function()
           hl.exec_cmd("btop-workspace exec foot --app-id foot-float home-terminal")
         end)
         -- Remote laptop: lid close turns the screen off via DPMS without
@@ -122,7 +123,7 @@ let
         # Remote role: Super+Enter and boot connect to the home box; Super+Shift+Enter opens local Herdr.
         bind = $mainMod, Return, exec, btop-workspace exec foot --app-id foot-float home-terminal
         bind = $mainMod SHIFT, Return, exec, btop-workspace exec foot --app-id foot-float herdr
-        exec-once = btop-workspace exec foot --app-id foot-float home-terminal
+        exec-once = ~/.config/hypr/scripts/run-session-startup.sh btop-workspace exec foot --app-id foot-float home-terminal
         # Remote laptop: lid close turns the screen off via DPMS without
         # suspending. logind ignores the lid; see modules/system/lid.nix.
         bindl = , switch:on:Lid Switch, exec, hyprctl dispatch dpms off
