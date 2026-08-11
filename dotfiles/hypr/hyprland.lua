@@ -327,10 +327,10 @@ hl.bind("XF86ScreenSaver", hl.dsp.exec_cmd("loginctl lock-session"), { locked = 
 hl.bind("XF86Sleep", hl.dsp.exec_cmd("systemctl suspend"), { locked = true })
 hl.bind("XF86WLAN", hl.dsp.exec_cmd(scripts .. "/mihomo-toggle.sh"), { locked = true })
 hl.bind("XF86Search", hl.dsp.exec_cmd("rofi -show drun -location 2"))
--- Both Fn+Space and Fn+F9 land on the XF86TouchpadToggle keysym and are told
--- apart by modmask; see the block above the two binds below for why they can
--- no longer be bound by keycode. Bare XF86TouchpadToggle is Fn+Space (the
--- monitor-scale cycle); Ctrl+Super is Fn+F9 (the actual touchpad toggle).
+-- Bare XF86TouchpadToggle is Fn+Space (the monitor-scale cycle); Fn+F9 (the
+-- actual touchpad toggle) is bound as CTRL+SUPER+F24 -- see the blocks below
+-- for why neither can be bound by keycode, and why F24 is the spelling that
+-- matches.
 -- Fn+F2 cycles power-profiles-daemon profiles; Fn+Z cycles keyboard backlight;
 -- Fn+Space cycles the focused monitor's scale.
 hl.bind("XF86Battery", hl.dsp.exec_cmd(scripts .. "/power-profile-cycle.sh"))
@@ -349,10 +349,9 @@ hl.bind("XF86KbdLightOnOff", hl.dsp.exec_cmd(scripts .. "/kbd-backlight-cycle.sh
 --   keycode 199 = <FK21>, symbols [ XF86TouchpadToggle ]
 --   keycode 202 = <FK24>, type PC_CONTROL_SUPER_LEVEL2,
 --                         symbols [ F24, XF86TouchpadToggle ]
--- so Fn+Space (199, no mods) is XF86TouchpadToggle, and Fn+F9 (202 with
--- Ctrl+Super held) resolves to level 2 -- also XF86TouchpadToggle. The two are
--- told apart by their modmask, which is exactly the collision the old comment
--- here warned about; binding by keycode was how it used to be dodged.
+-- so Fn+Space (199, no mods) is XF86TouchpadToggle; Fn+F9 (202 with Ctrl+Super
+-- held) would resolve to level 2 -- also XF86TouchpadToggle -- but Hyprland
+-- matches the base keysym, so it is bound as F24 and the two never collide.
 --
 -- Fn+Space arrives as KEY_F21 (hwdb-remapped from KEY_ZOOMRESET, which keyd
 -- can't forward).
@@ -360,15 +359,11 @@ hl.bind("XF86TouchpadToggle", hl.dsp.exec_cmd(scripts .. "/monitor-scale-cycle.s
 -- X30W-K Fn+F9 emits Ctrl+Super+F24. Linux 6.17 corrected this PS/2 scancode
 -- from Zenkaku_Hankaku (keycode 93) to F24 (keycode 202).
 --
--- Both level-1 and level-2 spellings are bound because which one Hyprland
--- matches against depends on whether it compares the modifier-resolved keysym
--- or the base one, and that cannot be settled without pressing the key on this
--- hardware -- headless verification proves registration, not matching. The two
--- binds carry the same modmask (68) and the same action, nothing else emits
--- either keysym on this machine, so whichever one matches, Fn+F9 toggles the
--- touchpad exactly once. Drop the one that turns out to be dead after the
--- first laptop boot confirms which fires.
-hl.bind("CTRL + SUPER + XF86TouchpadToggle", hl.dsp.exec_cmd(scripts .. "/touchpad-toggle.sh"))
+-- Keycode 202 carries [F24, XF86TouchpadToggle] and Fn+F9 arrives with
+-- Ctrl+Super held, i.e. at level 2 -- yet Hyprland matches the *base* keysym
+-- F24, not the modifier-resolved XF86TouchpadToggle. Measured on this laptop by
+-- unbinding one spelling at runtime and pressing the key; `hyprctl binds` gives
+-- no answer, it reports either spelling as registered.
 hl.bind("CTRL + SUPER + F24", hl.dsp.exec_cmd(scripts .. "/touchpad-toggle.sh"))
 hl.bind(
   "XF86AudioRaiseVolume",
