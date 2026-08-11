@@ -4,8 +4,8 @@ let
   dayTemperature = 6500;
   dayGamma = 1.0;
 
-  # Scheduled night warmth. Super+N keeps the service running while toggling
-  # its own deliberately extreme override against an unfiltered identity CTM.
+  # Scheduled and Super+N night warmth. Super+N keeps the service running;
+  # its second press switches to the unfiltered identity CTM.
   #
   # Keep it a multiple of 100. matrixForKelvin does `temp /= 100` on an integer,
   # so the temperature is quantised to hundreds: 3500 and 3599 produce exactly
@@ -49,7 +49,7 @@ let
     text = ''
       apply_night() {
         hyprctl hyprsunset gamma 100 >/dev/null 2>&1 &&
-          hyprctl hyprsunset temperature 1500 >/dev/null 2>&1
+          hyprctl hyprsunset temperature ${toString nightTemperature} >/dev/null 2>&1
       }
 
       numeric_equals() {
@@ -59,7 +59,7 @@ let
       manual_night_is_active() {
         [ "$(hyprctl hyprsunset identity get)" = false ] &&
           numeric_equals "$(hyprctl hyprsunset gamma)" 100 &&
-          numeric_equals "$(hyprctl hyprsunset temperature)" 1500
+          numeric_equals "$(hyprctl hyprsunset temperature)" ${toString nightTemperature}
       }
 
       wait_for_socket() {

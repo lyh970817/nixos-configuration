@@ -15,7 +15,7 @@
 | 白天 | 06:00 / 6500 K / gamma 1.0 | `home/desktop/hyprsunset.nix` |
 | 夜间 | 16:00 / 3500 K / gamma 1.0（色温仍在实机微调） | `home/desktop/hyprsunset.nix` |
 | 屏幕着色器 | 深色模式使用 `panel.glsl`；可从 Rofi 临时关闭 | `home/desktop/theming.nix`、`home/programs/launchers.nix` |
-| Super+N | 开关：开启时 gamma `100` / 1500 K，关闭时恢复无滤镜画面 | `dotfiles/hypr/hyprland.lua` |
+| Super+N | 开关：开启时 3500 K / gamma 1.0；第二次按下切换到 identity CTM（无滤镜画面） | `dotfiles/hypr/hyprland.lua` |
 
 命令：
 
@@ -23,7 +23,7 @@
 phosphor                # 在绿色/琥珀色板之间即时切换
 phosphor amber          # 或 phosphor green / phosphor status
 hyprsunset-warmth 3200  # 手动覆盖当前色温（2000-6500，100 K 步进）
-hyprsunset-night        # 开关；关闭时用 identity CTM 恢复无滤镜画面
+hyprsunset-night        # 开关；第二次按下用 identity CTM 恢复无滤镜画面
 ```
 
 `hyprsunset-night` 不会停止服务；下一次 06:00 / 16:00 的定时切换仍会正常应用对应 profile。

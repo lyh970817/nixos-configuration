@@ -215,7 +215,7 @@ include(home .. "/.config/hypr/role.lua")
 
 -- Manual theme toggle (both roles)
 hl.bind(mainMod .. " + SHIFT + T", hl.dsp.exec_cmd("theme-toggle"))
--- Toggle the manual gamma 100 / 1500 K hyprsunset override (Super+N).
+-- Toggle the shared scheduled 3500 K hyprsunset setting; second press uses identity/off (Super+N).
 hl.bind(mainMod .. " + N", hl.dsp.exec_cmd("hyprsunset-night"))
 hl.bind(mainMod .. " + W", hl.dsp.exec_cmd("btop-workspace exec brave"))
 hl.bind(mainMod .. " + Q", hl.dsp.exec_cmd(protect .. "killactive"))
