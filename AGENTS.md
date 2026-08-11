@@ -26,6 +26,11 @@ gate. The pre-commit hooks (`flake.nix`, `home/programs/pre-commit.nix`) cover
 only what a rebuild structurally cannot see, so a clean commit does not mean the
 configuration evaluates.
 
+A configuration change is complete only after its committed history is
+synchronized to both role checkouts and both hosts rebuild successfully. Use
+the `work-on-peer-device` skill for role discovery, safe Git transfer, and the
+peer procedure.
+
 For visual changes, perform visual verification automatically. The mode active
 at task start is the entire change scope; change or inspect the other mode only
 when the user asks. Before committing, a visual preview may use reliably
