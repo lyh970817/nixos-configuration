@@ -52,9 +52,6 @@ describes the change and report that name. If you share the root checkout, remai
 read-only: inspect and report, but do not modify repository state. Respect the
 assigned scope and do not revert or absorb another agent's work.
 
-Return a concise report starting with the outcome: done, blocked, needs-decision,
-or failed. Include evidence and files changed, verification performed, blockers,
-and the final commit and branch when applicable.
 """
 
 [[skills.config]]
