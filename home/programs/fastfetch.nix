@@ -193,6 +193,95 @@ let
     '';
   };
 
+  fastfetchQwen = pkgs.writeShellApplication {
+    name = "fastfetch-qwen";
+    runtimeInputs = with pkgs; [
+      aliyun-cli
+      coreutils
+      jq
+    ];
+    text = ''
+      credentials_path="''${FASTFETCH_QWEN_CREDENTIALS:-${config.home.homeDirectory}/.local/share/hyprwhspr/credentials}"
+      aliyun_cli="''${FASTFETCH_QWEN_ALIYUN_CLI:-aliyun}"
+
+      # The activation that installs this shared credential uses mode 0600.
+      # Refuse more permissive or malformed files rather than transmitting an
+      # AccessKey from an unexpectedly exposed source.
+      if [[ ! -f "$credentials_path" ]] || [[ $(stat -Lc '%a' "$credentials_path" 2>/dev/null || true) != 600 ]]; then
+        exit 1
+      fi
+      mapfile -t credentials < <(jq -ser '
+        def valid_secret:
+          type == "string"
+          and length > 0
+          and length <= 256
+          and ((contains("\n") or contains("\r")) | not);
+
+        if length == 1
+           and (.[0] | type == "object")
+           and (.[0].aliyun_access_key_id | valid_secret)
+           and (.[0].aliyun_access_key_secret | valid_secret)
+        then .[0] | .aliyun_access_key_id, .aliyun_access_key_secret
+        else empty
+        end
+      ' "$credentials_path" 2>/dev/null)
+      if [[ ''${#credentials[@]} -ne 2 ]]; then
+        exit 1
+      fi
+      access_key_id="''${credentials[0]}"
+      access_key_secret="''${credentials[1]}"
+
+      # The official CLI signs the RPC request. Credentials stay in its
+      # environment rather than argv, config, logs, or the Fastfetch cache.
+      # Clear every inherited alias that can select a profile or make the CLI
+      # auto-detect STS, RamRoleArn, or Anonymous instead of static-AK mode.
+      unset \
+        DEBUG \
+        ALIBABA_CLOUD_PROFILE \
+        ALIBABACLOUD_PROFILE \
+        ALICLOUD_PROFILE \
+        ALIBABA_CLOUD_SECURITY_TOKEN \
+        ALIBABACLOUD_SECURITY_TOKEN \
+        ALICLOUD_SECURITY_TOKEN \
+        SECURITY_TOKEN \
+        ALIBABA_CLOUD_ROLE_ARN \
+        ALIBABACLOUD_ROLE_ARN \
+        ALIBABA_CLOUD_PROFILE_MODE
+      export ALIBABA_CLOUD_ACCESS_KEY_ID="$access_key_id"
+      export ALIBABA_CLOUD_ACCESS_KEY_SECRET="$access_key_secret"
+      export ALIBABA_CLOUD_IGNORE_PROFILE=TRUE
+
+      if ! response=$(timeout --signal=TERM --kill-after=1s 5s \
+        "$aliyun_cli" bssopenapi QueryAccountBalance \
+          --region cn-hangzhou \
+          --endpoint business.aliyuncs.com \
+          --connect-timeout 2 \
+          --read-timeout 3 \
+          --retry-count 0 2>/dev/null); then
+        unset ALIBABA_CLOUD_ACCESS_KEY_ID ALIBABA_CLOUD_ACCESS_KEY_SECRET
+        exit 1
+      fi
+      unset ALIBABA_CLOUD_ACCESS_KEY_ID ALIBABA_CLOUD_ACCESS_KEY_SECRET
+
+      # Only a validated scalar reaches the cache; never persist or echo the
+      # raw billing response. QueryAccountBalance identifies the China account
+      # currency explicitly, so a non-CNY response is not relabelled.
+      available_cash=$(jq -ser '
+        if length == 1 and (.[0] | type == "object")
+        then .[0]
+          | select(.Success == true)
+          | .Data
+          | select(type == "object" and .Currency == "CNY")
+          | .AvailableCashAmount
+          | select(type == "string" and length <= 64)
+          | select(test("^-?[0-9]+([.][0-9]+)?$"))
+        else empty
+        end
+      ' <<< "$response" 2>/dev/null) || exit 1
+      printf 'CNY %s cash\n' "$available_cash"
+    '';
+  };
+
   # The greeting used to probe mihomo and the tailnet inline, which put two
   # network round-trips on every shell's startup path (and their costs are
   # paid serially, in display order). Instead a user timer refreshes small
@@ -205,18 +294,25 @@ let
       pkgs.coreutils
       fastfetchAudio
       fastfetchMihomo
+      fastfetchQwen
       fastfetchTailnet
     ];
     text = ''
       cache_dir="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/fastfetch-status"
       install -d -m 700 "$cache_dir"
       refresh() {
-        local name="$1" tmp
+        local name="$1" preserve_last_good="''${2:-false}" tmp error_tmp
         tmp=$(mktemp "$cache_dir/.$name.XXXXXX")
-        if "fastfetch-$name" > "$tmp" 2>/dev/null; then
+        if "fastfetch-$name" > "$tmp" 2>/dev/null && [[ -s "$tmp" ]]; then
           mv -f "$tmp" "$cache_dir/$name.txt"
+          rm -f "$cache_dir/$name.error"
         else
           rm -f "$tmp"
+          if [[ "$preserve_last_good" == true ]]; then
+            error_tmp=$(mktemp "$cache_dir/.$name.error.XXXXXX")
+            printf 'failed\n' > "$error_tmp"
+            mv -f "$error_tmp" "$cache_dir/$name.error"
+          fi
         fi
       }
       # Audio is local IPC, not network, but its six serial wpctl round-trips
@@ -224,6 +320,7 @@ let
       # the same cache. Volume shown can be up to a refresh interval stale.
       refresh audio &
       refresh mihomo &
+      refresh qwen true &
       refresh tailnet &
       wait
     '';
@@ -231,15 +328,26 @@ let
 
   fastfetchStatus = pkgs.writeShellApplication {
     name = "fastfetch-status";
-    runtimeInputs = [ pkgs.coreutils ];
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.systemd
+    ];
     text = ''
       # Read a cache written by fastfetch-status-refresh. On a miss (first
       # shell right after login, before the timer's first run) show a pending
       # marker and kick the refresh unit so the next shell has real data.
       name="$1"
-      cache="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/fastfetch-status/$name.txt"
+      cache_dir="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/fastfetch-status"
+      cache="$cache_dir/$name.txt"
+      error="$cache_dir/$name.error"
       if [ -r "$cache" ]; then
-        cat "$cache"
+        if [[ "$name" == qwen && -e "$error" ]]; then
+          printf '%s · stale\n' "$(cat "$cache")"
+        else
+          cat "$cache"
+        fi
+      elif [[ "$name" == qwen && -e "$error" ]]; then
+        echo "unavailable"
       else
         systemctl --user start --no-block fastfetch-status-refresh.service 2>/dev/null || true
         echo "…"
@@ -253,12 +361,12 @@ let
     runtimeInputs = with pkgs; [
       coreutils
       jq
+      fastfetchStatus
     ];
     text = ''
       # Renders one indented row per provider, in the same shape as the Tailnet
-      # block: a bullet for "has quota left right now", then each window's
-      # remaining percentage followed by a countdown to its reset. The windows
-      # are always the 5-hour and 7-day ones, so they go unlabelled.
+      # block. Coding-agent rows show remaining quota and reset countdowns;
+      # Qwen shows the China billing account's current cash balance.
       cache_path=${lib.escapeShellArg codexbarCachePath}
       indent='                     '
 
@@ -329,6 +437,7 @@ let
 
       mapfile -t codex < <(query codex)
       mapfile -t claude < <(query claude)
+      qwen=$(fastfetch-status qwen)
 
       # A window the provider does not report reads as N/A in both of its
       # columns, so the row keeps its shape instead of leaving a gap.
@@ -357,7 +466,7 @@ let
         done
         printf '%d' "$result"
       }
-      name_width=$(widest codex claude)
+      name_width=$(widest codex claude Qwen)
       width_left5=$(widest "$codex_left5" "$claude_left5")
       width_reset5=$(widest "$codex_reset5" "$claude_reset5")
       width_left7=$(widest "$codex_left7" "$claude_left7")
@@ -384,9 +493,8 @@ let
       row() {
         local state="$1" name="$2" left5="$3" reset5="$4" left7="$5" reset7="$6"
         local bullet rung rung5 rung7
-        # Shape alone carries usable/not, matching the identical glyph in the
-        # Tailnet block above; colouring it here would only make the healthy
-        # marker the dimmest thing on its own line.
+        # Shape alone carries quota available/spent for the coding-agent rows,
+        # matching the identical glyph in the Tailnet block above.
         if [[ "$state" == ok ]]; then
           bullet='●'
         else
@@ -406,9 +514,36 @@ let
           "$rung7" "$width_left7" "$left7" "$reset7"
       }
 
+      qwen_row() {
+        local value="$1" amount balance_state
+        if [[ "$value" == unavailable ]]; then
+          printf '%s○ %-*s \033[94munavailable\033[m\n' "$indent" "$name_width" Qwen
+          return
+        fi
+        if [[ "$value" == "…" ]]; then
+          printf '%s○ %-*s %s\n' "$indent" "$name_width" Qwen "$value"
+          return
+        fi
+        amount="''${value#CNY }"
+        amount="''${amount%% cash*}"
+        balance_state=$(jq -ern --arg amount "$amount" '
+          $amount
+          | select(test("^-?[0-9]+([.][0-9]+)?$"))
+          | if tonumber > 0 then "positive" else "nonpositive" end
+        ' 2>/dev/null || true)
+        if [[ "$balance_state" == positive ]]; then
+          printf '%s\033[34m●\033[m %-*s %s\n' "$indent" "$name_width" Qwen "$value"
+        elif [[ "$balance_state" == nonpositive ]]; then
+          printf '%s\033[92m●\033[m %-*s %s\n' "$indent" "$name_width" Qwen "$value"
+        else
+          printf '%s○ %-*s \033[94munavailable\033[m\n' "$indent" "$name_width" Qwen
+        fi
+      }
+
       printf '\n'
       row "''${codex[0]}" codex "$codex_left5" "$codex_reset5" "$codex_left7" "$codex_reset7"
       row "''${claude[0]}" claude "$claude_left5" "$claude_reset5" "$claude_left7" "$claude_reset7"
+      qwen_row "$qwen"
     '';
   };
 
@@ -418,6 +553,7 @@ in
     fastfetchAudio
     fastfetchTailnet
     fastfetchMihomo
+    fastfetchQwen
     fastfetchStatus
     fastfetchCodexbar
   ];
