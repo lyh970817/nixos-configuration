@@ -28,7 +28,7 @@ let
 
       for _ in 1 2 3; do
         # shellcheck disable=SC2016 # The single-quoted script expands $SHELL on the remote host.
-        if ssh -t "$PEER" sh -lc '
+        if ssh -t "$PEER" '
           if command -v remote-herdr-client >/dev/null 2>&1 && remote-herdr-client; then
             exit 0
           fi
