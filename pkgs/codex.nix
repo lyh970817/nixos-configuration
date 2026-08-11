@@ -3,6 +3,7 @@
   stdenv,
   fetchzip,
   makeWrapper,
+  writeShellScript,
   disableApps ? true,
 }:
 
@@ -10,9 +11,7 @@ let
   # Keep this allow-list synchronized with the 0.147 root, resume, and fork
   # clap grammar. Unknown options fail closed so non-TUI routes never inherit
   # the presentation-only environment override.
-  launcher = builtins.toFile "codex-launcher" ''
-    #!${stdenv.shell}
-
+  launcher = writeShellScript "codex-launcher" ''
     is_interactive_tui() {
       [ -t 0 ] && [ -t 1 ] || return 1
 
