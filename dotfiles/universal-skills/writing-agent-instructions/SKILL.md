@@ -19,8 +19,7 @@ Everything else is context you pay for every turn and get nothing back.
 - Numeric caps buy obedience, not the behaviour you wanted: the model that
   honours "under 200 words" is not the one you were writing for, and the model
   that ignores it is unaffected. Take brevity from structure instead — named
-  sections, one item per line. The same capped prompt returned 55% of input
-  length from Haiku, 94% from Sonnet 5.
+  sections, one item per line.
 
 ## Keep
 
@@ -51,9 +50,3 @@ A skill's `description` decides when it fires. Write it as narrowly as the
 situation allows and prefer a miss to a spurious trigger. Name the concrete
 artefacts that should trigger it, and add an explicit non-trigger list when the
 subject is broad enough that half the repo could be argued into it.
-
-## The history behind this
-
-`dotfiles/claude/orchestrator-opus.md`: `0b9ef951` moved rules to `AGENTS.md`
-instead of dropping them; `088bbd99` restored the delegation return contract
-that trim had cut; `c68c1913` dropped a rule only once a Stop hook enforced it.
