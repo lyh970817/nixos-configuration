@@ -48,6 +48,7 @@
     ./modules/programs/firefox.nix
     ./modules/programs/development.nix
     ./modules/programs/claude-desktop.nix
+    ./modules/programs/codex.nix
 
     # User accounts
     ./users/andongni.nix
