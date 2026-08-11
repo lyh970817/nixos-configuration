@@ -2,14 +2,16 @@
 
 ## Current decision
 
-Use `gpt-5.4` at `medium` reasoning effort with the route-aware prompt whose
-SHA-256 is
-`f4e6999c696a55829d708d5bc4266605efe86930a7644e6c1e3818f4716f5f29`.
+Use `gpt-5.4` at `medium` reasoning effort with the grouped route-aware prompt
+whose SHA-256 is
+`8eb8c0a49137d3199ed579372f4973a793cb2361cab9318dc9e3408f1ba12f8a`.
 The hook leaves the finished assistant response unchanged and adds only a short
-companion brief below it. The brief has no heading or role-play vocabulary and
-uses one to four one-sentence bullets by default, adding bullets only when
-needed to retain distinct answers, actions, or choices. It has no numeric word
-cap.
+companion brief below it. The brief gives each selected route its own heading,
+then places local `Category:` bullets beneath it in the declared route and
+category order. It uses one to four one-sentence prose bullets by default,
+adding bullets only when needed to retain distinct answers, actions, or choices;
+it has no numeric word cap. This explicit route-and-category format makes the
+former nautical/roleplay negative redundant, so it was removed.
 
 The prompt routes each response as Result, Decision, Research, Brainstorming,
 or Progress. That routing changes what the brief prioritizes: an outcome and
@@ -195,8 +197,8 @@ output integrity was validated before blind review.
 
 ### Focused v5 correction
 
-V5 tested the deployed prompt on the three remaining targeted regressions. Its
-SHA-256 is
+V5 tested the then-deployed flat-bullet prompt on the three remaining targeted
+regressions. Its SHA-256 is
 `f4e6999c696a55829d708d5bc4266605efe86930a7644e6c1e3818f4716f5f29`.
 It passed communication in `3/3` and safety in `2/3`.
 
@@ -207,6 +209,32 @@ the focused zero-failure production-acceptance criterion. Deployment
 deliberately accepts this residual because the unchanged original remains
 visible and authoritative; this is the best observed tradeoff, not a claim of
 perfect retention.
+
+### Grouped route-label comparison
+
+The grouped candidate was compared with that flat-bullet prompt on a distinct
+five-case set: cases 01 (Codex orchestrator installation), 13 (datetime/OpenSSL
+rebuild outcome), 14 (Codex skill-cleanup recommendation), 15 (documentation
+status audit), and a synthetic session-handoff exploration. This is not the
+earlier Phase 5 five-hard-fixture set. Both configurations used `gpt-5.4` at
+medium effort with one sample for each configuration/fixture pair.
+
+A strict independent audit of the exact candidate rejected promotion: it found
+critical table/scope loss in case 01, critical table/classification loss in case
+15, and no Brainstorming route in the synthetic case, for expected-route
+inclusion of `4/5`. The synthetic candidate retained content, but placed its
+unselected tradeoffs and open questions under Progress rather than Brainstorming.
+That audit prevents treating this deployment as a zero-distortion certification.
+
+The later blind pairwise result uses a narrower comparative gate. It preferred
+the candidate for communication grouping in `5/5`; critical safety was
+`PASS/PASS` for candidate/control in every fixture, where the gate covered
+invented reader actions, broadened verification, false selection or execution,
+and lost safety-relevant boundaries. Candidate retention passed `5/5`, compared
+with the control's `3/5`. The candidate was selected as a deliberate
+communication tradeoff because route headings and route-local `Category:`
+bullets improve orientation while the original remains visible and authoritative,
+not because the candidate is certified free of distortion or reliable generally.
 
 ## Evaluation limits
 
@@ -226,8 +254,8 @@ perfect retention.
   sets the 1,500-character gate, `gpt-5.4`, `medium` effort, 120-second
   timeout, isolated child execution, and fail-open behavior.
 - [`dotfiles/codex/response-simplifier.md`](../dotfiles/codex/response-simplifier.md)
-  is the route-aware production prompt. It produces only an unheaded companion
-  brief and never a replacement body rewrite.
+  is the grouped route-aware production prompt. It produces only a headed,
+  route-local-category companion brief and never a replacement body rewrite.
 
 The hook measures the original response before generation. A 1,494-character
 message remains bypassed by the 1,500-character gate; measuring the brief

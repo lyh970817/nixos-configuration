@@ -10,12 +10,14 @@ completed assistant response visible and unchanged, then uses `gpt-5.4` at
 only source and as the authoritative report.
 
 The brief silently routes the source as Result, Decision, Research,
-Brainstorming, or Progress. It normally emits one to four one-sentence bullets,
-can add bullets when distinct answers or actions require them, and has no
-numeric word cap. The hook still has a 1,500-character input gate, a 120-second
-timeout, isolated read-only execution, disabled child hooks, and fail-open
-behavior. The current prompt SHA-256 is
-`f4e6999c696a55829d708d5bc4266605efe86930a7644e6c1e3818f4716f5f29`.
+Brainstorming, or Progress, then emits each selected route as a heading with
+route-local `Category:` bullets beneath it. It normally emits one to four
+one-sentence prose bullets, can add bullets when distinct answers or actions
+require them, and has no numeric word cap. The explicit grouped format made the
+former nautical/roleplay negative redundant, so it was removed. The hook still
+has a 1,500-character input gate, a 120-second timeout, isolated read-only
+execution, disabled child hooks, and fail-open behavior. The current prompt
+SHA-256 is `8eb8c0a49137d3199ed579372f4973a793cb2361cab9318dc9e3408f1ba12f8a`.
 
 What was optimized was therefore not the quality of the original assistant
 answer. It was the reader's ability to orient quickly after a long answer while
@@ -47,6 +49,7 @@ companion brief.
 | Route-aware v3 | Change both prompt and reasoning effort | Routing again reached `10/10`, but safety was `6/10` and calls took 33.211–84.003 seconds. Because prompt and effort changed together, this was a configuration test, not an effort ablation. |
 | V4 ASD-STE100-instruction replacement | Replace the detailed prompt with one sentence requesting ASD-STE100 Simplified Technical English on six cases | Both cells routed `6/6`, but the detailed prompt won communication `6/6` and safety `3/6` versus `1/6`. Wording guidance did not replace semantic selection policy. |
 | Focused v5 | Target the remaining known regressions and retest three cases | Communication passed `3/3` and safety `2/3`. The retained original made the residual loss acceptable as a known tradeoff, not as perfect fidelity. |
+| Grouped route labels | Compare a route-heading and route-local-category candidate with the flat-bullet prompt on cases 01, 13, 14, 15, and a synthetic handoff exploration, distinct from the earlier five-hard-fixture set | The later pairwise gate preferred the grouped candidate `5/5`, with critical safety `PASS/PASS` in all five and retention `5/5` versus `3/5` for the control; a stricter independent audit rejected the exact candidate for table/scope and route defects. |
 
 The historical full-body packages and the later route-aware series used
 different numbering schemes: the former jumps from Phase 3 to Phase 5, while
@@ -134,6 +137,9 @@ This is why the prompt now names actor, component, environment, category,
 applicability, condition, and verification scope. It also treats a set as an
 integrity boundary: cover every distinct choice accurately or refer the reader
 to the original; never summarize an arbitrary subset as if it were complete.
+Route headings expose the selected purpose, and route-local `Category:` bullets
+make each claim's role explicit without repeating a separate nautical/roleplay
+negative.
 
 ## Model choice and what the comparisons mean
 
@@ -309,18 +315,34 @@ are not stable speed rankings.
 
 ## Current limitation and acceptance rationale
 
-Focused v5 passed communication in `3/3` and safety in `2/3`, so it failed the
-planned zero-failure gate. The remaining failure was a dense orchestrator
-Progress report. Its brief omitted the plugin/no-plugin decision and the safer
-`--approve-for-me` launcher, and it broadened which projects the reported
-`AGENTS.md` rule applied to.
+Focused v5 passed communication in `3/3` and safety in `2/3`; its dense
+orchestrator Progress brief omitted the plugin/no-plugin decision and safer
+`--approve-for-me` launcher, and broadened which projects the reported
+`AGENTS.md` rule applied to. That result describes the preceding flat-bullet
+prompt, not the current grouped prompt.
 
-The prompt was still deployed because the unchanged original remains directly
-above the brief and is authoritative. This is a conscious product tradeoff: the
-brief passed the focused communication review, while its known omission did not
-remove the reader's access to the correct report. It must not be described as
-perfect fidelity. If the UI ever hides or replaces the original, this acceptance
-rationale no longer applies and the safety gate must become stricter.
+The grouped candidate was then compared with that predecessor on a distinct
+five-case set: cases 01 (Codex orchestrator installation), 13 (datetime/OpenSSL
+rebuild outcome), 14 (Codex skill-cleanup recommendation), 15 (documentation
+status audit), and a synthetic session-handoff exploration. This set is distinct
+from the earlier five-hard-fixture set. Both configurations used `gpt-5.4` at
+medium effort with one sample per configuration/fixture.
+
+The exact candidate also received a stricter independent audit, which rejected
+promotion for critical table/scope loss in case 01, critical table/classification
+loss in case 15, and a missing Brainstorming route in the synthetic case
+(expected-route inclusion `4/5`). The synthetic output retained content but
+formally put unselected tradeoffs and open questions under Progress rather than
+Brainstorming. This strict audit rules out a zero-distortion interpretation.
+
+The later pairwise result uses a narrower comparative gate: it preferred the
+candidate `5/5`; both candidate and predecessor passed that gate's critical
+safety review in every fixture, while retention passed `5/5` for the candidate
+and `3/5` for the predecessor. The grouped prompt was selected as a deliberate
+communication tradeoff because headings and local categories improve orientation
+without hiding the original, which remains directly above the brief and
+authoritative. If the UI ever hides or replaces it, this acceptance rationale no
+longer applies and the safety gate must become stricter.
 
 ## Remaining risks and next experiments
 
