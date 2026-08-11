@@ -9,13 +9,16 @@ let
   role = osConfig.portable.role;
   peerHost = osConfig.portable.peerHost;
 
-  # Wrapper baked with the peer host. Retries a mosh tmux session to the home
+  # Wrapper baked with the peer host. Retries a mosh Herdr session to the home
   # box a few times; if home is unreachable (or no peer configured) it falls
   # back to a local shell so the floating window lands at a usable prompt
   # instead of closing.
   homeTerminal = pkgs.writeShellApplication {
     name = "home-terminal";
-    runtimeInputs = [ pkgs.mosh ];
+    runtimeInputs = [
+      pkgs.mosh
+      pkgs.coreutils
+    ];
     text = ''
       PEER=${pkgs.lib.escapeShellArg peerHost}
 
@@ -31,7 +34,16 @@ let
         # need it: mosh-client does a real shutdown handshake on
         # SIGHUP/SIGTERM and mosh-server exits in well under a second. 24h is
         # long enough that a suspended laptop reconnects fine.
-        if mosh --server 'MOSH_SERVER_NETWORK_TMOUT=86400 mosh-server' --predict=always --predict-overwrite "$PEER" -- theme-hold dark tmux new-session -A -d -s remote -e THEME_MODE=dark ';' attach -t remote; then
+        if mosh --server 'MOSH_SERVER_NETWORK_TMOUT=86400 mosh-server' --predict=always --predict-overwrite "$PEER" -- sh -lc '
+          if command -v remote-herdr-client >/dev/null 2>&1 && remote-herdr-client; then
+            exit 0
+          fi
+          if command -v tmux >/dev/null 2>&1; then
+            export THEME_MODE=dark
+            exec tmux new-session -A -d -s remote -e THEME_MODE=dark ";" attach -t remote
+          fi
+          exec "''${SHELL:-${pkgs.runtimeShell}}" -l
+        '; then
           exit 0
         fi
         sleep 2
@@ -42,21 +54,22 @@ let
     '';
   };
 
-  # Attaches (or creates) the local 'remote' tmux session — the one mosh
+  # Attaches (or creates) the local 'remote' Herdr session — the one mosh
   # sessions from the laptop land in — from a terminal launched right here on
   # home. Non-modal: Super+Enter keeps meaning "my local session"; this is a
   # separate, deliberate action for the rare occasion of walking over to the
   # home desk and wanting to see what the laptop session was doing.
   #
   # This is an independent dark session, regardless of the light home desktop
-  # or the laptop's current desktop mode. `-e` seeds its first pane when the
-  # session is created; on a later `-A` attach it is intentionally ignored,
-  # leaving the existing remote session unchanged.
+  # or the laptop's current desktop mode. It deliberately bypasses
+  # remote-herdr-client, so viewing the session locally never makes openers
+  # think a remote viewer is attached.
   attachRemote = pkgs.writeShellApplication {
     name = "attach-remote";
-    runtimeInputs = [ pkgs.tmux ];
+    runtimeInputs = [ pkgs.herdr ];
     text = ''
-      exec tmux new-session -A -d -s remote -e THEME_MODE=dark ';' attach -t remote
+      export THEME_MODE=dark
+      exec herdr --session remote
     '';
   };
 
@@ -88,7 +101,7 @@ let
       ''
     else
       ''
-        -- Home role: Super+Enter attaches to the 'main' tmux session, Super+Shift+Enter opens 'secondary', Super+Ctrl+Enter attaches the laptop's 'remote' session.
+        -- Home role: Super+Enter attaches to the 'main' tmux session, Super+Shift+Enter opens 'secondary', Super+Ctrl+Enter attaches the laptop's remote Herdr session.
         hl.bind("SUPER + Return", hl.dsp.exec_cmd("btop-workspace exec foot --app-id foot-float tmux new-session -A -s main"))
         hl.bind("SUPER + SHIFT + Return", hl.dsp.exec_cmd("btop-workspace exec foot --app-id foot-float tmux new-session -A -s secondary"))
         hl.bind("SUPER + CTRL + Return", hl.dsp.exec_cmd("btop-workspace exec foot --app-id foot-float attach-remote"))
@@ -126,7 +139,7 @@ let
       ''
     else
       ''
-        # Home role: Super+Enter attaches to the 'main' tmux session, Super+Shift+Enter opens 'secondary', Super+Ctrl+Enter attaches the laptop's 'remote' session.
+        # Home role: Super+Enter attaches to the 'main' tmux session, Super+Shift+Enter opens 'secondary', Super+Ctrl+Enter attaches the laptop's remote Herdr session.
         bind = $mainMod, Return, exec, btop-workspace exec foot --app-id foot-float tmux new-session -A -s main
         bind = $mainMod SHIFT, Return, exec, btop-workspace exec foot --app-id foot-float tmux new-session -A -s secondary
         bind = $mainMod CTRL, Return, exec, btop-workspace exec foot --app-id foot-float attach-remote

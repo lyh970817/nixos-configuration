@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if (($# != 1)); then
+  printf 'usage: %s <right|down>\n' "${0##*/}" >&2
+  exit 2
+fi
+
+direction=$1
+case "$direction" in
+  right | down) ;;
+  *)
+    printf 'split direction must be right or down\n' >&2
+    exit 2
+    ;;
+esac
+
+for required_command in herdr jq id mkdir mktemp stat date; do
+  command -v "$required_command" >/dev/null 2>&1 || {
+    printf 'herdr-scratch-note: %s is required\n' "$required_command" >&2
+    exit 1
+  }
+done
+
+socket_path=${HERDR_SOCKET_PATH:?HERDR_SOCKET_PATH is required}
+workspace_id=${HERDR_ACTIVE_WORKSPACE_ID:-${HERDR_WORKSPACE_ID:-}}
+pane_id=${HERDR_ACTIVE_PANE_ID:-${HERDR_PANE_ID:-}}
+pane_cwd=${HERDR_ACTIVE_PANE_CWD:-$PWD}
+
+if [[ -z $workspace_id || -z $pane_id ]]; then
+  printf 'herdr-scratch-note: current Herdr pane and workspace are required\n' >&2
+  exit 1
+fi
+
+scratch_dir=${SCRATCH_DIR:-$HOME/.scratch}
+uid=$(id -u)
+case "$scratch_dir" in
+  /*) ;;
+  *)
+    printf 'herdr-scratch-note: scratch directory must be absolute\n' >&2
+    exit 1
+    ;;
+esac
+if [[ -L $scratch_dir ]]; then
+  printf 'herdr-scratch-note: refusing symbolic-link scratch directory\n' >&2
+  exit 1
+fi
+if [[ ! -e $scratch_dir ]]; then
+  mkdir --mode=700 -- "$scratch_dir" 2>/dev/null || true
+fi
+if [[ ! -d $scratch_dir || -L $scratch_dir ]] \
+  || [[ $(stat -c '%u:%a' -- "$scratch_dir") != "$uid:700" ]]; then
+  printf 'herdr-scratch-note: refusing untrusted scratch directory\n' >&2
+  exit 1
+fi
+umask 077
+
+stamp=$(date +%Y-%m-%d-%H%M)
+note=$(mktemp --suffix=.md -- "$scratch_dir/$stamp.XXXXXX") || exit 1
+
+# A custom Herdr key command runs beside the UI, so restore its injected active
+# context explicitly before asking the CLI to split the invoking pane.
+export HERDR_SOCKET_PATH="$socket_path"
+export HERDR_WORKSPACE_ID="$workspace_id"
+export HERDR_PANE_ID="$pane_id"
+
+created=$(herdr pane split --current --direction "$direction" --cwd "$pane_cwd" --focus)
+new_pane_id=$(jq -er '.result.pane.pane_id | select(type == "string" and length > 0)' <<<"$created")
+command=$(printf 'nvim %q' "$note")
+herdr pane run "$new_pane_id" "$command"
