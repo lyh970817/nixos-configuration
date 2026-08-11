@@ -8,8 +8,8 @@ hl.config({
     gaps_out = 12,
     border_size = 1,
     col = {
-      active_border = "rgba(3D8E48ff)",
-      inactive_border = "rgba(15261Aff)",
+      active_border = "rgba(48504Bff)",
+      inactive_border = "rgba(282E2Aff)",
     },
   },
 
@@ -18,7 +18,7 @@ hl.config({
   },
 
   decoration = {
-    rounding = 4,
+    rounding = 12,
     -- screen-shader owns the live shader setting so cold starts, monitor IDs,
     -- theme mode, and the manual preference all follow one policy.
 
@@ -27,10 +27,13 @@ hl.config({
     active_opacity = 1,
 
     shadow = {
-      enabled = false,
-      range = 4,
-      render_power = 3,
-      color = "rgba(1a1a1aee)",
+      enabled = true,
+      range = 35,
+      render_power = 2,
+      sharp = false,
+      color = "rgba(00000075)",
+      color_inactive = "rgba(00000047)",
+      offset = { 0, 10 },
     },
 
     blur = {

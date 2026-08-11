@@ -30,11 +30,9 @@ local function include(path)
 end
 
 -- Include order matters and mirrors the old hyprland.conf: the theme comes
--- first, so the general/decoration blocks further down override whatever it
--- set. That is deliberate and long-standing -- switch-dark/switch-light push
--- the mode's real values in at runtime; the theme file's own general block only
--- matters for keys nothing below re-states (misc.background_color, env,
--- startup commands).
+-- first, so the general block further down overrides its shared gap settings.
+-- Mode-specific borders and decoration remain owned by the theme; the switch
+-- hooks push the same values at runtime.
 include(home .. "/.local/state/hypr/current-theme.lua")
 -- hyprwinwrap plugin and window rules for the dark-mode terminal wallpaper.
 include(home .. "/.config/hypr/wallpaper.lua")
@@ -101,14 +99,6 @@ hl.config({
   general = {
     gaps_in = 4,
     gaps_out = 15,
-
-    border_size = 2,
-
-    col = {
-      -- Transparent (no border) for unfocused. The active border is owned by
-      -- the mode themes and switch-dark/switch-light.
-      inactive_border = "rgba(00000000)",
-    },
 
     -- Set to true to enable resizing windows by clicking and dragging on
     -- borders and gaps
@@ -421,15 +411,7 @@ hl.window_rule({
 hl.window_rule({
   name = "brave",
   match = { class = "^(brave-browser)$" },
-  border_size = 0,
   suppress_event = "maximize",
-})
-
--- ChatGPT desktop
-hl.window_rule({
-  name = "chatgpt-desktop",
-  match = { class = "^(codex-desktop)$" },
-  border_size = 0,
 })
 
 -- File Managers (Thunar)
