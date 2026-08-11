@@ -143,6 +143,10 @@ let
 
     # Terminal: select the palette used by new windows.
     ln -sf $HOME/.config/foot/themes/dark.ini $HOME/.config/foot/foot.ini
+    # The managed btop dashboard is a persistent Foot process, and btop leaves
+    # that terminal background visible. Recreate both together so this relink
+    # reaches an existing dashboard as well as newly opened terminals.
+    ${pkgs.systemd}/bin/systemctl --user try-restart btop-dashboard.service || true
 
     # Claude Code: rewrite the theme in each profile's settings.json.
     ${claudeTheme}/bin/claude-theme dark
@@ -235,6 +239,9 @@ let
 
     # Terminal: select the palette used by new windows.
     ln -sf $HOME/.config/foot/themes/light.ini $HOME/.config/foot/foot.ini
+    # See the dark hook: btop's config changes at launch, but its terminal
+    # background only changes when the persistent dashboard Foot is recreated.
+    ${pkgs.systemd}/bin/systemctl --user try-restart btop-dashboard.service || true
 
     # Claude Code: rewrite the theme in each profile's settings.json.
     ${claudeTheme}/bin/claude-theme light
