@@ -28,11 +28,15 @@ previous_agent = "alt+up"
 next_agent = "alt+down"
 
 # Direct Alt bindings preserve the tmux navigation vocabulary without entering
-# prefix mode. The native Ctrl-a Shift-h/j/k/l pane-swap bindings remain.
+# prefix mode while retaining the native Ctrl-a Shift pane swaps.
 focus_pane_left = "alt+h"
 focus_pane_down = "alt+j"
 focus_pane_up = "alt+k"
 focus_pane_right = "alt+l"
+swap_pane_left = ["prefix+shift+h", "alt+shift+h"]
+swap_pane_down = ["prefix+shift+j", "alt+shift+j"]
+swap_pane_up = ["prefix+shift+k", "alt+shift+k"]
+swap_pane_right = ["prefix+shift+l", "alt+shift+l"]
 split_vertical = "alt+enter"
 split_horizontal = "shift+f10"
 close_pane = "alt+q"
@@ -104,6 +108,20 @@ key = "alt+9"
 type = "shell"
 command = "$HOME/.nixos-config/scripts/herdr-select-or-create-tab 9"
 description = "focus or create tab slot 9"
+
+# Match tmux's Ctrl+1 scratch notes, preserving the calling pane's Herdr
+# context and cwd when the split is created.
+[[keys.command]]
+key = "ctrl+1"
+type = "shell"
+command = "$HOME/.nixos-config/scripts/herdr-scratch-note right"
+description = "open a scratch note to the right"
+
+[[keys.command]]
+key = "ctrl+shift+1"
+type = "shell"
+command = "$HOME/.nixos-config/scripts/herdr-scratch-note down"
+description = "open a scratch note below"
 
 [theme]
 name = "terminal"
