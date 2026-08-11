@@ -109,11 +109,18 @@ let
       ${pkgs.hyprland}/bin/hyprctl keyword general:gaps_in 8
       ${pkgs.hyprland}/bin/hyprctl keyword general:gaps_out 12
       ${pkgs.hyprland}/bin/hyprctl keyword general:border_size 1
-      ${pkgs.hyprland}/bin/hyprctl keyword general:col.active_border "rgba(${p.accent}ff)"
-      ${pkgs.hyprland}/bin/hyprctl keyword general:col.inactive_border "rgba(${p.subtleBorder}ff)"
-      ${pkgs.hyprland}/bin/hyprctl keyword decoration:rounding 4
+      ${pkgs.hyprland}/bin/hyprctl keyword general:col.active_border "rgba(48504Bff)"
+      ${pkgs.hyprland}/bin/hyprctl keyword general:col.inactive_border "rgba(282E2Aff)"
+      ${pkgs.hyprland}/bin/hyprctl keyword decoration:rounding 12
       ${pkgs.hyprland}/bin/hyprctl keyword decoration:active_opacity 1
       ${pkgs.hyprland}/bin/hyprctl keyword decoration:inactive_opacity 1
+      ${pkgs.hyprland}/bin/hyprctl keyword decoration:shadow:enabled true
+      ${pkgs.hyprland}/bin/hyprctl keyword decoration:shadow:range 35
+      ${pkgs.hyprland}/bin/hyprctl keyword decoration:shadow:render_power 2
+      ${pkgs.hyprland}/bin/hyprctl keyword decoration:shadow:sharp false
+      ${pkgs.hyprland}/bin/hyprctl keyword decoration:shadow:color "rgba(00000075)"
+      ${pkgs.hyprland}/bin/hyprctl keyword decoration:shadow:color_inactive "rgba(00000047)"
+      ${pkgs.hyprland}/bin/hyprctl keyword decoration:shadow:offset "0 10"
     else
       ${pkgs.hyprland}/bin/hyprctl eval 'hl.config({
         general = {
@@ -121,11 +128,24 @@ let
           gaps_out = 12,
           border_size = 1,
           col = {
-            active_border = "rgba(${p.accent}ff)",
-            inactive_border = "rgba(${p.subtleBorder}ff)",
+            active_border = "rgba(48504Bff)",
+            inactive_border = "rgba(282E2Aff)",
           },
         },
-        decoration = { rounding = 4, active_opacity = 1, inactive_opacity = 1 },
+        decoration = {
+          rounding = 12,
+          active_opacity = 1,
+          inactive_opacity = 1,
+          shadow = {
+            enabled = true,
+            range = 35,
+            render_power = 2,
+            sharp = false,
+            color = "rgba(00000075)",
+            color_inactive = "rgba(00000047)",
+            offset = { 0, 10 },
+          },
+        },
         misc = { background_color = "0x${p.background}" },
       })'
     fi
