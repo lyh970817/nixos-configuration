@@ -31,7 +31,7 @@ For synchronizing the whole Matt Pocock skill set, see the `sync-mattpocock-skil
 
 ## Launcher and package
 
-- CLI package derivation: `pkgs/codex.nix`; the CLI runs directly against `~/.codex` (`home/programs/codex-desktop.nix` adds `pkgs.codex` to `home.packages`). Shell alias `cdy` runs `codex --yolo`; `cdo` selects the high-effort `orchestrator` profile, and `cdoy` combines both.
+- CLI package derivation: `pkgs/codex.nix`; the CLI runs directly against `~/.codex` (`home/programs/codex-desktop.nix` adds `pkgs.codex` to `home.packages`). Shell alias `cdy` runs `codex --yolo`; `cdo` runs the high-effort `orchestrator` profile with `--yolo`.
 - The `orchestrator` profile uses multi-agent V2 with 16 total resident threads (the root plus up to 15 subagents) and no depth ceiling. It disables the default collaboration-mode instruction so the profile's root instructions govern, and replaces inherited root instructions in subagents with `features.multi_agent_v2.subagent_developer_instructions`.
 - Codex Desktop (GUI) is wired through the same `home/programs/codex-desktop.nix` via `programs.codexDesktopLinux`, using `pkgs.codex-desktop-isolated` (`pkgs/codex-desktop-isolated.nix`), which wraps the desktop app to keep its state under `~/.codex-desktop`/isolated XDG dirs instead of `~/.codex`, so it does not share state with the CLI.
 
