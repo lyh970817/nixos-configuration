@@ -200,6 +200,8 @@
     .gallery.detail { grid-template-columns: minmax(0, 1fr); }
     .gallery.detail .concept { padding: 26px; }
     .gallery.detail .preview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .gallery.detail .preview-grid[data-app="brave"],
+    .gallery.detail .preview-grid[data-app="chatgpt"] { grid-template-columns: minmax(0, 1fr); }
 
     .concept {
       position: relative;
@@ -565,6 +567,7 @@
 
     .option-corners .window > * { overflow: hidden; }
     .option-corners .window .chrome { border-radius: 3px 3px 0 0; }
+    .option-corners .window .browser-body { border-radius: 0 0 3px 3px; }
     .option-corners .window .chat-layout { border-radius: 3px; }
 
     .corner {
