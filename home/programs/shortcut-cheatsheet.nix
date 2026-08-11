@@ -7,20 +7,15 @@
 }:
 
 let
-  p = (import ../palettes.nix).active;
-  keyb = pkgs.callPackage ../../pkgs/keyb.nix { };
+  # Sources for shortcut-cheatsheet-data.nix:
+  #   Desktop/voice/hardware: dotfiles/hypr/hyprland.lua and the remote
+  #     role fragment in home/programs/dotfiles.nix.
+  #   Herdr: direct custom bindings in dotfiles/herdr/config.toml.
+  #   MPV: built-in input map; home/programs/mpv.nix leaves it unchanged.
+  #   Shell: aliases and ZLE bindings in home/programs/shell.nix.
+  # This is the compact daily-driver set, not an exhaustive list of the
+  # defaults inherited from Hyprland, MPV, zsh, or Oh My Zsh.
   sections = import ./shortcut-cheatsheet-data.nix;
-
-  renderKeybBinding =
-    binding:
-    "    - name: ${builtins.toJSON binding.description}\n"
-    + "      key: ${builtins.toJSON binding.key}\n";
-  renderKeybSection =
-    section:
-    "- name: ${builtins.toJSON section.name}\n"
-    + "  keybinds:\n"
-    + lib.concatMapStrings renderKeybBinding section.bindings;
-  keybData = lib.concatMapStringsSep "\n" renderKeybSection sections;
 
   # These are the only non-ASCII characters in the padded columns. Normalize
   # them before counting bytes so the visible separators stay aligned.
@@ -48,18 +43,8 @@ let
     section: lib.concatMapStrings (renderRofiBinding section) section.bindings
   ) sections;
 
-  shortcutCheatsheet = pkgs.writeShellApplication {
-    name = "shortcut-cheatsheet";
-    text = ''
-      export CLICOLOR_FORCE=1
-      exec ${keyb}/bin/keyb \
-        --config ${lib.escapeShellArg "${config.xdg.configHome}/keyb/shortcut-cheatsheet.yml"} \
-        --key ${lib.escapeShellArg "${config.xdg.configHome}/keyb/shortcuts.yml"}
-    '';
-  };
-
-  rofiCheatsheetData = pkgs.writeShellApplication {
-    name = "shortcut-cheatsheet-rofi-data";
+  shortcutCheatsheetData = pkgs.writeShellApplication {
+    name = "shortcut-cheatsheet-data";
     text = ''
       if (( $# > 0 )); then
         exit 0
@@ -72,12 +57,12 @@ let
     '';
   };
 
-  rofiCheatsheet = pkgs.writeShellApplication {
-    name = "shortcut-cheatsheet-rofi";
+  shortcutCheatsheet = pkgs.writeShellApplication {
+    name = "shortcut-cheatsheet";
     text = ''
       exec ${pkgs.rofi}/bin/rofi \
         -show shortcuts \
-        -modes ${lib.escapeShellArg "shortcuts:${rofiCheatsheetData}/bin/shortcut-cheatsheet-rofi-data"} \
+        -modes ${lib.escapeShellArg "shortcuts:${shortcutCheatsheetData}/bin/shortcut-cheatsheet-data"} \
         -matching normal \
         -i \
         -no-sort \
@@ -92,112 +77,53 @@ in
   # on the home role. The source inventory is curated rather than claiming to
   # be exhaustive: each section names the configuration it was read from.
   config = lib.mkIf (osConfig.portable.role == "remote") {
-    home.packages = [
-      shortcutCheatsheet
-      rofiCheatsheet
-    ];
+    home.packages = [ shortcutCheatsheet ];
 
-    xdg.configFile = {
-      "keyb/shortcut-cheatsheet.yml".text = ''
-        settings:
-          keyb_path: ${config.xdg.configHome}/keyb/shortcuts.yml
-          reverse: true
-          mouse: true
-          search_mode: false
-          sort_keys: false
-          title: " SHORTCUTS · REMOTE "
-          prompt: "filter › "
-          prompt_location: bottom
-          placeholder: "type to search every section"
-          prefix_sep: "+"
-          sep_width: 5
-          margin: 1
-          padding: 1
-          border: rounded
-        color:
-          prompt: "#${p.foreground}"
-          cursor_fg: "#${p.background}"
-          cursor_bg: "#${p.accent}"
-          filter_fg: "#${p.hot}"
-          counter_fg: "#${p.secondaryText}"
-          placeholder_fg: "#${p.mutedText}"
-          border_color: "#${p.foreground}"
-      '';
+    # Inherit the current Rofi phosphor theme while keeping the established
+    # centered 1000x700 shortcut-reference footprint.
+    xdg.configFile."rofi/shortcut-cheatsheet.rasi".text = ''
+      @theme "current"
 
-      # Sources for shortcut-cheatsheet-data.nix:
-      #   Desktop/voice/hardware: dotfiles/hypr/hyprland.lua and the remote
-      #     role fragment in home/programs/dotfiles.nix.
-      #   Herdr: direct custom bindings in dotfiles/herdr/config.toml.
-      #   MPV: built-in input map; home/programs/mpv.nix leaves it unchanged.
-      #   Shell: aliases and ZLE bindings in home/programs/shell.nix.
-      # This is the compact daily-driver set, not an exhaustive list of the
-      # defaults inherited from Hyprland, MPV, zsh, or Oh My Zsh.
-      "keyb/shortcuts.yml".text = keybData;
+      * {
+          font: "Hack Nerd Font 10";
+      }
 
-      # The comparison sheet inherits the current Rofi phosphor theme while
-      # matching the keyb popup's 1000x700 centered footprint.
-      "rofi/shortcut-cheatsheet.rasi".text = ''
-        @theme "current"
+      window {
+          width: 1000px;
+          height: 700px;
+          location: center;
+          anchor: center;
+      }
 
-        * {
-            font: "Hack Nerd Font 10";
-        }
+      listview {
+          lines: 27;
+          dynamic: false;
+          scrollbar: true;
+      }
 
-        window {
-            width: 1000px;
-            height: 700px;
-            location: center;
-            anchor: center;
-        }
+      element {
+          padding: 3px 6px;
+      }
 
-        listview {
-            lines: 27;
-            dynamic: false;
-            scrollbar: true;
-        }
+      entry {
+          placeholder: "Search sections, keys, descriptions...";
+      }
+    '';
 
-        element {
-            padding: 3px 6px;
-        }
-
-        entry {
-            placeholder: "Search sections, keys, descriptions...";
-        }
-      '';
-    };
-
-    # Rofi's drun mode discovers both comparison entries. The original keyb
-    # launcher and its Foot-hosted treatment remain unchanged.
-    xdg.dataFile = {
-      "applications/shortcut-cheatsheet.desktop".text = ''
-        [Desktop Entry]
-        Version=1.0
-        Type=Application
-        Name=Shortcut Cheat Sheet
-        GenericName=Keyboard and Alias Reference
-        Comment=Search configured desktop, Herdr, MPV, shell, and alias shortcuts
-        Exec=${pkgs.foot}/bin/foot --app-id foot-float --title "Shortcut Cheat Sheet" ${shortcutCheatsheet}/bin/shortcut-cheatsheet
-        Icon=input-keyboard
-        Terminal=false
-        Categories=Utility;System;
-        Keywords=shortcut;keybinding;hotkey;alias;herdr;mpv;hyprland;
-        StartupNotify=false
-      '';
-
-      "applications/shortcut-cheatsheet-rofi.desktop".text = ''
-        [Desktop Entry]
-        Version=1.0
-        Type=Application
-        Name=Shortcut Cheat Sheet (Rofi)
-        GenericName=Keyboard and Alias Reference
-        Comment=Compare the Rofi-backed searchable shortcut reference
-        Exec=${rofiCheatsheet}/bin/shortcut-cheatsheet-rofi
-        Icon=input-keyboard
-        Terminal=false
-        Categories=Utility;System;
-        Keywords=shortcut;keybinding;hotkey;alias;herdr;mpv;hyprland;rofi;comparison;
-        StartupNotify=false
-      '';
-    };
+    # Super+R opens Rofi's drun mode, which discovers this canonical entry.
+    xdg.dataFile."applications/shortcut-cheatsheet.desktop".text = ''
+      [Desktop Entry]
+      Version=1.0
+      Type=Application
+      Name=Shortcut Cheat Sheet
+      GenericName=Keyboard and Alias Reference
+      Comment=Search shortcut sections, keys, and descriptions
+      Exec=${shortcutCheatsheet}/bin/shortcut-cheatsheet
+      Icon=input-keyboard
+      Terminal=false
+      Categories=Utility;System;
+      Keywords=shortcut;keybinding;hotkey;alias;herdr;mpv;hyprland;
+      StartupNotify=false
+    '';
   };
 }
