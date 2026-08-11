@@ -235,6 +235,7 @@
         '')
         {
           add_newline = false;
+          command_timeout = 750;
           line_break.disabled = true;
           cmd_duration.disabled = true;
         };
