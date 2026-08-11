@@ -192,9 +192,7 @@ let
         skill.removeprefix("openai-templates:"): skill
         for skill in OPENAI_TEMPLATE_SKILLS
     }
-    # These selectors named local bridges that were removed from the tracked
-    # skill set. Existing copied profiles retain unknown blocks by design, so
-    # migrate only these known obsolete entries while preserving all others.
+    # Remove only these known stale selectors from persisted configuration.
     OBSOLETE_PROFILE_SKILLS = {
         "mattpocock": {
             "ask-matt",
@@ -222,6 +220,10 @@ let
             "writing-great-skills",
         },
         "superpowers": {"superpowers-domain-context"},
+    }
+    OBSOLETE_BASE_SKILL_NAMES = set().union(*OBSOLETE_PROFILE_SKILLS.values())
+    OBSOLETE_BASE_SKILL_PATHS = {
+        os.path.expanduser("~/.codex/skills/superpowers-domain-context/SKILL.md"),
     }
 
     def value(item):
@@ -403,6 +405,10 @@ let
             # is the sole stale skill block we remove; every other unknown
             # user-owned block stays untouched.
             if name == "openai-templates":
+                del lines[start:end]
+                changed = True
+                continue
+            if name in OBSOLETE_BASE_SKILL_NAMES or skill_path in OBSOLETE_BASE_SKILL_PATHS:
                 del lines[start:end]
                 changed = True
                 continue
