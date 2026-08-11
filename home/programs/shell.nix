@@ -265,6 +265,7 @@ in
       # the latter silently downgrades to the default mode until the bypass
       # disclaimer has been accepted interactively at least once.
       alias clo='claude --dangerously-skip-permissions --model claude-opus-5 --append-system-prompt-file "$HOME/.config/claude/orchestrator-opus.md"'
+      alias clfo='claude --dangerously-skip-permissions --model claude-fable-5 --append-system-prompt-file "$HOME/.config/claude/orchestrator-fable.md"'
 
       # Claude Code profile launchers bypassing all permission checks.
       alias cly='claude --dangerously-skip-permissions'
