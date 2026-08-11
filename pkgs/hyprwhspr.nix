@@ -95,6 +95,14 @@ stdenvNoCC.mkDerivation rec {
 
   nativeBuildInputs = [ makeWrapper ];
 
+  # Package the whole upstream runtime tree (bin, config, lib, share, scripts,
+  # utils) -- the shipped commands reach across all of it -- and expose every
+  # user-facing launcher as a wrapper in $out/bin. A tool that lives only under
+  # $out/lib/hyprwhspr/bin (meeting-recorder was one) is unreachable. Upstream
+  # docs, contrib files, and license material go to $out/share/doc/hyprwhspr.
+  #
+  # This host runs the REST backend. Local backends such as pywhispercpp work
+  # only if their Python dependencies are added to pythonEnv above.
   installPhase = ''
     runHook preInstall
 
