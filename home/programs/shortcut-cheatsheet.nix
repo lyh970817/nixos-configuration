@@ -9,6 +9,44 @@
 let
   p = (import ../palettes.nix).active;
   keyb = pkgs.callPackage ../../pkgs/keyb.nix { };
+  sections = import ./shortcut-cheatsheet-data.nix;
+
+  renderKeybBinding =
+    binding:
+    "    - name: ${builtins.toJSON binding.description}\n"
+    + "      key: ${builtins.toJSON binding.key}\n";
+  renderKeybSection =
+    section:
+    "- name: ${builtins.toJSON section.name}\n"
+    + "  keybinds:\n"
+    + lib.concatMapStrings renderKeybBinding section.bindings;
+  keybData = lib.concatMapStringsSep "\n" renderKeybSection sections;
+
+  # These are the only non-ASCII characters in the padded columns. Normalize
+  # them before counting bytes so the visible separators stay aligned.
+  visibleLength =
+    value: builtins.stringLength (lib.replaceStrings [ "·" "–" "…" ] [ "." "-" "." ] value);
+  padTo =
+    width: value:
+    let
+      padding = lib.max 1 (width - visibleLength value);
+    in
+    value + lib.concatStrings (builtins.genList (_: " ") padding);
+  escapeMarkup = lib.replaceStrings [ "&" "<" ">" ] [ "&amp;" "&lt;" "&gt;" ];
+  renderRofiDisplay =
+    section: binding:
+    "<b>${escapeMarkup (padTo 24 section.name)}</b> │ "
+    + "${escapeMarkup (padTo 38 binding.key)} │ "
+    + escapeMarkup binding.description;
+  renderRofiBinding = section: binding: ''
+    ${pkgs.coreutils}/bin/printf '%s\0display\x1f%s\x1fmeta\x1f%s\n' \
+      ${lib.escapeShellArg "${binding.key} ${binding.description}"} \
+      ${lib.escapeShellArg (renderRofiDisplay section binding)} \
+      ${lib.escapeShellArg section.name}
+  '';
+  rofiRows = lib.concatMapStrings (
+    section: lib.concatMapStrings (renderRofiBinding section) section.bindings
+  ) sections;
 
   shortcutCheatsheet = pkgs.writeShellApplication {
     name = "shortcut-cheatsheet";
@@ -19,13 +57,45 @@ let
         --key ${lib.escapeShellArg "${config.xdg.configHome}/keyb/shortcuts.yml"}
     '';
   };
+
+  rofiCheatsheetData = pkgs.writeShellApplication {
+    name = "shortcut-cheatsheet-rofi-data";
+    text = ''
+      if (( $# > 0 )); then
+        exit 0
+      fi
+
+      ${pkgs.coreutils}/bin/printf '\0prompt\x1ffilter › \n'
+      ${pkgs.coreutils}/bin/printf '\0markup-rows\x1ftrue\n'
+      ${pkgs.coreutils}/bin/printf '\0no-custom\x1ftrue\n'
+      ${rofiRows}
+    '';
+  };
+
+  rofiCheatsheet = pkgs.writeShellApplication {
+    name = "shortcut-cheatsheet-rofi";
+    text = ''
+      exec ${pkgs.rofi}/bin/rofi \
+        -show shortcuts \
+        -modes ${lib.escapeShellArg "shortcuts:${rofiCheatsheetData}/bin/shortcut-cheatsheet-rofi-data"} \
+        -matching normal \
+        -i \
+        -no-sort \
+        -theme ${lib.escapeShellArg "${config.xdg.configHome}/rofi/shortcut-cheatsheet.rasi"} \
+        -kb-row-up ${lib.escapeShellArg "Up,Control+p,Alt+k"} \
+        -kb-row-down ${lib.escapeShellArg "Down,Control+n,Alt+j"}
+    '';
+  };
 in
 {
   # The sheet describes the remote laptop's desktop and is deliberately absent
-  # on the home role. The source inventory below is curated rather than claiming
-  # to be exhaustive: each section names the configuration it was read from.
+  # on the home role. The source inventory is curated rather than claiming to
+  # be exhaustive: each section names the configuration it was read from.
   config = lib.mkIf (osConfig.portable.role == "remote") {
-    home.packages = [ shortcutCheatsheet ];
+    home.packages = [
+      shortcutCheatsheet
+      rofiCheatsheet
+    ];
 
     xdg.configFile = {
       "keyb/shortcut-cheatsheet.yml".text = ''
@@ -54,7 +124,7 @@ in
           border_color: "#${p.foreground}"
       '';
 
-      # Sources:
+      # Sources for shortcut-cheatsheet-data.nix:
       #   Desktop/voice/hardware: dotfiles/hypr/hyprland.lua and the remote
       #     role fragment in home/programs/dotfiles.nix.
       #   Herdr: direct custom bindings in dotfiles/herdr/config.toml.
@@ -62,227 +132,68 @@ in
       #   Shell: aliases and ZLE bindings in home/programs/shell.nix.
       # This is the compact daily-driver set, not an exhaustive list of the
       # defaults inherited from Hyprland, MPV, zsh, or Oh My Zsh.
-      "keyb/shortcuts.yml".text = ''
-        - name: DESKTOP · LAUNCH
-          keybinds:
-            - name: Home session over SSH
-              key: Super + Enter
-            - name: Local Herdr session
-              key: Super + Shift + Enter
-            - name: Application launcher
-              key: Super + R
-            - name: Window switcher
-              key: Super + Shift + R
-            - name: Brave
-              key: Super + W
-            - name: Yazi in Foot
-              key: Super + E
-            - name: Thunar
-              key: Super + Shift + E
-            - name: Date and time
-              key: Super + D
+      "keyb/shortcuts.yml".text = keybData;
 
-        - name: DESKTOP · WINDOWS
-          keybinds:
-            - name: Focus left / down / up / right
-              key: Super + h / j / k / l
-            - name: Move window left / down / up / right
-              key: Super + Shift + h / j / k / l
-            - name: Next / previous window
-              key: Super + Tab / Super + Shift + Tab
-            - name: Close / force close
-              key: Super + q / Super + Shift + q
-            - name: Toggle floating
-              key: Super + s
-            - name: Toggle fullscreen
-              key: Super + f
-            - name: Toggle pseudotile
-              key: Super + p
-            - name: Toggle split direction
-              key: Super + v
-            - name: Resize with arrows
-              key: Super + Arrow keys
-            - name: Drag / resize with mouse
-              key: Super + left / right drag
-            - name: Send window behind others
-              key: Alt + Shift + b
+      # The comparison sheet inherits the current Rofi phosphor theme while
+      # matching the keyb popup's 1000x700 centered footprint.
+      "rofi/shortcut-cheatsheet.rasi".text = ''
+        @theme "current"
 
-        - name: DESKTOP · WORKSPACES
-          keybinds:
-            - name: Switch to workspace 1–10
-              key: Super + 1…0
-            - name: Move window to workspace 1–10
-              key: Super + Shift + 1…0
-            - name: Next / previous existing workspace
-              key: Super + wheel down / up
-            - name: Move window to workspace 10
-              key: Super + m
+        window {
+            width: 1000px;
+            height: 700px;
+            location: center;
+            anchor: center;
+        }
 
-        - name: DESKTOP · DISPLAY
-          keybinds:
-            - name: Toggle dark / light theme
-              key: Super + Shift + t
-            - name: Toggle night colour temperature
-              key: Super + n
-            - name: Full screenshot
-              key: Print
-            - name: Region screenshot
-              key: Super + Shift + s
-            - name: Restore laptop display after lid event
-              key: Fn + F12
+        listview {
+            lines: 27;
+            dynamic: false;
+            scrollbar: true;
+        }
 
-        - name: VOICE
-          keybinds:
-            - name: Toggle short dictation
-              key: Super + o
-            - name: Toggle long-form dictation
-              key: Ctrl + Shift + l
-            - name: Toggle dictation profile
-              key: Ctrl + Shift + p
-            - name: Cancel long-form dictation
-              key: Super + Escape
+        element {
+            padding: 3px 6px;
+        }
 
-        - name: LAPTOP · HARDWARE
-          keybinds:
-            - name: Cycle power profile
-              key: Fn + F2
-            - name: Toggle microphone mute
-              key: Fn + F4
-            - name: Brightness down / up
-              key: Fn + F6 / F7
-            - name: Toggle Mihomo proxy
-              key: Fn + F8
-            - name: Toggle touchpad
-              key: Fn + F9
-            - name: Cycle keyboard backlight
-              key: Fn + Z
-            - name: Cycle monitor scale
-              key: Fn + Space
-            - name: Volume mute / down / up
-              key: Fn + Esc / 3 / 4
-            - name: Microphone volume down / up
-              key: Ctrl + Shift + d / u
-
-        - name: HERDR · PANES
-          keybinds:
-            - name: Focus left / down / up / right
-              key: Alt + h / j / k / l
-            - name: Swap left / down / up / right
-              key: Alt + Shift + h / j / k / l
-            - name: Split pane side by side
-              key: Alt + Enter
-            - name: Toggle pane zoom
-              key: Alt + f
-            - name: Close pane and any empty tab / workspace
-              key: Alt + q
-            - name: Enter keyboard copy mode
-              key: Alt + v
-
-        - name: HERDR · TABS
-          keybinds:
-            - name: Previous / next tab
-              key: Alt + Shift + Tab / Alt + Tab
-            - name: Focus or create persistent tab slot 1–9
-              key: Alt + 1…9
-
-        - name: HERDR · WORKSPACES
-          keybinds:
-            - name: Open session navigator
-              key: Alt + g
-            - name: Open workspace picker
-              key: Alt + w
-            - name: Previous / next workspace
-              key: Alt + Left / Right
-            - name: Create workspace
-              key: Alt + n
-
-        - name: HERDR · AGENTS
-          keybinds:
-            - name: Toggle agent sidebar
-              key: Alt + e
-            - name: Previous / next agent
-              key: Alt + Up / Down
-
-        - name: MPV · AUDIO
-          keybinds:
-            - name: Volume down / up
-              key: 9 / 0
-            - name: Cycle audio track
-              key: "#"
-
-        - name: MPV · SUBTITLES
-          keybinds:
-            - name: Next / previous subtitle track
-              key: j / Shift + j
-            - name: Subtitle 100 ms earlier / later
-              key: z / Shift + z
-
-        - name: SHELL · KEYS
-          keybinds:
-            - name: Accept next suggested word
-              key: Alt + f
-            - name: Accept full suggestion
-              key: Ctrl + f
-            - name: Open Yazi and return in chosen directory
-              key: Ctrl + o
-            - name: Fuzzy command history
-              key: Ctrl + r
-            - name: Zeno completion
-              key: Tab
-            - name: Directory history back / forward
-              key: Ctrl + Left / Right
-            - name: Directory history up / down
-              key: Ctrl + Up / Down
-
-        - name: SHELL · CUSTOM ALIASES
-          keybinds:
-            - name: Ask Whai a natural-language question
-              key: ","
-            - name: Rebuild NixOS from /etc/nixos
-              key: rebuild
-            - name: Codex · unrestricted
-              key: cdy
-            - name: Codex orchestrator · unrestricted
-              key: cdo
-            - name: Claude · unrestricted
-              key: cly
-            - name: Opus 5 orchestrator · orchestrator-opus.md
-              key: clo
-            - name: Fable 5 orchestrator · orchestrator-fable.md
-              key: clfo
-            - name: Claude Matt Pocock profile
-              key: claude-matt
-            - name: Claude local GPT-5.6 gateway
-              key: clg
-            - name: Claude Matt profile · unrestricted
-              key: clty
-            - name: Claude GPT-5.6 gateway · unrestricted
-              key: clgy
-            - name: Git status
-              key: gs
-            - name: Git push
-              key: gp
-            - name: Git force push
-              key: gpf
+        entry {
+            placeholder: "Search sections, keys, descriptions...";
+        }
       '';
     };
 
-    # Rofi's drun mode discovers this as “Shortcut Cheat Sheet”; the dedicated
-    # wrapper fixes the declarative data/config paths and the existing
-    # foot-float rule supplies the compact 1000x700 popup treatment.
-    xdg.dataFile."applications/shortcut-cheatsheet.desktop".text = ''
-      [Desktop Entry]
-      Version=1.0
-      Type=Application
-      Name=Shortcut Cheat Sheet
-      GenericName=Keyboard and Alias Reference
-      Comment=Search configured desktop, Herdr, MPV, shell, and alias shortcuts
-      Exec=${pkgs.foot}/bin/foot --app-id foot-float --title "Shortcut Cheat Sheet" ${shortcutCheatsheet}/bin/shortcut-cheatsheet
-      Icon=input-keyboard
-      Terminal=false
-      Categories=Utility;System;
-      Keywords=shortcut;keybinding;hotkey;alias;herdr;mpv;hyprland;
-      StartupNotify=false
-    '';
+    # Rofi's drun mode discovers both comparison entries. The original keyb
+    # launcher and its Foot-hosted treatment remain unchanged.
+    xdg.dataFile = {
+      "applications/shortcut-cheatsheet.desktop".text = ''
+        [Desktop Entry]
+        Version=1.0
+        Type=Application
+        Name=Shortcut Cheat Sheet
+        GenericName=Keyboard and Alias Reference
+        Comment=Search configured desktop, Herdr, MPV, shell, and alias shortcuts
+        Exec=${pkgs.foot}/bin/foot --app-id foot-float --title "Shortcut Cheat Sheet" ${shortcutCheatsheet}/bin/shortcut-cheatsheet
+        Icon=input-keyboard
+        Terminal=false
+        Categories=Utility;System;
+        Keywords=shortcut;keybinding;hotkey;alias;herdr;mpv;hyprland;
+        StartupNotify=false
+      '';
+
+      "applications/shortcut-cheatsheet-rofi.desktop".text = ''
+        [Desktop Entry]
+        Version=1.0
+        Type=Application
+        Name=Shortcut Cheat Sheet (Rofi)
+        GenericName=Keyboard and Alias Reference
+        Comment=Compare the Rofi-backed searchable shortcut reference
+        Exec=${rofiCheatsheet}/bin/shortcut-cheatsheet-rofi
+        Icon=input-keyboard
+        Terminal=false
+        Categories=Utility;System;
+        Keywords=shortcut;keybinding;hotkey;alias;herdr;mpv;hyprland;rofi;comparison;
+        StartupNotify=false
+      '';
+    };
   };
 }
