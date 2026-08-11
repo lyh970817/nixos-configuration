@@ -165,9 +165,7 @@ let
         "openai-templates:artifact-template-team-alignment",
         "openai-templates:artifact-template-three-statement-forecast",
     ]
-    SKILLS = [
-        # Keep the other bundled system skills available, including
-        # openai-docs, skill-creator, skill-installer, and review-agent.
+    DISABLED_SKILLS = [
         "imagegen",
         "plugin-creator",
         "control-in-app-browser",
@@ -182,6 +180,24 @@ let
         "google-drive:google-sheets",
         "google-drive:google-slides",
     ] + OPENAI_TEMPLATE_SKILLS
+    # These are explicit enables, rather than relying on Codex's default, so
+    # an older mutable config cannot keep a required bundled skill hidden.
+    ENABLED_SKILLS = [
+        "openai-docs",
+        "skill-creator",
+        "skill-installer",
+    ]
+    # Older activations could write either the runtime system-skill path or
+    # this checkout's legacy path.  Recognize only those exact roots: a user
+    # path which merely happens to contain one of these names stays user-owned.
+    ENABLED_SYSTEM_SKILL_PATHS = {
+        os.path.normpath(os.path.join(root, skill, "SKILL.md")): skill
+        for root in (
+            os.path.expanduser("~/.codex/skills/.system"),
+            "${osConfig.portable.configDir}/dotfiles/codex/skills/.system",
+        )
+        for skill in ENABLED_SKILLS
+    }
     PATH_SKILLS = {
         "control-in-app-browser": "control-in-app-browser",
         "sites-hosting": "sites-hosting",
@@ -499,7 +515,11 @@ let
                 del lines[start:end]
                 changed = True
                 continue
-            selected = name if name in SKILLS else None
+            selected = name if name in DISABLED_SKILLS or name in ENABLED_SKILLS else None
+            if selected is None and skill_path:
+                selected = ENABLED_SYSTEM_SKILL_PATHS.get(
+                    os.path.normpath(os.path.expanduser(skill_path))
+                )
             if selected is None and skill_path:
                 for marker, stable in PATH_SKILLS.items():
                     if "/" + marker + "/" in skill_path or skill_path.endswith("/" + marker + "/SKILL.md"):
@@ -507,17 +527,29 @@ let
                         break
             if selected is None:
                 continue
+            if selected in present:
+                del lines[start:end]
+                changed = True
+                continue
             present.add(selected)
             if path_index is not None:
                 lines[path_index] = 'name = "%s"\n' % selected
                 changed = True
-            changed = set_enabled(lines, start, end, False) or changed
-        for skill in SKILLS:
+            changed = set_enabled(lines, start, end, selected in ENABLED_SKILLS) or changed
+        for skill in DISABLED_SKILLS:
             if skill not in present:
                 append_block(lines, [
                     "[[skills.config]]",
                     'name = "%s"' % skill,
                     "enabled = false",
+                ])
+                changed = True
+        for skill in ENABLED_SKILLS:
+            if skill not in present:
+                append_block(lines, [
+                    "[[skills.config]]",
+                    'name = "%s"' % skill,
+                    "enabled = true",
                 ])
                 changed = True
         new = "".join(lines)
