@@ -7,12 +7,42 @@
 
 let
   link = subpath: config.lib.file.mkOutOfStoreSymlink "${osConfig.portable.configDir}/${subpath}";
+
+  # Herdr keeps a persistent server behind its short-lived clients. Resolve the
+  # mode before that server starts so it is inherited by the server and every
+  # pane it later creates, rather than letting a later desktop switch retheme an
+  # already-running session.
+  herdrWrapped = pkgs.symlinkJoin {
+    name = "herdr-wrapped";
+    paths = [ pkgs.herdr ];
+    postBuild = ''
+      rm "$out/bin/herdr"
+      cat > "$out/bin/herdr" <<'WRAPPER'
+      #!/usr/bin/env bash
+      # An incoming session mode is authoritative. Otherwise snapshot this
+      # machine's desktop mode once, using the same dark-versus-light fallback
+      # as theme-mode and btop.
+      case "$THEME_MODE" in
+        dark | light) ;;
+        *)
+          case "$(readlink "$HOME/.local/state/hypr/current-theme.lua" 2>/dev/null)" in
+            *dark.lua) THEME_MODE=dark ;;
+            *) THEME_MODE=light ;;
+          esac
+          ;;
+      esac
+      export THEME_MODE
+      exec ${pkgs.herdr}/bin/herdr "$@"
+      WRAPPER
+      chmod +x "$out/bin/herdr"
+    '';
+  };
 in
 {
   # Terminal agent multiplexer; useful on both roles, so it is not gated on
   # `portable.role`. The package comes from the pinned upstream flake input
   # via the overlay in flake.nix.
-  home.packages = [ pkgs.herdr ];
+  home.packages = [ herdrWrapped ];
 
   # herdr rewrites its own config.toml at runtime: `mark_onboarding_complete`
   # clears the first-run wizard and the in-app Settings screen saves through the
