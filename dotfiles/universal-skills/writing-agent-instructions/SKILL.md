@@ -15,7 +15,7 @@ Everything else is context you pay for every turn and get nothing back.
   spends its words on what might go wrong instead of on what to do; let the rare
   misreading happen and fix it when it does.
 - Don't restate code, commands, or structure; it rots when they change — point
-  at the file. A finding or measurement stays true: state it inline.
+  at the file.
 - Numeric caps buy obedience, not the behaviour you wanted: the model that
   honours "under 200 words" is not the one you were writing for, and the model
   that ignores it is unaffected. Take brevity from structure instead — named
