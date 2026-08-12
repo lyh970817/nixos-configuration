@@ -2,7 +2,7 @@
   "title": "Herdr browser tabs and dynamic titles",
   "slug": "herdr-browser-titles",
   "workflow": "herdr-browser-titles",
-  "status": "verification_pending",
+  "status": "complete",
   "approval": {
     "source_changes": true,
     "real_qwen_call": false,
@@ -12,13 +12,13 @@
     {
       "id": "implementation",
       "owner": "implement_dynamic_titles",
-      "status": "implemented"
+      "status": "complete"
     }
   ],
   "verification": {
-    "fake_herdr": "pending",
-    "fake_http": "pending",
-    "static": "pending",
+    "fake_herdr": "passed",
+    "fake_http": "passed",
+    "static": "passed",
     "rebuild": "parent"
   }
 }
