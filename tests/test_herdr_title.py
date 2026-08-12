@@ -184,6 +184,25 @@ class HerdrTitleTests(unittest.IsolatedAsyncioTestCase):
         await self.coordinator.reconcile(connection)
         self.assertEqual(state["owner_pane"], "w1:p1")
 
+    async def test_owner_restart_grace_then_deterministic_re_election(self):
+        panes = [pane("w1:p1", agent=None), pane("w1:p2", agent="codex")]
+        connection = FakeConnection(self.coordinator, "/fake/herdr.sock", panes, [tab(count=2)])
+        state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
+        state.update({
+            "owner_pane": "w1:p1", "owner_kind": "claude", "session_id": "old",
+            "epoch": 1, "title": "1",
+        })
+        await self.coordinator.reconcile(connection)
+        self.assertEqual(state["owner_pane"], "w1:p1")
+        self.assertEqual(state["session_id"], "old")
+
+        state["owner_ineligible_since"] = time.time() - TITLE.OWNER_RESTART_GRACE - 1
+        await self.coordinator.reconcile(connection)
+        self.assertEqual(state["owner_pane"], "w1:p2")
+        self.assertEqual(state["owner_kind"], "codex")
+        self.assertNotIn("session_id", state)
+        self.assertGreaterEqual(state["epoch"], 3)
+
     async def test_manual_rename_pins_and_cancels(self):
         connection = FakeConnection(self.coordinator, "/fake/herdr.sock", [pane()])
         self.coordinator.connections[connection.socket_path] = connection
@@ -208,6 +227,19 @@ class HerdrTitleTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(state["pinned"])
         self.assertEqual(state["title"], "Manual While Offline")
         self.assertEqual(connection.renames, [])
+
+    async def test_reconnect_does_not_pin_expected_coordinator_rename(self):
+        connection = FakeConnection(
+            self.coordinator, "/fake/herdr.sock",
+            [pane(agent="claude", title="New Automatic Topic")],
+            [tab(label="New Automatic Topic")],
+        )
+        state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
+        state.update({"owner_pane": "w1:p1", "owner_kind": "claude", "title": "Old Automatic Topic", "pinned": False})
+        connection.expected_renames[("w1:t1", "New Automatic Topic")] = 1
+        await self.coordinator.reconcile(connection)
+        self.assertFalse(state.get("pinned", False))
+        self.assertEqual(state["title"], "New Automatic Topic")
 
     async def test_server_incarnation_change_clears_reused_tab_identity(self):
         connection = FakeConnection(self.coordinator, "/fake/herdr.sock", [pane(agent="claude", title="Fresh Claude Topic")])
@@ -332,6 +364,8 @@ class HerdrTitleTests(unittest.IsolatedAsyncioTestCase):
             "client_secret=abcdefghijklmnopqrstuvwxyz123456",
             "Use github_pat_abcdefghijklmnopqrstuvwxyz1234567890",
             "Authorization: Bearer abcdefghijklmnopqrstuvwxyz",
+            "BUILD_VALUE=aB3dE5fG7hJ9kL2mN4pQ6rS8tU",
+            "Use hf_abcdefghijklmnopqrstuvwxyz1234567890",
         ]
         for sample in samples:
             with self.subTest(sample=sample):

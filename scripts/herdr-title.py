@@ -9,6 +9,7 @@ import collections
 import contextlib
 import datetime as dt
 import json
+import math
 import os
 import re
 import socket
@@ -32,13 +33,15 @@ MODEL = "qwen3.6-flash"
 DEFAULT_ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
 MAX_PROMPT = 1_000
 MAX_TITLE = 64
+OWNER_RESTART_GRACE = 5.0
 ACKS = {"ok", "okay", "yes", "yep", "sure", "continue", "go ahead", "thanks", "thank you"}
 SECRET_PATTERNS = [
     re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----", re.I),
     re.compile(r"\b(?:[A-Za-z_][A-Za-z0-9_]*[_-])?(?:api[_-]?key|access[_-]?key|token|secret|password|passwd)[A-Za-z0-9_]*\s*[:=]\s*['\"]?[A-Za-z0-9_./+\-=]{12,}", re.I),
     re.compile(r"\bBearer\s+[A-Za-z0-9_.~+/=-]{12,}", re.I),
-    re.compile(r"\b(?:sk-[A-Za-z0-9_-]{16,}|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9_]{16,}|github_pat_[A-Za-z0-9_]{16,}|glpat-[A-Za-z0-9_-]{16,}|xox[baprs]-[A-Za-z0-9-]{16,})\b", re.I),
+    re.compile(r"\b(?:sk-[A-Za-z0-9_-]{16,}|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9_]{16,}|github_pat_[A-Za-z0-9_]{16,}|glpat-[A-Za-z0-9_-]{16,}|xox[baprs]-[A-Za-z0-9-]{16,}|AIza[A-Za-z0-9_-]{20,}|ya29\.[A-Za-z0-9_-]{20,}|npm_[A-Za-z0-9_-]{20,}|hf_[A-Za-z0-9_-]{20,}|pypi-[A-Za-z0-9_-]{20,})\b", re.I),
 ]
+ASSIGNMENT_RE = re.compile(r"\b[A-Za-z_][A-Za-z0-9_.-]*\s*[:=]\s*['\"]?([A-Za-z0-9_./+\-=]{20,})")
 
 
 def clean_title(value: Any, maximum: int = MAX_TITLE) -> str:
@@ -63,7 +66,16 @@ def is_substantive(prompt: str) -> bool:
 
 
 def contains_secret(prompt: str) -> bool:
-    return any(pattern.search(prompt) for pattern in SECRET_PATTERNS)
+    if any(pattern.search(prompt) for pattern in SECRET_PATTERNS):
+        return True
+    for match in ASSIGNMENT_RE.finditer(prompt):
+        value = match.group(1).rstrip("'\"")
+        frequencies = collections.Counter(value)
+        entropy = -sum((count / len(value)) * math.log2(count / len(value)) for count in frequencies.values())
+        classes = sum(bool(re.search(pattern, value)) for pattern in (r"[a-z]", r"[A-Z]", r"[0-9]", r"[^A-Za-z0-9]"))
+        if entropy >= 3.5 and classes >= 2:
+            return True
+    return False
 
 
 def local_prompt_title(prompt: str, cwd: str) -> str:
@@ -209,6 +221,7 @@ class Coordinator:
         self.daily: collections.Counter[str] = collections.Counter()
         self.failures = 0
         self.circuit_until = 0.0
+        self.owner_grace_handles: dict[str, asyncio.TimerHandle] = {}
 
     def discover(self) -> list[Path]:
         root = self.config_home / "herdr"
@@ -260,6 +273,30 @@ class Coordinator:
             self.generation_pending.pop(key, None)
             if task := self.generations.pop(key, None):
                 task.cancel()
+        for key in [key for key in self.owner_grace_handles if key.startswith(prefix)]:
+            self.owner_grace_handles.pop(key).cancel()
+
+    def schedule_owner_recheck(self, connection: HerdrConnection, tab_id: str, delay: float) -> None:
+        key = self.generation_key(connection.socket_path, tab_id)
+        if key in self.owner_grace_handles:
+            return
+
+        async def refresh() -> None:
+            try:
+                await connection.refresh_snapshot()
+            except Exception:
+                pass
+
+        def trigger() -> None:
+            self.owner_grace_handles.pop(key, None)
+            asyncio.create_task(refresh())
+
+        self.owner_grace_handles[key] = asyncio.get_running_loop().call_later(max(0.0, delay), trigger)
+
+    def cancel_owner_recheck(self, socket_path: str, tab_id: str) -> None:
+        key = self.generation_key(socket_path, tab_id)
+        if handle := self.owner_grace_handles.pop(key, None):
+            handle.cancel()
 
     @staticmethod
     def owner_kind(pane: dict[str, Any]) -> str | None:
@@ -280,6 +317,8 @@ class Coordinator:
             socket_path, _, tab_id = key.partition("\0")
             if socket_path == connection.socket_path and tab_id not in tabs:
                 self.state.data["tabs"].pop(key, None)
+                self.cancel_owner_recheck(connection.socket_path, tab_id)
+                self.cancel_generation(connection.socket_path, tab_id)
         for tab_id, tab in tabs.items():
             state_key = f"{connection.socket_path}\0{tab_id}"
             state_existed = state_key in self.state.data["tabs"]
@@ -297,13 +336,31 @@ class Coordinator:
                     state.update({"pinned": True, "title": label})
                     self.cancel_generation(connection.socket_path, tab_id)
             owner = next((p for p in by_tab[tab_id] if p.get("pane_id") == state.get("owner_pane")), None)
+            owner_reserved = False
+            if owner and not self.owner_kind(owner):
+                now = time.time()
+                since = float(state.setdefault("owner_ineligible_since", now))
+                remaining = OWNER_RESTART_GRACE - (now - since)
+                if remaining > 0:
+                    owner_reserved = True
+                    self.schedule_owner_recheck(connection, tab_id, remaining)
+                else:
+                    self.cancel_owner_recheck(connection.socket_path, tab_id)
+                    self.cancel_generation(connection.socket_path, tab_id)
+                    for field in ("owner_pane", "owner_kind", "owner_ineligible_since", "session_id"):
+                        state.pop(field, None)
+                    state["epoch"] = int(state.get("epoch", 0)) + 1
+                    owner = None
+            elif owner:
+                state.pop("owner_ineligible_since", None)
+                self.cancel_owner_recheck(connection.socket_path, tab_id)
             if owner is None:
                 eligible = [p for p in by_tab[tab_id] if self.owner_kind(p)]
                 owner = eligible[0] if eligible else None
                 if owner:
                     state.update({"owner_pane": owner["pane_id"], "owner_kind": self.owner_kind(owner), "epoch": int(state.get("epoch", 0)) + 1})
-            if owner and not state.get("pinned"):
-                kind = self.owner_kind(owner) or state.get("owner_kind")
+            if owner and not owner_reserved and not state.get("pinned"):
+                kind = self.owner_kind(owner)
                 state["owner_kind"] = kind
                 if kind == "claude":
                     title = clean_title(owner.get("terminal_title_stripped"), 256)
