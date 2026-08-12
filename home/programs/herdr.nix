@@ -1,5 +1,6 @@
 {
   config,
+  lib,
   osConfig,
   pkgs,
   ...
@@ -158,11 +159,11 @@ in
   # to dictation credentials or make their broader namespace readable here.
   home.activation.herdrTitleCredentials = config.lib.dag.entryAfter [ "writeBoundary" ] ''
     run ${pkgs.coreutils}/bin/install -d -m700 $VERBOSE_ARG -- \
-      ${config.lib.escapeShellArg titleCredentialsDir}
-    if [ -e ${config.lib.escapeShellArg titleCredentialsSource} ]; then
+      ${lib.escapeShellArg titleCredentialsDir}
+    if [ -e ${lib.escapeShellArg titleCredentialsSource} ]; then
       run ${pkgs.coreutils}/bin/install -m600 $VERBOSE_ARG -- \
-        ${config.lib.escapeShellArg titleCredentialsSource} \
-        ${config.lib.escapeShellArg titleCredentialsRuntime}
+        ${lib.escapeShellArg titleCredentialsSource} \
+        ${lib.escapeShellArg titleCredentialsRuntime}
     fi
   '';
 
