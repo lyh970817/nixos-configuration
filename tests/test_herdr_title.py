@@ -7,7 +7,6 @@ import collections
 import importlib.util
 import json
 import os
-import shutil
 import socket
 import subprocess
 import sys
@@ -25,7 +24,7 @@ SPEC = importlib.util.spec_from_file_location("herdr_title", ROOT / "scripts/her
 assert SPEC and SPEC.loader
 TITLE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(TITLE)
-HOOK = ROOT / "scripts/herdr-title-hook.sh"
+HOOK = ROOT / "scripts/herdr-title-hook.c"
 
 
 def pane(pane_id="w1:p1", tab_id="w1:t1", agent="codex", title=None, cwd="/tmp/project"):
@@ -119,6 +118,16 @@ class HerdrTitleTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(state["pinned"])
         self.assertTrue(pending.cancelled() or pending.cancelling())
 
+    async def test_reconnect_snapshot_preserves_missed_manual_rename(self):
+        connection = FakeConnection(self.coordinator, "/fake/herdr.sock", [pane(agent="claude", title="Automatic Topic")], [tab(label="Automatic Topic")])
+        state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
+        state.update({"owner_pane": "w1:p1", "owner_kind": "claude", "title": "Automatic Topic", "pinned": False})
+        connection.snapshot["tabs"][0]["label"] = "Manual While Offline"
+        await self.coordinator.reconcile(connection)
+        self.assertTrue(state["pinned"])
+        self.assertEqual(state["title"], "Manual While Offline")
+        self.assertEqual(connection.renames, [])
+
     async def test_session_replacement_invalidates_stale_generation(self):
         connection = FakeConnection(self.coordinator, "/fake/herdr.sock", [pane()])
         self.coordinator.connections[connection.socket_path] = connection
@@ -150,6 +159,17 @@ class HerdrTitleTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(0.3)
         self.assertFalse(called)
         self.assertEqual(connection.renames[-1], ("w1:t1", "Codex — project"))
+
+    def test_compound_and_vendor_secrets_are_detected(self):
+        samples = [
+            "GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz123456",
+            "client_secret=abcdefghijklmnopqrstuvwxyz123456",
+            "Use github_pat_abcdefghijklmnopqrstuvwxyz1234567890",
+            "Authorization: Bearer abcdefghijklmnopqrstuvwxyz",
+        ]
+        for sample in samples:
+            with self.subTest(sample=sample):
+                self.assertTrue(TITLE.contains_secret(sample))
 
     async def test_generation_failure_is_cosmetic(self):
         with mock.patch.object(self.coordinator, "qwen_title_sync", side_effect=OSError("offline")):
@@ -202,30 +222,17 @@ class HerdrTitleTests(unittest.IsolatedAsyncioTestCase):
 
 class HookTests(unittest.TestCase):
     def setUp(self):
-        text = HOOK.read_text()
-        timeout = shutil.which("timeout")
-        substitutions = {
-            "@bash@": shutil.which("bash"),
-            "@coreutils@": str(Path(timeout).parent) if timeout else None,
-            "@jq@": shutil.which("jq"),
-            "@nc@": shutil.which("nc"),
-        }
-        if any(value is None for value in substitutions.values()):
-            self.skipTest("hook runtime command missing")
-        for source, target in substitutions.items():
-            text = text.replace(source, target)
-        self._rendered_hook = tempfile.NamedTemporaryFile(mode="w", delete=False)
-        self._rendered_hook.write(text)
-        self._rendered_hook.close()
+        self._hook_dir = tempfile.TemporaryDirectory()
+        self._rendered_hook = str(Path(self._hook_dir.name) / "herdr-title-hook")
+        subprocess.run(["cc", "-O2", "-Wall", "-Wextra", "-Werror", str(HOOK), "-o", self._rendered_hook], check=True)
 
     def tearDown(self):
-        if hasattr(self, "_rendered_hook"):
-            Path(self._rendered_hook.name).unlink(missing_ok=True)
+        self._hook_dir.cleanup()
 
     def run_hook(self, runtime: Path, payload: dict):
         env = os.environ | {"XDG_RUNTIME_DIR": str(runtime), "HERDR_SOCKET_PATH": "/fake/herdr.sock", "HERDR_PANE_ID": "w1:p1", "HERDR_TAB_ID": "w1:t1"}
         start = time.perf_counter()
-        result = subprocess.run(["bash", self._rendered_hook.name], input=json.dumps(payload).encode(), env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=1)
+        result = subprocess.run([self._rendered_hook], input=json.dumps(payload).encode(), env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=1)
         return result, time.perf_counter() - start
 
     def test_hook_enqueue_is_fail_open_and_nonblocking(self):
@@ -237,7 +244,7 @@ class HookTests(unittest.TestCase):
             server.bind(str(directory / "events.sock"))
             payload = {"hook_event_name": "UserPromptSubmit", "session_id": "session-1", "turn_id": "turn-1", "cwd": "/tmp/project", "prompt": "Implement browser style semantic titles"}
             result, elapsed = self.run_hook(runtime, payload)
-            event = json.loads(server.recv(32768))
+            event = TITLE.Coordinator.decode_datagram(server.recv(32768))
             server.close()
             self.assertEqual(result.returncode, 0)
             self.assertLess(elapsed, 0.1)

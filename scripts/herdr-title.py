@@ -13,6 +13,7 @@ import os
 import re
 import socket
 import stat
+import struct
 import sys
 import tempfile
 import time
@@ -34,9 +35,9 @@ MAX_TITLE = 64
 ACKS = {"ok", "okay", "yes", "yep", "sure", "continue", "go ahead", "thanks", "thank you"}
 SECRET_PATTERNS = [
     re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----", re.I),
-    re.compile(r"\b(?:sk|api|token|secret|password|passwd)[_-]?[A-Za-z0-9]*\s*[:=]\s*['\"]?[A-Za-z0-9_./+\-=]{12,}", re.I),
+    re.compile(r"\b[A-Za-z_][A-Za-z0-9_]*(?:api[_-]?key|access[_-]?key|token|secret|password|passwd)[A-Za-z0-9_]*\s*[:=]\s*['\"]?[A-Za-z0-9_./+\-=]{12,}", re.I),
     re.compile(r"\bBearer\s+[A-Za-z0-9_.~+/=-]{12,}", re.I),
-    re.compile(r"\b(?:sk-[A-Za-z0-9_-]{16,}|AKIA[0-9A-Z]{16})\b"),
+    re.compile(r"\b(?:sk-[A-Za-z0-9_-]{16,}|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9_]{16,}|github_pat_[A-Za-z0-9_]{16,}|glpat-[A-Za-z0-9_-]{16,}|xox[baprs]-[A-Za-z0-9-]{16,})\b", re.I),
 ]
 
 
@@ -246,6 +247,12 @@ class Coordinator:
                 self.state.data["tabs"].pop(key, None)
         for tab_id, tab in tabs.items():
             state = self.state.tab(connection.socket_path, tab_id)
+            label = clean_title(tab.get("label"))
+            if state and state.get("title") and label != state.get("title"):
+                expected = getattr(connection, "expected_renames", collections.Counter())
+                if expected[(tab_id, label)] == 0:
+                    state.update({"pinned": True, "title": label})
+                    self.cancel_generation(connection.socket_path, tab_id)
             owner = next((p for p in by_tab[tab_id] if p.get("pane_id") == state.get("owner_pane")), None)
             if owner is None:
                 eligible = [p for p in by_tab[tab_id] if self.owner_kind(p)]
@@ -259,7 +266,7 @@ class Coordinator:
                     title = clean_title(owner.get("terminal_title_stripped"))
                     if title:
                         await connection.rename(tab_id, title)
-            state.setdefault("title", tab.get("label", ""))
+            state.setdefault("title", label)
         self.state.save()
 
     async def handle_herdr_event(self, connection: HerdrConnection, message: dict[str, Any]) -> None:
@@ -290,7 +297,7 @@ class Coordinator:
 
     async def handle_datagram(self, data: bytes) -> None:
         try:
-            event = json.loads(data)
+            event = self.decode_datagram(data)
             if event.get("version") != 1:
                 return
             if event.get("type") in {"auto", "claim"}:
@@ -327,6 +334,40 @@ class Coordinator:
                     self.schedule_generation(connection, tab_id, pane_id, session_id, prompt, str(event.get("cwd") or ""))
         except Exception:
             return
+
+    @staticmethod
+    def decode_datagram(data: bytes) -> dict[str, Any]:
+        if not data.startswith(b"HT1\0"):
+            return json.loads(data)
+        if len(data) < 20:
+            raise ValueError("short hook datagram")
+        lengths = struct.unpack("!IIII", data[4:20])
+        if any(length > 24 * 1024 for length in lengths) or sum(lengths) != len(data) - 20:
+            raise ValueError("invalid hook datagram lengths")
+        fields = []
+        offset = 20
+        for length in lengths:
+            fields.append(data[offset:offset + length])
+            offset += length
+        socket_path, pane_id, tab_id = (field.decode() for field in fields[:3])
+        incoming = json.loads(fields[3])
+        if incoming.get("agent_id") or incoming.get("agent_type"):
+            return {"version": 0}
+        name = incoming.get("hook_event_name")
+        if name not in {"SessionStart", "UserPromptSubmit"}:
+            return {"version": 0}
+        event = {
+            "version": 1,
+            "type": "codex_session" if name == "SessionStart" else "codex_prompt",
+            "session_id": str(incoming.get("session_id") or "")[:256],
+            "turn_id": str(incoming.get("turn_id") or "")[:256],
+            "cwd": str(incoming.get("cwd") or "")[:4096],
+            "source": str(incoming.get("source") or "")[:64],
+            "socket": socket_path[:4096], "pane_id": pane_id[:256], "tab_id": tab_id[:256],
+        }
+        if name == "UserPromptSubmit":
+            event["prompt"] = str(incoming.get("prompt") or "")[:4_000]
+        return event
 
     async def handle_control(self, event: dict[str, Any]) -> None:
         socket_path, tab_id = str(event.get("socket") or ""), str(event.get("tab_id") or "")

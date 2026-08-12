@@ -14,14 +14,14 @@
 
         [[hooks.SessionStart.hooks]]
         type = "command"
-        command = "/etc/codex/hooks/herdr-title-hook.sh"
+        command = "/etc/codex/hooks/herdr-title-hook"
         timeout = 1
 
         [[hooks.UserPromptSubmit]]
 
         [[hooks.UserPromptSubmit.hooks]]
         type = "command"
-        command = "/etc/codex/hooks/herdr-title-hook.sh"
+        command = "/etc/codex/hooks/herdr-title-hook"
         timeout = 1
 
         [[hooks.Stop]]
@@ -39,13 +39,10 @@
       mode = "0755";
     };
 
-    "codex/hooks/herdr-title-hook.sh" = {
-      source = pkgs.replaceVars ../../scripts/herdr-title-hook.sh {
-        bash = "${pkgs.bash}/bin/bash";
-        coreutils = "${pkgs.coreutils}/bin";
-        jq = "${pkgs.jq}/bin/jq";
-        nc = "${pkgs.netcat-openbsd}/bin/nc";
-      };
+    "codex/hooks/herdr-title-hook" = {
+      source = pkgs.runCommand "herdr-title-hook" { nativeBuildInputs = [ pkgs.stdenv.cc ]; } ''
+        $CC -O2 -Wall -Wextra -Werror ${../../scripts/herdr-title-hook.c} -o $out
+      '';
       mode = "0755";
     };
   };
