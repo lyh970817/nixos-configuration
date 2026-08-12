@@ -35,7 +35,7 @@ MAX_TITLE = 64
 ACKS = {"ok", "okay", "yes", "yep", "sure", "continue", "go ahead", "thanks", "thank you"}
 SECRET_PATTERNS = [
     re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----", re.I),
-    re.compile(r"\b[A-Za-z_][A-Za-z0-9_]*(?:api[_-]?key|access[_-]?key|token|secret|password|passwd)[A-Za-z0-9_]*\s*[:=]\s*['\"]?[A-Za-z0-9_./+\-=]{12,}", re.I),
+    re.compile(r"\b(?:[A-Za-z_][A-Za-z0-9_]*[_-])?(?:api[_-]?key|access[_-]?key|token|secret|password|passwd)[A-Za-z0-9_]*\s*[:=]\s*['\"]?[A-Za-z0-9_./+\-=]{12,}", re.I),
     re.compile(r"\bBearer\s+[A-Za-z0-9_.~+/=-]{12,}", re.I),
     re.compile(r"\b(?:sk-[A-Za-z0-9_-]{16,}|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9_]{16,}|github_pat_[A-Za-z0-9_]{16,}|glpat-[A-Za-z0-9_-]{16,}|xox[baprs]-[A-Za-z0-9-]{16,})\b", re.I),
 ]
