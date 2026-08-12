@@ -79,6 +79,35 @@ class HerdrTitleTests(unittest.IsolatedAsyncioTestCase):
         await self.coordinator.reconcile(connection)
         self.assertEqual(connection.renames, [("w1:t1", title)])
 
+    async def test_initial_claude_custom_label_is_pinned(self):
+        connection = FakeConnection(
+            self.coordinator, "/fake/herdr.sock",
+            [pane(agent="claude", title="Claude Automatic Topic")],
+            [tab(label="Existing Manual Topic")],
+        )
+        await self.coordinator.reconcile(connection)
+        state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
+        self.assertTrue(state["pinned"])
+        self.assertEqual(state["title"], "Existing Manual Topic")
+        self.assertEqual(connection.renames, [])
+
+    async def test_initial_codex_custom_label_blocks_session_fallback(self):
+        connection = FakeConnection(
+            self.coordinator, "/fake/herdr.sock", [pane(agent="codex")],
+            [tab(label="Existing Manual Topic")],
+        )
+        self.coordinator.connections[connection.socket_path] = connection
+        await self.coordinator.reconcile(connection)
+        event = {
+            "version": 1, "type": "codex_session", "socket": connection.socket_path,
+            "pane_id": "w1:p1", "tab_id": "w1:t1", "session_id": "s1", "cwd": "/tmp/project",
+        }
+        await self.coordinator.handle_datagram(json.dumps(event).encode())
+        state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
+        self.assertTrue(state["pinned"])
+        self.assertEqual(state["title"], "Existing Manual Topic")
+        self.assertEqual(connection.renames, [])
+
     async def test_raw_fake_socket_snapshot_and_rename(self):
         socket_path = Path(self.tmp.name) / "herdr.sock"
         requests = []

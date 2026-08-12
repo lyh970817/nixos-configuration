@@ -248,9 +248,17 @@ class Coordinator:
             if socket_path == connection.socket_path and tab_id not in tabs:
                 self.state.data["tabs"].pop(key, None)
         for tab_id, tab in tabs.items():
+            state_key = f"{connection.socket_path}\0{tab_id}"
+            state_existed = state_key in self.state.data["tabs"]
             state = self.state.tab(connection.socket_path, tab_id)
             label = clean_title(tab.get("label"))
-            if state and state.get("title") and label != state.get("title"):
+            default_label = str(tab.get("number") or "")
+            if not state_existed and label and label != default_label:
+                # With no automatic-title baseline, a semantic label already
+                # present in Herdr is user-owned. Preserve it on first install
+                # and after state loss; only empty/positional labels are adopted.
+                state.update({"pinned": True, "title": label})
+            elif state and state.get("title") and label != state.get("title"):
                 expected = getattr(connection, "expected_renames", collections.Counter())
                 if expected[(tab_id, label)] == 0:
                     state.update({"pinned": True, "title": label})
