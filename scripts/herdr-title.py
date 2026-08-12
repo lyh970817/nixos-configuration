@@ -40,6 +40,7 @@ SECRET_PATTERNS = [
     re.compile(r"\b(?:[A-Za-z_][A-Za-z0-9_]*[_-])?(?:api[_-]?key|access[_-]?key|token|secret|password|passwd)[A-Za-z0-9_]*\s*[:=]\s*['\"]?[A-Za-z0-9_./+\-=]{12,}", re.I),
     re.compile(r"\bBearer\s+[A-Za-z0-9_.~+/=-]{12,}", re.I),
     re.compile(r"\b(?:sk-[A-Za-z0-9_-]{16,}|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9_]{16,}|github_pat_[A-Za-z0-9_]{16,}|glpat-[A-Za-z0-9_-]{16,}|xox[baprs]-[A-Za-z0-9-]{16,}|AIza[A-Za-z0-9_-]{20,}|ya29\.[A-Za-z0-9_-]{20,}|npm_[A-Za-z0-9_-]{20,}|hf_[A-Za-z0-9_-]{20,}|pypi-[A-Za-z0-9_-]{20,})\b", re.I),
+    re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"),
 ]
 ASSIGNMENT_RE = re.compile(r"\b[A-Za-z_][A-Za-z0-9_.-]*\s*[:=]\s*['\"]?([A-Za-z0-9_./+\-=]{20,})")
 
@@ -377,6 +378,12 @@ class Coordinator:
             expected = (tab_id, label)
             if connection.expected_renames[expected] > 0:
                 connection.expected_renames[expected] -= 1
+                # Herdr can publish this event before the tab.rename response.
+                # Advance the automatic baseline now so a concurrent snapshot
+                # cannot misclassify our own label as an offline manual rename.
+                state = self.state.tab(connection.socket_path, tab_id)
+                state["title"] = label
+                self.state.save()
             else:
                 state = self.state.tab(connection.socket_path, tab_id)
                 state.update({"pinned": True, "title": label})

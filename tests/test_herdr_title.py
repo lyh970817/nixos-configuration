@@ -241,6 +241,23 @@ class HerdrTitleTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(state.get("pinned", False))
         self.assertEqual(state["title"], "New Automatic Topic")
 
+    async def test_expected_event_before_rename_response_advances_baseline(self):
+        connection = FakeConnection(
+            self.coordinator, "/fake/herdr.sock",
+            [pane(agent="claude", title="New Automatic Topic")],
+            [tab(label="New Automatic Topic")],
+        )
+        state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
+        state.update({"owner_pane": "w1:p1", "owner_kind": "claude", "title": "Old Automatic Topic", "pinned": False})
+        connection.expected_renames[("w1:t1", "New Automatic Topic")] = 1
+        await self.coordinator.handle_herdr_event(connection, {
+            "event": "tab.renamed",
+            "data": {"tab_id": "w1:t1", "label": "New Automatic Topic"},
+        })
+        self.assertEqual(state["title"], "New Automatic Topic")
+        await self.coordinator.reconcile(connection)
+        self.assertFalse(state.get("pinned", False))
+
     async def test_server_incarnation_change_clears_reused_tab_identity(self):
         connection = FakeConnection(self.coordinator, "/fake/herdr.sock", [pane(agent="claude", title="Fresh Claude Topic")])
         self.coordinator.confirm_incarnation(connection)
@@ -366,6 +383,7 @@ class HerdrTitleTests(unittest.IsolatedAsyncioTestCase):
             "Authorization: Bearer abcdefghijklmnopqrstuvwxyz",
             "BUILD_VALUE=aB3dE5fG7hJ9kL2mN4pQ6rS8tU",
             "Use hf_abcdefghijklmnopqrstuvwxyz1234567890",
+            "Use eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzZWNyZXQifQ.abcdefghijklmnopqrstuv",
         ]
         for sample in samples:
             with self.subTest(sample=sample):
