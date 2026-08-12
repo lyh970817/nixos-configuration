@@ -40,6 +40,9 @@ swap_pane_right = ["prefix+shift+l", "alt+shift+l"]
 split_vertical = "alt+enter"
 split_horizontal = "shift+f10"
 close_pane = "alt+q"
+# Ctrl+W closes the complete tab (and all of its panes); Alt+Q remains the
+# pane-only close action. Keep Herdr's native prefix binding as well.
+close_tab = ["prefix+shift+x", "ctrl+w"]
 zoom = "alt+f"
 goto = "alt+g"
 workspace_picker = "alt+w"

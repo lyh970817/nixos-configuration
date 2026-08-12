@@ -165,6 +165,16 @@ in
       # preserves the behaviour the plugin used to provide.
       if (( ''${+commands[fzf]} )); then
         eval "$(fzf --zsh)" 2>/dev/null
+        # Herdr owns Ctrl+t for creating tabs. Keep fzf's file selector on the
+        # otherwise unused plain F12 sequence in every ZLE keymap. zsh-vi-mode
+        # finalizes vi maps asynchronously, so zvm_after_init repeats the vi
+        # bindings below after its own setup has completed.
+        bindkey -M emacs '^T' undefined-key
+        bindkey -M viins '^T' undefined-key
+        bindkey -M vicmd '^T' undefined-key
+        bindkey -M emacs '^[[24~' fzf-file-widget
+        bindkey -M viins '^[[24~' fzf-file-widget
+        bindkey -M vicmd '^[[24~' fzf-file-widget
         if [[ -z "$FZF_DEFAULT_COMMAND" ]]; then
           if (( ''${+commands[fd]} )); then
             export FZF_DEFAULT_COMMAND='fd --type f --hidden --exclude .git'
@@ -212,6 +222,12 @@ in
 
       # Keybindings for zsh-vi-mode
       function zvm_after_init() {
+        # Preserve Herdr's Ctrl+t and fzf's F12 file picker after zsh-vi-mode
+        # has installed its final vi keymaps.
+        zvm_bindkey viins '^T' undefined-key
+        zvm_bindkey vicmd '^T' undefined-key
+        zvm_bindkey viins '^[[24~' fzf-file-widget
+        zvm_bindkey vicmd '^[[24~' fzf-file-widget
         # Bind for Insert Mode
         zvm_bindkey viins '^o' silent-y
         # zeno completion only; retain the existing bindings for all other widgets.
