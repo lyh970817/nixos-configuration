@@ -85,7 +85,7 @@ in
       @theme "current"
 
       * {
-          font: "Hack Nerd Font 10";
+          font: "Hack Nerd Font 12";
       }
 
       window {

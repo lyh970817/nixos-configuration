@@ -3,19 +3,19 @@
     name = "DESKTOP · LAUNCH";
     bindings = [
       {
-        description = "Home session over SSH";
+        description = "Home terminal";
         key = "Super + Enter";
       }
       {
-        description = "Local Herdr session";
+        description = "Local Herdr";
         key = "Super + Shift + Enter";
       }
       {
-        description = "Application launcher";
+        description = "Launch applications";
         key = "Super + R";
       }
       {
-        description = "Window switcher";
+        description = "Switch windows";
         key = "Super + Shift + R";
       }
       {
@@ -31,7 +31,7 @@
         key = "Super + Shift + E";
       }
       {
-        description = "Date and time";
+        description = "Date & time";
         key = "Super + D";
       }
     ];
@@ -40,15 +40,15 @@
     name = "DESKTOP · WINDOWS";
     bindings = [
       {
-        description = "Focus left / down / up / right";
+        description = "Focus by direction";
         key = "Super + h / j / k / l";
       }
       {
-        description = "Move window left / down / up / right";
+        description = "Move by direction";
         key = "Super + Shift + h / j / k / l";
       }
       {
-        description = "Next / previous window";
+        description = "Cycle windows";
         key = "Super + Tab / Super + Shift + Tab";
       }
       {
@@ -72,15 +72,15 @@
         key = "Super + v";
       }
       {
-        description = "Resize with arrows";
+        description = "Resize window";
         key = "Super + Arrow keys";
       }
       {
-        description = "Drag / resize with mouse";
+        description = "Move / resize with mouse";
         key = "Super + left / right drag";
       }
       {
-        description = "Send window behind others";
+        description = "Send window to back";
         key = "Alt + Shift + b";
       }
     ];
@@ -89,19 +89,19 @@
     name = "DESKTOP · WORKSPACES";
     bindings = [
       {
-        description = "Switch to workspace 1–10";
+        description = "Switch workspace 1–10";
         key = "Super + 1…0";
       }
       {
-        description = "Move window to workspace 1–10";
+        description = "Move to workspace 1–10";
         key = "Super + Shift + 1…0";
       }
       {
-        description = "Next / previous existing workspace";
+        description = "Cycle existing workspaces";
         key = "Super + wheel down / up";
       }
       {
-        description = "Move window to workspace 10";
+        description = "Minimize to workspace 10";
         key = "Super + m";
       }
     ];
@@ -110,11 +110,11 @@
     name = "DESKTOP · DISPLAY";
     bindings = [
       {
-        description = "Toggle dark / light theme";
+        description = "Switch dark / light theme";
         key = "Super + Shift + t";
       }
       {
-        description = "Toggle night colour temperature";
+        description = "Toggle night colour";
         key = "Super + n";
       }
       {
@@ -126,7 +126,7 @@
         key = "Super + Shift + s";
       }
       {
-        description = "Restore laptop display after lid event";
+        description = "Turn display on";
         key = "Fn + F12";
       }
     ];
@@ -139,15 +139,15 @@
         key = "Super + o";
       }
       {
-        description = "Toggle long-form dictation";
+        description = "Toggle long dictation";
         key = "Ctrl + Shift + l";
       }
       {
-        description = "Toggle dictation profile";
+        description = "Switch dictation profile";
         key = "Ctrl + Shift + p";
       }
       {
-        description = "Cancel long-form dictation";
+        description = "Cancel long dictation";
         key = "Super + Escape";
       }
     ];
@@ -160,7 +160,7 @@
         key = "Fn + F2";
       }
       {
-        description = "Toggle microphone mute";
+        description = "Toggle mic mute";
         key = "Fn + F4";
       }
       {
@@ -168,7 +168,7 @@
         key = "Fn + F6 / F7";
       }
       {
-        description = "Toggle Mihomo proxy";
+        description = "Toggle proxy";
         key = "Fn + F8";
       }
       {
@@ -180,7 +180,7 @@
         key = "Fn + Z";
       }
       {
-        description = "Cycle monitor scale";
+        description = "Cycle display scale";
         key = "Fn + Space";
       }
       {
@@ -188,7 +188,7 @@
         key = "Fn + Esc / 3 / 4";
       }
       {
-        description = "Microphone volume down / up";
+        description = "Mic volume down / up";
         key = "Ctrl + Shift + d / u";
       }
     ];
@@ -197,27 +197,27 @@
     name = "HERDR · PANES";
     bindings = [
       {
-        description = "Focus left / down / up / right";
+        description = "Focus by direction";
         key = "Alt + h / j / k / l";
       }
       {
-        description = "Swap left / down / up / right";
+        description = "Swap by direction";
         key = "Alt + Shift + h / j / k / l";
       }
       {
-        description = "Split pane side by side";
+        description = "Split pane to the right";
         key = "Alt + Enter";
       }
       {
-        description = "Toggle pane zoom";
+        description = "Toggle zoom";
         key = "Alt + f";
       }
       {
-        description = "Close pane and any empty tab / workspace";
+        description = "Close pane";
         key = "Alt + q";
       }
       {
-        description = "Enter keyboard copy mode";
+        description = "Copy mode";
         key = "Alt + v";
       }
     ];
@@ -230,7 +230,7 @@
         key = "Alt + Shift + Tab / Alt + Tab";
       }
       {
-        description = "Focus or create persistent tab slot 1–9";
+        description = "Focus / create tab slot";
         key = "Alt + 1…9";
       }
     ];
@@ -239,11 +239,11 @@
     name = "HERDR · WORKSPACES";
     bindings = [
       {
-        description = "Open session navigator";
+        description = "Session navigator";
         key = "Alt + g";
       }
       {
-        description = "Open workspace picker";
+        description = "Workspace picker";
         key = "Alt + w";
       }
       {
@@ -260,7 +260,7 @@
     name = "HERDR · AGENTS";
     bindings = [
       {
-        description = "Toggle agent sidebar";
+        description = "Toggle sidebar";
         key = "Alt + e";
       }
       {
@@ -277,7 +277,7 @@
         key = "9 / 0";
       }
       {
-        description = "Cycle audio track";
+        description = "Next audio track";
         key = "#";
       }
     ];
@@ -286,11 +286,11 @@
     name = "MPV · SUBTITLES";
     bindings = [
       {
-        description = "Next / previous subtitle track";
+        description = "Next / previous subtitles";
         key = "j / Shift + j";
       }
       {
-        description = "Subtitle 100 ms earlier / later";
+        description = "Subtitles 100 ms earlier / later";
         key = "z / Shift + z";
       }
     ];
@@ -299,7 +299,7 @@
     name = "SHELL · KEYS";
     bindings = [
       {
-        description = "Accept next suggested word";
+        description = "Accept suggested word";
         key = "Alt + f";
       }
       {
@@ -307,23 +307,23 @@
         key = "Ctrl + f";
       }
       {
-        description = "Open Yazi and return in chosen directory";
+        description = "Yazi; keep chosen directory";
         key = "Ctrl + o";
       }
       {
-        description = "Fuzzy command history";
+        description = "Search command history";
         key = "Ctrl + r";
       }
       {
-        description = "Zeno completion";
+        description = "Fuzzy completion";
         key = "Tab";
       }
       {
-        description = "Directory history back / forward";
+        description = "Previous / next visited directory";
         key = "Ctrl + Left / Right";
       }
       {
-        description = "Directory history up / down";
+        description = "Parent / first child directory";
         key = "Ctrl + Up / Down";
       }
     ];
@@ -332,47 +332,47 @@
     name = "SHELL · CUSTOM ALIASES";
     bindings = [
       {
-        description = "Ask Whai a natural-language question";
+        description = "Ask Whai";
         key = ",";
       }
       {
-        description = "Rebuild NixOS from /etc/nixos";
+        description = "Rebuild NixOS";
         key = "rebuild";
       }
       {
-        description = "Codex · unrestricted";
+        description = "Codex (yolo)";
         key = "cdy";
       }
       {
-        description = "Codex orchestrator · unrestricted";
+        description = "Codex orchestrator (yolo)";
         key = "cdo";
       }
       {
-        description = "Claude · unrestricted";
+        description = "Claude (yolo)";
         key = "cly";
       }
       {
-        description = "Opus 5 orchestrator · orchestrator-opus.md";
+        description = "Opus 5 orchestrator (yolo)";
         key = "clo";
       }
       {
-        description = "Fable 5 orchestrator · orchestrator-fable.md";
+        description = "Fable 5 orchestrator (yolo)";
         key = "clfo";
       }
       {
-        description = "Claude Matt Pocock profile";
+        description = "Claude · Matt Pocock";
         key = "claude-matt";
       }
       {
-        description = "Claude local GPT-5.6 gateway";
+        description = "Claude · local GPT-5.6";
         key = "clg";
       }
       {
-        description = "Claude Matt profile · unrestricted";
+        description = "Claude · Matt Pocock (yolo)";
         key = "clty";
       }
       {
-        description = "Claude GPT-5.6 gateway · unrestricted";
+        description = "Claude · local GPT-5.6 (yolo)";
         key = "clgy";
       }
       {
