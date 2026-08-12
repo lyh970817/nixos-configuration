@@ -108,6 +108,45 @@ class HerdrTitleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state["title"], "Existing Manual Topic")
         self.assertEqual(connection.renames, [])
 
+    async def test_pinned_codex_prompt_stays_local_until_auto(self):
+        connection = FakeConnection(
+            self.coordinator, "/fake/herdr.sock", [pane(agent="codex")],
+            [tab(label="Existing Manual Topic")],
+        )
+        self.coordinator.connections[connection.socket_path] = connection
+        await self.coordinator.reconcile(connection)
+        calls = 0
+
+        async def generated(*_args):
+            nonlocal calls
+            calls += 1
+            return "Generated After Auto"
+
+        self.coordinator.qwen_title = generated
+        event = {
+            "version": 1, "type": "codex_prompt", "socket": connection.socket_path,
+            "pane_id": "w1:p1", "tab_id": "w1:t1", "session_id": "s1",
+            "cwd": "/tmp/project", "prompt": "Implement a substantial pinned privacy regression",
+        }
+        await self.coordinator.handle_datagram(json.dumps(event).encode())
+        key = self.coordinator.generation_key(connection.socket_path, "w1:t1")
+        await asyncio.sleep(0.3)
+        self.assertEqual(calls, 0)
+        self.assertNotIn(key, self.coordinator.generation_pending)
+        self.assertNotIn(key, self.coordinator.generations)
+        self.assertEqual(connection.renames, [])
+
+        await self.coordinator.handle_control({
+            "type": "auto", "socket": connection.socket_path,
+            "pane_id": "w1:p1", "tab_id": "w1:t1",
+        })
+        await self.coordinator.handle_datagram(json.dumps(event | {
+            "prompt": "Implement generation after automatic titles resume",
+        }).encode())
+        await asyncio.wait_for(self.coordinator.generations[key], 1)
+        self.assertEqual(calls, 1)
+        self.assertEqual(connection.renames[-1], ("w1:t1", "Generated After Auto"))
+
     async def test_raw_fake_socket_snapshot_and_rename(self):
         socket_path = Path(self.tmp.name) / "herdr.sock"
         requests = []

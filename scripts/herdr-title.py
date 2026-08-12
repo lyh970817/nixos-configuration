@@ -340,7 +340,7 @@ class Coordinator:
             self.state.save()
             if event.get("type") == "codex_prompt":
                 prompt = str(event.get("prompt") or "")[:MAX_PROMPT]
-                if is_substantive(prompt):
+                if is_substantive(prompt) and not state.get("pinned"):
                     self.schedule_generation(connection, tab_id, pane_id, session_id, prompt, str(event.get("cwd") or ""))
         except Exception:
             return
@@ -419,6 +419,21 @@ class Coordinator:
                 if not item:
                     return
                 connection, tab_id, pane_id, session_id, epoch, seq, prompt, cwd = item
+                state = self.state.tab(connection.socket_path, tab_id)
+                current = self.find_pane(connection.socket_path, pane_id)
+                still_latest = self.generation_pending.get(key) == item and self.prompt_seq[key] == seq
+                eligible = (
+                    current
+                    and current[1].get("tab_id") == tab_id
+                    and not state.get("pinned")
+                    and state.get("session_id") == session_id
+                    and int(state.get("epoch", 0)) == epoch
+                )
+                if still_latest and not eligible:
+                    # Do not disclose a prompt after a pin, session replacement,
+                    # pane close, or pane move that occurred during coalescing.
+                    self.generation_pending.pop(key, None)
+                    continue
                 prior = str(self.state.tab(connection.socket_path, tab_id).get("title") or "")
                 title = local_prompt_title(prompt, cwd) if contains_secret(prompt) else await self.qwen_title(prompt, prior, cwd)
                 state = self.state.tab(connection.socket_path, tab_id)
