@@ -7,6 +7,7 @@ import collections
 import importlib.util
 import json
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -24,7 +25,7 @@ SPEC = importlib.util.spec_from_file_location("herdr_title", ROOT / "scripts/her
 assert SPEC and SPEC.loader
 TITLE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(TITLE)
-HOOK = ROOT / "scripts/herdr-title-hook.py"
+HOOK = ROOT / "scripts/herdr-title-hook.sh"
 
 
 def pane(pane_id="w1:p1", tab_id="w1:t1", agent="codex", title=None, cwd="/tmp/project"):
@@ -200,10 +201,31 @@ class HerdrTitleTests(unittest.IsolatedAsyncioTestCase):
 
 
 class HookTests(unittest.TestCase):
+    def setUp(self):
+        text = HOOK.read_text()
+        timeout = shutil.which("timeout")
+        substitutions = {
+            "@bash@": shutil.which("bash"),
+            "@coreutils@": str(Path(timeout).parent) if timeout else None,
+            "@jq@": shutil.which("jq"),
+            "@nc@": shutil.which("nc"),
+        }
+        if any(value is None for value in substitutions.values()):
+            self.skipTest("hook runtime command missing")
+        for source, target in substitutions.items():
+            text = text.replace(source, target)
+        self._rendered_hook = tempfile.NamedTemporaryFile(mode="w", delete=False)
+        self._rendered_hook.write(text)
+        self._rendered_hook.close()
+
+    def tearDown(self):
+        if hasattr(self, "_rendered_hook"):
+            Path(self._rendered_hook.name).unlink(missing_ok=True)
+
     def run_hook(self, runtime: Path, payload: dict):
         env = os.environ | {"XDG_RUNTIME_DIR": str(runtime), "HERDR_SOCKET_PATH": "/fake/herdr.sock", "HERDR_PANE_ID": "w1:p1", "HERDR_TAB_ID": "w1:t1"}
         start = time.perf_counter()
-        result = subprocess.run([sys.executable, str(HOOK)], input=json.dumps(payload).encode(), env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=1)
+        result = subprocess.run(["bash", self._rendered_hook.name], input=json.dumps(payload).encode(), env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=1)
         return result, time.perf_counter() - start
 
     def test_hook_enqueue_is_fail_open_and_nonblocking(self):

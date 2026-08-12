@@ -1,4 +1,4 @@
-{ ... }:
+{ pkgs, ... }:
 
 {
   environment.etc = {
@@ -14,14 +14,14 @@
 
         [[hooks.SessionStart.hooks]]
         type = "command"
-        command = "/etc/codex/hooks/herdr-title-hook.py"
+        command = "/etc/codex/hooks/herdr-title-hook.sh"
         timeout = 1
 
         [[hooks.UserPromptSubmit]]
 
         [[hooks.UserPromptSubmit.hooks]]
         type = "command"
-        command = "/etc/codex/hooks/herdr-title-hook.py"
+        command = "/etc/codex/hooks/herdr-title-hook.sh"
         timeout = 1
 
         [[hooks.Stop]]
@@ -39,8 +39,13 @@
       mode = "0755";
     };
 
-    "codex/hooks/herdr-title-hook.py" = {
-      source = ../../scripts/herdr-title-hook.py;
+    "codex/hooks/herdr-title-hook.sh" = {
+      source = pkgs.replaceVars ../../scripts/herdr-title-hook.sh {
+        bash = "${pkgs.bash}/bin/bash";
+        coreutils = "${pkgs.coreutils}/bin";
+        jq = "${pkgs.jq}/bin/jq";
+        nc = "${pkgs.netcat-openbsd}/bin/nc";
+      };
       mode = "0755";
     };
   };
