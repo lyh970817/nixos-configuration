@@ -7,6 +7,9 @@
 
 let
   link = subpath: config.lib.file.mkOutOfStoreSymlink "${osConfig.portable.configDir}/${subpath}";
+  titleCredentialsSource = "${osConfig.portable.configDir}/secrets/herdr-title-credentials.json";
+  titleCredentialsDir = "${config.home.homeDirectory}/.local/share/herdr-title";
+  titleCredentialsRuntime = "${titleCredentialsDir}/credentials";
 
   # Herdr keeps a persistent server behind its short-lived clients. Resolve the
   # mode before that server starts so it is inherited by the server and every
@@ -151,6 +154,18 @@ in
   # See dotfiles/herdr/config.toml for the layout and theme rationale.
   xdg.configFile."herdr/config.toml".source = link "dotfiles/herdr/config.toml";
 
+  # Herdr titles own a dedicated one-key credential. Do not couple the service
+  # to dictation credentials or make their broader namespace readable here.
+  home.activation.herdrTitleCredentials = config.lib.dag.entryAfter [ "writeBoundary" ] ''
+    run ${pkgs.coreutils}/bin/install -d -m700 $VERBOSE_ARG -- \
+      ${config.lib.escapeShellArg titleCredentialsDir}
+    if [ -e ${config.lib.escapeShellArg titleCredentialsSource} ]; then
+      run ${pkgs.coreutils}/bin/install -m600 $VERBOSE_ARG -- \
+        ${config.lib.escapeShellArg titleCredentialsSource} \
+        ${config.lib.escapeShellArg titleCredentialsRuntime}
+    fi
+  '';
+
   systemd.user.services.herdr-title = {
     Unit = {
       Description = "Mirror agent topics into Herdr tab titles";
@@ -161,7 +176,7 @@ in
     Service = {
       Type = "simple";
       ExecStart = "${herdrTitle}/bin/herdr-title daemon";
-      Environment = "HERDR_TITLE_CREDENTIALS=%h/.local/share/hyprwhspr/credentials";
+      Environment = "HERDR_TITLE_CREDENTIALS=%h/.local/share/herdr-title/credentials";
       Restart = "on-failure";
       RestartSec = "2s";
       UMask = "0077";

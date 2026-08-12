@@ -661,7 +661,7 @@ def main() -> int:
     runtime = Path(os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}") / "herdr-title"
     config = Path(os.environ.get("XDG_CONFIG_HOME") or home / ".config")
     state = Path(os.environ.get("XDG_STATE_HOME") or home / ".local/state")
-    credential = Path(os.environ.get("HERDR_TITLE_CREDENTIALS") or home / ".local/share/hyprwhspr/credentials")
+    credential = Path(os.environ.get("HERDR_TITLE_CREDENTIALS") or home / ".local/share/herdr-title/credentials")
     asyncio.run(Coordinator(config, runtime, state, credential).run())
     return 0
 

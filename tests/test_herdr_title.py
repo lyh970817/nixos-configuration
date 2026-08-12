@@ -465,5 +465,24 @@ class HookTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0)
 
 
+class CredentialIsolationTests(unittest.TestCase):
+    def test_title_service_uses_only_dedicated_credential_namespace(self):
+        module = (ROOT / "home/programs/herdr.nix").read_text()
+        coordinator = (ROOT / "scripts/herdr-title.py").read_text()
+        combined = module + coordinator
+        self.assertIn("secrets/herdr-title-credentials.json", module)
+        self.assertIn(".local/share/herdr-title/credentials", combined)
+        self.assertNotIn("hyprwhspr/credentials", combined)
+
+    def test_dedicated_secret_is_gitignored_and_peer_allowlisted(self):
+        result = subprocess.run(
+            ["git", "check-ignore", "-q", "secrets/herdr-title-credentials.json"],
+            cwd=ROOT,
+        )
+        self.assertEqual(result.returncode, 0)
+        peer_skill = (ROOT / ".agents/skills/work-on-peer-device/SKILL.md").read_text()
+        self.assertIn("secrets/herdr-title-credentials.json", peer_skill)
+
+
 if __name__ == "__main__":
     unittest.main()
