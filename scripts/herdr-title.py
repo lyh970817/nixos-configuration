@@ -325,11 +325,11 @@ class Coordinator:
             state_existed = state_key in self.state.data["tabs"]
             state = self.state.tab(connection.socket_path, tab_id)
             label = clean_title(tab.get("label"))
-            default_label = str(tab.get("number") or "")
-            if not state_existed and label and label != default_label:
+            if not state_existed and label and not re.fullmatch(r"[0-9]+", label):
                 # With no automatic-title baseline, a semantic label already
                 # present in Herdr is user-owned. Preserve it on first install
-                # and after state loss; only empty/positional labels are adopted.
+                # and after state loss. Herdr's visible positional labels can
+                # differ from its internal number, but always use ASCII digits.
                 state.update({"pinned": True, "title": label})
             elif state and state.get("title") and label != state.get("title"):
                 expected = getattr(connection, "expected_renames", collections.Counter())

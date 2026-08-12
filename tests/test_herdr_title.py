@@ -35,8 +35,8 @@ def pane(pane_id="w1:p1", tab_id="w1:t1", agent="codex", title=None, cwd="/tmp/p
     }
 
 
-def tab(tab_id="w1:t1", label="1", count=1):
-    return {"tab_id": tab_id, "workspace_id": "w1", "number": 1, "label": label, "focused": True, "pane_count": count, "agent_status": "working"}
+def tab(tab_id="w1:t1", label="1", count=1, number=1):
+    return {"tab_id": tab_id, "workspace_id": "w1", "number": number, "label": label, "focused": True, "pane_count": count, "agent_status": "working"}
 
 
 class FakeConnection:
@@ -111,6 +111,60 @@ class HerdrTitleTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(state["pinned"])
         self.assertEqual(state["title"], "Existing Manual Topic")
         self.assertEqual(connection.renames, [])
+
+    async def test_initial_codex_positional_label_can_fallback_then_generate(self):
+        connection = FakeConnection(
+            self.coordinator, "/fake/herdr.sock", [pane(agent="codex")],
+            [tab(label="5", number=32)],
+        )
+        self.coordinator.connections[connection.socket_path] = connection
+        await self.coordinator.reconcile(connection)
+        state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
+        self.assertFalse(state.get("pinned", False))
+        self.assertEqual(state["title"], "5")
+
+        common = {
+            "version": 1, "socket": connection.socket_path,
+            "pane_id": "w1:p1", "tab_id": "w1:t1", "session_id": "s1",
+            "cwd": "/tmp/project",
+        }
+        await self.coordinator.handle_datagram(json.dumps(common | {"type": "codex_session"}).encode())
+        self.assertEqual(connection.renames[-1], ("w1:t1", "Codex — project"))
+
+        calls = 0
+
+        async def generated(*_args):
+            nonlocal calls
+            calls += 1
+            return "Generated Numeric Tab Topic"
+
+        self.coordinator.qwen_title = generated
+        await self.coordinator.handle_datagram(json.dumps(common | {
+            "type": "codex_prompt",
+            "prompt": "Implement a substantial numeric tab title regression",
+        }).encode())
+        key = self.coordinator.generation_key(connection.socket_path, "w1:t1")
+        await asyncio.wait_for(self.coordinator.generations[key], 1)
+        self.assertEqual(calls, 1)
+        self.assertEqual(connection.renames[-1], ("w1:t1", "Generated Numeric Tab Topic"))
+
+    async def test_initial_labels_adopt_only_empty_or_ascii_numeric_values(self):
+        cases = [
+            ("empty", "", False),
+            ("ascii", "005", False),
+            ("arabic_indic", "٥", True),
+            ("fullwidth", "５", True),
+        ]
+        for suffix, label, pinned in cases:
+            with self.subTest(label=label):
+                socket_path = f"/fake/{suffix}.sock"
+                connection = FakeConnection(
+                    self.coordinator, socket_path, [pane(agent="codex")],
+                    [tab(label=label, number=32)],
+                )
+                await self.coordinator.reconcile(connection)
+                state = self.coordinator.state.tab(socket_path, "w1:t1")
+                self.assertEqual(state.get("pinned", False), pinned)
 
     async def test_pinned_codex_prompt_stays_local_until_auto(self):
         connection = FakeConnection(
