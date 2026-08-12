@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import collections
 import importlib.util
 import json
 import os
@@ -44,6 +45,7 @@ class FakeConnection:
         self.socket_path = socket_path
         self.snapshot = {"panes": panes, "tabs": tabs or [tab()]}
         self.renames = []
+        self.expected_renames = collections.Counter()
 
     async def rename(self, tab_id, title):
         state = self.coordinator.state.tab(self.socket_path, tab_id)

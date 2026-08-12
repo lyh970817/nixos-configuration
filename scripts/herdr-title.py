@@ -41,7 +41,7 @@ SECRET_PATTERNS = [
 
 
 def clean_title(value: Any) -> str:
-    text = str(value or "").replace("\x1b", "")
+    text = str(value or "").replace("\n", " ").replace("\r", " ").replace("\t", " ").replace("\x1b", "")
     text = " ".join("".join("" if unicodedata_category(ch) == "C" else ch for ch in text).split())
     return text[:MAX_TITLE].strip()
 
