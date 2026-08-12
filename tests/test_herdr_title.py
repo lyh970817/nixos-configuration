@@ -46,6 +46,10 @@ class FakeConnection:
         self.snapshot = {"panes": panes, "tabs": tabs or [tab()]}
         self.renames = []
         self.expected_renames = collections.Counter()
+        self.identity = [1, 100, 1000]
+
+    def incarnation(self):
+        return self.identity
 
     async def rename(self, tab_id, title):
         state = self.coordinator.state.tab(self.socket_path, tab_id)
@@ -204,6 +208,38 @@ class HerdrTitleTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(state["pinned"])
         self.assertEqual(state["title"], "Manual While Offline")
         self.assertEqual(connection.renames, [])
+
+    async def test_server_incarnation_change_clears_reused_tab_identity(self):
+        connection = FakeConnection(self.coordinator, "/fake/herdr.sock", [pane(agent="claude", title="Fresh Claude Topic")])
+        self.coordinator.confirm_incarnation(connection)
+        old = self.coordinator.state.tab(connection.socket_path, "w1:t1")
+        old.update({"pinned": True, "title": "Old Manual Topic", "session_id": "old-session", "owner_pane": "w1:p1"})
+        self.coordinator.state.save()
+
+        # A reconnect to the same live socket preserves manual state.
+        self.coordinator.confirm_incarnation(connection)
+        self.assertTrue(self.coordinator.state.tab(connection.socket_path, "w1:t1")["pinned"])
+
+        # A recreated socket can reuse opaque IDs, but is a fresh namespace.
+        connection.identity = [1, 200, 2000]
+        self.coordinator.confirm_incarnation(connection)
+        self.assertNotIn(f"{connection.socket_path}\0w1:t1", self.coordinator.state.data["tabs"])
+        await self.coordinator.reconcile(connection)
+        fresh = self.coordinator.state.tab(connection.socket_path, "w1:t1")
+        self.assertFalse(fresh.get("pinned", False))
+        self.assertNotIn("session_id", fresh)
+        self.assertEqual(connection.renames[-1], ("w1:t1", "Fresh Claude Topic"))
+
+    async def test_server_removal_cancels_pending_generation(self):
+        connection = FakeConnection(self.coordinator, "/fake/herdr.sock", [pane()])
+        key = self.coordinator.generation_key(connection.socket_path, "w1:t1")
+        self.coordinator.generation_pending[key] = (connection, "w1:t1", "w1:p1", "s1", 1, 1, "prompt", "/tmp")
+        task = asyncio.create_task(asyncio.sleep(30))
+        self.coordinator.generations[key] = task
+        self.coordinator.cancel_socket_generations(connection.socket_path)
+        self.assertNotIn(key, self.coordinator.generation_pending)
+        self.assertNotIn(key, self.coordinator.generations)
+        self.assertTrue(task.cancelling())
 
     async def test_session_replacement_invalidates_stale_generation(self):
         connection = FakeConnection(self.coordinator, "/fake/herdr.sock", [pane()])

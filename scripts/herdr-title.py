@@ -77,13 +77,14 @@ def local_prompt_title(prompt: str, cwd: str) -> str:
 class JsonState:
     def __init__(self, path: Path):
         self.path = path
-        self.data: dict[str, Any] = {"version": 1, "tabs": {}}
+        self.data: dict[str, Any] = {"version": 1, "servers": {}, "tabs": {}}
         try:
             loaded = json.loads(path.read_text())
             if loaded.get("version") == 1 and isinstance(loaded.get("tabs"), dict):
                 self.data = loaded
         except (OSError, ValueError, TypeError):
             pass
+        self.data.setdefault("servers", {})
 
     def tab(self, socket_path: str, tab_id: str) -> dict[str, Any]:
         return self.data["tabs"].setdefault(f"{socket_path}\0{tab_id}", {})
@@ -148,8 +149,15 @@ class HerdrConnection:
 
     async def refresh_snapshot(self) -> None:
         result = await self.request("session.snapshot")
+        self.coordinator.confirm_incarnation(self)
         self.snapshot = result.get("snapshot", {})
         await self.coordinator.reconcile(self)
+
+    def incarnation(self) -> list[int]:
+        info = os.stat(self.socket_path, follow_symlinks=False)
+        if not stat.S_ISSOCK(info.st_mode):
+            raise ValueError("Herdr API path is not a socket")
+        return [info.st_dev, info.st_ino, info.st_ctime_ns]
 
     async def run(self) -> None:
         while True:
@@ -226,7 +234,32 @@ class Coordinator:
             for socket_path in set(self.tasks) - set(found):
                 self.tasks.pop(socket_path).cancel()
                 self.connections.pop(socket_path, None)
+                self.cancel_socket_generations(socket_path)
             await asyncio.sleep(2)
+
+    def confirm_incarnation(self, connection: HerdrConnection) -> None:
+        socket_path = connection.socket_path
+        incarnation = connection.incarnation()
+        previous = self.state.data["servers"].get(socket_path)
+        if previous is not None and previous != incarnation:
+            self.cancel_socket_generations(socket_path)
+            prefix = f"{socket_path}\0"
+            for key in [key for key in self.state.data["tabs"] if key.startswith(prefix)]:
+                self.state.data["tabs"].pop(key, None)
+        self.state.data["servers"][socket_path] = incarnation
+        self.state.save()
+
+    def cancel_socket_generations(self, socket_path: str) -> None:
+        prefix = f"{socket_path}\0"
+        keys = {
+            *[key for key in self.generation_pending if key.startswith(prefix)],
+            *[key for key in self.generations if key.startswith(prefix)],
+        }
+        for key in keys:
+            self.prompt_seq[key] += 1
+            self.generation_pending.pop(key, None)
+            if task := self.generations.pop(key, None):
+                task.cancel()
 
     @staticmethod
     def owner_kind(pane: dict[str, Any]) -> str | None:
