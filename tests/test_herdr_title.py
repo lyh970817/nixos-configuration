@@ -122,7 +122,10 @@ class HerdrTitleTests(unittest.IsolatedAsyncioTestCase):
         await self.coordinator.handle_herdr_event(connection, {"event": "tab.renamed", "data": {"tab_id": "w1:t1", "label": "Pinned by user"}})
         state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
         self.assertTrue(state["pinned"])
-        self.assertTrue(pending.cancelled() or pending.cancelling())
+        self.assertNotIn(key, self.coordinator.generation_pending)
+        # An already-running HTTP thread cannot be force-cancelled safely; its
+        # sequence is invalidated and its eventual result is discarded.
+        self.assertGreater(self.coordinator.prompt_seq[key], 0)
 
     async def test_reconnect_snapshot_preserves_missed_manual_rename(self):
         connection = FakeConnection(self.coordinator, "/fake/herdr.sock", [pane(agent="claude", title="Automatic Topic")], [tab(label="Automatic Topic")])
