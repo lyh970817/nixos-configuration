@@ -6,7 +6,14 @@
 }:
 
 let
-  claudeEnvironment = ../../dotfiles/claude/environment.json;
+  # Snapshotted through writeText and interpolated as a derivation rather than
+  # `toString path`: toString yields a store path string with no string
+  # context, so the launcher would name a file Nix never records as a
+  # reference, and the first garbage collection after the flake source snapshot
+  # goes unreachable leaves every lookup below silently empty.
+  claudeEnvironment = pkgs.writeText "claude-environment.json" (
+    builtins.readFile ../../dotfiles/claude/environment.json
+  );
 
   claudeHostEnvironment = ''
     export TZ="Europe/London"
@@ -17,7 +24,7 @@ let
     export LANGUAGE="en_GB:en"
     export LOCALE_ARCHIVE="${pkgs.glibcLocales}/lib/locale/locale-archive"
 
-    claude_environment=${lib.escapeShellArg (toString claudeEnvironment)}
+    claude_environment=${lib.escapeShellArg "${claudeEnvironment}"}
     claude_env_value() {
       ${pkgs.jq}/bin/jq -r --arg key "$1" '.[$key] // empty' "$claude_environment"
     }

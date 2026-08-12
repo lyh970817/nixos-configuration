@@ -27,23 +27,40 @@ let
   # in light, chosen from this machine's current mode at activation below and
   # rewritten on a mode switch by claude-theme (desktop/theming.nix).
   link = subpath: config.lib.file.mkOutOfStoreSymlink "${osConfig.portable.configDir}/${subpath}";
-  claudeEnvironment = ../../dotfiles/claude/environment.json;
-  claudeMarketplaces = ../../dotfiles/claude/marketplaces.json;
+  # Every tracked file read below at activation time is snapshotted through
+  # writeText and interpolated as a derivation, never as `toString path`. A
+  # bare toString yields the store path as a plain string carrying no string
+  # context, so Nix records no reference to it: the path is baked into the
+  # activation script while the flake source snapshot it points into stays
+  # unreachable, and the next garbage collection deletes the file out from
+  # under a script that still names it. The failure is silent and delayed.
+  claudeEnvironment = pkgs.writeText "claude-environment.json" (
+    builtins.readFile ../../dotfiles/claude/environment.json
+  );
+  claudeMarketplaces = pkgs.writeText "claude-marketplaces.json" (
+    builtins.readFile ../../dotfiles/claude/marketplaces.json
+  );
   claudeProfiles = [
     {
       name = "standard";
       configDir = ".config/claude";
-      settings = ../../dotfiles/claude/settings.json;
+      settings = pkgs.writeText "claude-settings-standard.json" (
+        builtins.readFile ../../dotfiles/claude/settings.json
+      );
     }
     {
       name = "mattpocock";
       configDir = ".config/claude-mattpocock";
-      settings = ../../dotfiles/claude-mattpocock/settings.json;
+      settings = pkgs.writeText "claude-settings-mattpocock.json" (
+        builtins.readFile ../../dotfiles/claude-mattpocock/settings.json
+      );
     }
     {
       name = "gpt56";
       configDir = ".config/claude-gpt56";
-      settings = ../../dotfiles/claude-gpt56/settings.json;
+      settings = pkgs.writeText "claude-settings-gpt56.json" (
+        builtins.readFile ../../dotfiles/claude-gpt56/settings.json
+      );
     }
   ];
 
@@ -95,6 +112,15 @@ let
     "superpowers"
     "understand-anything-codegraph"
   ];
+
+  codexProfileConfigs = lib.listToAttrs (
+    map (name: {
+      inherit name;
+      value = pkgs.writeText "codex-${name}.config.toml" (
+        builtins.readFile ../../dotfiles/codex/profiles/${name}.config.toml
+      );
+    }) codexProfileNames
+  );
 
   codexSkillNames = [
     "nix-environment-setup"
@@ -612,6 +638,8 @@ let
     for profile, template, target in args.profile:
         reconcile_profile(profile, template, target)
   '';
+
+  piSettings = pkgs.writeText "pi-settings.json" (builtins.readFile ../../dotfiles/pi/settings.json);
 in
 {
   # Keep tracked Claude policy separate from ordinary mutable per-profile
@@ -679,8 +707,8 @@ in
   # missing key. These are unconditional assignments for that reason.
   home.activation.claudeSettings = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
     claude_jq=${pkgs.jq}/bin/jq
-    claude_environment=${lib.escapeShellArg (toString claudeEnvironment)}
-    claude_marketplaces=${lib.escapeShellArg (toString claudeMarketplaces)}
+    claude_environment=${lib.escapeShellArg "${claudeEnvironment}"}
+    claude_marketplaces=${lib.escapeShellArg "${claudeMarketplaces}"}
 
     # Which ANSI-only theme matches this machine's current mode. Derived from
     # the hypr current-theme symlink, the same source the claude-theme helper
@@ -875,7 +903,7 @@ in
         else
           claude_settings_tmp="$(${pkgs.coreutils}/bin/mktemp "$claude_settings.XXXXXX")"
           if ! claude_reconcile "$claude_settings" "$claude_settings_tmp" \
-            ${lib.escapeShellArg (toString profile.settings)} ${lib.escapeShellArg profile.name}; then
+            ${lib.escapeShellArg "${profile.settings}"} ${lib.escapeShellArg profile.name}; then
             ${pkgs.coreutils}/bin/rm -f "$claude_settings_tmp"
             echo "error: failed to reconcile Claude settings: $claude_settings" >&2
             exit 1
@@ -885,8 +913,8 @@ in
         fi
       else
         claude_settings_tmp="$(${pkgs.coreutils}/bin/mktemp "$claude_settings.XXXXXX")"
-        if ! claude_reconcile ${lib.escapeShellArg (toString profile.settings)} "$claude_settings_tmp" \
-          ${lib.escapeShellArg (toString profile.settings)} ${lib.escapeShellArg profile.name}; then
+        if ! claude_reconcile ${lib.escapeShellArg "${profile.settings}"} "$claude_settings_tmp" \
+          ${lib.escapeShellArg "${profile.settings}"} ${lib.escapeShellArg profile.name}; then
           ${pkgs.coreutils}/bin/rm -f "$claude_settings_tmp"
           echo "error: failed to seed Claude settings: $claude_settings" >&2
           exit 1
@@ -900,7 +928,7 @@ in
       if [ "$claude_reconcile_profile" -eq 1 ]; then
         claude_settings_tmp="$(${pkgs.coreutils}/bin/mktemp "$claude_settings.XXXXXX")"
         if ! claude_reconcile "$claude_settings" "$claude_settings_tmp" \
-          ${lib.escapeShellArg (toString profile.settings)} ${lib.escapeShellArg profile.name}; then
+          ${lib.escapeShellArg "${profile.settings}"} ${lib.escapeShellArg profile.name}; then
           ${pkgs.coreutils}/bin/rm -f "$claude_settings_tmp"
           echo "error: failed to finalize Claude settings: $claude_settings" >&2
           exit 1
@@ -988,7 +1016,7 @@ in
       --base "$codex_home/config.toml"
     ${lib.concatMapStringsSep "\n" (name: ''
       run ${pkgs.python3}/bin/python3 ${codexReconcile} \
-        --profile ${lib.escapeShellArg name} ${lib.escapeShellArg (toString ../../dotfiles/codex/profiles/${name}.config.toml)} \
+        --profile ${lib.escapeShellArg name} ${lib.escapeShellArg "${codexProfileConfigs.${name}}"} \
         "$codex_home/${name}.config.toml"
     '') codexProfileNames}
   '';
@@ -1003,7 +1031,7 @@ in
     run ${pkgs.coreutils}/bin/install -d -m 0700 "$pi_settings_dir"
     pi_settings_tmp="$(${pkgs.coreutils}/bin/mktemp "$pi_settings.XXXXXX")"
 
-    run ${pkgs.coreutils}/bin/cp ${lib.escapeShellArg (toString ../../dotfiles/pi/settings.json)} "$pi_settings_tmp"
+    run ${pkgs.coreutils}/bin/cp ${lib.escapeShellArg "${piSettings}"} "$pi_settings_tmp"
 
     run ${pkgs.coreutils}/bin/chmod 0600 "$pi_settings_tmp"
     run ${pkgs.coreutils}/bin/mv -f "$pi_settings_tmp" "$pi_settings"
