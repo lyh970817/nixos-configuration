@@ -491,6 +491,8 @@ class CredentialIsolationTests(unittest.TestCase):
         self.assertIn("secrets/herdr-title-credentials.json", module)
         self.assertIn(".local/share/herdr-title/credentials", combined)
         self.assertNotIn("hyprwhspr/credentials", combined)
+        self.assertIn("install -d -m700", module)
+        self.assertIn("install -m600", module)
 
     def test_dedicated_secret_is_gitignored_and_peer_allowlisted(self):
         result = subprocess.run(
