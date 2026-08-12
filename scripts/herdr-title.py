@@ -416,9 +416,13 @@ class Coordinator:
                 state = self.state.tab(connection.socket_path, tab_id)
                 current = self.find_pane(connection.socket_path, pane_id)
                 still_latest = self.generation_pending.get(key) == item and self.prompt_seq[key] == seq
-                if current and current[1].get("tab_id") == tab_id and still_latest:
-                    if not state.get("pinned") and state.get("session_id") == session_id and int(state.get("epoch", 0)) == epoch:
-                        await connection.rename(tab_id, title)
+                if still_latest:
+                    if current and current[1].get("tab_id") == tab_id:
+                        if not state.get("pinned") and state.get("session_id") == session_id and int(state.get("epoch", 0)) == epoch:
+                            await connection.rename(tab_id, title)
+                    # A completed newest request is consumed even if its pane
+                    # closed or moved while HTTP was in flight. Its stale
+                    # result is discarded instead of being generated again.
                     self.generation_pending.pop(key, None)
         except asyncio.CancelledError:
             raise

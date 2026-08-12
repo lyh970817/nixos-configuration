@@ -174,6 +174,38 @@ class HerdrTitleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(maximum, 1)
         self.assertEqual(connection.renames[-1], ("w1:t1", "Newest Prompt Topic"))
 
+    async def test_owner_close_during_generation_consumes_stale_request(self):
+        connection = FakeConnection(self.coordinator, "/fake/herdr.sock", [pane()])
+        self.coordinator.connections[connection.socket_path] = connection
+        await self.coordinator.reconcile(connection)
+        calls = 0
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        async def generated(*_args):
+            nonlocal calls
+            calls += 1
+            started.set()
+            await release.wait()
+            return "Closed Pane Topic"
+
+        self.coordinator.qwen_title = generated
+        event = {
+            "version": 1, "type": "codex_prompt", "socket": connection.socket_path,
+            "pane_id": "w1:p1", "tab_id": "w1:t1", "session_id": "s1",
+            "cwd": "/tmp/project", "prompt": "Implement a substantial closing pane regression",
+        }
+        await self.coordinator.handle_datagram(json.dumps(event).encode())
+        await asyncio.wait_for(started.wait(), 1)
+        connection.snapshot["panes"] = []
+        release.set()
+        key = self.coordinator.generation_key(connection.socket_path, "w1:t1")
+        await asyncio.wait_for(self.coordinator.generations[key], 1)
+        self.assertEqual(calls, 1)
+        self.assertNotIn(key, self.coordinator.generation_pending)
+        self.assertNotIn(key, self.coordinator.generations)
+        self.assertNotIn(("w1:t1", "Closed Pane Topic"), connection.renames)
+
     async def test_secret_skips_qwen_and_uses_fallback(self):
         connection = FakeConnection(self.coordinator, "/fake/herdr.sock", [pane()])
         self.coordinator.connections[connection.socket_path] = connection
