@@ -10,6 +10,20 @@
         [hooks]
         managed_dir = "/etc/codex/hooks"
 
+        [[hooks.SessionStart]]
+
+        [[hooks.SessionStart.hooks]]
+        type = "command"
+        command = "/etc/codex/hooks/herdr-title-hook.py"
+        timeout = 1
+
+        [[hooks.UserPromptSubmit]]
+
+        [[hooks.UserPromptSubmit.hooks]]
+        type = "command"
+        command = "/etc/codex/hooks/herdr-title-hook.py"
+        timeout = 1
+
         [[hooks.Stop]]
 
         [[hooks.Stop.hooks]]
@@ -22,6 +36,11 @@
 
     "codex/hooks/response-simplifier.sh" = {
       source = ../../dotfiles/codex/hooks/response-simplifier.sh;
+      mode = "0755";
+    };
+
+    "codex/hooks/herdr-title-hook.py" = {
+      source = ../../scripts/herdr-title-hook.py;
       mode = "0755";
     };
   };

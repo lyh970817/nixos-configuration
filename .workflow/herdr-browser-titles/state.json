@@ -1,0 +1,22 @@
+{
+  "workflow": "herdr-browser-titles",
+  "status": "verification_pending",
+  "approval": {
+    "source_changes": true,
+    "real_qwen_call": false,
+    "activation": false
+  },
+  "packets": [
+    {
+      "id": "implementation",
+      "owner": "implement_dynamic_titles",
+      "status": "implemented"
+    }
+  ],
+  "verification": {
+    "fake_herdr": "pending",
+    "fake_http": "pending",
+    "static": "pending",
+    "rebuild": "parent"
+  }
+}

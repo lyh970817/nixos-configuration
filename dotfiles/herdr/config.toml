@@ -15,8 +15,8 @@ onboarding = false
 # line-based upserts, so they keep these comments but may prepend a top-level
 # `onboarding = false` above them.
 
-# Herdr shares the terminal's modifier layer: Alt controls fast navigation,
-# while the Ctrl-a prefix keeps the complete keymap available.
+# Herdr shares the terminal's modifier layer. Browser-style Ctrl tab controls
+# are direct; the Ctrl-a prefix keeps the complete keymap available.
 [keys]
 prefix = "ctrl+a"
 copy_mode = "alt+v"
@@ -47,67 +47,12 @@ new_workspace = "alt+n"
 previous_workspace = "alt+left"
 next_workspace = "alt+right"
 
-# Keep the native Ctrl-a index bindings. Direct Alt slots are persistent,
-# workspace-local commands, so labels can change without changing slot identity.
+# Keep the native Ctrl-a index bindings as a secondary direct-jump mechanism.
+# Browser-style traversal follows visible tab order and does not assign slots.
 switch_tab = "prefix+1..9"
-previous_tab = ["prefix+p", "shift+alt+tab"]
-next_tab = ["prefix+n", "alt+tab"]
-
-# Each Alt slot uses the helper's workspace-to-opaque-tab-ID map rather than
-# tab position or display label. `type = "shell"` keeps these non-blocking.
-[[keys.command]]
-key = "alt+1"
-type = "shell"
-command = "$HOME/.nixos-config/scripts/herdr-select-or-create-tab 1"
-description = "focus or create tab slot 1"
-
-[[keys.command]]
-key = "alt+2"
-type = "shell"
-command = "$HOME/.nixos-config/scripts/herdr-select-or-create-tab 2"
-description = "focus or create tab slot 2"
-
-[[keys.command]]
-key = "alt+3"
-type = "shell"
-command = "$HOME/.nixos-config/scripts/herdr-select-or-create-tab 3"
-description = "focus or create tab slot 3"
-
-[[keys.command]]
-key = "alt+4"
-type = "shell"
-command = "$HOME/.nixos-config/scripts/herdr-select-or-create-tab 4"
-description = "focus or create tab slot 4"
-
-[[keys.command]]
-key = "alt+5"
-type = "shell"
-command = "$HOME/.nixos-config/scripts/herdr-select-or-create-tab 5"
-description = "focus or create tab slot 5"
-
-[[keys.command]]
-key = "alt+6"
-type = "shell"
-command = "$HOME/.nixos-config/scripts/herdr-select-or-create-tab 6"
-description = "focus or create tab slot 6"
-
-[[keys.command]]
-key = "alt+7"
-type = "shell"
-command = "$HOME/.nixos-config/scripts/herdr-select-or-create-tab 7"
-description = "focus or create tab slot 7"
-
-[[keys.command]]
-key = "alt+8"
-type = "shell"
-command = "$HOME/.nixos-config/scripts/herdr-select-or-create-tab 8"
-description = "focus or create tab slot 8"
-
-[[keys.command]]
-key = "alt+9"
-type = "shell"
-command = "$HOME/.nixos-config/scripts/herdr-select-or-create-tab 9"
-description = "focus or create tab slot 9"
+new_tab = "ctrl+t"
+previous_tab = ["prefix+p", "ctrl+shift+tab"]
+next_tab = ["prefix+n", "ctrl+tab"]
 
 # Match tmux's Ctrl+1 scratch notes, preserving the calling pane's Herdr
 # context and cwd when the split is created.
@@ -157,6 +102,7 @@ accent = "lightgreen"
 surface_dim = "black"
 
 [ui]
+prompt_new_tab_name = false
 sidebar_start_collapsed = true
 sidebar_collapsed_mode = "hidden"
 hide_tab_bar_when_single_tab = true

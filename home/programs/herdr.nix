@@ -38,6 +38,14 @@ let
     '';
   };
 
+  herdrTitle = pkgs.writeShellApplication {
+    name = "herdr-title";
+    runtimeInputs = [ pkgs.python3 ];
+    text = ''
+      exec python3 ${../../scripts/herdr-title.py} "$@"
+    '';
+  };
+
   # A remote client is the only attachment that means the human is viewing the
   # home session from the laptop. Its per-client lease distinguishes that case
   # from a local attachment to the same named session. `exec` leaves a stale
@@ -121,6 +129,7 @@ in
   home.packages = [
     herdrWrapped
     remoteHerdrClient
+    herdrTitle
   ];
 
   # herdr rewrites its own config.toml at runtime: `mark_onboarding_complete`
@@ -141,4 +150,42 @@ in
   #
   # See dotfiles/herdr/config.toml for the layout and theme rationale.
   xdg.configFile."herdr/config.toml".source = link "dotfiles/herdr/config.toml";
+
+  systemd.user.services.herdr-title = {
+    Unit = {
+      Description = "Mirror agent topics into Herdr tab titles";
+      After = [ "network-online.target" ];
+      Wants = [ "network-online.target" ];
+    };
+
+    Service = {
+      Type = "simple";
+      ExecStart = "${herdrTitle}/bin/herdr-title daemon";
+      Environment = "HERDR_TITLE_CREDENTIALS=%h/.local/share/hyprwhspr/credentials";
+      Restart = "on-failure";
+      RestartSec = "2s";
+      UMask = "0077";
+      RuntimeDirectory = "herdr-title";
+      RuntimeDirectoryMode = "0700";
+      StateDirectory = "herdr-title";
+      StateDirectoryMode = "0700";
+      NoNewPrivileges = true;
+      PrivateTmp = true;
+      PrivateDevices = true;
+      ProtectSystem = "strict";
+      ProtectKernelTunables = true;
+      ProtectKernelModules = true;
+      ProtectControlGroups = true;
+      RestrictSUIDSGID = true;
+      LockPersonality = true;
+      MemoryDenyWriteExecute = true;
+      RestrictAddressFamilies = [
+        "AF_UNIX"
+        "AF_INET"
+        "AF_INET6"
+      ];
+    };
+
+    Install.WantedBy = [ "default.target" ];
+  };
 }
