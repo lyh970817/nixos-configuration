@@ -168,7 +168,7 @@ tab_is_live() {
   ' <<<"$tabs" >/dev/null
 }
 
-tab_with_public_number() {
+tab_with_internal_number() {
   jq -r --arg workspace "$workspace_id" --argjson slot "$number" '
     [
       .result.tabs[]
@@ -177,20 +177,15 @@ tab_with_public_number() {
     ] as $tab_ids
     | if ($tab_ids | length) == 0 then ""
       elif ($tab_ids | length) == 1 then $tab_ids[0]
-      else error("duplicate public tab number")
+      else error("duplicate internal tab number")
       end
   ' <<<"$tabs"
 }
 
-tab_is_mapped_to_another_slot() {
+workspace_has_mapped_slots() {
   jq -e \
     --arg workspace "$workspace_id" \
-    --arg slot "$number" \
-    --arg tab_id "$tab_id" '
-    any(
-      (.workspaces[$workspace] // {}) | to_entries[];
-      .key != $slot and .value == $tab_id
-    )
+    '((.workspaces[$workspace] // {}) | length) > 0
   ' <<<"$state" >/dev/null
 }
 
@@ -213,28 +208,27 @@ if [[ -n "$tab_id" ]] && tab_is_live; then
   fi
 fi
 
-# A missing or stale mapping can still have a deterministic live owner. Herdr
-# assigns public tab numbers per workspace, keeps them stable, and never reuses
-# them after close; persist the opaque tab ID once it is adopted.
-if ! adopted_tab_id=$(tab_with_public_number); then
-  fail "could not identify public tab number $number in workspace $workspace_id"
-fi
-if [[ -n "$adopted_tab_id" ]]; then
-  tab_id=$adopted_tab_id
-  if tab_is_mapped_to_another_slot; then
-    fail "public tab $tab_id is already assigned to another slot"
+# Bootstrap an entirely unmapped workspace from Herdr's immutable internal tab
+# number. Once any slot is mapped, opaque tab IDs are the only slot identity:
+# another slot's internal number can collide with the requested visible slot.
+if ! workspace_has_mapped_slots; then
+  if ! adopted_tab_id=$(tab_with_internal_number); then
+    fail "could not identify internal tab number $number in workspace $workspace_id"
   fi
-  if herdr tab focus "$tab_id"; then
-    persist_slot
-    exit 0
-  fi
+  if [[ -n "$adopted_tab_id" ]]; then
+    tab_id=$adopted_tab_id
+    if herdr tab focus "$tab_id"; then
+      persist_slot
+      exit 0
+    fi
 
-  # As above, only create after proving the adopted tab disappeared.
-  if ! load_tabs; then
-    fail "could not revalidate adopted tab slot $number in workspace $workspace_id"
-  fi
-  if tab_is_live; then
-    fail "could not focus adopted tab $tab_id"
+    # As above, only create after proving the adopted tab disappeared.
+    if ! load_tabs; then
+      fail "could not revalidate adopted tab slot $number in workspace $workspace_id"
+    fi
+    if tab_is_live; then
+      fail "could not focus adopted tab $tab_id"
+    fi
   fi
 fi
 
