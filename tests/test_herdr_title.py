@@ -73,6 +73,12 @@ class HerdrTitleTests(unittest.IsolatedAsyncioTestCase):
         await self.coordinator.reconcile(connection)
         self.assertEqual(connection.renames, [("w1:t1", "Fix Tabs")])
 
+    async def test_claude_title_is_not_limited_to_qwen_length(self):
+        title = "A" * 80
+        connection = FakeConnection(self.coordinator, "/fake/herdr.sock", [pane(agent="claude", title=title)])
+        await self.coordinator.reconcile(connection)
+        self.assertEqual(connection.renames, [("w1:t1", title)])
+
     async def test_raw_fake_socket_snapshot_and_rename(self):
         socket_path = Path(self.tmp.name) / "herdr.sock"
         requests = []
@@ -143,6 +149,27 @@ class HerdrTitleTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(0.35)
         self.assertNotIn(("w1:t1", "Stale Generated Title"), connection.renames)
         self.assertEqual(self.coordinator.state.tab(connection.socket_path, "w1:t1")["session_id"], "new")
+
+    async def test_dynamic_refresh_serializes_and_uses_newest_prompt(self):
+        connection = FakeConnection(self.coordinator, "/fake/herdr.sock", [pane()])
+        self.coordinator.connections[connection.socket_path] = connection
+        await self.coordinator.reconcile(connection)
+        common = {"version": 1, "type": "codex_prompt", "socket": connection.socket_path, "pane_id": "w1:p1", "tab_id": "w1:t1", "session_id": "s1", "cwd": "/tmp/project"}
+        active = maximum = 0
+        async def generated(prompt, *_args):
+            nonlocal active, maximum
+            active += 1
+            maximum = max(maximum, active)
+            await asyncio.sleep(0.1)
+            active -= 1
+            return "Newest Prompt Topic" if "newest" in prompt else "Older Prompt Topic"
+        self.coordinator.qwen_title = generated
+        await self.coordinator.handle_datagram(json.dumps(common | {"prompt": "Investigate the older substantial task"}).encode())
+        await asyncio.sleep(0.28)
+        await self.coordinator.handle_datagram(json.dumps(common | {"prompt": "Implement the newest substantial task"}).encode())
+        await asyncio.sleep(0.5)
+        self.assertEqual(maximum, 1)
+        self.assertEqual(connection.renames[-1], ("w1:t1", "Newest Prompt Topic"))
 
     async def test_secret_skips_qwen_and_uses_fallback(self):
         connection = FakeConnection(self.coordinator, "/fake/herdr.sock", [pane()])

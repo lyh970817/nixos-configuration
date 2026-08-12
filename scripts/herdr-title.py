@@ -41,10 +41,10 @@ SECRET_PATTERNS = [
 ]
 
 
-def clean_title(value: Any) -> str:
+def clean_title(value: Any, maximum: int = MAX_TITLE) -> str:
     text = str(value or "").replace("\n", " ").replace("\r", " ").replace("\t", " ").replace("\x1b", "")
     text = " ".join("".join("" if unicodedata_category(ch) == "C" else ch for ch in text).split())
-    return text[:MAX_TITLE].strip()
+    return text[:maximum].strip()
 
 
 def unicodedata_category(ch: str) -> str:
@@ -130,7 +130,7 @@ class HerdrConnection:
                 await writer.wait_closed()
 
     async def rename(self, tab_id: str, title: str) -> None:
-        title = clean_title(title)
+        title = clean_title(title, 256)
         if not title:
             return
         state = self.coordinator.state.tab(self.socket_path, tab_id)
@@ -144,6 +144,7 @@ class HerdrConnection:
             return
         state["title"] = title
         self.coordinator.state.save()
+        asyncio.get_running_loop().call_later(2, lambda: self.expected_renames.pop((tab_id, title), None))
 
     async def refresh_snapshot(self) -> None:
         result = await self.request("session.snapshot")
@@ -194,6 +195,7 @@ class Coordinator:
         self.connections: dict[str, HerdrConnection] = {}
         self.tasks: dict[str, asyncio.Task[Any]] = {}
         self.generations: dict[str, asyncio.Task[Any]] = {}
+        self.generation_pending: dict[str, tuple[Any, ...]] = {}
         self.prompt_seq: collections.Counter[str] = collections.Counter()
         self.requests: collections.deque[float] = collections.deque()
         self.daily: collections.Counter[str] = collections.Counter()
@@ -263,7 +265,7 @@ class Coordinator:
                 kind = self.owner_kind(owner) or state.get("owner_kind")
                 state["owner_kind"] = kind
                 if kind == "claude":
-                    title = clean_title(owner.get("terminal_title_stripped"))
+                    title = clean_title(owner.get("terminal_title_stripped"), 256)
                     if title:
                         await connection.rename(tab_id, title)
             state.setdefault("title", label)
@@ -273,7 +275,7 @@ class Coordinator:
         event = message.get("event")
         data = message.get("data", {})
         if event == "tab.renamed":
-            tab_id, label = data.get("tab_id", ""), clean_title(data.get("label"))
+            tab_id, label = data.get("tab_id", ""), clean_title(data.get("label"), 256)
             expected = (tab_id, label)
             if connection.expected_renames[expected] > 0:
                 connection.expected_renames[expected] -= 1
@@ -390,36 +392,41 @@ class Coordinator:
     def cancel_generation(self, socket_path: str, tab_id: str) -> None:
         key = self.generation_key(socket_path, tab_id)
         self.prompt_seq[key] += 1
-        if task := self.generations.pop(key, None):
-            task.cancel()
+        self.generation_pending.pop(key, None)
 
     def schedule_generation(self, connection: HerdrConnection, tab_id: str, pane_id: str, session_id: str, prompt: str, cwd: str) -> None:
         key = self.generation_key(connection.socket_path, tab_id)
         self.prompt_seq[key] += 1
         seq = self.prompt_seq[key]
-        if task := self.generations.get(key):
-            task.cancel()
         epoch = int(self.state.tab(connection.socket_path, tab_id).get("epoch", 0))
-        self.generations[key] = asyncio.create_task(self.generate_after_delay(connection, tab_id, pane_id, session_id, epoch, seq, prompt, cwd))
+        self.generation_pending[key] = (connection, tab_id, pane_id, session_id, epoch, seq, prompt, cwd)
+        if key not in self.generations or self.generations[key].done():
+            self.generations[key] = asyncio.create_task(self.generation_worker(key))
 
-    async def generate_after_delay(self, connection: HerdrConnection, tab_id: str, pane_id: str, session_id: str, epoch: int, seq: int, prompt: str, cwd: str) -> None:
+    async def generation_worker(self, key: str) -> None:
         try:
-            await asyncio.sleep(0.25)
-            prior = str(self.state.tab(connection.socket_path, tab_id).get("title") or "")
-            title = local_prompt_title(prompt, cwd) if contains_secret(prompt) else await self.qwen_title(prompt, prior, cwd)
-            state = self.state.tab(connection.socket_path, tab_id)
-            current = self.find_pane(connection.socket_path, pane_id)
-            if not current or current[1].get("tab_id") != tab_id:
-                return
-            if state.get("pinned") or state.get("session_id") != session_id or int(state.get("epoch", 0)) != epoch:
-                return
-            if self.prompt_seq[self.generation_key(connection.socket_path, tab_id)] != seq:
-                return
-            await connection.rename(tab_id, title)
+            while key in self.generation_pending:
+                await asyncio.sleep(0.25)
+                item = self.generation_pending.get(key)
+                if not item:
+                    return
+                connection, tab_id, pane_id, session_id, epoch, seq, prompt, cwd = item
+                prior = str(self.state.tab(connection.socket_path, tab_id).get("title") or "")
+                title = local_prompt_title(prompt, cwd) if contains_secret(prompt) else await self.qwen_title(prompt, prior, cwd)
+                state = self.state.tab(connection.socket_path, tab_id)
+                current = self.find_pane(connection.socket_path, pane_id)
+                still_latest = self.generation_pending.get(key) == item and self.prompt_seq[key] == seq
+                if current and current[1].get("tab_id") == tab_id and still_latest:
+                    if not state.get("pinned") and state.get("session_id") == session_id and int(state.get("epoch", 0)) == epoch:
+                        await connection.rename(tab_id, title)
+                    self.generation_pending.pop(key, None)
         except asyncio.CancelledError:
             raise
         except Exception:
             return
+        finally:
+            if self.generations.get(key) is asyncio.current_task():
+                self.generations.pop(key, None)
 
     def allow_request(self) -> bool:
         now = time.monotonic()
