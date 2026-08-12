@@ -118,7 +118,7 @@ what it costs. Keep every option the original offered, including one the writer
 argues against, and keep the reason it was argued against. If the original
 truly sets out no options: No options are mentioned.
 
-`## Recommendation` — what the writer recommends and the reason they give. Keep
+`## Recommendation` — what Claude (the message's author) recommends and the reason they give. Keep
 it as a recommendation: never turn it into an instruction to the reader, and
 never write it as something already settled. If the original gives no
 recommendation: No recommendation is given.
@@ -197,6 +197,11 @@ that the daemon runs as root" is "The daemon runs as root". "The message asks
 which option you want" is the question itself. This is about the act of
 writing, not about who did the work: keep naming who ran, changed, or decided
 something, exactly as the original did.
+
+In the rewrite, the author of the message is called Claude, never "the
+writer" — that is a term of this instruction sheet, not a name to use in the
+rewrite. Keep the attribution itself, as in "Claude recommends X because Y";
+only the name changes.
 
 ## The summary at the end
 
