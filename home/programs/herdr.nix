@@ -50,6 +50,24 @@ let
     '';
   };
 
+  # Generate the Claude hook through Herdr's own installer so its payload stays
+  # aligned with the pinned Herdr package. The matching SessionStart entry is
+  # reconciled only into the standard Claude profile in mutable-configs.nix.
+  herdrClaudeSessionHook =
+    pkgs.runCommand "herdr-claude-session-hook"
+      {
+        nativeBuildInputs = [ pkgs.herdr ];
+      }
+      ''
+        export HOME="$TMPDIR/home"
+        export CLAUDE_CONFIG_DIR="$TMPDIR/claude"
+        mkdir -p "$CLAUDE_CONFIG_DIR"
+        herdr integration install claude >/dev/null
+        install -Dm0555 \
+          "$CLAUDE_CONFIG_DIR/hooks/herdr-agent-state.sh" \
+          "$out"
+      '';
+
   # A remote client is the only attachment that means the human is viewing the
   # home session from the laptop. Its per-client lease distinguishes that case
   # from a local attachment to the same named session. `exec` leaves a stale
@@ -154,6 +172,10 @@ in
   #
   # See dotfiles/herdr/config.toml for the layout and theme rationale.
   xdg.configFile."herdr/config.toml".source = link "dotfiles/herdr/config.toml";
+  xdg.configFile."claude/hooks/herdr-agent-state.sh" = {
+    source = herdrClaudeSessionHook;
+    executable = true;
+  };
 
   # Herdr titles own a dedicated one-key credential. Do not couple the service
   # to dictation credentials or make their broader namespace readable here.

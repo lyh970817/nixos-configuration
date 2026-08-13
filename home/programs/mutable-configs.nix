@@ -29,6 +29,7 @@ let
   link = subpath: config.lib.file.mkOutOfStoreSymlink "${osConfig.portable.configDir}/${subpath}";
   claudeEnvironment = ../../dotfiles/claude/environment.json;
   claudeMarketplaces = ../../dotfiles/claude/marketplaces.json;
+  claudeHerdrSessionHook = "${config.home.homeDirectory}/.config/claude/hooks/herdr-agent-state.sh";
   claudeProfiles = [
     {
       name = "standard";
@@ -686,6 +687,7 @@ in
     claude_jq=${pkgs.jq}/bin/jq
     claude_environment=${lib.escapeShellArg (toString claudeEnvironment)}
     claude_marketplaces=${lib.escapeShellArg (toString claudeMarketplaces)}
+    claude_herdr_session_hook=${lib.escapeShellArg claudeHerdrSessionHook}
 
     # Which ANSI-only theme matches this machine's current mode. Derived from
     # the hypr current-theme symlink, the same source the claude-theme helper
@@ -708,6 +710,7 @@ in
         --slurpfile manifest "$claude_marketplaces" \
         --arg profile "$profile_name" \
         --arg claude_theme "$claude_theme" \
+        --arg claude_herdr_session_hook "$claude_herdr_session_hook" \
         '
           ($template[0]) as $template |
           ($environment[0]) as $environment |
@@ -732,6 +735,17 @@ in
             .editorMode = "vim" |
             .includeCoAuthoredBy = false |
             (if ($template.hooks | type) == "object" then .hooks = $template.hooks else . end) |
+            if $profile == "standard" then
+              .hooks.SessionStart = [{
+                matcher: "*",
+                hooks: [{
+                  type: "command",
+                  command: ("bash '" + $claude_herdr_session_hook + "' session"),
+                  timeout: 10
+                }]
+              }]
+            else .
+            end |
             # Same guard as hooks: only profiles whose template declares the
             # key get it, so the others are not handed a null.
             (if ($template.worktree | type) == "object" then .worktree = $template.worktree else . end) |

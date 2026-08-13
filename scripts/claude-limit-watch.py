@@ -13,9 +13,16 @@ from pathlib import Path
 import subprocess
 import tempfile
 from typing import Any, Iterator
+import uuid
 
 
 FRESH_FOR = dt.timedelta(minutes=15)
+STATE_VERSION = 2
+RESUME_PROMPT = (
+    "Your five-hour usage limit has reset. Continue the work that was interrupted "
+    "by the limit from where you left off. If no work was interrupted, do not start "
+    "anything new; reply briefly that no continuation is needed."
+)
 
 
 def parse_time(value: Any) -> dt.datetime | None:
@@ -119,7 +126,26 @@ def notify(title: str, body: str) -> None:
         pass
 
 
-def focus_only_claude_agent() -> None:
+def migrate_state(state: dict[str, Any] | None) -> tuple[dict[str, Any] | None, bool]:
+    if state is None:
+        return None, False
+    if state.get("version") == STATE_VERSION:
+        if not isinstance(state.get("targets"), list):
+            state = dict(state)
+            state["targets"] = []
+            return state, True
+        return state, False
+
+    # Version 1 had no explicit version or captured agent identities. It is
+    # safe to preserve its schedule, but there is nothing trustworthy to
+    # resume after that schedule elapses.
+    migrated = dict(state)
+    migrated["version"] = STATE_VERSION
+    migrated["targets"] = []
+    return migrated, True
+
+
+def list_herdr_agents() -> list[dict[str, Any]] | None:
     herdr = os.environ.get("CLAUDE_LIMIT_HERDR", "herdr")
     try:
         result = subprocess.run(
@@ -130,31 +156,185 @@ def focus_only_claude_agent() -> None:
             timeout=10,
         )
         document = json.loads(result.stdout)
-        agents = document.get("result", {}).get("agents", [])
-        claude_agents = [
-            agent
-            for agent in agents
-            if isinstance(agent, dict) and agent.get("agent") == "claude"
-        ]
-        if len(claude_agents) != 1:
-            return
-        target = claude_agents[0].get("pane_id")
-        if not isinstance(target, str) or not target:
-            return
-        subprocess.run(
-            [herdr, "agent", "focus", target],
-            check=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=10,
-        )
+        if not isinstance(document, dict):
+            return None
+        result_object = document.get("result")
+        if not isinstance(result_object, dict):
+            return None
+        agents = result_object.get("agents")
+        if not isinstance(agents, list) or not all(
+            isinstance(agent, dict) for agent in agents
+        ):
+            return None
+        return agents
     except (
         OSError,
         subprocess.TimeoutExpired,
         subprocess.CalledProcessError,
         json.JSONDecodeError,
     ):
-        pass
+        return None
+
+
+def session_uuid(agent: dict[str, Any]) -> str | None:
+    identity = agent.get("agent_session")
+    if (
+        not isinstance(identity, dict)
+        or identity.get("source") != "herdr:claude"
+        or identity.get("kind") != "id"
+    ):
+        return None
+    value = identity.get("value")
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return str(uuid.UUID(value))
+    except (ValueError, AttributeError):
+        return None
+
+
+def capture_targets() -> list[dict[str, str]]:
+    agents = list_herdr_agents()
+    if agents is None:
+        return []
+    captured: dict[tuple[str, str], dict[str, str]] = {}
+    for agent in agents:
+        terminal_id = agent.get("terminal_id")
+        pane_id = agent.get("pane_id")
+        session_id = session_uuid(agent)
+        if (
+            agent.get("agent") != "claude"
+            or not isinstance(terminal_id, str)
+            or not terminal_id
+            or not isinstance(pane_id, str)
+            or not pane_id
+            or session_id is None
+        ):
+            continue
+        key = (terminal_id, session_id)
+        captured.setdefault(
+            key,
+            {
+                "terminalId": terminal_id,
+                "sessionId": session_id,
+                "paneIdAtExhaustion": pane_id,
+            },
+        )
+    return [captured[key] for key in sorted(captured)]
+
+
+def resume_summary(targets: list[dict[str, Any]]) -> str:
+    counts: dict[str, int] = {}
+    for target in targets:
+        result = target.get("resumeResult")
+        if isinstance(result, str):
+            counts[result] = counts.get(result, 0) + 1
+    if not targets:
+        return "No standard-profile Herdr Claude sessions were captured for continuation."
+    ordered = [
+        "resumed",
+        "already_running",
+        "blocked",
+        "unknown",
+        "missing",
+        "replaced",
+        "identity_absent",
+        "list_failed",
+        "prompt_failed",
+        "prompt_attempted",
+    ]
+    parts = [f"{name}={counts[name]}" for name in ordered if counts.get(name)]
+    return "Continuation summary: " + ", ".join(parts) + "."
+
+
+def resume_targets(
+    state_path: Path, state: dict[str, Any], now: dt.datetime
+) -> dict[str, Any]:
+    raw_targets = state.get("targets")
+    targets = (
+        [target for target in raw_targets if isinstance(target, dict)]
+        if isinstance(raw_targets, list)
+        else []
+    )
+    state["targets"] = targets
+    agents = list_herdr_agents() if targets else []
+    by_terminal: dict[str, dict[str, Any]] = {}
+    if agents is not None:
+        for agent in agents:
+            terminal_id = agent.get("terminal_id")
+            if isinstance(terminal_id, str) and terminal_id:
+                by_terminal.setdefault(terminal_id, agent)
+
+    for target in targets:
+        if isinstance(target.get("resumeResult"), str):
+            continue
+        if isinstance(target.get("resumeAttemptedAt"), str):
+            # A previous process wrote the marker before invoking Herdr. Its
+            # outcome is ambiguous, so completing the state must never resend.
+            target["resumeResult"] = "prompt_attempted"
+            write_state(state_path, state)
+            continue
+
+        result: str
+        if agents is None:
+            result = "list_failed"
+        else:
+            terminal_id = target.get("terminalId")
+            expected_session = target.get("sessionId")
+            agent = by_terminal.get(terminal_id) if isinstance(terminal_id, str) else None
+            if agent is None:
+                result = "missing"
+            elif agent.get("agent") != "claude":
+                result = "replaced"
+            else:
+                current_session = session_uuid(agent)
+                if current_session is None:
+                    result = "identity_absent"
+                elif current_session != expected_session:
+                    result = "replaced"
+                else:
+                    status = agent.get("agent_status")
+                    if status == "working":
+                        result = "already_running"
+                    elif status in ("blocked", "unknown"):
+                        result = status
+                    elif status in ("idle", "done"):
+                        pane_id = agent.get("pane_id")
+                        if not isinstance(pane_id, str) or not pane_id:
+                            result = "missing"
+                        else:
+                            target["resumeAttemptedAt"] = format_time(now)
+                            target["resumeResult"] = "prompt_attempted"
+                            write_state(state_path, state)
+                            herdr = os.environ.get("CLAUDE_LIMIT_HERDR", "herdr")
+                            try:
+                                prompt = subprocess.run(
+                                    [herdr, "agent", "prompt", pane_id, RESUME_PROMPT],
+                                    check=False,
+                                    stdout=subprocess.DEVNULL,
+                                    stderr=subprocess.DEVNULL,
+                                    timeout=10,
+                                )
+                                result = "resumed" if prompt.returncode == 0 else "prompt_failed"
+                            except (OSError, subprocess.TimeoutExpired):
+                                result = "prompt_failed"
+                            target["resumeResult"] = result
+                            write_state(state_path, state)
+                            continue
+                    else:
+                        result = "unknown"
+        target["resumeResult"] = result
+        target["resumeEvaluatedAt"] = format_time(now)
+        write_state(state_path, state)
+
+    state["phase"] = "reset"
+    state["resetNotifiedAt"] = format_time(now)
+    write_state(state_path, state)
+    notify(
+        "Claude limit reset",
+        "Claude's five-hour usage window is available again. " + resume_summary(targets),
+    )
+    return state
 
 
 def run(usage_file: Path, state_dir: Path, now: dt.datetime) -> None:
@@ -164,7 +344,9 @@ def run(usage_file: Path, state_dir: Path, now: dt.datetime) -> None:
     with lock_path.open("a+") as lock:
         os.chmod(lock_path, 0o600)
         fcntl.flock(lock, fcntl.LOCK_EX)
-        state = read_state(state_path)
+        state, migrated = migrate_state(read_state(state_path))
+        if migrated and state is not None:
+            write_state(state_path, state)
 
         observations = fresh_claude_windows(usage_file, now)
         live = (
@@ -215,9 +397,11 @@ def run(usage_file: Path, state_dir: Path, now: dt.datetime) -> None:
             if same_window and state is not None and state.get("phase") == "reset":
                 return
             state = {
+                "version": STATE_VERSION,
                 "phase": "exhausted",
                 "resetsAt": format_time(resets_at),
                 "exhaustedNotifiedAt": format_time(now),
+                "targets": capture_targets(),
             }
             write_state(state_path, state)
             notify(
@@ -229,17 +413,7 @@ def run(usage_file: Path, state_dir: Path, now: dt.datetime) -> None:
         if state is not None and state.get("phase") == "exhausted":
             scheduled_reset = parse_time(state.get("resetsAt"))
             if scheduled_reset is not None and now >= scheduled_reset:
-                state = {
-                    "phase": "reset",
-                    "resetsAt": format_time(scheduled_reset),
-                    "resetNotifiedAt": format_time(now),
-                }
-                write_state(state_path, state)
-                notify(
-                    "Claude limit reset",
-                    "Claude's five-hour usage window is available again.",
-                )
-                focus_only_claude_agent()
+                resume_targets(state_path, state, now)
 
         if observations is None:
             return
