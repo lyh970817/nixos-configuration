@@ -29,7 +29,7 @@
     ./programs/codex-theme.nix
     ./programs/claude.nix
     ./programs/cli-proxy-api.nix
-    ./programs/codex-desktop.nix
+    ./programs/chatgpt.nix
     ./programs/claude-desktop.nix
     ./programs/visual-verification.nix
     ./programs/gemini.nix

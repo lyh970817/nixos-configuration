@@ -17,10 +17,6 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    codex-desktop-linux = {
-      url = "github:ilysenko/codex-desktop-linux";
-    };
-
     # Official Anthropic .deb repackaged for Nix, with Cowork's KVM-backed
     # VM stack (qemu_kvm, OVMF, virtiofsd) bundled into the FHS variant.
     claude-desktop-debian = {
@@ -41,7 +37,6 @@
       home-manager,
       nur,
       pre-commit-hooks,
-      codex-desktop-linux,
       claude-desktop-debian,
       herdr,
       ...
@@ -98,14 +93,7 @@
         cli-proxy-api = final.callPackage ./pkgs/cli-proxy-api.nix { };
         codex = final.callPackage ./pkgs/codex.nix { };
         codexbar = final.callPackage ./pkgs/codexbar.nix { };
-        # Desktop needs a current, unmodified CLI of its own. The terminal
-        # package above disables Apps, but Desktop's CODEX_CLI_PATH must not.
-        codex-desktop-cli = final.callPackage ./pkgs/codex.nix {
-          disableApps = false;
-        };
-        codex-desktop-isolated = final.callPackage ./pkgs/codex-desktop-isolated.nix {
-          codexDesktopPackage = codex-desktop-linux.packages.${system}.codex-desktop;
-        };
+        chatgpt = final.callPackage ./pkgs/chatgpt.nix { };
         xberg-cli = final.callPackage ./pkgs/xberg-cli.nix { };
         matrix-icons = final.callPackage ./pkgs/matrix-icons.nix { };
         digg-pp-cli = final.callPackage ./pkgs/digg-pp-cli.nix { };
@@ -180,10 +168,7 @@
             # activation, so it needs the same check this flake's devShell uses.
             home-manager.extraSpecialArgs = { inherit preCommitCheck; };
             home-manager.users.andongni = {
-              imports = [
-                codex-desktop-linux.homeManagerModules.default
-                ./home/andongni.nix
-              ];
+              imports = [ ./home/andongni.nix ];
             };
           }
         ];

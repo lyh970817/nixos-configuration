@@ -507,7 +507,7 @@ quiet_graphite_rule({
 
 quiet_graphite_rule({
   name = "quiet-graphite-apps",
-  match = { class = "^(brave-browser|codex-desktop)$" },
+  match = { class = "^(brave-browser|chatgpt)$" },
   border_size = 2,
   border_color = "rgba(48504Bff) rgba(282E2Aff)",
   rounding = 12,

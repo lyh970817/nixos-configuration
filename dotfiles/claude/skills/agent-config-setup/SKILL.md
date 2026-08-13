@@ -41,11 +41,11 @@ Tracked source of truth: `/home/andongni/.nixos-config/dotfiles/codex/` for Code
 - The `last30days` profile's `skills.config` entry enables the installed marketplace skill; it is not a tracked static skill copy.
 - The base `~/.codex/config.toml`, `auth.json`, databases, history, sessions, caches, marketplace metadata, and installed payloads remain machine-local. Activation owns only the documented explicit deny policy and preserves all other fields.
 - `~/.codex/shared-skills` remains a separate out-of-store link to `dotfiles/agents/skills`; it is not a replacement for the individual Codex skill links, is separate from the universal sources, and must not be linked into Claude.
-- Codex Desktop uses isolated `~/.codex-desktop` state and does not consume the CLI configuration.
+- The official ChatGPT desktop app and Codex CLI are installed together by `home/programs/chatgpt.nix`.
 
 ## Workflow
 
 1. Locate the tracked source under `dotfiles/claude/` (Claude-only resources), `dotfiles/codex/` (the Codex-authored skills), `dotfiles/universal-skills/` (the five universal skills), or `dotfiles/agents/skills` (the separate Codex shared pool) first; edit there, never a runtime copy under `$CLAUDE_CONFIG_DIR` or `~/.codex`.
 2. Keep edits scoped to the requested change.
 3. Commit the change so the repo's pre-commit hooks are the verification gate (repo policy) — do this even for changes that are already live via symlink.
-4. Rebuild with `sudo nixos-rebuild switch --flake .#system --impure` (or the `rebuild` alias, which targets `/etc/nixos#system` and works from any directory) only when the change touches a materialized file (`settings.json`) or Nix wiring itself (`mutable-configs.nix`, `theming.nix`, `claude.nix`, `cli-proxy-api.nix`, `codex-desktop.nix`, or a package derivation). Pure content edits to already-wired symlinked files (`CLAUDE.md`, `skills/`, `dotfiles/universal-skills/`, `commands/`, `output-styles/`, `agents/`, `statusline.sh`, `AGENTS.md`, `rules/`, `dotfiles/agents/skills/`, `dotfiles/codex/profiles/`) are already live — commit only, no rebuild required.
+4. Rebuild with `sudo nixos-rebuild switch --flake .#system --impure` (or the `rebuild` alias, which targets `/etc/nixos#system` and works from any directory) only when the change touches a materialized file (`settings.json`) or Nix wiring itself (`mutable-configs.nix`, `theming.nix`, `claude.nix`, `cli-proxy-api.nix`, `chatgpt.nix`, or a package derivation). Pure content edits to already-wired symlinked files (`CLAUDE.md`, `skills/`, `dotfiles/universal-skills/`, `commands/`, `output-styles/`, `agents/`, `statusline.sh`, `AGENTS.md`, `rules/`, `dotfiles/agents/skills/`, `dotfiles/codex/profiles/`) are already live — commit only, no rebuild required.

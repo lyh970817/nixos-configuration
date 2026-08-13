@@ -1,0 +1,121 @@
+{
+  lib,
+  stdenv,
+  stdenvNoCC,
+  fetchurl,
+  autoPatchelfHook,
+  dpkg,
+  makeWrapper,
+  wrapGAppsHook3,
+  alsa-lib,
+  at-spi2-atk,
+  at-spi2-core,
+  cairo,
+  cups,
+  dbus,
+  expat,
+  gdk-pixbuf,
+  glib,
+  graphite2,
+  gtk3,
+  libdrm,
+  libgbm,
+  libGL,
+  libnotify,
+  libusb1,
+  libxkbcommon,
+  nspr,
+  nss,
+  openssl,
+  pango,
+  systemdLibs,
+  xdg-utils,
+  xorg,
+}:
+
+stdenvNoCC.mkDerivation (finalAttrs: {
+  pname = "chatgpt";
+  version = "26.803.81509";
+
+  src = fetchurl {
+    url = "https://persistent.oaistatic.com/codex-app-prod/linux/deb/latest/chatgpt_amd64.deb";
+    hash = "sha256-qb+Ro2j598Tuo4CCqfuPtGuNAFtxmm13FdLloZgsOOs=";
+  };
+
+  nativeBuildInputs = [
+    autoPatchelfHook
+    dpkg
+    makeWrapper
+    wrapGAppsHook3
+  ];
+
+  buildInputs = [
+    (lib.getLib stdenv.cc.cc)
+    alsa-lib
+    at-spi2-atk
+    at-spi2-core
+    cairo
+    cups
+    dbus
+    expat
+    gdk-pixbuf
+    glib
+    graphite2
+    gtk3
+    libdrm
+    libgbm
+    libGL
+    libnotify
+    libusb1
+    libxkbcommon
+    nspr
+    nss
+    openssl
+    pango
+    systemdLibs
+    xorg.libX11
+    xorg.libXcomposite
+    xorg.libXdamage
+    xorg.libXext
+    xorg.libXfixes
+    xorg.libXrandr
+    xorg.libxcb
+  ];
+
+  dontBuild = true;
+  dontStrip = true;
+
+  # The bundle includes unused Qt desktop-integration shims and musl native
+  # modules alongside the glibc modules selected on this platform.
+  autoPatchelfIgnoreMissingDeps = [
+    "libQt5*.so.*"
+    "libQt6*.so.*"
+    "libc.musl-x86_64.so.1"
+  ];
+
+  installPhase = ''
+    runHook preInstall
+
+    mkdir -p "$out/lib" "$out/bin"
+    cp -a usr/lib/chatgpt "$out/lib/chatgpt"
+    cp -a usr/share "$out/share"
+
+    makeWrapper "$out/lib/chatgpt/ChatGPT" "$out/bin/chatgpt" \
+      --prefix PATH : ${lib.makeBinPath [ xdg-utils ]}
+
+    substituteInPlace "$out/share/applications/chatgpt.desktop" \
+      --replace-fail "Exec=chatgpt %U" "Exec=chatgpt --class=chatgpt %U" \
+      --replace-fail "StartupNotify=true" $'StartupNotify=true\nStartupWMClass=chatgpt'
+
+    runHook postInstall
+  '';
+
+  meta = {
+    description = "Official ChatGPT desktop application from OpenAI";
+    homepage = "https://openai.com/chatgpt/desktop/";
+    license = lib.licenses.unfree;
+    mainProgram = "chatgpt";
+    sourceProvenance = with lib.sourceTypes; [ binaryNativeCode ];
+    platforms = [ "x86_64-linux" ];
+  };
+})
