@@ -280,6 +280,22 @@
         description = "Previous / next agent";
         key = "Alt + Up / Down";
       }
+      {
+        description = "Resume Claude / Codex · new tab";
+        key = "F1 / F2";
+      }
+      {
+        description = "Resume Claude / Codex · split right";
+        key = "F3 / F4";
+      }
+      {
+        description = "Resume Claude / Codex · split below";
+        key = "F5 / F6";
+      }
+      {
+        description = "Start fresh in the same destination";
+        key = "Shift + F1…F6";
+      }
     ];
   }
   {
