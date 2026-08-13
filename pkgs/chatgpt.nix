@@ -5,7 +5,7 @@
   fetchurl,
   autoPatchelfHook,
   dpkg,
-  makeWrapper,
+  makeShellWrapper,
   wrapGAppsHook3,
   alsa-lib,
   at-spi2-atk,
@@ -45,7 +45,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
   nativeBuildInputs = [
     autoPatchelfHook
     dpkg
-    makeWrapper
+    makeShellWrapper
     wrapGAppsHook3
   ];
 
@@ -100,7 +100,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     cp -a usr/lib/chatgpt "$out/lib/chatgpt"
     cp -a usr/share "$out/share"
 
-    makeWrapper "$out/lib/chatgpt/ChatGPT" "$out/bin/chatgpt" \
+    makeShellWrapper "$out/lib/chatgpt/ChatGPT" "$out/bin/chatgpt" \
       --prefix PATH : ${lib.makeBinPath [ xdg-utils ]} \
       --run 'export CODEX_HOME="$HOME/.codex-desktop"' \
       --run 'export XDG_CONFIG_HOME="$HOME/.config/codex-desktop"' \
