@@ -100,6 +100,17 @@ let
       exit "$codexbar_status"
     '';
   };
+  claudeLimitWatch = pkgs.writeShellApplication {
+    name = "claude-limit-watch";
+    runtimeInputs = with pkgs; [
+      herdr
+      libnotify
+      python3
+    ];
+    text = ''
+      exec python3 ${../../scripts/claude-limit-watch.py} "$@"
+    '';
+  };
 
 in
 {
@@ -172,6 +183,51 @@ in
       Unit = "codexbar-refresh.service";
     };
 
+    Install.WantedBy = [ "timers.target" ];
+  };
+
+  systemd.user.services.claude-limit-watch = {
+    Unit.Description = "Observe Claude's five-hour usage limit";
+
+    Service = {
+      Type = "oneshot";
+      ExecStart = "${claudeLimitWatch}/bin/claude-limit-watch";
+      StateDirectory = "claude-limit-watch";
+      StateDirectoryMode = "0700";
+      UMask = "0077";
+      NoNewPrivileges = true;
+      PrivateTmp = true;
+      PrivateDevices = true;
+      ProtectSystem = "strict";
+      ProtectKernelTunables = true;
+      ProtectKernelModules = true;
+      ProtectControlGroups = true;
+      RestrictSUIDSGID = true;
+      LockPersonality = true;
+      MemoryDenyWriteExecute = true;
+      RestrictAddressFamilies = [ "AF_UNIX" ];
+    };
+  };
+
+  # Atomic cache replacements wake this path unit. The timer independently
+  # advances persisted reset schedules, even when Claude OAuth data goes stale.
+  systemd.user.paths.claude-limit-watch = {
+    Unit.Description = "Watch the CodexBar cache for Claude limit changes";
+    Path = {
+      PathChanged = codexbarCachePath;
+      Unit = "claude-limit-watch.service";
+    };
+    Install.WantedBy = [ "default.target" ];
+  };
+
+  systemd.user.timers.claude-limit-watch = {
+    Unit.Description = "Check Claude's persisted limit reset schedule";
+    Timer = {
+      OnCalendar = "*-*-* *:*:00";
+      AccuracySec = "1s";
+      Persistent = true;
+      Unit = "claude-limit-watch.service";
+    };
     Install.WantedBy = [ "timers.target" ];
   };
 }
