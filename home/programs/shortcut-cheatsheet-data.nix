@@ -270,6 +270,117 @@
     ];
   }
   {
+    name = "YAZI · NAVIGATION";
+    bindings = [
+      {
+        description = "Previous / next file";
+        key = "k / j";
+      }
+      {
+        description = "Parent / enter or open";
+        key = "h / l";
+      }
+      {
+        description = "Previous / next directory";
+        key = "Shift + h / Shift + l";
+      }
+      {
+        description = "Move 5 files up / down";
+        key = "Ctrl + u / Ctrl + d";
+      }
+      {
+        description = "Top / bottom";
+        key = "g g / Shift + g";
+      }
+      {
+        description = "Filter files";
+        key = "f";
+      }
+      {
+        description = "Find file";
+        key = "/";
+      }
+      {
+        description = "Next / previous find match";
+        key = "n / Shift + n";
+      }
+    ];
+  }
+  {
+    name = "YAZI · FILES";
+    bindings = [
+      {
+        description = "Toggle / visual selection";
+        key = "Space / v";
+      }
+      {
+        description = "Open / choose opener";
+        key = "o / Shift + o";
+      }
+      {
+        description = "Yank copy / cut";
+        key = "y / x";
+      }
+      {
+        description = "Yank copy following symlinks";
+        key = "Shift + y";
+      }
+      {
+        description = "Paste / overwrite";
+        key = "p / Shift + p";
+      }
+      {
+        description = "Create / rename";
+        key = "a / r";
+      }
+      {
+        description = "Trash / permanently delete";
+        key = "d / Shift + d";
+      }
+      {
+        description = "Toggle hidden files";
+        key = ".";
+      }
+    ];
+  }
+  {
+    name = "YAZI · TOOLS";
+    bindings = [
+      {
+        description = "Spot hovered file";
+        key = "s";
+      }
+      {
+        description = "Extract archives / create zip";
+        key = "Shift + e / Shift + z";
+      }
+      {
+        description = "Git root / changed files";
+        key = "g r / g c";
+      }
+      {
+        description = "Open interactive shell";
+        key = "$";
+      }
+      {
+        description = "Change permissions";
+        key = "c m";
+      }
+      {
+        description = "Mount manager";
+        key = "Shift + m";
+      }
+      {
+        description = "Zoom preview in / out";
+        key = "+ / -";
+      }
+      {
+        description = "Maximize parent / files / preview";
+        key = "Ctrl + 1 / 2 / 3";
+      }
+    ];
+  }
+  {
     name = "MPV · AUDIO";
     bindings = [
       {

@@ -11,6 +11,7 @@ let
   #   Desktop/voice/hardware: dotfiles/hypr/hyprland.lua and the remote
   #     role fragment in home/programs/dotfiles.nix.
   #   Herdr: direct custom bindings in dotfiles/herdr/config.toml.
+  #   Yazi: dotfiles/yazi/keymap.toml plus the shipped built-in keymap.
   #   MPV: built-in input map; home/programs/mpv.nix leaves it unchanged.
   #   Shell: aliases and ZLE bindings in home/programs/shell.nix.
   # This is the compact daily-driver set, not an exhaustive list of the
@@ -122,7 +123,7 @@ in
       Icon=input-keyboard
       Terminal=false
       Categories=Utility;System;
-      Keywords=shortcut;keybinding;hotkey;alias;herdr;mpv;hyprland;
+      Keywords=shortcut;keybinding;hotkey;alias;herdr;yazi;mpv;hyprland;
       StartupNotify=false
     '';
   };
