@@ -194,12 +194,14 @@ hl.device({
   sensitivity = -0.5,
 })
 
+-- Deliberately global: touchpad-toggle.sh reads and updates this through the
+-- running Lua config's REPL. A reload creates a fresh Lua state and restores
+-- both this value and the device setting to the enabled default together, so
+-- the next toggle cannot act on stale state left over from before the reload.
+touchpad_enabled = true
 hl.device({
   name = "363030314b424e44:00-06cb:cddb-touchpad",
-  -- Touchpad disabled by default; every reload/rebuild restores this. Fn+F9
-  -- (touchpad-toggle.sh via code:202) enables it, and a missing state file is
-  -- treated as disabled so the first press enables.
-  enabled = false,
+  enabled = touchpad_enabled,
 })
 
 ---------------------
