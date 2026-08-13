@@ -41,6 +41,12 @@ upward only a decision-ready result or a genuine parent-level decision/blocker.
 The parent retains cross-workstream decisions and integration, plus any
 repository-required gates assigned to it. Put every repository-modifying agent in
 an explicit isolated worktree; shared-checkout agents remain read-only.
+
+Treat a `wait_agent` timeout as no news and wait again. Do not use `list_agents`
+for routine progress polling. Use it only for a concrete status diagnostic, with
+the narrowest `path_prefix`; omit the prefix only when whole-tree state is the
+subject. For live detail, ask the agent for a status update and wait for its
+message.
 """
 subagent_developer_instructions = """
 You are a subagent. Complete the bounded task you were assigned and remain
