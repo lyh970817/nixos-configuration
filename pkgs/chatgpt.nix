@@ -141,6 +141,8 @@ let
       --proc /proc
       --bind "$HOME" "$HOME"
       --bind /tmp /tmp
+      --tmpfs /usr
+      --dir /usr/bin
       --ro-bind ${lib.getExe' glibc.bin "ldd"} /usr/bin/ldd
     )
 
