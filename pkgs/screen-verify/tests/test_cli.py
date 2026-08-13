@@ -370,7 +370,6 @@ PY
 """,
         )
         self.fake("gsettings", "#!/bin/sh\nprintf \"'prefer-dark'\\n\"\n")
-        self.fake("darkman", "#!/bin/sh\nprintf 'dark\\n'\n")
 
     def tearDown(self) -> None:
         for connection in self.connections:
@@ -836,7 +835,6 @@ if [ "$1" = clients ]; then pid=$(cat {pid_file} 2>/dev/null || printf 0); print
             "gsettings",
             f"#!/bin/sh\nprintf \"'prefer-%s'\\n\" \"$(cat {mode_file})\"\n",
         )
-        self.fake("darkman", "#!/bin/sh\nexit 1\n")
         self.fake("switch-dark", f"#!/bin/sh\nprintf dark > {mode_file}\n")
         self.fake("switch-light", f"#!/bin/sh\nprintf light > {mode_file}\n")
         session = self.begin()

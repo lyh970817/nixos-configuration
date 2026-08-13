@@ -398,12 +398,8 @@ in
   '';
 
   # Monitor presence in hypr/scripts/monitor-switch.sh is the sole automatic
-  # theme trigger; it calls switch-light/switch-dark directly. The Darkman
-  # daemon is intentionally not started because this configuration manages no
-  # Darkman schedule, location, or other Darkman configuration.
-
-  # Legacy Darkman hook locations expose the same theme actions, but the
-  # monitor-switch script is what selects and invokes a mode automatically.
+  # theme trigger; it calls switch-light/switch-dark directly. Keep the common
+  # freedesktop hook locations as compatibility entry points for those actions.
   systemd.user.tmpfiles.rules = [
     "d %h/.local/state/hypr 0755 - - -"
     "L %h/.local/state/hypr/current-theme.lua - - - - %h/.config/hypr/themes/dark.lua"

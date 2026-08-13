@@ -4,7 +4,6 @@
   makeWrapper,
   python3,
   coreutils,
-  darkman,
   glib,
   grim,
   hyprland,
@@ -37,7 +36,6 @@ stdenvNoCC.mkDerivation {
       --prefix PATH : ${
         lib.makeBinPath [
           coreutils
-          darkman
           glib
           grim
           hyprland

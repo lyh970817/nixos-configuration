@@ -167,14 +167,3 @@ def associated_window(pid: int, wait_seconds: float) -> dict[str, Any] | None:
         if time.monotonic() >= deadline:
             return None
         time.sleep(0.1)
-
-
-def expected_mode() -> str:
-    try:
-        result = subprocess.run(
-            ["darkman", "get"], check=True, capture_output=True, text=True
-        )
-        value = result.stdout.strip()
-        return value if value in {"dark", "light"} else "unknown"
-    except (OSError, subprocess.CalledProcessError):
-        return "unknown"

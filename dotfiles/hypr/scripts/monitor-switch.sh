@@ -12,8 +12,7 @@ STATE_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/theme-monitor-mode"
 # theming.nix), which this poll loop never touches.
 current_mode() {
   # Monitor presence is the automatic theme trigger. The DSC e-ink display
-  # selects light mode; its absence selects dark mode. This setup does not
-  # use Darkman's time, location, or GeoClue transition mechanisms.
+  # selects light mode; its absence selects dark mode.
   if hyprctl monitors | grep -q "DSC"; then
     echo light
   else
@@ -51,9 +50,8 @@ if [ "$mode" = "dark" ] && [ "${HYPR_ROLE:-}" != "remote" ]; then
 fi
 
 # Poll state so this script has no socat runtime dependency. Apply the theme
-# scripts directly rather than asking Darkman to schedule a transition. Only a
-# change relative to the stored mode is a real edge: on such an edge, record
-# it and apply locally. Monitor edges no longer push to the peer — the only
+# scripts directly. Only a change relative to the stored mode is a real edge:
+# on such an edge, record it and apply locally. Monitor edges no longer push to the peer — the only
 # remaining theme-push caller is theme-toggle (see theming.nix), a deliberate
 # manual action, not this automatic poll.
 while sleep 2; do

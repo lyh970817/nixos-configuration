@@ -1,7 +1,7 @@
 # Mako Notification Daemon Configuration
 # Managed by home-manager
 # Original: ~/.config/mako/config
-# Theme switching handled by darkman hooks via makoctl mode
+# Theme switching handled by the monitor-driven hooks via makoctl mode
 { config, pkgs, ... }:
 
 let

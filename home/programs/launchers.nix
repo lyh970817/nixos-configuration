@@ -29,7 +29,6 @@ let
     "calibre-ebook-viewer"
     "calibre-lrfviewer"
     "cups"
-    "darkman"
     "fcitx5-configtool"
     "foot-server"
     "footclient"
@@ -395,21 +394,6 @@ in
       ];
       settings = {
         Keywords = "power;off;halt;stop;";
-      };
-    };
-
-    darkman-toggle = {
-      name = "Toggle darkman";
-      genericName = "Toggle dark mode";
-      comment = "Toggle dark mode via darkman";
-      exec = "darkman toggle";
-      terminal = false;
-      type = "Application";
-      categories = [ "Settings" ];
-      noDisplay = true;
-      settings = {
-        TryExec = "darkman";
-        Keywords = "dark;light;colour-preference;theme;";
       };
     };
 

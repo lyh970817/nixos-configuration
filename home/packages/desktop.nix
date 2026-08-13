@@ -49,7 +49,6 @@
     hypr-ipc
     glib
     gsettings-desktop-schemas
-    darkman
     slack
     # Windows apps (e.g. Mplus) via a 64+32-bit wine.
     wineWowPackages.stable

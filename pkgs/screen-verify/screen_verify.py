@@ -22,7 +22,6 @@ from screen_verify_lib.desktop import (
     associated_window,
     current_mode,
     descendant_pids,
-    expected_mode,
     focused_monitor,
     notify,
     process_start_time,
@@ -466,9 +465,7 @@ def command_end(args: argparse.Namespace) -> dict[str, Any]:
     # A failed restore still retains the session directory and still fails the
     # command, so the user can retry it once the cause is fixed.
     restored_previews = restore_previews(path)
-    desired_mode = expected_mode()
-    if desired_mode == "unknown":
-        desired_mode = data.get("restore_mode", "unknown")
+    desired_mode = data.get("restore_mode", "unknown")
     if desired_mode in {"dark", "light"} and current_mode() != desired_mode:
         try:
             subprocess.run([f"switch-{desired_mode}"], check=True)

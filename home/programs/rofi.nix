@@ -1,7 +1,7 @@
 # Rofi Application Launcher Configuration
 # Managed by home-manager
 # Original: ~/.config/rofi/
-# Theme switching handled by darkman hooks (symlinks to current.rasi)
+# Theme switching handled by the monitor-driven hooks (symlinks to current.rasi)
 { config, pkgs, ... }:
 
 let
@@ -20,10 +20,10 @@ in
       display-run = "Run";
       display-window = "Windows";
     };
-    theme = "current"; # References the symlink managed by darkman
+    theme = "current"; # References the symlink managed by the theme hooks
   };
 
-  # Theme files for darkman switching
+  # Theme files for monitor-driven switching
   home.file = {
     ".config/rofi/themes/dark.rasi".text = ''
       * {
