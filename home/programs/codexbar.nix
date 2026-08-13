@@ -131,7 +131,9 @@ let
 
       enable_watch() {
         rm -f "$marker"
-        if systemctl --user enable --now "$path_unit" "$timer_unit"; then
+        systemctl --user reset-failed "$path_unit" "$timer_unit" "$service_unit" \
+          >/dev/null 2>&1 || true
+        if systemctl --user start "$path_unit" "$timer_unit"; then
           announce "Claude watcher enabled" \
             "The five-hour limit watcher will resume Claude sessions after reset."
           return
@@ -139,7 +141,8 @@ let
 
         install -d -m 700 "$(dirname "$marker")"
         install -m 600 /dev/null "$marker"
-        systemctl --user disable --now "$path_unit" "$timer_unit" >/dev/null 2>&1 || true
+        systemctl --user stop "$path_unit" "$timer_unit" "$service_unit" \
+          >/dev/null 2>&1 || true
         announce "Claude watcher could not be enabled" \
           "Its previous disabled state has been restored."
         return 1
@@ -149,8 +152,10 @@ let
         install -d -m 700 "$(dirname "$marker")"
         install -m 600 /dev/null "$marker"
         disable_status=0
-        systemctl --user disable --now "$path_unit" "$timer_unit" || disable_status=$?
-        systemctl --user stop "$service_unit" || disable_status=$?
+        systemctl --user stop "$path_unit" "$timer_unit" "$service_unit" \
+          || disable_status=$?
+        systemctl --user reset-failed "$path_unit" "$timer_unit" "$service_unit" \
+          >/dev/null 2>&1 || true
         if [ "$disable_status" -eq 0 ]; then
           announce "Claude watcher disabled" \
             "Limit checks and automatic session resumes are stopped."
@@ -322,16 +327,20 @@ in
     Install.WantedBy = [ "timers.target" ];
   };
 
-  # Home Manager recreates WantedBy links on activation. Reapply the user's
-  # persisted preference after the unit reload so disabling the watcher from
-  # the launcher survives future rebuilds.
+  # Reapply the user's persisted preference after the unit reload. The units
+  # remain declaratively enabled: disabling a Home Manager unit through
+  # systemctl would also remove its managed unit-file symlink. The marker and
+  # unit conditions provide the durable disabled state instead.
   home.activation.reconcileClaudeLimitWatch = lib.hm.dag.entryAfter [ "reloadSystemd" ] ''
     if [ -e ${lib.escapeShellArg claudeLimitWatchDisabledMarker} ]; then
-      run ${pkgs.systemd}/bin/systemctl --user disable --now \
-        claude-limit-watch.path claude-limit-watch.timer
-      run ${pkgs.systemd}/bin/systemctl --user stop claude-limit-watch.service
+      run ${pkgs.systemd}/bin/systemctl --user stop \
+        claude-limit-watch.path claude-limit-watch.timer claude-limit-watch.service
+      run ${pkgs.systemd}/bin/systemctl --user reset-failed \
+        claude-limit-watch.path claude-limit-watch.timer claude-limit-watch.service
     else
-      run ${pkgs.systemd}/bin/systemctl --user enable --now \
+      run ${pkgs.systemd}/bin/systemctl --user reset-failed \
+        claude-limit-watch.path claude-limit-watch.timer claude-limit-watch.service
+      run ${pkgs.systemd}/bin/systemctl --user start \
         claude-limit-watch.path claude-limit-watch.timer
     fi
   '';
