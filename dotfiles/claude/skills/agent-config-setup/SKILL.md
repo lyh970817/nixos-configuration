@@ -41,7 +41,7 @@ Tracked source of truth: `/home/andongni/.nixos-config/dotfiles/codex/` for Code
 - The `last30days` profile's `skills.config` entry enables the installed marketplace skill; it is not a tracked static skill copy.
 - The base `~/.codex/config.toml`, `auth.json`, databases, history, sessions, caches, marketplace metadata, and installed payloads remain machine-local. Activation owns only the documented explicit deny policy and preserves all other fields.
 - `~/.codex/shared-skills` remains a separate out-of-store link to `dotfiles/agents/skills`; it is not a replacement for the individual Codex skill links, is separate from the universal sources, and must not be linked into Claude.
-- The official ChatGPT desktop app and Codex CLI are installed together by `home/programs/chatgpt.nix`.
+- The official ChatGPT Desktop is packaged by `pkgs/chatgpt.nix` and wired by `home/programs/chatgpt.nix`. It is isolated at `~/.codex-desktop` and does not consume CLI policy or shared skills.
 
 ## Workflow
 

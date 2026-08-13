@@ -101,7 +101,12 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     cp -a usr/share "$out/share"
 
     makeWrapper "$out/lib/chatgpt/ChatGPT" "$out/bin/chatgpt" \
-      --prefix PATH : ${lib.makeBinPath [ xdg-utils ]}
+      --prefix PATH : ${lib.makeBinPath [ xdg-utils ]} \
+      --run 'export CODEX_HOME="$HOME/.codex-desktop"' \
+      --run 'export XDG_CONFIG_HOME="$HOME/.config/codex-desktop"' \
+      --run 'export XDG_DATA_HOME="$HOME/.local/share/codex-desktop"' \
+      --run 'export XDG_CACHE_HOME="$HOME/.cache/codex-desktop"' \
+      --run 'export CODEX_ELECTRON_USER_DATA_PATH="$HOME/.config/codex-desktop/Codex"'
 
     substituteInPlace "$out/share/applications/chatgpt.desktop" \
       --replace-fail "Exec=chatgpt %U" "Exec=chatgpt --class=chatgpt %U" \

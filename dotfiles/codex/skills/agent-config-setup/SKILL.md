@@ -33,7 +33,7 @@ For synchronizing the whole Matt Pocock skill set, see the `sync-mattpocock-skil
 
 - CLI package derivation: `pkgs/codex.nix`; the CLI runs directly against `~/.codex` (`home/programs/chatgpt.nix` adds `pkgs.codex` to `home.packages`). Shell alias `cdy` runs `codex --yolo`; `cdo` runs the high-effort `orchestrator` profile with `--yolo`.
 - The `orchestrator` profile uses multi-agent V2 with 16 total resident threads (the root plus up to 15 subagents) and no depth ceiling. It disables the default collaboration-mode instruction so the profile's root instructions govern, and replaces inherited root instructions in subagents with `features.multi_agent_v2.subagent_developer_instructions`.
-- The official ChatGPT desktop app is packaged by `pkgs/chatgpt.nix` and installed with the CLI from `home/programs/chatgpt.nix`.
+- The official ChatGPT Desktop is packaged by `pkgs/chatgpt.nix` and wired by `home/programs/chatgpt.nix`. It is isolated at `~/.codex-desktop` and does not consume CLI policy or shared skills.
 
 ## Workflow
 
