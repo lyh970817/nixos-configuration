@@ -109,7 +109,8 @@ let
     "session-handoff"
     "visual-verification"
     "writing-agent-instructions"
-  ];
+  ]
+  ++ lib.optionals (osConfig.portable.role != "home") [ "tuicr" ];
 
   codexSkillLinks = lib.listToAttrs (
     (map (name: {

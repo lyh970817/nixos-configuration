@@ -34,6 +34,7 @@
     ./programs/visual-verification.nix
     ./programs/gemini.nix
     ./programs/herdr.nix
+    ./programs/tuicr.nix
     ./programs/pi.nix
     ./programs/omp.nix
     ./programs/hyprwhspr.nix
