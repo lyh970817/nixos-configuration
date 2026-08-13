@@ -300,10 +300,8 @@ in
         ${builtins.readFile ./print_poem.sh}
       }
 
-      # Launch fastfetch on terminal open. A `sleep 0.1` used to sit here "to
-      # let the terminal initialize", but foot sets the pty size before the
-      # shell spawns, so the greeting renders correctly without it.
-      fastfetch && print_welcome_poem && printf '\n'
+      ${builtins.readFile ./print_welcome.sh}
+      print_shell_welcome
 
       # Re-register zoxide's chpwd hook after the oh-my-zsh/plugin chpwd hooks
       # loaded above, so directory tracking keeps working (some plugins reassign
