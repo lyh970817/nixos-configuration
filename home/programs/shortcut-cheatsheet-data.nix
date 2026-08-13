@@ -194,6 +194,19 @@
     ];
   }
   {
+    name = "CODEX · TUI";
+    bindings = [
+      {
+        description = "Open transcript";
+        key = "Ctrl + o";
+      }
+      {
+        description = "Copy selected response";
+        key = "Ctrl + y";
+      }
+    ];
+  }
+  {
     name = "HERDR · PANES";
     bindings = [
       {
