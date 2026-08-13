@@ -90,7 +90,7 @@ let
     # 1. WALLPAPER (Kill old, start new)
     pkill swaybg || true
     ${pkgs.util-linux}/bin/setsid -f ${pkgs.swaybg}/bin/swaybg -c ${p.background} >/dev/null 2>&1
-    ${pkgs.systemd}/bin/systemctl --user start mandala-wallpaper.service || true
+    ${pkgs.systemd}/bin/systemctl --user start poem-wallpaper.service || true
 
     # 2/3. HYPRLAND BACKGROUND COLOR + LIVE THEME SETTINGS
     #
@@ -180,7 +180,7 @@ let
     ${pkgs.screen-shader-controller}/bin/screen-shader reconcile --mode light
 
     # WALLPAPER
-    ${pkgs.systemd}/bin/systemctl --user stop mandala-wallpaper.service || true
+    ${pkgs.systemd}/bin/systemctl --user stop poem-wallpaper.service || true
     pkill swaybg || true
     ${pkgs.util-linux}/bin/setsid -f ${pkgs.swaybg}/bin/swaybg -i "${lightWallpaper}" -m fit -c ffffff >/dev/null 2>&1
 
