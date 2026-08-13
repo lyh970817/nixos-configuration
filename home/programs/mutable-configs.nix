@@ -480,10 +480,8 @@ let
         # own RGB, so a stray /theme silently strands code blocks and the
         # status line on a scheme that fights the rest of the terminal.
         changed = table_key(lines, "tui", "theme", '"vt220-phosphor"') or changed
-        changed = table_key(
-            lines, "tui.keymap.global", "open_transcript", '"ctrl-o"'
-        ) or changed
-        changed = table_key(lines, "tui.keymap.global", "copy", '"ctrl-y"') or changed
+        changed = remove_map_key(lines, "tui.keymap.global", "open_transcript") or changed
+        changed = remove_map_key(lines, "tui.keymap.global", "copy") or changed
         changed = remove_map_key(
             lines,
             "shell_environment_policy.filters",
