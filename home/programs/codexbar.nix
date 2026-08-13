@@ -21,6 +21,7 @@ let
     "no_proxy=localhost,127.0.0.1,::1,.local,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,100.64.0.0/10,.ts.net"
   ];
   codexbarCachePath = "${config.home.homeDirectory}/.cache/codexbar/usage.json";
+  claudeLimitWatchDisabledMarker = "${config.xdg.stateHome}/claude-limit-watch/disabled";
   codexbarRefresh = pkgs.writeShellApplication {
     name = "codexbar-refresh-cache";
     runtimeInputs = with pkgs; [
@@ -111,10 +112,91 @@ let
       exec python3 ${../../scripts/claude-limit-watch.py} "$@"
     '';
   };
+  claudeLimitWatchControl = pkgs.writeShellApplication {
+    name = "claude-limit-watch-control";
+    runtimeInputs = with pkgs; [
+      coreutils
+      libnotify
+      systemd
+    ];
+    text = ''
+      marker=${lib.escapeShellArg claudeLimitWatchDisabledMarker}
+      path_unit=claude-limit-watch.path
+      timer_unit=claude-limit-watch.timer
+      service_unit=claude-limit-watch.service
+
+      announce() {
+        notify-send --app-name="Claude limit watch" "$1" "$2" || true
+      }
+
+      enable_watch() {
+        rm -f "$marker"
+        if systemctl --user enable --now "$path_unit" "$timer_unit"; then
+          announce "Claude watcher enabled" \
+            "The five-hour limit watcher will resume Claude sessions after reset."
+          return
+        fi
+
+        install -d -m 700 "$(dirname "$marker")"
+        install -m 600 /dev/null "$marker"
+        systemctl --user disable --now "$path_unit" "$timer_unit" >/dev/null 2>&1 || true
+        announce "Claude watcher could not be enabled" \
+          "Its previous disabled state has been restored."
+        return 1
+      }
+
+      disable_watch() {
+        install -d -m 700 "$(dirname "$marker")"
+        install -m 600 /dev/null "$marker"
+        disable_status=0
+        systemctl --user disable --now "$path_unit" "$timer_unit" || disable_status=$?
+        systemctl --user stop "$service_unit" || disable_status=$?
+        if [ "$disable_status" -eq 0 ]; then
+          announce "Claude watcher disabled" \
+            "Limit checks and automatic session resumes are stopped."
+          return
+        fi
+
+        announce "Claude watcher disable was incomplete" \
+          "The disabled preference was saved and will be enforced on the next activation."
+        return 1
+      }
+
+      case "''${1:-toggle}" in
+        enable)
+          enable_watch
+          ;;
+        disable)
+          disable_watch
+          ;;
+        toggle)
+          if [ -e "$marker" ]; then
+            enable_watch
+          else
+            disable_watch
+          fi
+          ;;
+        status)
+          if [ -e "$marker" ]; then
+            printf 'disabled\n'
+          else
+            printf 'enabled\n'
+          fi
+          ;;
+        *)
+          printf 'usage: claude-limit-watch-control [enable|disable|toggle|status]\n' >&2
+          exit 2
+          ;;
+      esac
+    '';
+  };
 
 in
 {
-  home.packages = [ pkgs.codexbar ];
+  home.packages = [
+    pkgs.codexbar
+    claudeLimitWatchControl
+  ];
 
   systemd.user.services.codexbar = {
     Unit = {
@@ -187,7 +269,10 @@ in
   };
 
   systemd.user.services.claude-limit-watch = {
-    Unit.Description = "Observe Claude's five-hour usage limit";
+    Unit = {
+      Description = "Observe Claude's five-hour usage limit";
+      ConditionPathExists = "!${claudeLimitWatchDisabledMarker}";
+    };
 
     Service = {
       Type = "oneshot";
@@ -212,7 +297,10 @@ in
   # Atomic cache replacements wake this path unit. The timer independently
   # advances persisted reset schedules, even when Claude OAuth data goes stale.
   systemd.user.paths.claude-limit-watch = {
-    Unit.Description = "Watch the CodexBar cache for Claude limit changes";
+    Unit = {
+      Description = "Watch the CodexBar cache for Claude limit changes";
+      ConditionPathExists = "!${claudeLimitWatchDisabledMarker}";
+    };
     Path = {
       PathChanged = codexbarCachePath;
       Unit = "claude-limit-watch.service";
@@ -221,7 +309,10 @@ in
   };
 
   systemd.user.timers.claude-limit-watch = {
-    Unit.Description = "Check Claude's persisted limit reset schedule";
+    Unit = {
+      Description = "Check Claude's persisted limit reset schedule";
+      ConditionPathExists = "!${claudeLimitWatchDisabledMarker}";
+    };
     Timer = {
       OnCalendar = "*-*-* *:*:00";
       AccuracySec = "1s";
@@ -230,4 +321,18 @@ in
     };
     Install.WantedBy = [ "timers.target" ];
   };
+
+  # Home Manager recreates WantedBy links on activation. Reapply the user's
+  # persisted preference after the unit reload so disabling the watcher from
+  # the launcher survives future rebuilds.
+  home.activation.reconcileClaudeLimitWatch = lib.hm.dag.entryAfter [ "reloadSystemd" ] ''
+    if [ -e ${lib.escapeShellArg claudeLimitWatchDisabledMarker} ]; then
+      run ${pkgs.systemd}/bin/systemctl --user disable --now \
+        claude-limit-watch.path claude-limit-watch.timer
+      run ${pkgs.systemd}/bin/systemctl --user stop claude-limit-watch.service
+    else
+      run ${pkgs.systemd}/bin/systemctl --user enable --now \
+        claude-limit-watch.path claude-limit-watch.timer
+    fi
+  '';
 }

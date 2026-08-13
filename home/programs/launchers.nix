@@ -1,5 +1,6 @@
-{ pkgs, ... }:
+{ config, pkgs, ... }:
 let
+  profileBin = "/etc/profiles/per-user/${config.home.username}/bin";
   # Package-provided .desktop entries the user hides from the rofi launcher to
   # declutter it. On the home machine these were hand-made override files in
   # ~/.local/share/applications that add NoDisplay=true; capture them here so
@@ -277,6 +278,20 @@ in
   };
 
   xdg.desktopEntries = {
+    toggle-claude-limit-watch = {
+      name = "Toggle Claude Limit Watcher";
+      genericName = "Claude Code";
+      comment = "Enable or disable five-hour limit checks and automatic session resumes";
+      exec = "${profileBin}/claude-limit-watch-control toggle";
+      icon = "preferences-system-time";
+      terminal = false;
+      type = "Application";
+      categories = [ "Settings" ];
+      settings = {
+        Keywords = "claude;watcher;limit;resume;toggle;enable;disable;";
+      };
+    };
+
     # The central controller preserves the preference and reconciles it with
     # the current theme and active laptop output.
     toggle-screen-shader = {
