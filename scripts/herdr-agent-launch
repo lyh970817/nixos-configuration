@@ -1,0 +1,202 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if (($# != 3)); then
+  printf 'usage: %s <claude|codex> <tab|right|down> <resume|new>\n' \
+    "${0##*/}" >&2
+  exit 2
+fi
+
+agent_kind=$1
+placement=$2
+session_mode=$3
+case "$agent_kind" in
+  claude | codex) ;;
+  *)
+    printf 'agent kind must be claude or codex\n' >&2
+    exit 2
+    ;;
+esac
+case "$placement" in
+  tab | right | down) ;;
+  *)
+    printf 'placement must be tab, right, or down\n' >&2
+    exit 2
+    ;;
+esac
+case "$session_mode" in
+  resume | new) ;;
+  *)
+    printf 'session mode must be resume or new\n' >&2
+    exit 2
+    ;;
+esac
+
+for required_command in herdr jq tr; do
+  command -v "$required_command" >/dev/null 2>&1 || {
+    printf 'herdr-agent-launch: %s is required\n' "$required_command" >&2
+    exit 1
+  }
+done
+
+socket_path=${HERDR_SOCKET_PATH:?HERDR_SOCKET_PATH is required}
+workspace_id=${HERDR_ACTIVE_WORKSPACE_ID:-${HERDR_WORKSPACE_ID:-}}
+pane_id=${HERDR_ACTIVE_PANE_ID:-${HERDR_PANE_ID:-}}
+pane_cwd=${HERDR_ACTIVE_PANE_CWD:-$PWD}
+
+if [[ -z $workspace_id || -z $pane_id ]]; then
+  printf 'herdr-agent-launch: current Herdr pane and workspace are required\n' >&2
+  exit 1
+fi
+
+export HERDR_SOCKET_PATH="$socket_path"
+export HERDR_WORKSPACE_ID="$workspace_id"
+export HERDR_PANE_ID="$pane_id"
+
+if [[ $agent_kind == claude ]]; then
+  orchestrator_prompt="$HOME/.config/claude/orchestrator-opus.md"
+  if [[ ! -r $orchestrator_prompt ]]; then
+    herdr notification show "Claude launch failed" \
+      --body "Missing orchestrator prompt: $orchestrator_prompt" \
+      --sound request >/dev/null 2>&1 || true
+    printf 'herdr-agent-launch: missing orchestrator prompt: %s\n' \
+      "$orchestrator_prompt" >&2
+    exit 1
+  fi
+fi
+
+case "$placement" in
+  tab)
+    before_state=$(herdr tab list --workspace "$workspace_id")
+    before_ids=$(jq -ce '[.result.tabs[]?.tab_id]' <<<"$before_state")
+    ;;
+  right | down)
+    before_state=$(herdr pane list --workspace "$workspace_id")
+    before_ids=$(jq -ce '[.result.panes[]?.pane_id]' <<<"$before_state")
+    ;;
+esac
+
+rollback_unparsed_destination() {
+  local after_state discovered_id
+  case "$placement" in
+    tab)
+      after_state=$(herdr tab list --workspace "$workspace_id") || return 1
+      discovered_id=$(jq -er --argjson before "$before_ids" '
+        [.result.tabs[]?.tab_id] - $before
+        | select(length == 1)[0]
+      ' <<<"$after_state") || return 1
+      herdr tab close "$discovered_id" >/dev/null
+      ;;
+    right | down)
+      after_state=$(herdr pane list --workspace "$workspace_id") || return 1
+      discovered_id=$(jq -er --argjson before "$before_ids" '
+        [.result.panes[]?.pane_id] - $before
+        | select(length == 1)[0]
+      ' <<<"$after_state") || return 1
+      herdr pane close "$discovered_id" >/dev/null
+      ;;
+  esac
+}
+
+case "$placement" in
+  tab)
+    created=$(herdr tab create \
+      --workspace "$workspace_id" \
+      --cwd "$pane_cwd" \
+      --no-focus)
+    if ! new_tab_id=$(jq -er \
+      '.result.tab.tab_id | select(type == "string" and length > 0)' \
+      <<<"$created") \
+      || ! new_pane_id=$(jq -er \
+        '.result.root_pane.pane_id | select(type == "string" and length > 0)' \
+        <<<"$created"); then
+      rollback_unparsed_destination || true
+      printf 'herdr-agent-launch: could not parse created tab response\n' >&2
+      exit 1
+    fi
+    ;;
+  right | down)
+    created=$(herdr pane split \
+      --current \
+      --direction "$placement" \
+      --cwd "$pane_cwd" \
+      --no-focus)
+    if ! new_pane_id=$(jq -er \
+      '.result.pane.pane_id | select(type == "string" and length > 0)' \
+      <<<"$created"); then
+      rollback_unparsed_destination || true
+      printf 'herdr-agent-launch: could not parse created pane response\n' >&2
+      exit 1
+    fi
+    ;;
+esac
+
+rollback_destination() {
+  case "$placement" in
+    tab) herdr tab close "$new_tab_id" >/dev/null ;;
+    right | down) herdr pane close "$new_pane_id" >/dev/null ;;
+  esac
+}
+
+pane_slug=$(printf '%s' "$new_pane_id" \
+  | tr '[:upper:]' '[:lower:]' \
+  | tr -cd 'a-z0-9_-')
+agent_name="${agent_kind}-orch-${pane_slug}"
+agent_name=${agent_name:0:32}
+
+case "$agent_kind" in
+  claude)
+    agent_args=(
+      --dangerously-skip-permissions
+      --model claude-opus-5
+      --append-system-prompt-file "$orchestrator_prompt"
+    )
+    if [[ $session_mode == resume ]]; then
+      # With no value, --resume opens Claude's interactive session picker.
+      agent_args+=(--resume)
+    fi
+    ;;
+  codex)
+    agent_args=(--profile orchestrator --yolo)
+    if [[ $session_mode == resume ]]; then
+      # With no session ID or --last, `resume` opens Codex's interactive picker.
+      agent_args+=(resume)
+    fi
+    ;;
+esac
+
+if ! herdr agent start "$agent_name" \
+  --kind "$agent_kind" \
+  --pane "$new_pane_id" \
+  -- "${agent_args[@]}"; then
+  # A startup timeout is ambiguous: detection can finish between the timeout
+  # and this check, or the expected process can be alive before Herdr has
+  # classified it. Preserve either case. Otherwise remove only the destination
+  # this invocation created, never pre-existing user layout.
+  if agent_state=$(herdr agent get "$new_pane_id" 2>/dev/null) \
+    && jq -e --arg kind "$agent_kind" \
+      '.result.agent.agent == $kind' <<<"$agent_state" >/dev/null; then
+    herdr agent focus "$new_pane_id"
+    exit 0
+  fi
+  if process_state=$(herdr pane process-info --pane "$new_pane_id" 2>/dev/null) \
+    && jq -e --arg kind "$agent_kind" '
+      any(.result.process_info.foreground_processes[]?;
+        .name == $kind
+        or ((.argv[0]? // "") | split("/")[-1] == $kind))
+    ' <<<"$process_state" >/dev/null; then
+    herdr notification show "Agent launch still starting" \
+      --body "The $agent_kind process is alive in $new_pane_id but Herdr has not detected it yet." \
+      --sound request >/dev/null 2>&1 || true
+    exit 1
+  fi
+  rollback_destination || true
+  herdr notification show "Agent launch failed" \
+    --body "The $agent_kind orchestrator did not start; its empty destination was removed." \
+    --sound request >/dev/null 2>&1 || true
+  exit 1
+fi
+
+# Keep the calling pane visible while the agent starts, then reveal the ready
+# orchestrator so the function key behaves like a complete launch action.
+herdr agent focus "$agent_name"

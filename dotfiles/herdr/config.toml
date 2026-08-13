@@ -71,6 +71,81 @@ type = "shell"
 command = "$HOME/.nixos-config/scripts/herdr-scratch-note down"
 description = "open a scratch note below"
 
+# Start each orchestrator in the invoking pane's cwd. Plain function keys open
+# the interactive resume picker; Shift starts a fresh session. A vertical split
+# places the new pane to the right; a horizontal split places it below.
+[[keys.command]]
+key = "f1"
+type = "shell"
+command = "$HOME/.nixos-config/scripts/herdr-agent-launch claude tab resume"
+description = "resume a Claude orchestrator in a new tab"
+
+[[keys.command]]
+key = "shift+f1"
+type = "shell"
+command = "$HOME/.nixos-config/scripts/herdr-agent-launch claude tab new"
+description = "start a Claude orchestrator in a new tab"
+
+[[keys.command]]
+key = "f2"
+type = "shell"
+command = "$HOME/.nixos-config/scripts/herdr-agent-launch codex tab resume"
+description = "resume a Codex orchestrator in a new tab"
+
+[[keys.command]]
+key = "shift+f2"
+type = "shell"
+command = "$HOME/.nixos-config/scripts/herdr-agent-launch codex tab new"
+description = "start a Codex orchestrator in a new tab"
+
+[[keys.command]]
+key = "f3"
+type = "shell"
+command = "$HOME/.nixos-config/scripts/herdr-agent-launch claude right resume"
+description = "resume a Claude orchestrator in a vertical split"
+
+[[keys.command]]
+key = "shift+f3"
+type = "shell"
+command = "$HOME/.nixos-config/scripts/herdr-agent-launch claude right new"
+description = "start a Claude orchestrator in a vertical split"
+
+[[keys.command]]
+key = "f4"
+type = "shell"
+command = "$HOME/.nixos-config/scripts/herdr-agent-launch codex right resume"
+description = "resume a Codex orchestrator in a vertical split"
+
+[[keys.command]]
+key = "shift+f4"
+type = "shell"
+command = "$HOME/.nixos-config/scripts/herdr-agent-launch codex right new"
+description = "start a Codex orchestrator in a vertical split"
+
+[[keys.command]]
+key = "f5"
+type = "shell"
+command = "$HOME/.nixos-config/scripts/herdr-agent-launch claude down resume"
+description = "resume a Claude orchestrator in a horizontal split"
+
+[[keys.command]]
+key = "shift+f5"
+type = "shell"
+command = "$HOME/.nixos-config/scripts/herdr-agent-launch claude down new"
+description = "start a Claude orchestrator in a horizontal split"
+
+[[keys.command]]
+key = "f6"
+type = "shell"
+command = "$HOME/.nixos-config/scripts/herdr-agent-launch codex down resume"
+description = "resume a Codex orchestrator in a horizontal split"
+
+[[keys.command]]
+key = "shift+f6"
+type = "shell"
+command = "$HOME/.nixos-config/scripts/herdr-agent-launch codex down new"
+description = "start a Codex orchestrator in a horizontal split"
+
 [theme]
 name = "terminal"
 

@@ -457,7 +457,7 @@ let
         changed = table_key(
             lines, "tui.keymap.global", "open_transcript", '"ctrl-o"'
         ) or changed
-        changed = table_key(lines, "tui.keymap.global", "copy", '"ctrl-t"') or changed
+        changed = table_key(lines, "tui.keymap.global", "copy", '"ctrl-y"') or changed
         changed = remove_map_key(
             lines,
             "shell_environment_policy.filters",
