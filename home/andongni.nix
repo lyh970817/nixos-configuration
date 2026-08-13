@@ -51,7 +51,6 @@
     ./directories.nix
     ./desktop/btop-workspace.nix
     ./desktop/mandala-wallpaper.nix
-    ./desktop/poem-wallpaper.nix
     ./desktop/theming.nix
     ./desktop/hyprsunset.nix
     ./desktop/phosphor-switch.nix
