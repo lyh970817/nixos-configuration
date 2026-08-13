@@ -50,9 +50,9 @@ new_workspace = "alt+n"
 previous_workspace = "alt+left"
 next_workspace = "alt+right"
 
-# Keep the native Ctrl-a index bindings as a secondary direct-jump mechanism.
+# Keep the native Ctrl-a index bindings alongside direct Alt index bindings.
 # Browser-style traversal follows visible tab order and does not assign slots.
-switch_tab = "prefix+1..9"
+switch_tab = ["prefix+1..9", "alt+1..9"]
 new_tab = "ctrl+t"
 previous_tab = ["prefix+p", "ctrl+shift+tab"]
 next_tab = ["prefix+n", "ctrl+tab"]

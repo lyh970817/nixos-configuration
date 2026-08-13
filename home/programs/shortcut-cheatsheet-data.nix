@@ -230,7 +230,7 @@
         key = "Alt + Shift + Tab / Alt + Tab";
       }
       {
-        description = "Focus / create tab slot";
+        description = "Select tab by ordinal";
         key = "Alt + 1…9";
       }
     ];
