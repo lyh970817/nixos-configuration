@@ -30,6 +30,9 @@ let
   claudeEnvironment = ../../dotfiles/claude/environment.json;
   claudeMarketplaces = ../../dotfiles/claude/marketplaces.json;
   claudeHerdrSessionHook = "${config.home.homeDirectory}/.config/claude/hooks/herdr-agent-state.sh";
+  claudeHerdrSessionCommand = "bash '${
+    lib.replaceStrings [ "'" ] [ "'\\''" ] claudeHerdrSessionHook
+  }' session";
   claudeProfiles = [
     {
       name = "standard";
@@ -687,7 +690,7 @@ in
     claude_jq=${pkgs.jq}/bin/jq
     claude_environment=${lib.escapeShellArg (toString claudeEnvironment)}
     claude_marketplaces=${lib.escapeShellArg (toString claudeMarketplaces)}
-    claude_herdr_session_hook=${lib.escapeShellArg claudeHerdrSessionHook}
+    claude_herdr_session_command=${lib.escapeShellArg claudeHerdrSessionCommand}
 
     # Which ANSI-only theme matches this machine's current mode. Derived from
     # the hypr current-theme symlink, the same source the claude-theme helper
@@ -710,7 +713,7 @@ in
         --slurpfile manifest "$claude_marketplaces" \
         --arg profile "$profile_name" \
         --arg claude_theme "$claude_theme" \
-        --arg claude_herdr_session_hook "$claude_herdr_session_hook" \
+        --arg claude_herdr_session_command "$claude_herdr_session_command" \
         '
           ($template[0]) as $template |
           ($environment[0]) as $environment |
@@ -740,7 +743,7 @@ in
                 matcher: "*",
                 hooks: [{
                   type: "command",
-                  command: ("bash '" + $claude_herdr_session_hook + "' session"),
+                  command: $claude_herdr_session_command,
                   timeout: 10
                 }]
               }]
@@ -785,7 +788,11 @@ in
             else .
             end
           end
-        ' "$input" > "$output"
+        ' "$input" > "$output" &&
+        { [ "$profile_name" != "standard" ] ||
+          "$claude_jq" -e --arg expected "$claude_herdr_session_command" \
+            '.hooks.SessionStart[0].hooks[0].command == $expected' \
+            "$output" >/dev/null; }
     }
 
     claude_handle_failure() {
