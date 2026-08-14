@@ -50,6 +50,23 @@ let
     '';
   };
 
+  # Herdr restores every pane into the directory it was last in, which is not
+  # wanted here: after a reboot panes should come up in $HOME. Upstream 0.8.0
+  # has no knob for it — `restore()` (src/persist/restore.rs) threads no cwd
+  # policy at all, and `[terminal] new_cwd` governs only *newly created* panes
+  # (and must stay `follow`, because herdr-agent-launch and herdr-scratch-note
+  # rely on inheriting the calling pane's cwd). The restore source is the
+  # session snapshot on disk, so the snapshot is the only place to intervene:
+  # the script rewrites just the cwd fields and leaves the workspace/tab/pane
+  # layout, custom tab names and agent session refs alone.
+  herdrResetCwd = pkgs.writeShellApplication {
+    name = "herdr-reset-cwd";
+    runtimeInputs = [ pkgs.python3 ];
+    text = ''
+      exec python3 ${../../scripts/herdr-reset-cwd.py} "$@"
+    '';
+  };
+
   # Generate the Claude hook through Herdr's own installer so its payload stays
   # aligned with the pinned Herdr package. The matching SessionStart entry is
   # reconciled only into the standard Claude profile in mutable-configs.nix.
@@ -152,6 +169,7 @@ in
     herdrWrapped
     remoteHerdrClient
     herdrTitle
+    herdrResetCwd
   ];
 
   # herdr rewrites its own config.toml at runtime: `mark_onboarding_complete`
@@ -188,6 +206,45 @@ in
         ${lib.escapeShellArg titleCredentialsRuntime}
     fi
   '';
+
+  # Runs once per user session, before the first terminal exists and therefore
+  # before the Herdr server starts and reads the snapshot. Both guards live in
+  # the script, not here: it refuses to touch a session whose API socket
+  # actually answers, and it skips any snapshot already written during this
+  # boot, so a Home Manager activation that restarts this unit mid-session
+  # cannot disturb a session in progress. Named sessions under `sessions/` get
+  # the same treatment, since `remote-herdr-client` restores panes exactly the
+  # same way.
+  systemd.user.services.herdr-reset-cwd = {
+    Unit = {
+      Description = "Reset Herdr's saved pane directories to the home directory";
+      Before = [ "default.target" ];
+    };
+
+    Service = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = "${herdrResetCwd}/bin/herdr-reset-cwd";
+      UMask = "0077";
+      NoNewPrivileges = true;
+      PrivateTmp = true;
+      PrivateDevices = true;
+      ProtectSystem = "strict";
+      # The snapshot rewrite is temp-file-plus-rename, so the directory itself
+      # has to be writable. `-` tolerates a host that has never run Herdr.
+      ReadWritePaths = [ "-%h/.config/herdr" ];
+      ProtectKernelTunables = true;
+      ProtectKernelModules = true;
+      ProtectControlGroups = true;
+      RestrictSUIDSGID = true;
+      LockPersonality = true;
+      MemoryDenyWriteExecute = true;
+      # AF_UNIX only: the sole socket use is probing Herdr's API socket.
+      RestrictAddressFamilies = [ "AF_UNIX" ];
+    };
+
+    Install.WantedBy = [ "default.target" ];
+  };
 
   systemd.user.services.herdr-title = {
     Unit = {
