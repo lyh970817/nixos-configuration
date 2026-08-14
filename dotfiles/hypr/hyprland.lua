@@ -550,16 +550,24 @@ hl.window_rule({
 })
 
 -- ...and the only window this desktop makes see-through on its own account.
--- Matched on the class rather than on `float`, so the terminal keeps the same
--- treatment after it is tiled; the other three foot classes are untouched.
+-- This is the *floating* scratch terminal's treatment, so it is matched on
+-- `float` as well as on the class: the same terminal tiled is an ordinary
+-- terminal and dims like the rest of them through the inactive-dim rule below.
+-- Matching on the class alone left a tiled foot-float wearing the floating
+-- terminal's translucency -- see-through even while focused, which in dark mode
+-- meant a full-tile everyday terminal sitting at 0.9.
+--
+-- That also settles the overlap with inactive-dim: both rules name foot-float,
+-- and they are mutually exclusive by construction because `float = true` here
+-- and `float = false` there can never both hold. Only the exclusivity makes
+-- this safe -- two rules setting `opacity` do not compose, the later one simply
+-- wins -- and it is what makes the declaration order between them irrelevant.
 --
 -- The two slots are the product of the terminal's own translucency and the
 -- mode's dimming amount, which is how this read before the dimming moved out
 -- of decoration:inactive_opacity: back then the rule's single value multiplied
 -- with the global, and the global is now 1, so the second factor has to be
--- spelled out to keep the same pixels. It is also the reason this rule and the
--- inactive-dim rule below cannot both name foot-float -- two rules setting
--- `opacity` do not compose, the later one simply wins.
+-- spelled out to keep the same pixels.
 --
 -- A mode that wants neither effect sets both to 1 and takes the `enabled`
 -- branch, rather than relying on 1 multiplying out, because the rule is
@@ -568,7 +576,7 @@ hl.window_rule({
 -- Graphite set below.
 hl.window_rule({
   name = "foot-float-opacity",
-  match = { class = "^(foot-float)$" },
+  match = { class = "^(foot-float)$", float = true },
   enabled = float_terminal_opacity < 1 or inactive_opacity < 1,
   opacity = float_terminal_opacity .. " " .. (float_terminal_opacity * inactive_opacity),
 })
@@ -593,8 +601,10 @@ hl.window_rule({
 -- The class list is the second half. foot-btop is left out deliberately: the
 -- workspace-10 dashboard opens with no_initial_focus and is almost never the
 -- focused window, so dimming it would just mean a permanently dimmed
--- dashboard. foot-float is left out because it is handled above.
-local inactive_dim_classes = { "brave-browser", "foot", "foot-main" }
+-- dashboard. foot-float is in the list: `float = false` hands the floating
+-- scratch terminal to the rule above and keeps the tiled one here, where it
+-- gets the same opaque-when-focused treatment as every other tiled terminal.
+local inactive_dim_classes = { "brave-browser", "foot", "foot-main", "foot-float" }
 
 hl.window_rule({
   name = "inactive-dim",
