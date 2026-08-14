@@ -11,6 +11,12 @@ _G.quiet_graphite_dark = true
 -- the rule dims the glyphs along with the background.
 _G.float_terminal_opacity = 0.9
 
+-- How far an unfocused window is dimmed, spent by the window rules in
+-- hyprland.lua rather than by decoration:inactive_opacity below, so that only
+-- tiled foot and Brave windows dim and dialogs, file pickers and image
+-- previews stay opaque. 1 turns it off.
+_G.inactive_opacity = 0.93
+
 hl.config({
   general = {
     gaps_in = 8,
@@ -31,8 +37,9 @@ hl.config({
     -- screen-shader owns the live shader setting so cold starts, monitor IDs,
     -- theme mode, and the manual preference all follow one policy.
 
-    -- Change transparency of focused and unfocused windows
-    inactive_opacity = 0.93,
+    -- Both pinned to 1: the mode's dimming is applied per window rule, from
+    -- _G.inactive_opacity above.
+    inactive_opacity = 1,
     active_opacity = 1,
 
     shadow = {

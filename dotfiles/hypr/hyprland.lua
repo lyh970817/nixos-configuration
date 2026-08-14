@@ -34,6 +34,13 @@ _G.quiet_graphite_dark = false
 -- opaque, and is the safe default for the same reason as above.
 _G.float_terminal_opacity = 1
 
+-- How far an unfocused window is dimmed. This is deliberately NOT
+-- decoration:inactive_opacity -- the themes pin that to 1 -- because a global
+-- setting dims every window there is, including the dialogs, file pickers and
+-- image previews that must stay readable. Only the rules below spend it, and
+-- only on tiled windows. 1 means no dimming anywhere, the safe default again.
+_G.inactive_opacity = 1
+
 -- Lua's `dofile` throws when the file is missing. The theme link is created by
 -- systemd-tmpfiles and the generated fragments by Home Manager, so all three
 -- normally exist -- but a missing include must not take the whole config down
@@ -541,22 +548,61 @@ hl.window_rule({
   center = true,
 })
 
--- ...and the only window this desktop makes see-through. Matched on the class
--- rather than on `float`, so the Super+Enter terminal keeps the same treatment
--- after it is tiled; the other three foot classes are untouched. Both slots
--- carry the same value, so the terminal reads the same whether or not it holds
--- focus. `override` is deliberately absent: without it the value multiplies
--- with the mode's own active/inactive_opacity instead of replacing it, so the
--- e-ink mode's focus dimming survives. A mode that wants no translucency sets
--- 1 and takes the `enabled` branch, rather than relying on 1 multiplying out,
--- because the rule is declared either way -- an undeclared named rule keeps
--- its previous state across a reload, which is what `enabled` exists for here
--- and in the Quiet Graphite set below.
+-- ...and the only window this desktop makes see-through on its own account.
+-- Matched on the class rather than on `float`, so the terminal keeps the same
+-- treatment after it is tiled; the other three foot classes are untouched.
+--
+-- The two slots are the product of the terminal's own translucency and the
+-- mode's dimming amount, which is how this read before the dimming moved out
+-- of decoration:inactive_opacity: back then the rule's single value multiplied
+-- with the global, and the global is now 1, so the second factor has to be
+-- spelled out to keep the same pixels. It is also the reason this rule and the
+-- inactive-dim rule below cannot both name foot-float -- two rules setting
+-- `opacity` do not compose, the later one simply wins.
+--
+-- A mode that wants neither effect sets both to 1 and takes the `enabled`
+-- branch, rather than relying on 1 multiplying out, because the rule is
+-- declared either way -- an undeclared named rule keeps its previous state
+-- across a reload, which is what `enabled` exists for here and in the Quiet
+-- Graphite set below.
 hl.window_rule({
   name = "foot-float-opacity",
   match = { class = "^(foot-float)$" },
-  enabled = float_terminal_opacity < 1,
-  opacity = float_terminal_opacity .. " " .. float_terminal_opacity,
+  enabled = float_terminal_opacity < 1 or inactive_opacity < 1,
+  opacity = float_terminal_opacity .. " " .. (float_terminal_opacity * inactive_opacity),
+})
+
+-- Everything else that dims. Two things make this narrow on purpose:
+--
+-- `float = false` is the whole of "a dialog is never see-through". Hyprland
+-- floats every parented window itself -- X11 dialogs, transients and
+-- override-redirects, xdg-toplevels with a parent, and the cross-client portal
+-- dialogs that reach the same check through xdg-foreign -- in
+-- CHyprXWaylandManager::shouldBeFloated, and CWindow::map() writes that verdict
+-- into the same `m_isFloating` the rule engine matches on, before any window
+-- rule is applied. So a browser download window or a file picker is already
+-- floating by the time this rule is tested and cannot match it. There is no
+-- parent/transient rule predicate in 0.56.1 and no need for one: the answer
+-- this desktop wants is "did the compositor float it", not "why". It also stays
+-- correct afterwards, because CWindowTarget::setFloating raises
+-- RULE_PROP_FLOATING and every rule matched on `float` is re-evaluated at once
+-- -- Super+S on a Brave window drops its dimming immediately, and tiling it
+-- again brings it back.
+--
+-- The class list is the second half. foot-btop is left out deliberately: the
+-- workspace-10 dashboard opens with no_initial_focus and is almost never the
+-- focused window, so dimming it would just mean a permanently dimmed
+-- dashboard. foot-float is left out because it is handled above.
+local inactive_dim_classes = { "brave-browser", "foot", "foot-main" }
+
+hl.window_rule({
+  name = "inactive-dim",
+  match = {
+    class = "^(" .. table.concat(inactive_dim_classes, "|") .. ")$",
+    float = false,
+  },
+  enabled = inactive_opacity < 1,
+  opacity = "1 " .. inactive_opacity,
 })
 
 -- Main Terminal (Startup) - tile (not fullscreen)

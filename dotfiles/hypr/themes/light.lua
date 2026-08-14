@@ -11,6 +11,12 @@ _G.quiet_graphite_dark = false
 -- palette exists to avoid -- see the dark twin for the knob.
 _G.float_terminal_opacity = 1
 
+-- How far an unfocused window is dimmed, spent by the window rules in
+-- hyprland.lua rather than by decoration:inactive_opacity below, so that only
+-- tiled foot and Brave windows dim and dialogs, file pickers and image
+-- previews stay opaque. 1 turns it off.
+_G.inactive_opacity = 0.7
+
 hl.config({
   general = {
     gaps_in = 4,
@@ -30,8 +36,9 @@ hl.config({
     rounding = 4,
     rounding_power = 2,
 
-    -- Change transparency of focused and unfocused windows
-    inactive_opacity = 0.7,
+    -- Both pinned to 1: the mode's dimming is applied per window rule, from
+    -- _G.inactive_opacity above.
+    inactive_opacity = 1,
     active_opacity = 1,
 
     shadow = {
