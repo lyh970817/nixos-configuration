@@ -209,12 +209,16 @@ in
 
   # Runs once per user session, before the first terminal exists and therefore
   # before the Herdr server starts and reads the snapshot. Both guards live in
-  # the script, not here: it refuses to touch a session whose API socket
-  # actually answers, and it skips any snapshot already written during this
-  # boot, so a Home Manager activation that restarts this unit mid-session
-  # cannot disturb a session in progress. Named sessions under `sessions/` get
-  # the same treatment, since `remote-herdr-client` restores panes exactly the
-  # same way.
+  # the script, not here. The API socket probe is the one that protects a
+  # session in progress: a Home Manager activation reloads user units, so this
+  # can and does run mid-session, and only a socket that actually answers
+  # proves a session must be left alone. The this-boot mtime check covers less
+  # than it looks — it only spares snapshots written since the current boot, so
+  # a dormant session last saved before this boot is rewritten at activation
+  # time rather than at the next boot. That is fine: the end state is exactly
+  # what the next boot would have produced, and resetting those directories is
+  # the whole point. Named sessions under `sessions/` get the same treatment,
+  # since `remote-herdr-client` restores panes exactly the same way.
   systemd.user.services.herdr-reset-cwd = {
     Unit = {
       Description = "Reset Herdr's saved pane directories to the home directory";
