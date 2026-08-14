@@ -469,6 +469,7 @@ local autofloat = {
     "thunar",
     "localsend_app",
     "mandala-wallpaper",
+    "imv", -- floated at 1000x700 below, which is over the threshold
   },
 }
 
@@ -603,6 +604,20 @@ hl.window_rule({
   },
   enabled = inactive_opacity < 1,
   opacity = "1 " .. inactive_opacity,
+})
+
+-- Image viewer, the Yazi image opener (home/programs/image-open.nix). Floated
+-- at the keybind terminal's geometry so a preview never rearranges the tiling
+-- layout, and -- because the dimming rules above only reach tiled windows --
+-- never dimmed either. It has to sit in never_probe above, or the auto-float
+-- probe would tag it, read back the 1000x700 asked for here, and tile it
+-- straight again.
+hl.window_rule({
+  name = "imv-float",
+  match = { class = "^(imv)$" },
+  float = true,
+  size = "1000 700",
+  center = true,
 })
 
 -- Main Terminal (Startup) - tile (not fullscreen)
