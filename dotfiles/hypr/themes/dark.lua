@@ -32,7 +32,7 @@ hl.config({
     -- theme mode, and the manual preference all follow one policy.
 
     -- Change transparency of focused and unfocused windows
-    inactive_opacity = 1,
+    inactive_opacity = 0.93,
     active_opacity = 1,
 
     shadow = {
