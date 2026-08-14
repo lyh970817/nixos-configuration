@@ -207,36 +207,45 @@ in
     fi
   '';
 
-  # Runs once per user session, before the first terminal exists and therefore
-  # before the Herdr server starts and reads the snapshot. Both guards live in
-  # the script, not here. The API socket probe is the one that protects a
-  # session in progress: a Home Manager activation reloads user units, so this
-  # can and does run mid-session, and only a socket that actually answers
-  # proves a session must be left alone. The this-boot mtime check covers less
-  # than it looks — it only spares snapshots written since the current boot, so
-  # a dormant session last saved before this boot is rewritten at activation
-  # time rather than at the next boot. That is fine: the end state is exactly
-  # what the next boot would have produced, and resetting those directories is
-  # the whole point. Named sessions under `sessions/` get the same treatment,
-  # since `remote-herdr-client` restores panes exactly the same way.
+  # Runs once per boot, before the first terminal exists and therefore before
+  # the Herdr server starts and reads the snapshot. Once per boot is the whole
+  # requirement, but `WantedBy` alone does not give it: sd-switch restarts this
+  # unit whenever its own definition changes, which would reset a live session's
+  # directories mid-activation. The stamp under `%t` is the gate. `%t` is
+  # /run/user/$UID, a tmpfs, so a reboot empties it and nothing has to expire or
+  # clean up the stamp; every later start this boot fails the condition and is
+  # skipped. `ExecStartPost` stamps only on success, so a failed run retries.
+  #
+  # The script's live-socket probe is now belt-and-braces on this path, but it
+  # is still the only guard for a manual `herdr-reset-cwd`, where refusing to
+  # rewrite a session that is actually running matters. Named sessions under
+  # `sessions/` get the same treatment, since `remote-herdr-client` restores
+  # panes exactly the same way.
   systemd.user.services.herdr-reset-cwd = {
     Unit = {
       Description = "Reset Herdr's saved pane directories to the home directory";
       Before = [ "default.target" ];
+      ConditionPathExists = "!%t/herdr-reset-cwd.done";
     };
 
     Service = {
       Type = "oneshot";
       RemainAfterExit = true;
       ExecStart = "${herdrResetCwd}/bin/herdr-reset-cwd";
+      ExecStartPost = "${pkgs.coreutils}/bin/touch %t/herdr-reset-cwd.done";
       UMask = "0077";
       NoNewPrivileges = true;
       PrivateTmp = true;
       PrivateDevices = true;
       ProtectSystem = "strict";
       # The snapshot rewrite is temp-file-plus-rename, so the directory itself
-      # has to be writable. `-` tolerates a host that has never run Herdr.
-      ReadWritePaths = [ "-%h/.config/herdr" ];
+      # has to be writable. `-` tolerates a host that has never run Herdr. `%t`
+      # is here because ProtectSystem=strict would otherwise leave the runtime
+      # directory read-only and the stamp could never be written.
+      ReadWritePaths = [
+        "-%h/.config/herdr"
+        "%t"
+      ];
       ProtectKernelTunables = true;
       ProtectKernelModules = true;
       ProtectControlGroups = true;
