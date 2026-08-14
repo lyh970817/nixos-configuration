@@ -420,6 +420,97 @@ hl.window_rule({
   opacity = "1.0 1.0",
 })
 
+-- --- Automatic Floating ---
+--
+-- Hyprland 0.56 already floats every window that has a parent and every window
+-- that is fixed-size, and its floating layout centres anything that opened
+-- without a requested position (CHyprXWaylandManager::shouldBeFloated,
+-- CDefaultFloatingAlgorithm::newTarget). That is dialogs, file pickers, modals,
+-- X11 transients and cross-client portal dialogs -- xdg-foreign's set_parent_of
+-- reaches the same toplevel parent check -- so none of it is repeated here.
+--
+-- What Hyprland has no equivalent for is a size threshold. No window-rule
+-- predicate can see a client's requested size, and once a window is tiled its
+-- size *is* the tile's, so the requested size is unrecoverable after the fact.
+-- The only place it ever materialises is the floating layout, so candidates are
+-- floated on open and the ones that turn out large are tiled again from
+-- `window.open`, which fires at the end of CWindow::map() before the window has
+-- been composited once -- no flicker, and no daemon that could die and leave
+-- the desktop floating.
+--
+-- The probe deliberately skips the windows this desktop tiles all day and the
+-- ones with a float rule of their own: those keep exactly the behaviour they
+-- had before this block existed. Adjust the threshold or opt an app out here.
+local autofloat = {
+  min_width = 600,
+  min_height = 400,
+  tag = "autofloat-probe",
+  never_probe = {
+    "foot", -- yazi, nmtui and the other keybind terminals
+    "foot-main",
+    "foot-float",
+    "foot-btop",
+    "brave-browser",
+    "chatgpt",
+    "115Browser",
+    "Thunar",
+    "thunar",
+    "localsend_app",
+    "mandala-wallpaper",
+  },
+}
+
+-- A tag applied by a rule is stored with a trailing "*" appended
+-- (CTagKeeper::applyTag), so both spellings have to be accepted.
+local function autofloat_probed(w)
+  local tags = w.tags
+  if type(tags) ~= "table" then
+    return false
+  end
+
+  for _, tag in ipairs(tags) do
+    if tag == autofloat.tag or tag == autofloat.tag .. "*" then
+      return true
+    end
+  end
+
+  return false
+end
+
+-- `match.float` is evaluated before any rule effect is applied, so `false` here
+-- selects exactly the windows Hyprland did not float on its own -- the probe
+-- never second-guesses a native dialog. Declared ahead of the application rules
+-- because the last matching rule wins: `float = false` on foot-main, nmtui and
+-- workspace 10 still overrides it.
+hl.window_rule({
+  name = "autofloat-probe",
+  match = {
+    class = "negative:^(" .. table.concat(autofloat.never_probe, "|") .. ")$",
+    float = false,
+  },
+  float = true,
+  tag = "+" .. autofloat.tag,
+})
+
+hl.on("window.open", function(w)
+  if not w.floating or not autofloat_probed(w) then
+    return
+  end
+
+  local size = w.size
+  if not size then
+    return
+  end
+
+  if size.x >= autofloat.min_width and size.y >= autofloat.min_height then
+    hl.dispatch(hl.dsp.window.float({ action = "disable", window = w }))
+  else
+    -- Already centred unless the client asked for a position, which in practice
+    -- means X11; kwm centres regardless, so ask for it explicitly.
+    hl.dispatch(hl.dsp.window.center({ window = w }))
+  end
+end)
+
 -- --- Application Rules ---
 
 -- Brave: Fix maximize events
