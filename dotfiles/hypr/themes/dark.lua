@@ -6,6 +6,11 @@ local onHyprlandStart = ...
 
 _G.quiet_graphite_dark = true
 
+-- Super+Enter's floating terminal, lifted just off the phosphor background so
+-- the wallpaper reads through it. Tune here; 1 turns it off. Kept high because
+-- the rule dims the glyphs along with the background.
+_G.float_terminal_opacity = 0.9
+
 hl.config({
   general = {
     gaps_in = 8,

@@ -29,6 +29,11 @@ end
 -- a reload.
 _G.quiet_graphite_dark = false
 
+-- Opacity of the keybind-spawned floating terminal, owned by the theme
+-- fragment next to the mode's own active_opacity/inactive_opacity. 1 means
+-- opaque, and is the safe default for the same reason as above.
+_G.float_terminal_opacity = 1
+
 -- Lua's `dofile` throws when the file is missing. The theme link is created by
 -- systemd-tmpfiles and the generated fragments by Home Manager, so all three
 -- normally exist -- but a missing include must not take the whole config down
@@ -534,6 +539,24 @@ hl.window_rule({
   float = true,
   size = "1000 700",
   center = true,
+})
+
+-- ...and the only window this desktop makes see-through. Matched on the class
+-- rather than on `float`, so the Super+Enter terminal keeps the same treatment
+-- after it is tiled; the other three foot classes are untouched. Both slots
+-- carry the same value, so the terminal reads the same whether or not it holds
+-- focus. `override` is deliberately absent: without it the value multiplies
+-- with the mode's own active/inactive_opacity instead of replacing it, so the
+-- e-ink mode's focus dimming survives. A mode that wants no translucency sets
+-- 1 and takes the `enabled` branch, rather than relying on 1 multiplying out,
+-- because the rule is declared either way -- an undeclared named rule keeps
+-- its previous state across a reload, which is what `enabled` exists for here
+-- and in the Quiet Graphite set below.
+hl.window_rule({
+  name = "foot-float-opacity",
+  match = { class = "^(foot-float)$" },
+  enabled = float_terminal_opacity < 1,
+  opacity = float_terminal_opacity .. " " .. float_terminal_opacity,
 })
 
 -- Main Terminal (Startup) - tile (not fullscreen)

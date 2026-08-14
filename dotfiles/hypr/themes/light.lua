@@ -6,6 +6,11 @@ local onHyprlandStart = ...
 
 _G.quiet_graphite_dark = false
 
+-- The floating terminal stays opaque here. This mode is pure black on white on
+-- an e-ink panel, and blending either one toward the other is the grey the
+-- palette exists to avoid -- see the dark twin for the knob.
+_G.float_terminal_opacity = 1
+
 hl.config({
   general = {
     gaps_in = 4,
