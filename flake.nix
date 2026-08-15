@@ -107,6 +107,8 @@
         pi-web-access = final.callPackage ./pkgs/pi-web-access.nix { };
         quicktui = final.callPackage ./pkgs/quicktui.nix { };
         screen-shader-controller = final.callPackage ./pkgs/screen-shader-controller.nix { };
+        yadisk = final.python3Packages.callPackage ./pkgs/yadisk.nix { };
+        yandex-trash = final.callPackage ./pkgs/yandex-trash.nix { };
         zeno-zsh = final.callPackage ./pkgs/zeno-zsh.nix { };
         # DECSCUSR cursor-shape support (unmerged upstream PR #1355) — needed on
         # both roles: mosh-server parses the escape, mosh-client renders it.

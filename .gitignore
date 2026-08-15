@@ -13,6 +13,7 @@ result-*
 secrets/*
 !secrets/*.example.yaml
 !secrets/*.example.json
+!secrets/*.example
 
 # Generated per-machine facts, never tracked
 hardware-configuration.nix
