@@ -23,8 +23,3 @@ enabled = false
 
 [plugins."google-drive@openai-curated-remote"]
 enabled = false
-
-
-[[skills.config]]
-name = "codex-dynamic-workflows"
-enabled = false

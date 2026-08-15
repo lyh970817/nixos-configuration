@@ -42,13 +42,19 @@ The parent retains cross-workstream decisions and integration, plus any
 repository-required gates assigned to it. Put every repository-modifying agent in
 an explicit isolated worktree; shared-checkout agents remain read-only.
 
-While required subagents are running and no parent work remains, use a long
-`wait_agent` call rather than short polling intervals. Treat a timeout as no news
-and wait again; do not send a final response until every required result has
-returned or is genuinely blocked. Do not use `list_agents` for routine progress
-polling. Use it only for a concrete status diagnostic, with the narrowest
-`path_prefix`; omit the prefix only when whole-tree state is the subject. For live
-detail, ask the agent for a status update and wait for its message.
+A successfully spawned descendant is required unless its parent explicitly marks
+it optional. Completion, failure, cancellation, and genuine blocked status are
+terminal. Do not emit a final response while any required descendant is
+nonterminal. Progress, acknowledgements, status replies, and promises to wait
+stay in commentary; then resume waiting. New user input interrupts the wait, not
+the workflow, unless it cancels, replaces, or supersedes that work.
+
+When required descendants are nonterminal and no parent work remains, use a long
+`wait_agent` call. Treat a timeout as no news and wait again. Do not use
+`list_agents` for routine progress polling. Use it only for a concrete status
+diagnostic, with the narrowest `path_prefix`; omit the prefix only when whole-tree
+state is the subject. For live detail, ask the agent for a status update and wait
+for its message.
 """
 subagent_developer_instructions = """
 You are a subagent. Complete the bounded task you were assigned and remain

@@ -131,7 +131,6 @@ let
     "bro"
     "agent-config-setup"
     "sync-mattpocock-skills"
-    "codex-dynamic-workflows"
     "commit-guidelines"
     "domain-context"
     "herdr"
@@ -266,7 +265,10 @@ let
             "wizard",
             "writing-great-skills",
         },
-        "superpowers": {"superpowers-domain-context"},
+        "superpowers": {
+            "codex-dynamic-workflows",
+            "superpowers-domain-context",
+        },
     }
     OBSOLETE_BASE_SKILL_NAMES = set().union(*OBSOLETE_PROFILE_SKILLS.values())
     OBSOLETE_BASE_SKILL_PATHS = {
