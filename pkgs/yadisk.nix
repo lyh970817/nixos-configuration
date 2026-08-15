@@ -1,27 +1,30 @@
 {
   lib,
-  python3Packages,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools,
+  requests,
 }:
 
 # Yandex Disk REST API client. Not in nixpkgs, and needed because rclone's
 # yandex backend implements only CleanUp() -- it can empty the trash but
 # cannot list or restore from it, which is exactly the direction that matters
 # for recovery.
-python3Packages.buildPythonPackage rec {
+buildPythonPackage rec {
   pname = "yadisk";
   version = "3.4.1";
   pyproject = true;
 
-  src = python3Packages.fetchPypi {
+  src = fetchPypi {
     inherit pname version;
     hash = "sha256-F9kJLGVmJEJTvoaUUFv7Urw1HyfOtWBBeY34fYmS05o=";
   };
 
-  build-system = [ python3Packages.setuptools ];
+  build-system = [ setuptools ];
 
   # `requests` is an optional extra upstream (sync_defaults), but it is what
   # backs the synchronous Client used here, so it is a hard dependency for us.
-  dependencies = [ python3Packages.requests ];
+  dependencies = [ requests ];
 
   # Upstream's suite drives the live Yandex Disk API and needs a real token.
   doCheck = false;
