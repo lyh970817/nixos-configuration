@@ -406,8 +406,10 @@ class Coordinator:
     def hook_matches_pane_cwd(event: dict[str, Any], pane: dict[str, Any]) -> bool:
         hook_cwd = str(event.get("cwd") or "")
         pane_cwd = str(pane.get("foreground_cwd") or pane.get("cwd") or "")
-        if not hook_cwd or not pane_cwd:
+        if not hook_cwd:
             return True
+        if not pane_cwd:
+            return False
         return os.path.realpath(hook_cwd) == os.path.realpath(pane_cwd)
 
     async def handle_datagram(self, data: bytes) -> None:

@@ -44,6 +44,8 @@ class FakeConnection:
         self.coordinator = coordinator
         self.socket_path = socket_path
         self.snapshot = {"panes": panes, "tabs": tabs or [tab()]}
+        self.refreshed_panes = None
+        self.refresh_count = 0
         self.renames = []
         self.expected_renames = collections.Counter()
         self.identity = [1, 100, 1000]
@@ -58,6 +60,10 @@ class FakeConnection:
             state["title"] = title
 
     async def refresh_snapshot(self):
+        self.refresh_count += 1
+        if self.refreshed_panes is not None:
+            self.snapshot["panes"] = self.refreshed_panes
+            self.refreshed_panes = None
         await self.coordinator.reconcile(self)
 
 
@@ -168,6 +174,84 @@ class HerdrTitleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state["session_id"], "main")
         self.assertEqual(state["title"], "Codex — project")
         self.assertEqual(connection.renames, [("w1:t1", "Codex — project")])
+        self.assertEqual(connection.refresh_count, 1)
+
+    async def test_missing_cached_cwd_refreshes_and_accepts_live_match(self):
+        cached = pane(cwd="/tmp/project")
+        cached.pop("cwd")
+        connection = FakeConnection(self.coordinator, "/fake/missing-match.sock", [cached])
+        connection.refreshed_panes = [pane(cwd="/tmp/project")]
+        self.coordinator.connections[connection.socket_path] = connection
+        await self.coordinator.reconcile(connection)
+        event = {
+            "version": 1, "type": "codex_session", "socket": connection.socket_path,
+            "pane_id": "w1:p1", "tab_id": "w1:t1", "session_id": "main",
+            "cwd": "/tmp/project",
+        }
+        await self.coordinator.handle_datagram(json.dumps(event).encode())
+
+        state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
+        self.assertEqual(connection.refresh_count, 1)
+        self.assertEqual(state["session_id"], "main")
+        self.assertEqual(state["title"], "Codex — project")
+        self.assertEqual(connection.renames, [("w1:t1", "Codex — project")])
+
+    async def test_missing_cached_cwd_refresh_rejects_unavailable_or_mismatch(self):
+        still_missing = pane(cwd="/tmp/project")
+        still_missing.pop("cwd")
+        for suffix, refreshed in (
+            ("missing", still_missing),
+            ("mismatch", pane(cwd="/tmp/project")),
+        ):
+            with self.subTest(refreshed=suffix):
+                connection = FakeConnection(self.coordinator, f"/fake/{suffix}.sock", [pane(cwd="/tmp/project")])
+                self.coordinator.connections[connection.socket_path] = connection
+                await self.coordinator.reconcile(connection)
+                common = {
+                    "version": 1, "type": "codex_session", "socket": connection.socket_path,
+                    "pane_id": "w1:p1", "tab_id": "w1:t1",
+                }
+                await self.coordinator.handle_datagram(json.dumps(common | {
+                    "session_id": "main", "cwd": "/tmp/project",
+                }).encode())
+                connection.snapshot["tabs"][0]["label"] = "Codex — project"
+                connection.snapshot["panes"][0].pop("cwd")
+                connection.refreshed_panes = [refreshed]
+                await self.coordinator.handle_datagram(json.dumps(common | {
+                    "session_id": "memory-helper", "cwd": "/tmp/memories",
+                }).encode())
+
+                state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
+                self.assertEqual(connection.refresh_count, 1)
+                self.assertEqual(state["session_id"], "main")
+                self.assertEqual(state["title"], "Codex — project")
+                self.assertEqual(connection.renames, [("w1:t1", "Codex — project")])
+
+    async def test_real_cwd_transition_refreshes_and_accepts_new_cwd(self):
+        connection = FakeConnection(self.coordinator, "/fake/cwd-transition.sock", [pane(cwd="/tmp/project")])
+        self.coordinator.connections[connection.socket_path] = connection
+        await self.coordinator.reconcile(connection)
+        common = {
+            "version": 1, "type": "codex_session", "socket": connection.socket_path,
+            "pane_id": "w1:p1", "tab_id": "w1:t1",
+        }
+        await self.coordinator.handle_datagram(json.dumps(common | {
+            "session_id": "old", "cwd": "/tmp/project",
+        }).encode())
+        connection.snapshot["tabs"][0]["label"] = "Codex — project"
+        connection.refreshed_panes = [pane(cwd="/tmp/new-project")]
+        await self.coordinator.handle_datagram(json.dumps(common | {
+            "session_id": "new", "cwd": "/tmp/new-project",
+        }).encode())
+
+        state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
+        self.assertEqual(connection.refresh_count, 1)
+        self.assertEqual(state["session_id"], "new")
+        self.assertEqual(state["title"], "Codex — new-project")
+        self.assertEqual(connection.renames, [
+            ("w1:t1", "Codex — project"),
+            ("w1:t1", "Codex — new-project"),
+        ])
 
     async def test_initial_labels_adopt_only_empty_or_ascii_numeric_values(self):
         cases = [
