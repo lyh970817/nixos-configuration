@@ -62,10 +62,11 @@ A reverted or auto-reverted edit is preserved at
 `sudo nix-collect-garbage -d` deletes old generations in **every** profile, and
 supersedes any `--delete-generations` run before it — one invocation left a
 single system generation and destroyed every boot-menu rollback target. It also
-collects the nix-channels' nixpkgs. The channels are not vestigial despite the
-flake: `NIX_PATH` still resolves `<nixpkgs>` for outside projects whose
-`shell.nix` imports it, which then fail with `path '/nix/store/…-source' does
-not exist` and fall back to a stale direnv environment.
+collects the unrooted path `~/.config/nix/registry.json` pins `flake:nixpkgs`
+to, shadowing the GC-protected system pin, so `<nixpkgs>` fails with `path
+'//nix/store/…-source' does not exist` — the `//` marks registry resolution.
+`nix registry remove nixpkgs` drops the stale pin for good; `nix-direnv` roots
+each `.direnv` cache, so projects fail only on their next reload.
 
 Reclaim space in this order instead:
 
