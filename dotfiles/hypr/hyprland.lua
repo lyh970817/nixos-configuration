@@ -421,17 +421,6 @@ hl.bind("XF86AudioPrev", hl.dsp.exec_cmd("playerctl previous"), { locked = true 
 ---- WINDOWS AND WORKSPACES ----
 --------------------------------
 
--- --- State-Based Rules ---
-
--- Fullscreen behavior: No borders, no rounding, full opacity
-hl.window_rule({
-  name = "fullscreen-state",
-  match = { fullscreen = 1 },
-  border_size = 0,
-  rounding = 0,
-  opacity = "1.0 1.0",
-})
-
 -- --- Automatic Floating ---
 --
 -- Hyprland 0.56 already floats every window that has a parent and every window
@@ -563,22 +552,24 @@ hl.window_rule({
 -- this safe -- two rules setting `opacity` do not compose, the later one simply
 -- wins -- and it is what makes the declaration order between them irrelevant.
 --
--- The two slots are the product of the terminal's own translucency and the
--- mode's dimming amount, which is how this read before the dimming moved out
--- of decoration:inactive_opacity: back then the rule's single value multiplied
--- with the global, and the global is now 1, so the second factor has to be
--- spelled out to keep the same pixels.
+-- Both slots carry the same value: translucency is all this terminal gets.
+-- Dimming is what marks a *tiled* window as unfocused, and it is spent on the
+-- tiled windows by the rule below; a floating scratch terminal is already
+-- distinguished by floating, and stacking the mode's dimming on top of its
+-- translucency only made it harder to read while it sat unfocused over the
+-- wallpaper. So the two-factor product this used to spell out is gone and the
+-- second slot repeats the first.
 --
--- A mode that wants neither effect sets both to 1 and takes the `enabled`
--- branch, rather than relying on 1 multiplying out, because the rule is
--- declared either way -- an undeclared named rule keeps its previous state
--- across a reload, which is what `enabled` exists for here and in the Quiet
--- Graphite set below.
+-- A mode that wants no translucency sets float_terminal_opacity to 1 and takes
+-- the `enabled` branch, rather than relying on the rule being a no-op, because
+-- the rule is declared either way -- an undeclared named rule keeps its
+-- previous state across a reload, which is what `enabled` exists for here and
+-- in the Quiet Graphite set below.
 hl.window_rule({
   name = "foot-float-opacity",
   match = { class = "^(foot-float)$", float = true },
-  enabled = float_terminal_opacity < 1 or inactive_opacity < 1,
-  opacity = float_terminal_opacity .. " " .. (float_terminal_opacity * inactive_opacity),
+  enabled = float_terminal_opacity < 1,
+  opacity = float_terminal_opacity .. " " .. float_terminal_opacity,
 })
 
 -- Everything else that dims. Two things make this narrow on purpose:
@@ -614,6 +605,36 @@ hl.window_rule({
   },
   enabled = inactive_opacity < 1,
   opacity = "1 " .. inactive_opacity,
+})
+
+-- Fullscreen is the state where none of that applies: nothing shows through a
+-- window that covers the screen, and both slots go back to fully opaque
+-- whether the window is floating or tiled underneath. It has to be declared
+-- *after* the two rules above, because a repeated property is last-declaration
+-- wins rather than a merge -- declared first, as it was, foot-float-opacity
+-- and inactive-dim simply overwrote it and a fullscreen terminal stayed
+-- see-through. quiet-graphite-fullscreen at the end of the file is the same
+-- exception for the same reason; it sets no opacity, so it does not take this
+-- one back.
+--
+-- `fullscreen` is the boolean predicate: it matches both fullscreen states
+-- Hyprland tracks, the maximized one Super+F produces
+-- (scripts/protected-dispatch.sh translates it to `mode = "maximized"`, which
+-- is what reports as `fullscreen: 1`) and the real fullscreen a client asks
+-- for itself. Matching a specific state would need fullscreen_state_internal
+-- and would leave the other one dimmed.
+--
+-- A rule *is* allowed a third opacity slot, and decoration:fullscreen_opacity
+-- scales it, which looks like it would do this job without a separate rule. It
+-- would not: CWindow reaches for that slot only when the internal mode is
+-- FSMODE_FULLSCREEN, so Super+F's maximized fullscreen -- the one this desktop
+-- actually produces -- keeps taking the active/inactive slots.
+hl.window_rule({
+  name = "fullscreen-state",
+  match = { fullscreen = 1 },
+  border_size = 0,
+  rounding = 0,
+  opacity = "1.0 1.0",
 })
 
 -- Image viewer, the Yazi image opener (home/programs/image-open.nix). Floated
