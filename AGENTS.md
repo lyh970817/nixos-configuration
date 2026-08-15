@@ -57,6 +57,35 @@ apply an edit only through `mihomo-guard` (`modules/services/mihomo.nix`):
 A reverted or auto-reverted edit is preserved at
 `/var/lib/mihomo-config/rejected.yaml` for inspection afterwards.
 
+## Store Garbage Collection: Never `-d`
+
+`sudo nix-collect-garbage -d` deletes old generations in **every** profile, and
+supersedes any `--delete-generations` run before it — one invocation left a
+single system generation and destroyed every boot-menu rollback target. It also
+collects the nix-channels' nixpkgs. The channels are not vestigial despite the
+flake: `NIX_PATH` still resolves `<nixpkgs>` for outside projects whose
+`shell.nix` imports it, which then fail with `path '/nix/store/…-source' does
+not exist` and fall back to a stale direnv environment.
+
+Reclaim space in this order instead:
+
+1. Unpin stale GC roots — leftover `result*` symlinks, abandoned `.direnv`
+   profiles. The store is large because paths are pinned, not because garbage
+   accumulated (65G store, 2.6 GiB collectable, ~21 GiB pinned by user roots).
+   Deleting a root symlink does not delete the store path.
+2. `sudo nix-env --delete-generations +10 --profile /nix/var/nix/profiles/system`,
+   then `sudo /run/current-system/bin/switch-to-configuration boot`.
+3. `sudo nix-collect-garbage` — no `-d`.
+4. `sudo nix store optimise`, last, on the reduced store.
+
+Scheduled upkeep (`modules/system/nix.nix`, `modules/system/boot.nix`) uses
+`--delete-older-than` and does not have this problem; the hazard is the manual
+`-d`.
+
+Check generations under `sudo`: without it `nix-env --list-generations` exits 0
+with empty output and `ls /boot/loader/entries` looks empty, both reading as
+"nothing there".
+
 ## Coding Style & Naming Conventions
 
 Keep modules focused on one concern and name files by feature, for example
