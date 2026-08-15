@@ -202,7 +202,7 @@
       }
       {
         description = "Copy selected response";
-        key = "Ctrl + y";
+        key = "F12";
       }
     ];
   }
