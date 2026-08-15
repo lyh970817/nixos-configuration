@@ -402,6 +402,14 @@ class Coordinator:
         pane = next((p for p in connection.snapshot.get("panes", []) if p.get("pane_id") == pane_id), None)
         return (connection, pane) if pane else None
 
+    @staticmethod
+    def hook_matches_pane_cwd(event: dict[str, Any], pane: dict[str, Any]) -> bool:
+        hook_cwd = str(event.get("cwd") or "")
+        pane_cwd = str(pane.get("foreground_cwd") or pane.get("cwd") or "")
+        if not hook_cwd or not pane_cwd:
+            return True
+        return os.path.realpath(hook_cwd) == os.path.realpath(pane_cwd)
+
     async def handle_datagram(self, data: bytes) -> None:
         try:
             event = self.decode_datagram(data)
@@ -420,6 +428,16 @@ class Coordinator:
             if not found:
                 return
             connection, pane = found
+            if not self.hook_matches_pane_cwd(event, pane):
+                # Auxiliary Codex work can inherit the parent pane's Herdr
+                # variables without actually occupying that pane. Refresh once
+                # to avoid rejecting a legitimate cwd transition, then ignore
+                # hooks that still belong to a different working directory.
+                await connection.refresh_snapshot()
+                found = self.find_pane(socket_path, pane_id)
+                if not found or not self.hook_matches_pane_cwd(event, found[1]):
+                    return
+                connection, pane = found
             tab_id = pane.get("tab_id")
             state = self.state.tab(socket_path, tab_id)
             owner = state.get("owner_pane")

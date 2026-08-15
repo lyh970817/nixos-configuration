@@ -148,6 +148,27 @@ class HerdrTitleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(calls, 1)
         self.assertEqual(connection.renames[-1], ("w1:t1", "Generated Numeric Tab Topic"))
 
+    async def test_auxiliary_cwd_cannot_replace_live_pane_session(self):
+        connection = FakeConnection(self.coordinator, "/fake/herdr.sock", [pane(cwd="/tmp/project")])
+        self.coordinator.connections[connection.socket_path] = connection
+        await self.coordinator.reconcile(connection)
+        common = {
+            "version": 1, "type": "codex_session", "socket": connection.socket_path,
+            "pane_id": "w1:p1", "tab_id": "w1:t1",
+        }
+        await self.coordinator.handle_datagram(json.dumps(common | {
+            "session_id": "main", "cwd": "/tmp/project",
+        }).encode())
+        connection.snapshot["tabs"][0]["label"] = "Codex — project"
+        await self.coordinator.handle_datagram(json.dumps(common | {
+            "session_id": "memory-helper", "cwd": "/tmp/memories",
+        }).encode())
+
+        state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
+        self.assertEqual(state["session_id"], "main")
+        self.assertEqual(state["title"], "Codex — project")
+        self.assertEqual(connection.renames, [("w1:t1", "Codex — project")])
+
     async def test_initial_labels_adopt_only_empty_or_ascii_numeric_values(self):
         cases = [
             ("empty", "", False),
