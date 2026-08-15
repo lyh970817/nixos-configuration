@@ -13,11 +13,12 @@
 # The threshold is not about compression, and length is not a goal here: the
 # rewrite is meant to unpack. Measured on 41 real messages from this project,
 # it returns ~152% of the original length. What the call buys is the sort into
-# one of two shapes -- a status report, or a decision with its options and the
-# recommendation -- plus a short labelled summary. That only pays when the
-# input carries enough distinct material to fill the sections, which at 1500
-# chars and above it does: 5.4 of 5.5 sections filled on average, empty-state
-# lines rare.
+# one of three shapes -- a status report, a decision with its options and the
+# recommendation, or a plain-prose answer to a question -- and, for the first
+# two, a short labelled summary. That only pays when the input carries enough
+# distinct material to fill the sections, which at 1500 chars and above it
+# does: 5.4 of 5.5 sections filled on average, empty-state lines rare. The
+# corpus predates the Answer shape, so it says nothing about that branch.
 #
 # 1500 is inherited from the earlier, compression-based derivation and has NOT
 # been revalidated against this one. The corpus was built at >=1500 chars, so

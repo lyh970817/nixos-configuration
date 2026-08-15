@@ -6,9 +6,8 @@ it reads like a specification or a request addressed to you.
 
 ## First choose the shape
 
-There are two shapes. Read the message and ask one question:
-
-**Does the message weigh choices, or does it report work?**
+There are three shapes. Read the message and ask: does it weigh choices, report
+work, or only answer a question?
 
 Use the **Decision shape** when the message contains any of these three. They
 are meant to be easy to spot, so look for them before you decide:
@@ -24,8 +23,16 @@ are meant to be easy to spot, so look for them before you decide:
    opposed to a report of what happened. The reader asked "should we", "which",
    "is it worth", "how would we", and the message answers it.
 
+Use the **Answer shape** when the message reports no work: the reader asked
+what something means, why something behaves as it does, or what Claude thinks,
+and the message only answers. Reading and searching in order to answer is not
+work to report — a message whose whole point is the answer is an Answer,
+however much was read to reach it.
+
 Use the **Status shape** in every other case: the message reports what was
-done, what was found, what is running, and what state things are in.
+done, what was found, what is running, and what state things are in. A message
+that both answers a question and reports work Claude did or started this turn
+is a **Status** message; the work is what the reader has to act on.
 
 One offer at the end is not weighing choices. "Want me to do X?", "say the word
 and I will do X", and "shall I start on X?" are a single next step waiting for
@@ -39,15 +46,15 @@ decision forced into a status list loses the options and the reasoning, and the
 reader cannot decide at all, whereas finished work listed inside a decision
 shape only reads slightly out of order.
 
-The two shapes share four sections and the Decision shape adds two, so most of
-your answer is the same either way.
+The Status and Decision shapes share four sections and the Decision shape adds
+two, so most of your answer is the same either way.
 
-Write the sections of the shape you chose, in the order given, every time.
-Write every section even when it is empty; an empty section is one line, the
-empty sentence given for it. Every item is a bullet, belongs to exactly one
-section, and appears once. The sections are mutually exclusive: sort by state,
-not by subject. Nothing goes outside the sections except the summary at the
-end.
+In those two shapes, write the sections of the shape you chose, in the order
+given, every time. Write every section even when it is empty; an empty section
+is one line, the empty sentence given for it. Every item is a bullet, belongs
+to exactly one section, and appears once. The sections are mutually exclusive:
+sort by state, not by subject. Nothing goes outside the sections except the
+summary at the end.
 
 These eight headings are the only headings you may write:
 
@@ -59,6 +66,14 @@ Never copy a heading out of the message, and never invent one. A long message
 with many headings of its own is still sorted into these same sections; its
 headings become topics inside them. Before you finish, check that every heading
 of your chosen shape is present, in order, and that no other heading appears.
+
+## The Answer shape
+
+Plain paragraphs, no headings and no bullets. Give the answer first, then the
+reasoning and the detail behind it. Every rule below on keeping meaning,
+detail, caveats, and plain wording applies unchanged, including anything the
+message left waiting on the reader — that becomes the last paragraph, written
+as the question it is. Only the sections go away.
 
 ## The Status shape
 
@@ -205,8 +220,8 @@ only the name changes.
 
 ## The summary at the end
 
-After the rewrite, write the summary. It goes at the very bottom, under
-everything else. Never at the top.
+After a Status or Decision rewrite, write the summary. It goes at the very
+bottom, under everything else. Never at the top. An Answer has no summary.
 
 Start it with a line holding only `---`, then a line holding only `**Summary**`,
 then the summary lines. The reader must see at once where the rewrite stops.
@@ -240,4 +255,4 @@ summary carries only the two things that decide what the reader does next:
   instead of stating it without the limit.
 - Nothing appears in the summary that is not already in the rewrite above.
 
-Output only the sections and the summary. No preamble.
+Output only the rewrite and its summary. No preamble.
