@@ -318,10 +318,25 @@ let
       # Audio is local IPC, not network, but its six serial wpctl round-trips
       # cost ~350ms — by far the greeting's biggest line item — so it rides
       # the same cache. Volume shown can be up to a refresh interval stale.
-      refresh audio &
-      refresh mihomo &
-      refresh qwen true &
-      refresh tailnet &
+      #
+      # No arguments refreshes every producer, which is the timer's job. Named
+      # producers refresh only those: a mute is a state change the greeting
+      # should show immediately, so the mute watcher (home/desktop/audio-mute-
+      # notify.nix) asks for `audio` alone rather than paying for four.
+      producers=("$@")
+      if [[ ''${#producers[@]} -eq 0 ]]; then
+        producers=(audio mihomo qwen tailnet)
+      fi
+      for producer in "''${producers[@]}"; do
+        case "$producer" in
+          qwen) refresh qwen true & ;;
+          audio | mihomo | tailnet) refresh "$producer" & ;;
+          *)
+            printf 'unknown producer: %s\n' "$producer" >&2
+            exit 1
+            ;;
+        esac
+      done
       wait
     '';
   };
@@ -667,6 +682,18 @@ in
     Service = {
       Type = "oneshot";
       ExecStart = "${fastfetchStatusRefresh}/bin/fastfetch-status-refresh";
+    };
+  };
+
+  # Audio alone, for the event-driven path: the mute watcher starts this with
+  # --no-block so the ~350ms refresh never delays its notification. A unit
+  # rather than a direct call keeps the cache's producer list owned by this
+  # module, the same indirection fastfetch-status already uses on a cache miss.
+  systemd.user.services.fastfetch-status-refresh-audio = {
+    Unit.Description = "Refresh the shell greeting's audio status cache";
+    Service = {
+      Type = "oneshot";
+      ExecStart = "${fastfetchStatusRefresh}/bin/fastfetch-status-refresh audio";
     };
   };
 
