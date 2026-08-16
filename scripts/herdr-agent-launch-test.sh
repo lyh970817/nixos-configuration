@@ -44,6 +44,7 @@ case "$1:$2" in
     fi
     ;;
   agent:start)
+    : >"$HERDR_TEST_STARTED"
     [[ ${HERDR_TEST_START_RESULT:-success} == success ]]
     ;;
   agent:get)
@@ -52,10 +53,27 @@ case "$1:$2" in
       *) exit 1 ;;
     esac
     ;;
+  pane:get)
+    if [[ -e $HERDR_TEST_STARTED && ${HERDR_TEST_AFTER_FAILURE:-empty} == gone ]] \
+      || [[ ! -e $HERDR_TEST_STARTED && ${HERDR_TEST_BEFORE_START:-idle} == gone ]]; then
+      printf '{"error":{"code":"pane_not_found"}}\n'
+      exit 1
+    fi
+    printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "$3"
+    ;;
   pane:process-info)
+    # The shell itself in the foreground and nothing else is Herdr's available
+    # shell; any other pid means something is running in the pane.
+    if [[ ! -e $HERDR_TEST_STARTED ]]; then
+      case "${HERDR_TEST_BEFORE_START:-idle}" in
+        idle) printf '{"result":{"process_info":{"shell_pid":100,"foreground_processes":[{"pid":100,"name":"zsh"}]}}}\n' ;;
+        *) printf '{"result":{"process_info":{"shell_pid":100,"foreground_processes":[{"pid":100,"name":"zsh"},{"pid":101,"name":"fastfetch"}]}}}\n' ;;
+      esac
+      exit 0
+    fi
     case "${HERDR_TEST_AFTER_FAILURE:-empty}" in
-      running) printf '{"result":{"process_info":{"foreground_processes":[{"name":"%s","argv":["/bin/%s"]}]}}}\n' "$HERDR_TEST_AGENT_KIND" "$HERDR_TEST_AGENT_KIND" ;;
-      *) printf '{"result":{"process_info":{"foreground_processes":[]}}}\n' ;;
+      running) printf '{"result":{"process_info":{"shell_pid":100,"foreground_processes":[{"pid":201,"name":"%s","argv":["/bin/%s"]}]}}}\n' "$HERDR_TEST_AGENT_KIND" "$HERDR_TEST_AGENT_KIND" ;;
+      *) printf '{"result":{"process_info":{"shell_pid":100,"foreground_processes":[{"pid":100,"name":"zsh"}]}}}\n' ;;
     esac
     ;;
 esac
@@ -64,12 +82,13 @@ chmod +x "$test_dir/bin/herdr"
 
 run_launch() {
   : >"$test_dir/log"
-  rm -f -- "$test_dir/state"
+  rm -f -- "$test_dir/state" "$test_dir/started"
   PATH="$test_dir/bin:$PATH" \
     HOME="$test_dir/home" \
     HERDR_TEST_LOG="$test_dir/log" \
     HERDR_TEST_AGENT_KIND="${1:-}" \
     HERDR_TEST_STATE="$test_dir/state" \
+    HERDR_TEST_STARTED="$test_dir/started" \
     HERDR_SOCKET_PATH="$test_dir/herdr.sock" \
     HERDR_ACTIVE_WORKSPACE_ID=w9 \
     HERDR_ACTIVE_PANE_ID=w9:p1 \
@@ -126,6 +145,31 @@ HERDR_TEST_START_RESULT=failure HERDR_TEST_AFTER_FAILURE=running \
   run_launch claude tab new 2>/dev/null || true
 if grep -Eq '^(pane|tab) close ' "$test_dir/log"; then
   echo "running agent destination was unexpectedly rolled back" >&2
+  exit 1
+fi
+
+# A destination the user closed while the agent was starting: nothing to remove,
+# and no failure to announce.
+HERDR_TEST_START_RESULT=failure HERDR_TEST_AFTER_FAILURE=gone \
+  run_launch claude right resume 2>/dev/null || true
+if grep -Eq '^(pane|tab) close ' "$test_dir/log"; then
+  echo "closed destination was unexpectedly rolled back" >&2
+  exit 1
+fi
+if grep -Fq 'notification show' "$test_dir/log"; then
+  echo "closed destination unexpectedly reported a failure" >&2
+  exit 1
+fi
+
+# The same, for a destination closed before the shell ever went quiet.
+HERDR_TEST_BEFORE_START=gone \
+  run_launch codex tab resume 2>/dev/null || true
+if grep -Eq '^(pane|tab) close ' "$test_dir/log"; then
+  echo "destination closed during the shell wait was rolled back" >&2
+  exit 1
+fi
+if grep -Fq 'notification show' "$test_dir/log"; then
+  echo "destination closed during the shell wait reported a failure" >&2
   exit 1
 fi
 
