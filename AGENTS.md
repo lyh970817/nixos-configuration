@@ -104,11 +104,15 @@ Short imperative subjects, as in `Add 115 Browser launcher` or `Fix tmux
 copy-mode paging keys`; no unrelated changes in one commit.
 
 Committing your own work on your own branch or worktree needs no approval. Never
-push branches and never open pull requests. Merging into `master` and running
-`rebuild` belong to the top-level session: if another session gave you this task,
-leave the finished work committed on your branch and report it. In the top-level
-session, merging and rebuilding what the user asked for is part of delivering it,
-not a separate thing to ask about.
+push on your own initiative and never open pull requests; leave finished work
+committed locally for the user. When the user explicitly asks for a push, push
+exactly what they named and nothing more: fast-forward only, never `--force` or
+`--force-with-lease`, never `--all`/`--tags`/`--mirror`, and never publish
+feature or worktree branches alongside the named branch. Merging into `master`
+and running `rebuild` belong to the top-level session: if another session gave
+you this task, leave the finished work committed on your branch and report it.
+In the top-level session, merging and rebuilding what the user asked for is part
+of delivering it, not a separate thing to ask about.
 
 Cleanup is the last step of merging, and the condition is that the branch is
 fully merged — `git branch --merged master`, or `git cherry master <branch>` when
