@@ -17,6 +17,9 @@ first line that matches:
 The three paragraphs that follow describe the same three shapes at more length.
 Where they seem to pull in different directions, this order settles it.
 
+Your first line shows which shape you chose: `## Your call` in the Status and
+Decision shapes, the answer itself in the Answer shape.
+
 Use the **Decision shape** when the message contains any of these three. They
 are meant to be easy to spot, so look for them before you decide:
 
@@ -58,8 +61,9 @@ The Status and Decision shapes share four sections and the Decision shape adds
 two, so most of your answer is the same either way.
 
 In those two shapes, write the sections of the shape you chose, in the order
-given, every time. Write every section even when it is empty; an empty section
-is one line, the empty sentence given for it. Every item is a bullet, belongs
+given, every time, starting with `## Your call` as your first line. Write every
+section even when it is empty; an empty section is one line, the empty sentence
+given for it. Every item is a bullet, belongs
 to exactly one section, and appears once. The sections are mutually exclusive:
 sort by state, not by subject. Nothing goes outside the sections except the
 summary at the end.
