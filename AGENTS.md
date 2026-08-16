@@ -57,31 +57,35 @@ apply an edit only through `mihomo-guard` (`modules/services/mihomo.nix`):
 A reverted or auto-reverted edit is preserved at
 `/var/lib/mihomo-config/rejected.yaml` for inspection afterwards.
 
-## Store Garbage Collection: Never `-d`
+## Store Garbage Collection: `-d` and Unknown Roots
 
-`sudo nix-collect-garbage -d` deletes old generations in **every** profile, and
-supersedes any `--delete-generations` run before it — one invocation left a
-single system generation and destroyed every boot-menu rollback target. It also
-collects the unrooted path `~/.config/nix/registry.json` pins `flake:nixpkgs`
-to, shadowing the GC-protected system pin, so `<nixpkgs>` fails with `path
-'//nix/store/…-source' does not exist` — the `//` marks registry resolution.
-`nix registry remove nixpkgs` drops the stale pin for good; `nix-direnv` roots
-each `.direnv` cache, so projects fail only on their next reload.
+`sudo nix-collect-garbage -d` deletes old generations in **every** profile and
+supersedes a preceding `--delete-generations`; one invocation left a single
+system generation and destroyed every boot-menu rollback target.
 
-Reclaim space in this order instead:
+That is all `-d` adds. The other hazard is independent of it: a GC root does not
+tell you what it is holding. Before deleting a stale `result*` symlink or
+`.direnv` profile, check its closure (`nix-store -q --references`, `nix-store
+--gc --print-live`). A leftover `result-iso` was the last root on the nixpkgs
+source `~/.config/nix/registry.json` pinned `flake:nixpkgs` to; unpinning it let
+the next plain `nix-collect-garbage` take it, and `<nixpkgs>` failed with `path
+'//nix/store/…-source' does not exist` — the `//` marks registry resolution. A
+`path:` pin has nothing to re-fetch from, so the loss is unrecoverable; prefer
+`github:owner/repo/rev`, rooted under `/nix/var/nix/gcroots/per-user/<user>/`.
+
+Reclaim space in this order:
 
 1. Unpin stale GC roots — leftover `result*` symlinks, abandoned `.direnv`
-   profiles. The store is large because paths are pinned, not because garbage
+   profiles — each checked first; deleting the symlink does not delete the store
+   path. The store is large because paths are pinned, not because garbage
    accumulated (65G store, 2.6 GiB collectable, ~21 GiB pinned by user roots).
-   Deleting a root symlink does not delete the store path.
 2. `sudo nix-env --delete-generations +10 --profile /nix/var/nix/profiles/system`,
    then `sudo /run/current-system/bin/switch-to-configuration boot`.
 3. `sudo nix-collect-garbage` — no `-d`.
 4. `sudo nix store optimise`, last, on the reduced store.
 
 Scheduled upkeep (`modules/system/nix.nix`, `modules/system/boot.nix`) uses
-`--delete-older-than` and does not have this problem; the hazard is the manual
-`-d`.
+`--delete-older-than` and touches neither hazard; both are manual.
 
 Check generations under `sudo`: without it `nix-env --list-generations` exits 0
 with empty output and `ls /boot/loader/entries` looks empty, both reading as
