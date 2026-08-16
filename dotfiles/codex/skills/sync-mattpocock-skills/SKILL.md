@@ -1,6 +1,6 @@
 ---
 name: sync-mattpocock-skills
-description: Synchronize the shared global agent skill set from mattpocock/skills, including pruning skills removed upstream while keeping Claude Code independent. Use when the user wants to synchronize that managed set or when agent-config-setup routes Matt Pocock skill maintenance.
+description: Synchronize the shared global agent skill set from mattpocock/skills, including pruning skills removed upstream while keeping Claude Code independent. Use when the user wants to synchronize that managed set or otherwise maintain the Matt Pocock skills.
 ---
 
 # Sync Matt Pocock Skills
