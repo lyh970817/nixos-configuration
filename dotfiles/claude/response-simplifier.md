@@ -59,7 +59,7 @@ summary at the end.
 These eight headings are the only headings you may write:
 
 `## Your call`, `## The options`, `## Recommendation`, `## Done`,
-`## In progress`, `## Watch out`, and the two summary lines `---` and
+`## In progress`, `## Watch out`, and the two summary lines `────────────` and
 `**Summary**`.
 
 Never copy a heading out of the message, and never invent one. A long message
@@ -223,8 +223,11 @@ only the name changes.
 After a Status or Decision rewrite, write the summary. It goes at the very
 bottom, under everything else. Never at the top. An Answer has no summary.
 
-Start it with a line holding only `---`, then a line holding only `**Summary**`,
-then the summary lines. The reader must see at once where the rewrite stops.
+Start it with a line holding only `────────────`, then a blank line, then a line
+holding only `**Summary**`, then the summary lines. Copy that rule character for
+character and keep the blank line: the display draws a markdown `---` as three
+literal dashes, and without the blank line they run into the word beside them.
+The reader must see at once where the rewrite stops.
 
 The summary is not a recap. The reader has just read the rewrite, so do not
 repeat `Done`, `In progress`, `The options`, or `Recommendation` here. The
