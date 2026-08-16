@@ -93,6 +93,29 @@ let
         -- only, never a toggle: a toggle here could blank the screen and would
         -- then be the only way out.
         hl.bind("Scroll_Lock", hl.dsp.dpms({ action = "on" }), { locked = true })
+        -- Remote laptop: every external output mirrors the built-in panel.
+        -- eDP-1 is the one screen being looked at, so a second display is
+        -- always a duplicate of it rather than extra desk space. Listed per
+        -- connector (the X30W-K exposes exactly these three) because a
+        -- catch-all output = "" would also match eDP-1 and ask it to mirror
+        -- itself.
+        for _, output in ipairs({ "HDMI-A-1", "DP-1", "DP-2" }) do
+          hl.monitor({ output = output, mode = "preferred", position = "auto", scale = 1, mirror = "eDP-1" })
+        end
+        -- Re-assert the e-ink panel's own rule, which hyprland.lua sets before
+        -- it includes this file. Measured on Hyprland 0.56.1: the LAST matching
+        -- monitor rule wins, with no precedence for desc: over a connector
+        -- name. Without this line the mirror rules above would capture the
+        -- Paperlike whenever it lands on one of those three connectors, costing
+        -- both its native mode and the light-mode trigger that
+        -- scripts/monitor-switch.sh derives from its presence. Keep identical
+        -- to the copy in dotfiles/hypr/hyprland.lua.
+        hl.monitor({
+          output = "desc:DSC Paperlike H D",
+          mode = "2200x1650@40",
+          position = "0x0",
+          scale = 1.666667,
+        })
       ''
     else
       ''
@@ -131,6 +154,13 @@ let
         # only, never a toggle: a toggle here could blank the screen and would
         # then be the only way out.
         bindl = , Scroll_Lock, exec, hyprctl dispatch dpms on
+        # Remote laptop: every external output mirrors the built-in panel; see
+        # the roleLua twin for why the connectors are listed one by one and why
+        # the Paperlike rule is repeated after them.
+        monitor = HDMI-A-1,preferred,auto,1,mirror,eDP-1
+        monitor = DP-1,preferred,auto,1,mirror,eDP-1
+        monitor = DP-2,preferred,auto,1,mirror,eDP-1
+        monitor = desc:DSC Paperlike H D,2200x1650@40,0x0,1.666667
       ''
     else
       ''
