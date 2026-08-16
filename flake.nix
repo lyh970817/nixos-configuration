@@ -23,6 +23,7 @@
       url = "github:aaddrick/claude-desktop-debian";
     };
 
+    # Bumping this tag means re-checking the F3 patch in the overlay below.
     herdr = {
       url = "git+https://github.com/ogulcancelik/herdr.git?ref=refs/tags/v0.8.0";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -98,9 +99,27 @@
         matrix-icons = final.callPackage ./pkgs/matrix-icons.nix { };
         digg-pp-cli = final.callPackage ./pkgs/digg-pp-cli.nix { };
         # Upstream flake ships the package directly; take it from the pinned
-        # input. The patch fixes the client input parser dropping F3 outright
-        # (see its header); v0.8.0 is still the newest tag, so drop it once a
-        # later release carries the fix.
+        # input. 0.8.0 silently drops F3 and Shift+F3: under the kitty keyboard
+        # protocol a real F3 arrives as `ESC[13;1:1~`, and
+        # `parse_xterm_modified_special_sequence` in `src/input/parse.rs` has a
+        # CSI-tilde code table starting at "15", so 11-14 (F1-F4) fall through
+        # and are discarded. The patch adds those four entries.
+        #
+        # On a version bump, re-check whether upstream fixed it: look for 11-14
+        # in that file's *parameterized* tilde table, and if they are there drop
+        # both this overrideAttrs and pkgs/patches/herdr-f3-csi-tilde.patch.
+        # The build will not tell you -- the package sets `doCheck = false`, and
+        # a patch that has merely become redundant still applies cleanly. Verify
+        # behaviourally instead: press F3 in a herdr pane, or inject
+        # `\x1b[13;1:1~` into a client. Decoding happens in the *server*, so
+        # restart the herdr server first -- a fresh client attached to an old
+        # server still shows the old behaviour.
+        #
+        # Upstream (ogulcancelik/herdr redirects to herdrdev/herdr): issue #1809
+        # open; #818 has the same mechanism and an independent patch but was
+        # closed by its reporter, not a maintainer; PR #2378 is open but targets
+        # only the separate CSI-u codepoint path.
+        # https://github.com/herdrdev/herdr/issues/1809
         herdr = herdr.packages.${system}.default.overrideAttrs (old: {
           patches = (old.patches or [ ]) ++ [ ./pkgs/patches/herdr-f3-csi-tilde.patch ];
         });
