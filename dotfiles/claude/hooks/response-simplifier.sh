@@ -65,12 +65,27 @@
 # findings. What moved coverage was recognising decisions in `Your call`, not
 # summary-space rules; ~7 of 9 losses never reached the section at all.
 #
-# The corpus was measured on whole messages, so the gate counts whole messages
-# here too.
+# The corpus was measured on whole messages, but what the gate is really asking
+# is whether there is enough *prose* to sort into sections, and a message that
+# is mostly diff answers no. Fenced code blocks are therefore stripped before
+# counting, which makes this gate stricter than the corpus that calibrated it:
+# three sentences wrapped around a 200-line patch used to buy a ~20s call and
+# now do not. That direction is deliberate and untested against the corpus.
 #
 # Tune by editing this number: the hook reaches ~/.config/claude as an
 # out-of-store symlink, so an edit is live with no rebuild.
 min_chars=1500
+
+# Emit a fixed, deterministic rewrite instead of calling the model. For
+# iterating on the display mechanics -- divider, spacing, how markdown renders
+# in the message body -- without paying ~20s and a model call per attempt. It
+# changes nothing else: the buffering, the gate and every fail-open path behave
+# exactly as they do in a real run.
+stub="${RESPONSE_SIMPLIFIER_STUB:-0}"
+
+# One line on screen, once per session, when a rewrite was lost to something
+# the user can fix. Set to 0 to silence.
+notice="${RESPONSE_SIMPLIFIER_NOTICE:-1}"
 
 set -uo pipefail
 
@@ -99,12 +114,29 @@ final="$(jq -r '.final // false' <<<"$input" 2>/dev/null)"
 buffer_root="${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/claude-response-simplifier"
 mkdir -p "$buffer_root" 2>/dev/null || pass_through
 
+# Every deletion in this file goes through here. `$session_id` and
+# `$message_id` come from the event, so the guard is what stops an empty or
+# surprising one from widening the path: refuse anything that is not a real
+# directory two levels below the buffer root, or that resolves elsewhere.
+discard_dir() {
+  local target="$1" resolved
+  case "$target" in "$buffer_root"/*/*) ;; *) return 0 ;; esac
+  case "$target" in *"/../"* | *"/..") return 0 ;; esac
+  [ -d "$target" ] && [ ! -L "$target" ] || return 0
+  resolved="$(realpath -- "$target" 2>/dev/null)" || return 0
+  case "$resolved" in "$buffer_root"/*/*) ;; *) return 0 ;; esac
+  rm -rf -- "$resolved" 2>/dev/null
+}
+
 # A message whose final chunk never arrives -- interrupted turn, killed hook,
 # crash -- leaves its parts behind, and nothing else would ever collect them.
 # Sweep message directories untouched for half an hour, then the session
-# directories they empty out.
-find "$buffer_root" -mindepth 2 -maxdepth 2 -type d -mmin +30 -exec rm -rf {} + 2>/dev/null
+# directories they empty out, then stale per-session notice flags.
+while IFS= read -r stale; do discard_dir "$stale"; done < <(
+  find "$buffer_root" -mindepth 2 -maxdepth 2 -type d -mmin +30 2>/dev/null
+)
 find "$buffer_root" -mindepth 1 -maxdepth 1 -type d -empty -mmin +30 -exec rmdir {} + 2>/dev/null
+find "$buffer_root" -mindepth 1 -maxdepth 1 -type f -name '*.notified' -mmin +1440 -delete 2>/dev/null
 
 message_dir="$buffer_root/$session_id/$message_id"
 mkdir -p "$message_dir" 2>/dev/null || pass_through
@@ -117,10 +149,44 @@ jq -j '.delta // ""' <<<"$input" >"$part" 2>/dev/null || pass_through
 # held back or blanked while it is still arriving.
 [ "$final" = "true" ] || pass_through
 
-discard_buffer() { rm -rf "$message_dir" 2>/dev/null; }
+discard_buffer() { discard_dir "$message_dir"; }
+
+# Append `$1` to this chunk's own delta and hand the result back as the text to
+# display, then exit. Only this chunk's delta is replaced -- the earlier chunks
+# are already on screen -- so the delta has to lead, or the end of the message
+# would be dropped. Every caller only ever adds after it.
+emit_appended_to_delta() {
+  local addition="$1" delta
+  delta="$(cat "$part" 2>/dev/null)"
+  discard_buffer
+  jq -n --arg delta "$delta" --arg addition "$addition" \
+    '{hookSpecificOutput: {hookEventName: "MessageDisplay",
+                           displayContent: ($delta + $addition)}}' \
+    || pass_through
+  exit 0
+}
 
 message="$(cat "$message_dir"/*.part 2>/dev/null)" || { discard_buffer; pass_through; }
-[ "${#message}" -ge "$min_chars" ] || { discard_buffer; pass_through; }
+
+# Strip fenced code blocks before applying the gate; see the comment on
+# `min_chars`. The model still receives the message whole -- only the decision
+# to call it at all is taken on the prose.
+prose="$(awk '/^[[:space:]]*```/ { fenced = !fenced; next } !fenced' <<<"$message" 2>/dev/null)"
+[ "${#prose}" -ge "$min_chars" ] || { discard_buffer; pass_through; }
+
+if [ "$stub" = "1" ]; then
+  chunks="$(find "$message_dir" -maxdepth 1 -name '*.part' | wc -l)"
+  rewrite="**Summary**
+
+- Stub rewrite: this text came from the hook, not from a model.
+- Reassembled \`$chunks\` chunk(s); the gate saw ${#prose} characters of prose
+  in a ${#message}-character message.
+
+**What happened**
+
+\`RESPONSE_SIMPLIFIER_STUB=1\` is set, so the nested model call was skipped."
+  rewrite_status=0
+else
 
 prompt_file="${CLAUDE_CONFIG_DIR:-$HOME/.config/claude}/response-simplifier.md"
 [ -r "$prompt_file" ] || { discard_buffer; pass_through; }
@@ -154,17 +220,34 @@ rewrite="$(
     --system-prompt-file "$prompt_file" \
     --tools "" \
     -p 2>/dev/null
-)" || { discard_buffer; pass_through; }
+)"
+rewrite_status=$?
+
+fi
+
+# A rewriter that is simply broken is otherwise indistinguishable on screen
+# from a message that was too short to rewrite, and stays broken for the rest
+# of the session. So say so once, and only when the cause is something the user
+# can act on: a nested call that exited non-zero, which covers `timeout`'s 124,
+# a missing or unauthenticated `claude`, and a model error. A call that
+# succeeds and returns nothing gets no notice -- there would be nothing to fix.
+#
+# This branch APPENDS one line to the delta and never replaces or drops it, so
+# the fail-open contract holds here as much as on the silent paths.
+if [ "$rewrite_status" -ne 0 ]; then
+  notified="$buffer_root/$session_id.notified"
+  if [ "$notice" = "1" ] && [ ! -e "$notified" ] && : >"$notified" 2>/dev/null; then
+    if [ "$rewrite_status" -eq 124 ]; then
+      why="the rewrite timed out after 120s"
+    else
+      why="the rewriter exited $rewrite_status"
+    fi
+    emit_appended_to_delta "$separator⚠ response-simplifier: $why, so this message is shown unrewritten. Once per session; set RESPONSE_SIMPLIFIER_NOTICE=0 to silence."
+  fi
+  discard_buffer
+  pass_through
+fi
 
 [ -n "${rewrite//[[:space:]]/}" ] || { discard_buffer; pass_through; }
 
-# Only this chunk's own delta is replaced; earlier chunks are already on
-# screen. Emitting anything less than the final delta here would drop the end
-# of the message, so it is carried through verbatim ahead of the divider.
-final_delta="$(cat "$part" 2>/dev/null)"
-discard_buffer
-
-jq -n --arg delta "$final_delta" --arg separator "$separator" --arg rewrite "$rewrite" \
-  '{hookSpecificOutput: {hookEventName: "MessageDisplay",
-                         displayContent: ($delta + $separator + $rewrite)}}' \
-  || pass_through
+emit_appended_to_delta "$separator$rewrite"
