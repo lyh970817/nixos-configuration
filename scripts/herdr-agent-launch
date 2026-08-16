@@ -138,6 +138,32 @@ rollback_destination() {
   esac
 }
 
+# Rolling back is only ever right for a destination that is still an empty idle
+# shell. A destination the user already closed has nothing to remove and nothing
+# to announce, and a destination with a foreground process in it may hold an
+# agent Herdr has not classified yet or a `--resume` picker waiting on the user;
+# tearing either down destroys live work.
+destination_state() {
+  local process_state
+  herdr pane get "$new_pane_id" >/dev/null 2>&1 || {
+    printf 'gone\n'
+    return
+  }
+  process_state=$(herdr pane process-info --pane "$new_pane_id" 2>/dev/null) || {
+    printf 'occupied\n'
+    return
+  }
+  if jq -e '
+    .result.process_info as $info
+    | ($info.shell_pid | numbers) as $shell_pid
+    | any($info.foreground_processes[]?; .pid != $shell_pid)
+  ' <<<"$process_state" >/dev/null; then
+    printf 'occupied\n'
+  else
+    printf 'idle\n'
+  fi
+}
+
 # A freshly created pane runs its login greeting (fastfetch, starship) for a
 # second or more, and `herdr agent start` issued during that window never types
 # the command: it returns only after its own startup timeout, which then tears
@@ -169,6 +195,11 @@ wait_for_available_shell() {
 }
 
 if ! wait_for_available_shell; then
+  if [[ $(destination_state) == gone ]]; then
+    printf 'herdr-agent-launch: %s was closed before %s could be started\n' \
+      "$new_pane_id" "$agent_kind" >&2
+    exit 1
+  fi
   rollback_destination || true
   herdr notification show "Agent launch failed" \
     --body "The new pane never reached an idle shell prompt, so $agent_kind was not started; its empty destination was removed." \
@@ -210,26 +241,32 @@ if ! herdr agent start "$agent_name" \
   --pane "$new_pane_id" \
   -- "${agent_args[@]}"; then
   # A startup timeout is ambiguous: detection can finish between the timeout
-  # and this check, or the expected process can be alive before Herdr has
-  # classified it. Preserve either case. Otherwise remove only the destination
-  # this invocation created, never pre-existing user layout.
+  # and this check, so a detected agent always wins over any teardown.
   if agent_state=$(herdr agent get "$new_pane_id" 2>/dev/null) \
     && jq -e --arg kind "$agent_kind" \
       '.result.agent.agent == $kind' <<<"$agent_state" >/dev/null; then
     herdr agent focus "$new_pane_id"
     exit 0
   fi
-  if process_state=$(herdr pane process-info --pane "$new_pane_id" 2>/dev/null) \
-    && jq -e --arg kind "$agent_kind" '
-      any(.result.process_info.foreground_processes[]?;
-        .name == $kind
-        or ((.argv[0]? // "") | split("/")[-1] == $kind))
-    ' <<<"$process_state" >/dev/null; then
-    herdr notification show "Agent launch still starting" \
-      --body "The $agent_kind process is alive in $new_pane_id but Herdr has not detected it yet." \
-      --sound request >/dev/null 2>&1 || true
-    exit 1
-  fi
+  case "$(destination_state)" in
+    gone)
+      # `agent start` burns its full 30-second timeout when the pane it is
+      # watching disappears, so this arrives long after the user closed the
+      # destination themselves. There is nothing left to remove, and claiming a
+      # failure they did not cause is the only thing a notification would add.
+      printf 'herdr-agent-launch: %s was closed while %s was starting\n' \
+        "$new_pane_id" "$agent_kind" >&2
+      exit 1
+      ;;
+    occupied)
+      herdr notification show "Agent launch still starting" \
+        --body "Something is still running in $new_pane_id but Herdr has not detected $agent_kind yet; the destination was left alone." \
+        --sound request >/dev/null 2>&1 || true
+      exit 1
+      ;;
+  esac
+  # An idle empty shell: remove only the destination this invocation created,
+  # never pre-existing user layout.
   rollback_destination || true
   herdr notification show "Agent launch failed" \
     --body "The $agent_kind orchestrator did not start; its empty destination was removed." \
