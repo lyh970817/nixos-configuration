@@ -107,6 +107,8 @@
         pi-web-access = final.callPackage ./pkgs/pi-web-access.nix { };
         quicktui = final.callPackage ./pkgs/quicktui.nix { };
         screen-shader-controller = final.callPackage ./pkgs/screen-shader-controller.nix { };
+        twitter-cli = final.python3Packages.callPackage ./pkgs/twitter-cli.nix { };
+        xiaohongshu-cli = final.python3Packages.callPackage ./pkgs/xiaohongshu-cli.nix { };
         yadisk = final.python3Packages.callPackage ./pkgs/yadisk.nix { };
         yandex-trash = final.callPackage ./pkgs/yandex-trash.nix { };
         zeno-zsh = final.callPackage ./pkgs/zeno-zsh.nix { };
