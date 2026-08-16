@@ -97,8 +97,13 @@
         xberg-cli = final.callPackage ./pkgs/xberg-cli.nix { };
         matrix-icons = final.callPackage ./pkgs/matrix-icons.nix { };
         digg-pp-cli = final.callPackage ./pkgs/digg-pp-cli.nix { };
-        # Upstream flake ships the package directly; take it from the pinned input.
-        herdr = herdr.packages.${system}.default;
+        # Upstream flake ships the package directly; take it from the pinned
+        # input. The patch fixes the client input parser dropping F3 outright
+        # (see its header); v0.8.0 is still the newest tag, so drop it once a
+        # later release carries the fix.
+        herdr = herdr.packages.${system}.default.overrideAttrs (old: {
+          patches = (old.patches or [ ]) ++ [ ./pkgs/patches/herdr-f3-csi-tilde.patch ];
+        });
         hypr-ipc = final.callPackage ./pkgs/hypr-ipc.nix { };
         hyprwhspr = final.callPackage ./pkgs/hyprwhspr.nix { };
         oh-my-pi = final.callPackage ./pkgs/oh-my-pi.nix { };
