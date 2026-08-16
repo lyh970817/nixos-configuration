@@ -138,6 +138,46 @@ rollback_destination() {
   esac
 }
 
+# A freshly created pane runs its login greeting (fastfetch, starship) for a
+# second or more, and `herdr agent start` issued during that window never types
+# the command: it returns only after its own startup timeout, which then tears
+# the destination down again. Wait for a quiet prompt first, and require several
+# consecutive quiet polls so the gap before the greeting starts cannot itself
+# read as ready.
+wait_for_available_shell() {
+  local poll_interval=0.25 max_polls=80 required_quiet_polls=4
+  local poll quiet_polls=0 process_state
+  for ((poll = 0; poll < max_polls; poll++)); do
+    if process_state=$(herdr pane process-info --pane "$new_pane_id" 2>/dev/null) \
+      && jq -e '
+        .result.process_info as $info
+        | ($info.shell_pid | numbers) as $shell_pid
+        | all($info.foreground_processes[]?; .pid == $shell_pid)
+      ' <<<"$process_state" >/dev/null; then
+      quiet_polls=$((quiet_polls + 1))
+      if ((quiet_polls >= required_quiet_polls)); then
+        # Let the drawn prompt settle before Herdr looks at the pane.
+        sleep 0.5
+        return 0
+      fi
+    else
+      quiet_polls=0
+    fi
+    sleep "$poll_interval"
+  done
+  return 1
+}
+
+if ! wait_for_available_shell; then
+  rollback_destination || true
+  herdr notification show "Agent launch failed" \
+    --body "The new pane never reached an idle shell prompt, so $agent_kind was not started; its empty destination was removed." \
+    --sound request >/dev/null 2>&1 || true
+  printf 'herdr-agent-launch: %s never became an available shell\n' \
+    "$new_pane_id" >&2
+  exit 1
+fi
+
 pane_slug=$(printf '%s' "$new_pane_id" \
   | tr '[:upper:]' '[:lower:]' \
   | tr -cd 'a-z0-9_-')
