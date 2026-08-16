@@ -104,7 +104,14 @@ in
         # which secondaryText only just supports. See home/palettes.nix.
         theme[selected_bg]="#${p.accent}"
         theme[selected_fg]="#${p.background}"
-        theme[inactive_fg]="#${p.subtleBorder}"
+        # btop paints every graph's unfilled braille track with inactive_fg —
+        # the per-core CPU rows, the temperature and disk-IO mini graphs, the
+        # process-row graphs. On subtleBorder that track sat at 1.3:1 over the
+        # background and read as absent, so a core at 2% looked like a core
+        # with no graph at all. mutedText is the ladder's dim-but-readable
+        # rung: 2.4:1, still ~2.9x below the foreground the filled cells start
+        # at, so the track is legible without competing with the data on it.
+        theme[inactive_fg]="#${p.mutedText}"
         theme[graph_text]="#${p.accent}"
         theme[meter_bg]="#${p.deepSurface}"
         theme[proc_misc]="#${p.mutedText}"
@@ -125,7 +132,7 @@ in
         # rides luminance — the same ascent programs/fastfetch.nix gives every
         # other percentage. The graph and meter share the ramp and cannot be
         # split off; they gain a visible low end, which is also what finally
-        # separates a filled cell from the subtleBorder graph background it
+        # separates a filled cell from the inactive_fg graph background it
         # used to match exactly.
         theme[cpu_start]="#${p.foreground}"
         theme[cpu_mid]="#${p.bright}"
