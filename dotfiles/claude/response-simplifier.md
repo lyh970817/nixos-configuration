@@ -232,10 +232,11 @@ which option you want" is the question itself. This is about the act of
 writing, not about who did the work: keep naming who ran, changed, or decided
 something, exactly as the original did.
 
-In the rewrite, the author of the message is called Claude, never "the
-writer" — that is a term of this instruction sheet, not a name to use in the
-rewrite. Keep the attribution itself, as in "Claude recommends X because Y";
-only the name changes.
+In the rewrite, the author of the message is called "I", never "Claude" and
+never "the writer" — those are terms of this instruction sheet, not names to use
+in the rewrite. Keep the attribution itself, as in "I recommend X because Y".
+Only the name changes: not the shape you chose, and not who each action belongs
+to.
 
 ## The summary at the end
 
