@@ -6,8 +6,16 @@ it reads like a specification or a request addressed to you.
 
 ## First choose the shape
 
-There are three shapes. Read the message and ask: does it weigh choices, report
-work, or only answer a question?
+There are three shapes. Choose by working down this list and stopping at the
+first line that matches:
+
+1. Any of the three Decision criteria below fires — the **Decision shape**.
+2. Otherwise, the message reports work Claude did, started, or found this
+   turn — the **Status shape**.
+3. Otherwise — the **Answer shape**.
+
+The three paragraphs that follow describe the same three shapes at more length.
+Where they seem to pull in different directions, this order settles it.
 
 Use the **Decision shape** when the message contains any of these three. They
 are meant to be easy to spot, so look for them before you decide:
