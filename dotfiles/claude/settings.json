@@ -16,7 +16,7 @@
     "baseRef": "head"
   },
   "hooks": {
-    "Stop": [
+    "MessageDisplay": [
       {
         "hooks": [
           {

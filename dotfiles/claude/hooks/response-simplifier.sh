@@ -1,10 +1,37 @@
 #!/usr/bin/env bash
-# Stop hook. Takes the turn's finished assistant message, has a nested model
-# rewrite it into plain English, and shows the rewrite under the
-# original. `systemMessage` is the only stdout channel that reaches the user;
-# plain stdout/stderr on exit 0 are discarded, and `additionalContext` or a
-# blocking decision would go to the model instead. Never blocks: every failure
-# path exits 0 with no output, so a broken rewriter cannot disturb the session.
+# MessageDisplay hook. Takes an assistant message as it is being displayed, has
+# a nested model rewrite it into plain English, and appends the rewrite to the
+# message body under a divider.
+#
+# Ported from a Stop hook. `systemMessage` is the only user-visible channel a
+# Stop hook has, and it renders the rewrite as a dim, indented `Stop says:`
+# attachment with markdown left unparsed -- `**Summary**` reaches the screen
+# with its asterisks. `displayContent` *is* the assistant message body, so the
+# same text renders at body contrast with headings, lists and inline code
+# formatted. That rendering difference is the whole reason for the port;
+# nothing about the rewrite itself changed.
+#
+# The event fires once per streamed chunk of one message, carrying
+# `.message_id` (groups the chunks), `.index` (chunk order), `.final` (true on
+# the last one) and `.delta` (that chunk's fragment, NOT cumulative). Every
+# delta is buffered to disk under its message id and only the final chunk calls
+# the model, once the whole message is known.
+#
+# Two consequences of the channel, both intended:
+#
+#   - This runs on every assistant message, not only the last one of a turn.
+#     Nothing in the event says whether more messages follow, so there is no
+#     Stop-equivalent to gate on. The length threshold below is what keeps that
+#     from being expensive.
+#   - The final chunk's text is held on screen for as long as the nested call
+#     takes (11-43s measured, see below). Earlier chunks have already streamed;
+#     append mode never suppresses them.
+#
+# FAIL-OPEN CONTRACT: every failure path -- no jq, unparseable input, missing
+# prompt file, model down, timeout, empty rewrite -- exits 0 with no output,
+# which makes Claude Code display the original delta unchanged. A display hook
+# must never be able to swallow an assistant message; this is the property to
+# preserve above all others when editing this file.
 
 # Messages shorter than this many characters are left alone, without spawning
 # the nested call at all. That call costs 11-43s of wall time and buys nothing
@@ -38,28 +65,74 @@
 # findings. What moved coverage was recognising decisions in `Your call`, not
 # summary-space rules; ~7 of 9 losses never reached the section at all.
 #
+# The corpus was measured on whole messages, so the gate counts whole messages
+# here too.
+#
 # Tune by editing this number: the hook reaches ~/.config/claude as an
 # out-of-store symlink, so an edit is live with no rebuild.
 min_chars=1500
 
 set -uo pipefail
 
-input="$(cat)" || exit 0
+# Every abandoned path lands here. Exit 0 with nothing on stdout is the
+# documented "display the original delta" answer, and it is also what a crash
+# or a timeout produces, so the contract holds even for paths not written here.
+pass_through() { exit 0; }
 
-# `last_assistant_message` carries the finished message. Do not read
-# `transcript_path`: at hook time the final message is not flushed to it yet.
-message="$(jq -r '.last_assistant_message // empty' <<<"$input" 2>/dev/null)" || exit 0
-[ -n "$message" ] || exit 0
-[ "${#message}" -ge "$min_chars" ] || exit 0
+# The divider under which the rewrite is appended. A markdown `---` is rendered
+# literally by the message renderer, so the rule is drawn rather than marked up.
+separator=$'\n\n────────────────────────\n\n'
+
+command -v jq >/dev/null 2>&1 || pass_through
+
+input="$(cat)" || pass_through
+[ -n "$input" ] || pass_through
+
+message_id="$(jq -r '.message_id // empty' <<<"$input" 2>/dev/null)" || pass_through
+[ -n "$message_id" ] || pass_through
+session_id="$(jq -r '.session_id // "nosession"' <<<"$input" 2>/dev/null)"
+[ -n "$session_id" ] || session_id="nosession"
+index="$(jq -r '(.index // 0) | tostring' <<<"$input" 2>/dev/null)"
+case "$index" in '' | *[!0-9]*) index=0 ;; esac
+final="$(jq -r '.final // false' <<<"$input" 2>/dev/null)"
+
+buffer_root="${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/claude-response-simplifier"
+mkdir -p "$buffer_root" 2>/dev/null || pass_through
+
+# A message whose final chunk never arrives -- interrupted turn, killed hook,
+# crash -- leaves its parts behind, and nothing else would ever collect them.
+# Sweep message directories untouched for half an hour, then the session
+# directories they empty out.
+find "$buffer_root" -mindepth 2 -maxdepth 2 -type d -mmin +30 -exec rm -rf {} + 2>/dev/null
+find "$buffer_root" -mindepth 1 -maxdepth 1 -type d -empty -mmin +30 -exec rmdir {} + 2>/dev/null
+
+message_dir="$buffer_root/$session_id/$message_id"
+mkdir -p "$message_dir" 2>/dev/null || pass_through
+part="$message_dir/$(printf '%08d' "$index").part"
+
+# `jq -j` so the fragment is stored byte-exact, with no newline added.
+jq -j '.delta // ""' <<<"$input" >"$part" 2>/dev/null || pass_through
+
+# Append mode: non-final chunks stream through untouched, so a message is never
+# held back or blanked while it is still arriving.
+[ "$final" = "true" ] || pass_through
+
+discard_buffer() { rm -rf "$message_dir" 2>/dev/null; }
+
+message="$(cat "$message_dir"/*.part 2>/dev/null)" || { discard_buffer; pass_through; }
+[ "${#message}" -ge "$min_chars" ] || { discard_buffer; pass_through; }
 
 prompt_file="${CLAUDE_CONFIG_DIR:-$HOME/.config/claude}/response-simplifier.md"
-[ -r "$prompt_file" ] || exit 0
+[ -r "$prompt_file" ] || { discard_buffer; pass_through; }
 
 # --safe-mode is the recursion guard: the child inherits CLAUDE_CONFIG_DIR and
-# would otherwise load this same Stop hook and spawn another child forever. It
-# also keeps CLAUDE.md out of the child, which is intended — the rewriter is
-# deliberately context-free. Not --bare: it demands ANTHROPIC_API_KEY and
-# ignores this machine's subscription OAuth.
+# would otherwise load this same hook. That matters more on MessageDisplay than
+# it did on Stop -- the child emits assistant messages of its own, so an
+# unguarded child would fire this hook on its own output and fork again, once
+# per message rather than once per turn. Safe mode also keeps CLAUDE.md out of
+# the child, which is intended: the rewriter is deliberately context-free. Not
+# --bare: it demands ANTHROPIC_API_KEY and ignores this machine's subscription
+# OAuth.
 #
 # --system-prompt-file replaces Claude Code's default system prompt, which is
 # dead weight for a rewrite. MAX_THINKING_TOKENS=0 is what makes that pay off:
@@ -81,8 +154,17 @@ rewrite="$(
     --system-prompt-file "$prompt_file" \
     --tools "" \
     -p 2>/dev/null
-)" || exit 0
+)" || { discard_buffer; pass_through; }
 
-[ -n "${rewrite//[[:space:]]/}" ] || exit 0
+[ -n "${rewrite//[[:space:]]/}" ] || { discard_buffer; pass_through; }
 
-jq -n --arg rewrite "$rewrite" '{systemMessage: $rewrite}'
+# Only this chunk's own delta is replaced; earlier chunks are already on
+# screen. Emitting anything less than the final delta here would drop the end
+# of the message, so it is carried through verbatim ahead of the divider.
+final_delta="$(cat "$part" 2>/dev/null)"
+discard_buffer
+
+jq -n --arg delta "$final_delta" --arg separator "$separator" --arg rewrite "$rewrite" \
+  '{hookSpecificOutput: {hookEventName: "MessageDisplay",
+                         displayContent: ($delta + $separator + $rewrite)}}' \
+  || pass_through

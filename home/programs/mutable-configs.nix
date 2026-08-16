@@ -1106,7 +1106,8 @@ in
     # session-handoff skill with --append-system-prompt-file.
     "claude/orchestrator-opus.md".source = link "dotfiles/claude/orchestrator-opus.md";
     "claude/orchestrator-fable.md".source = link "dotfiles/claude/orchestrator-fable.md";
-    # Rewrite prompt for the Stop hook above, passed with --system-prompt-file.
+    # Rewrite prompt for the MessageDisplay hook above, passed with
+    # --system-prompt-file.
     "claude/response-simplifier.md".source = link "dotfiles/claude/response-simplifier.md";
     "claude/skills/session-handoff".source = link "dotfiles/claude/skills/session-handoff";
     "claude/skills/nix-environment-setup".source = link "dotfiles/claude/skills/nix-environment-setup";

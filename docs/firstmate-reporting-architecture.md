@@ -2,7 +2,7 @@
 
 ## Why this file exists
 
-The Stop-hook rewriter in this repo (`dotfiles/claude/response-simplifier.md`)
+The response rewriter in this repo (`dotfiles/claude/response-simplifier.md`)
 borrows its shape from FirstMate, an unrelated project by another author. Several
 sessions have re-derived that shape from scratch, and at least one of them got it
 wrong in a way that changed the design. This file records what FirstMate actually
@@ -24,9 +24,9 @@ place and appends a compact `**First Mate**` brief of at most 120 words, using
 `gpt-5.4` at medium effort. That doc owns the model comparison and the
 brief-versus-rewrite argument for that hook.
 
-This file is about the **Claude** Stop hook
+This file is about the **Claude** rewriter
 (`dotfiles/claude/hooks/response-simplifier.sh` +
-`dotfiles/claude/response-simplifier.md`), wired as `Stop` in
+`dotfiles/claude/response-simplifier.md`), wired as `MessageDisplay` in
 `dotfiles/claude/settings.json`, which produces a full sectioned rewrite plus a
 trailing summary using `claude-sonnet-5`. The two hooks share a name, a
 1,500-character gate, and a fail-open posture, and nothing else. Do not carry a
