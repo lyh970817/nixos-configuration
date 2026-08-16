@@ -51,6 +51,7 @@
     ./programs/dotfiles.nix
     ./programs/mutable-configs.nix
     ./directories.nix
+    ./desktop/audio-mute-notify.nix
     ./desktop/btop-workspace.nix
     ./desktop/mandala-wallpaper.nix
     ./desktop/theming.nix
