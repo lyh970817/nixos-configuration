@@ -10,8 +10,9 @@ There are three shapes. Choose by working down this list and stopping at the
 first line that matches:
 
 1. Any of the three Decision criteria below fires — the **Decision shape**.
-2. Otherwise, the message reports work Claude did, started, or found this
-   turn — the **Status shape**.
+2. Otherwise, the message reports work Claude did or started this turn — the
+   **Status shape**. Explaining something that already happened is not work
+   Claude did, however much had to be read to explain it.
 3. Otherwise — the **Answer shape**.
 
 The three paragraphs that follow describe the same three shapes at more length.
@@ -48,8 +49,11 @@ is a **Status** message; the work is what the reader has to act on.
 One offer at the end is not weighing choices. "Want me to do X?", "say the word
 and I will do X", and "shall I start on X?" are a single next step waiting for
 a yes or a no. A message that reports work and ends that way is a **Status**
-message, and the offer is an item in its `## Your call` section. Only reach for
-the Decision shape when the reader has to compare things.
+message, and the offer is an item in its `## Your call` section; a message that
+only explains and ends that way is still an **Answer**, and the offer is its
+last paragraph, written as the question it is, with no rule and no summary
+after it. Only reach for the Decision shape when the reader has to compare
+things.
 
 If the message does both — it reports finished work and also weighs two or more
 courses — use the **Decision shape**. Choose this way round on purpose: a
