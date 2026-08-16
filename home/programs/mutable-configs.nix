@@ -129,7 +129,6 @@ let
   codexSkillNames = [
     "nix-environment-setup"
     "bro"
-    "agent-config-setup"
     "sync-mattpocock-skills"
     "commit-guidelines"
     "domain-context"
@@ -1110,7 +1109,6 @@ in
     "claude/response-simplifier.md".source = link "dotfiles/claude/response-simplifier.md";
     "claude/skills/session-handoff".source = link "dotfiles/claude/skills/session-handoff";
     "claude/skills/nix-environment-setup".source = link "dotfiles/claude/skills/nix-environment-setup";
-    "claude/skills/agent-config-setup".source = link "dotfiles/claude/skills/agent-config-setup";
     "claude/skills/bro".source = link "dotfiles/claude/skills/bro";
     "claude/skills/visual-verification".source = link "dotfiles/claude/skills/visual-verification";
     "claude/skills/domain-context".source = link "dotfiles/claude/skills/domain-context";
@@ -1135,7 +1133,6 @@ in
     "claude-gpt56/output-styles".source = link "dotfiles/claude/output-styles";
     "claude-gpt56/agents".source = link "dotfiles/claude/agents";
     "claude-gpt56/skills/bro".source = link "dotfiles/claude/skills/bro";
-    "claude-gpt56/skills/agent-config-setup".source = link "dotfiles/claude/skills/agent-config-setup";
     "claude-gpt56/skills/nix-environment-setup".source =
       link "dotfiles/claude/skills/nix-environment-setup";
     "claude-gpt56/skills/visual-verification".source =
@@ -1169,10 +1166,6 @@ in
     };
     "claude-mattpocock/skills/nix-environment-setup" = {
       source = link "dotfiles/claude/skills/nix-environment-setup";
-      force = true;
-    };
-    "claude-mattpocock/skills/agent-config-setup" = {
-      source = link "dotfiles/claude/skills/agent-config-setup";
       force = true;
     };
     "claude-mattpocock/skills/visual-verification" = {
