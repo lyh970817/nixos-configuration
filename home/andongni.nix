@@ -33,6 +33,8 @@
     ./programs/claude-desktop.nix
     ./programs/visual-verification.nix
     ./programs/gemini.nix
+    ./programs/twitter-cli.nix
+    ./programs/xiaohongshu-cli.nix
     ./programs/herdr.nix
     ./programs/tuicr.nix
     ./programs/pi.nix
