@@ -135,6 +135,7 @@ let
     "herdr"
     "r-dev-shell"
     "session-handoff"
+    "social-bookmarks"
     "visual-verification"
     "writing-agent-instructions"
   ]
@@ -1118,6 +1119,7 @@ in
     "claude/skills/domain-modeling".source = link "dotfiles/claude/skills/domain-modeling";
     "claude/skills/herdr".source = link "dotfiles/claude/skills/herdr";
     "claude/skills/r-dev-shell".source = link "dotfiles/claude/skills/r-dev-shell";
+    "claude/skills/social-bookmarks".source = link "dotfiles/claude/skills/social-bookmarks";
     "claude/skills/writing-agent-instructions".source =
       link "dotfiles/claude/skills/writing-agent-instructions";
     "claude/commands".source = link "dotfiles/claude/commands";
@@ -1140,6 +1142,7 @@ in
     "claude-gpt56/skills/domain-context".source = link "dotfiles/claude/skills/domain-context";
     "claude-gpt56/skills/herdr".source = link "dotfiles/claude/skills/herdr";
     "claude-gpt56/skills/r-dev-shell".source = link "dotfiles/claude/skills/r-dev-shell";
+    "claude-gpt56/skills/social-bookmarks".source = link "dotfiles/claude/skills/social-bookmarks";
 
     # Claude has a profile per CLAUDE_CONFIG_DIR. Share only portable authored
     # assets with claude-mattpocock; its credential, settings, plugin state,
@@ -1186,6 +1189,10 @@ in
     };
     "claude-mattpocock/skills/r-dev-shell" = {
       source = link "dotfiles/claude/skills/r-dev-shell";
+      force = true;
+    };
+    "claude-mattpocock/skills/social-bookmarks" = {
+      source = link "dotfiles/claude/skills/social-bookmarks";
       force = true;
     };
   };
