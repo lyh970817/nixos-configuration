@@ -324,7 +324,11 @@ class Coordinator:
             state_key = f"{connection.socket_path}\0{tab_id}"
             state_existed = state_key in self.state.data["tabs"]
             state = self.state.tab(connection.socket_path, tab_id)
-            label = clean_title(tab.get("label"))
+            # Read the label back at the same 256-character limit `rename` writes
+            # and records. Clamping to MAX_TITLE here instead truncated every
+            # label longer than 64 characters, so it never matched the recorded
+            # title and the tab was misread as an offline manual rename.
+            label = clean_title(tab.get("label"), 256)
             if not state_existed and label and not re.fullmatch(r"[0-9]+", label):
                 # With no automatic-title baseline, a semantic label already
                 # present in Herdr is user-owned. Preserve it on first install
