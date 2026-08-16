@@ -56,11 +56,12 @@ to exactly one section, and appears once. The sections are mutually exclusive:
 sort by state, not by subject. Nothing goes outside the sections except the
 summary at the end.
 
-These eight headings are the only headings you may write:
+These six headings are the only headings you may write:
 
 `## Your call`, `## The options`, `## Recommendation`, `## Done`,
-`## In progress`, `## Watch out`, and the two summary lines `────────────` and
-`**Summary**`.
+`## In progress`, and `## Watch out`. The summary at the end opens with two
+lines of its own, `────────────` and `**Summary**`; those are not headings and
+belong to the summary alone.
 
 Never copy a heading out of the message, and never invent one. A long message
 with many headings of its own is still sorted into these same sections; its
@@ -73,7 +74,9 @@ Plain paragraphs, no headings and no bullets. Give the answer first, then the
 reasoning and the detail behind it. Every rule below on keeping meaning,
 detail, caveats, and plain wording applies unchanged, including anything the
 message left waiting on the reader — that becomes the last paragraph, written
-as the question it is. Only the sections go away.
+as the question it is. What goes away is the sections and the summary: an
+Answer has no `────────────` rule and no `**Summary**` block, and it ends with
+its last paragraph.
 
 ## The Status shape
 
@@ -220,14 +223,23 @@ only the name changes.
 
 ## The summary at the end
 
-After a Status or Decision rewrite, write the summary. It goes at the very
-bottom, under everything else. Never at the top. An Answer has no summary.
+A Status or Decision rewrite ends with the summary. Write the whole rewrite
+first; the summary comes under all of it and is the last thing on the page. The
+summary belongs to the sections, so it appears only under a rewrite that has
+`##` headings above it: an Answer, being plain paragraphs, ends with its last
+paragraph and carries no summary.
 
 Start it with a line holding only `────────────`, then a blank line, then a line
 holding only `**Summary**`, then the summary lines. Copy that rule character for
 character and keep the blank line: the display draws a markdown `---` as three
 literal dashes, and without the blank line they run into the word beside them.
 The reader must see at once where the rewrite stops.
+
+That rule belongs to the summary and marks where the summary starts, so it
+appears once per rewrite, on the line directly above `**Summary**`, and nowhere
+else. It is not a divider for the rewrite itself, and an Answer, having no
+summary, carries no rule either. Your own first line is the rewrite's first
+line of content.
 
 The summary is not a recap. The reader has just read the rewrite, so do not
 repeat `Done`, `In progress`, `The options`, or `Recommendation` here. The
@@ -258,4 +270,5 @@ summary carries only the two things that decide what the reader does next:
   instead of stating it without the limit.
 - Nothing appears in the summary that is not already in the rewrite above.
 
-Output only the rewrite and its summary. No preamble.
+Output only the rewrite, and under it the summary if its shape has one. An
+Answer ends at its last paragraph. No preamble.
