@@ -11,6 +11,14 @@ let
   p = (import ../palettes.nix).active;
 
   lightWallpaper = "$HOME/.local/share/wallpapers/Taiji_mandala.png";
+
+  # Dark wallpaper: a rock-art frieze tinted to the phosphor ladder. Stored
+  # rendered rather than generated from a rung, because its green (#76D87D)
+  # is deliberately between `bright` and `hot` in ../palettes.nix and is not a
+  # named rung -- see the recipe in the asset comment below. Centred at its
+  # native 1254x706 rather than `fit`, so the figures keep the 1:1 pixel scale
+  # they were tuned at and the surrounding field stays flat background.
+  darkWallpaper = "$HOME/.local/share/wallpapers/Petroglyph_frieze.png";
   # Hyprland's config is Lua (the .conf format is removed in 0.57), so the mode
   # marker is a .lua symlink and every reader below matches *dark.lua /
   # *light.lua. See dotfiles/hypr/hyprland.lua.
@@ -89,7 +97,7 @@ let
 
     # 1. WALLPAPER (Kill old, start new)
     pkill swaybg || true
-    ${pkgs.util-linux}/bin/setsid -f ${pkgs.swaybg}/bin/swaybg -c ${p.background} >/dev/null 2>&1
+    ${pkgs.util-linux}/bin/setsid -f ${pkgs.swaybg}/bin/swaybg -i "${darkWallpaper}" -m center -c ${p.background} >/dev/null 2>&1
     ${pkgs.systemd}/bin/systemctl --user start mandala-wallpaper.service || true
 
     # 2/3. HYPRLAND BACKGROUND COLOR + LIVE THEME SETTINGS
@@ -494,5 +502,15 @@ in
   # of the white raster icons HighContrast was falling back to. The cursor is
   # Bibata-Original-VT220 (see darkCursorTheme above); light mode keeps Adwaita.
   xdg.dataFile."wallpapers/Taiji_mandala.png".source = ../../assets/wallpapers/Taiji_mandala.png;
+
+  # Rendered from an untinted rock-art scan by mapping its greyscale through a
+  # background -> green gradient, so the figures glow on the same brown-black
+  # the compositor paints. To retune the green, rerun with a different endpoint:
+  #
+  #   magick <original>.png -resize 75% -colorspace gray -auto-level \
+  #     -level '7%,100%' \( -size 256x1 'gradient:#050806-#76D87D' \) -clut \
+  #     assets/wallpapers/Petroglyph_frieze.png
+  xdg.dataFile."wallpapers/Petroglyph_frieze.png".source =
+    ../../assets/wallpapers/Petroglyph_frieze.png;
   xdg.dataFile."themes/VT220-Amber".source = vt220Theme;
 }

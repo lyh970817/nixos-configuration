@@ -83,7 +83,12 @@ hl.env("XCURSOR_THEME", "Bibata-Original-VT220")
 hl.env("XCURSOR_SIZE", "22")
 
 onHyprlandStart(function()
-  -- Brown-black CRT glass background for startup.
-  hl.exec_cmd("pkill swaybg || true; setsid -f swaybg -c 050806")
+  -- Rock-art frieze on the brown-black CRT glass background, for startup.
+  -- Centred at native size; see darkWallpaper in home/desktop/theming.nix.
+  hl.exec_cmd(
+    "pkill swaybg || true; setsid -f swaybg -i "
+      .. os.getenv("HOME")
+      .. "/.local/share/wallpapers/Petroglyph_frieze.png -m center -c 050806"
+  )
   hl.exec_cmd("hyprctl setcursor Bibata-Original-VT220 22")
 end)
