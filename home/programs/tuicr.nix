@@ -1,6 +1,4 @@
 {
-  lib,
-  osConfig,
   pkgs,
   ...
 }:
@@ -118,42 +116,39 @@ let
   };
 in
 {
-  # Interactive code review is currently part of the portable agent workflow.
-  config = lib.mkIf (osConfig.portable.role != "home") {
-    home.packages = [ pkgs.tuicr ];
+  home.packages = [ pkgs.tuicr ];
 
-    xdg.configFile = {
-      "tuicr/config.toml".text = ''
-        appearance = "system"
-        theme_dark = "vt220-phosphor"
-        theme_light = "eink"
-      '';
-      "tuicr/themes/vt220-phosphor.toml".text = mkTheme dark "vt220-phosphor.tmTheme";
-      "tuicr/themes/vt220-phosphor.tmTheme".text = mkSyntaxTheme "VT220 Phosphor" {
-        background = p.background;
-        foreground = p.foreground;
-        accent = p.accent;
-        selection = p.accent;
-        lineHighlight = p.deepSurface;
-        comment = p.secondaryText;
-        literal = p.accent;
-        structure = p.bright;
-        invalidFg = p.background;
-        invalidBg = p.hot;
-      };
-      "tuicr/themes/eink.toml".text = mkTheme light "eink.tmTheme";
-      "tuicr/themes/eink.tmTheme".text = mkSyntaxTheme "E-ink" {
-        background = "FFFFFF";
-        foreground = "000000";
-        accent = "000000";
-        selection = "D0D0D0";
-        lineHighlight = "E8E8E8";
-        comment = "686868";
-        literal = "303030";
-        structure = "000000";
-        invalidFg = "FFFFFF";
-        invalidBg = "000000";
-      };
+  xdg.configFile = {
+    "tuicr/config.toml".text = ''
+      appearance = "system"
+      theme_dark = "vt220-phosphor"
+      theme_light = "eink"
+    '';
+    "tuicr/themes/vt220-phosphor.toml".text = mkTheme dark "vt220-phosphor.tmTheme";
+    "tuicr/themes/vt220-phosphor.tmTheme".text = mkSyntaxTheme "VT220 Phosphor" {
+      background = p.background;
+      foreground = p.foreground;
+      accent = p.accent;
+      selection = p.accent;
+      lineHighlight = p.deepSurface;
+      comment = p.secondaryText;
+      literal = p.accent;
+      structure = p.bright;
+      invalidFg = p.background;
+      invalidBg = p.hot;
+    };
+    "tuicr/themes/eink.toml".text = mkTheme light "eink.tmTheme";
+    "tuicr/themes/eink.tmTheme".text = mkSyntaxTheme "E-ink" {
+      background = "FFFFFF";
+      foreground = "000000";
+      accent = "000000";
+      selection = "D0D0D0";
+      lineHighlight = "E8E8E8";
+      comment = "686868";
+      literal = "303030";
+      structure = "000000";
+      invalidFg = "FFFFFF";
+      invalidBg = "000000";
     };
   };
 }
