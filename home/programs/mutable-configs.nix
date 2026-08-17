@@ -136,10 +136,10 @@ let
     "r-dev-shell"
     "session-handoff"
     "social-bookmarks"
+    "tuicr"
     "visual-verification"
     "writing-agent-instructions"
-  ]
-  ++ lib.optionals (osConfig.portable.role != "home") [ "tuicr" ];
+  ];
 
   codexSkillLinks = lib.listToAttrs (
     (map (name: {
@@ -1121,6 +1121,7 @@ in
     "claude/skills/herdr".source = link "dotfiles/claude/skills/herdr";
     "claude/skills/r-dev-shell".source = link "dotfiles/claude/skills/r-dev-shell";
     "claude/skills/social-bookmarks".source = link "dotfiles/claude/skills/social-bookmarks";
+    "claude/skills/tuicr".source = link "dotfiles/claude/skills/tuicr";
     "claude/skills/writing-agent-instructions".source =
       link "dotfiles/claude/skills/writing-agent-instructions";
     "claude/commands".source = link "dotfiles/claude/commands";
@@ -1144,6 +1145,7 @@ in
     "claude-gpt56/skills/herdr".source = link "dotfiles/claude/skills/herdr";
     "claude-gpt56/skills/r-dev-shell".source = link "dotfiles/claude/skills/r-dev-shell";
     "claude-gpt56/skills/social-bookmarks".source = link "dotfiles/claude/skills/social-bookmarks";
+    "claude-gpt56/skills/tuicr".source = link "dotfiles/claude/skills/tuicr";
 
     # Claude has a profile per CLAUDE_CONFIG_DIR. Share only portable authored
     # assets with claude-mattpocock; its credential, settings, plugin state,
@@ -1194,6 +1196,10 @@ in
     };
     "claude-mattpocock/skills/social-bookmarks" = {
       source = link "dotfiles/claude/skills/social-bookmarks";
+      force = true;
+    };
+    "claude-mattpocock/skills/tuicr" = {
+      source = link "dotfiles/claude/skills/tuicr";
       force = true;
     };
   };

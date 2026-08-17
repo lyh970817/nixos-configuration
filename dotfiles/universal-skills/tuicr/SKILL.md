@@ -165,7 +165,7 @@ tuicr review add --repo /path/to/repo --session <slug> \
   --line 42 \
   --side new \
   --type issue \
-  --username "Codex" \
+  --username "Agent" \
   "Handle the empty case here."
 ```
 
@@ -173,7 +173,7 @@ tuicr review add --repo /path/to/repo --session <slug> \
 tuicr review add --repo /path/to/repo --session <slug> \
   --target-file src/main.rs \
   --type suggestion \
-  --username "Codex" \
+  --username "Agent" \
   "Consider splitting this file-level concern into a helper."
 ```
 
