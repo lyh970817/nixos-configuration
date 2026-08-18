@@ -110,9 +110,12 @@ exactly what they named and nothing more: fast-forward only, never `--force` or
 `--force-with-lease`, never `--all`/`--tags`/`--mirror`, and never publish
 feature or worktree branches alongside the named branch. Merging into `master`
 and running `rebuild` belong to the top-level session: if another session gave
-you this task, leave the finished work committed on your branch and report it.
-In the top-level session, merging and rebuilding what the user asked for is part
-of delivering it, not a separate thing to ask about.
+you this task, leave the finished work committed on your branch and report it,
+and never merge into `master` yourself. In the top-level session, merge and
+rebuild in the same turn you finish the change — that is delivering it, not a
+separate thing to ask about. Do not park finished work on a branch for review
+and do not offer a review step the user did not ask for; if they want to see it
+first they will say so.
 
 Cleanup is the last step of merging, and the condition is that the branch is
 fully merged — `git branch --merged master`, or `git cherry master <branch>` when
