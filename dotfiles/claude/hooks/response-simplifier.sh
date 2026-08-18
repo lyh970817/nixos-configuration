@@ -43,13 +43,26 @@
 # one of three shapes -- a status report, a decision with its options and the
 # recommendation, or a plain-prose answer to a question -- and, for the first
 # two, a short labelled summary. That only pays when the input carries enough
-# distinct material to fill the sections, which at 1500 chars and above it
-# does: 5.4 of 5.5 sections filled on average, empty-state lines rare. The
-# corpus predates the Answer shape, so it says nothing about that branch.
+# distinct material to fill the sections, which at 1500 chars and above it did:
+# 5.4 of 5.5 sections filled on average, empty-state lines rare. The corpus
+# predates the Answer shape, so it says nothing about that branch.
 #
-# 1500 is inherited from the earlier, compression-based derivation and has NOT
-# been revalidated against this one. The corpus was built at >=1500 chars, so
-# it holds no evidence at all about what happens below the line.
+# The threshold was 1500, inherited from the earlier, compression-based
+# derivation and never revalidated against this one. It was lowered to 800 on
+# 2026-08-18 at the user's explicit request, not from any new measurement, so
+# 800 is unvalidated too -- and doubly so, because the corpus was built at
+# >=1500 chars and holds no evidence at all about the 800-1500 range the gate
+# now admits. The numbers above were measured at the old line and do not
+# transfer to the new one.
+#
+# The reasoning, not a result: the prompt was restructured (534ad33f) so every
+# rewrite now opens with a complete plain-English retelling of the message
+# before any section. A short message therefore yields a short retelling rather
+# than a page of near-empty headings, which makes a low threshold more
+# defensible than it was under the previous section-only structure. The known
+# cost is real either way -- more messages cross the gate, so more turns pay the
+# 11-43s wait, and the sections under those short rewrites will be largely the
+# empty-section sentences.
 #
 # Sample sizes differ by measurement, and only these apply to this prompt:
 # length and shape-selection accuracy are n=41; the blind retention comparison
@@ -74,7 +87,7 @@
 #
 # Tune by editing this number: the hook reaches ~/.config/claude as an
 # out-of-store symlink, so an edit is live with no rebuild.
-min_chars=1500
+min_chars=800
 
 # Emit a fixed, deterministic rewrite instead of calling the model. For
 # iterating on the display mechanics -- divider, spacing, how markdown renders
