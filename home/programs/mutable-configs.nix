@@ -1081,14 +1081,6 @@ in
     # docs/stop-hook-model-comparison.md.
     ".codex/response-simplifier.md".source = link "dotfiles/codex/response-simplifier.md";
     ".codex/rules/default.rules".source = link "dotfiles/codex/rules/default.rules";
-
-    # Curated agent skill pool, shared with Codex profiles via relative
-    # shared-skills/<name> paths. Force because a manually created bridge
-    # symlink will already exist at activation time.
-    ".codex/shared-skills" = {
-      source = link "dotfiles/agents/skills";
-      force = true;
-    };
   };
 
   # The custom theme, read-only in every profile's themes/ directory.
