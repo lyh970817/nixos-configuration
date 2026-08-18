@@ -97,10 +97,12 @@ about something they have not been told about yet. That is why the full rewrite
 comes first: sorting by state alone splits a topic's setup away from its
 question, and the question then arrives with nothing behind it.
 
-Open on substance, the way the original opens. "Here's what happened, and" is a
-stub that says nothing; the first thing the original says, in plain English, is
-the first thing you say. Never lead with a small correction or a side point
-just because it is phrased as an answer.
+Open on substance, the way the original opens. Any "here's what / here's why /
+here's the thing" opener is a stub that says nothing: "Here's what happened,
+and" announces the point instead of making it. So do "The truth is", "It turns
+out", "Let me be clear", and "Let me walk you through". The first thing the
+original says, in plain English, is the first thing you say. Never lead with a
+small correction or a side point just because it is phrased as an answer.
 
 Length follows the original: a three-line message becomes a short paragraph,
 and a long message stays long.
@@ -231,7 +233,10 @@ source for all six:
   merged, will do is not did.
 - **Who acts.** "I will judge the result" must not become "you will evaluate
   it", and the reverse. Keep the writer's actions with the writer and the
-  reader's with the reader.
+  reader's with the reader. Name the actor rather than letting a thing act for
+  them: not "the decision emerges" but "I decided", not "the fix was applied"
+  but "I applied the fix". Use the actor the original gives you; where the
+  original itself does not say who acted, keep it unsaid rather than guessing.
 - **Mood.** A finished action stays a report. "Sent it back to the agent" never
   becomes "Send it back to the agent".
 - **Negation.** Keep every "not", "no", and "without", and keep what it
@@ -240,7 +245,11 @@ source for all six:
 - **Conditions.** "If X, then Y" keeps its "if X". A number without its
   condition is worse than no number.
 - **Hedges.** "probably", "I did not verify this", "this assumes" stay at the
-  strength the original used. Never harden a hedge into a plain statement.
+  strength the original used. Never harden a hedge into a plain statement. Cut
+  only the empty intensifiers, the words that would change nothing if deleted:
+  "really", "just", "literally", "genuinely", "honestly", "simply", "actually",
+  "truly", "deeply", "fundamentally". A word that carries doubt, scope, or
+  degree is not one of them and stays.
 
 Never sound more certain than the original. Copy code, commands, paths,
 identifiers, config keys, error messages, numbers, dates, measurements, branch
@@ -268,15 +277,50 @@ no idioms or filler.
 
 State the thing, not the fact that the message states it. "The writer explains
 that the daemon runs as root" is "The daemon runs as root". "The message asks
-which option you want" is the question itself. This is about the act of
-writing, not about who did the work: keep naming who ran, changed, or decided
-something, exactly as the original did.
+which option you want" is the question itself. Your own asides about the
+rewrite belong to the same rule and go too: "As we'll see", "In this section",
+"Note that", "It's worth noting", "Hint:". This is about the act of writing,
+not about who did the work: keep naming who ran, changed, or decided something,
+exactly as the original did.
 
 In the rewrite, the author of the message is called "I", never "Claude" and
 never "the writer" — those are terms of this instruction sheet, not names to use
 in the rewrite. Keep the attribution itself, as in "I recommend X because Y".
 Only the name changes: not the shape you chose, and not who each action belongs
 to.
+
+## Plain style
+
+These are style rules, and they rank below everything above. Where a style rule
+here would drop, weaken, or reshape something the original said, the rule above
+wins and you keep the meaning. (Adapted from the stop-slop skill, MIT.)
+
+- Replace business jargon with plain words: "navigate" is handle, "unpack" is
+  explain, "lean into" is accept, "the landscape" is the situation, "a
+  game-changer" is important, "a deep dive" is an examination, "circle back" is
+  return to, "moving forward" is from now on, "on the same page" is agreed.
+- Delete emphasis crutches. "Full stop.", "Let that sink in.", "Make no
+  mistake", "This matters because" and "This is genuinely hard" add nothing;
+  the fact they decorate says it alone.
+- Name the specific thing instead of announcing that it matters. "The
+  implications are significant" is not a sentence the reader can use; say which
+  implication, and if the original never says, drop the announcement.
+- State the point without the contrast scaffolding it arrived in. "The problem
+  isn't X, it's Y" is "The problem is Y". "Not a patch. Not a workaround. A
+  rewrite." is "This is a rewrite." Drop rhetorical setups too: "What if …?",
+  "Think about it:", "And that's okay."
+- Write complete sentences instead of fragments for drama, and do not end a
+  paragraph on a quotable line. If a sentence sounds like something to put on a
+  poster, say the fact plainly instead.
+- Keep em dashes out of your own connective prose; a comma or a full stop does
+  the work. This never touches quoted text, code, commands, paths,
+  identifiers, error messages, or the `────────────` summary rule, which you
+  copy character for character.
+
+Two things this section does not license. Never drop an item, an option, a
+caveat, or a decision to improve rhythm: three of them stay three. And never
+soften the reader's side of the job — a technical term still gets its plain
+gloss, and `## Your call` still writes the reader's question as a question.
 
 ## The summary at the end
 
