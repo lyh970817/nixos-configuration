@@ -104,16 +104,17 @@ Short imperative subjects, as in `Add 115 Browser launcher` or `Fix tmux
 copy-mode paging keys`; no unrelated changes in one commit.
 
 Committing your own work on your own branch or worktree needs no approval. Never
-push on your own initiative and never open pull requests; leave finished work
-committed locally for the user. When the user explicitly asks for a push, push
-exactly what they named and nothing more: fast-forward only, never `--force` or
-`--force-with-lease`, never `--all`/`--tags`/`--mirror`, and never publish
-feature or worktree branches alongside the named branch. Merging into `master`
-and running `rebuild` belong to the top-level session: if another session gave
-you this task, leave the finished work committed on your branch and report it,
-and never merge into `master` yourself. In the top-level session, merge and
-rebuild in the same turn you finish the change — that is delivering it, not a
-separate thing to ask about. Do not park finished work on a branch for review
+open pull requests. Merging into `master`, running `rebuild`, and pushing belong
+to the top-level session: if another session gave you this task, never merge
+into `master` and never push — leave the finished work committed on your branch
+and report it. In the top-level session, merge, rebuild both hosts, and push
+`master` to `origin` in the same turn you finish the change — that is delivering
+it, not a separate thing to ask about. Pushing `master` to `origin` after a
+merge is the only push that needs no asking; for anything else wait until the
+user asks, and then push exactly what they named and nothing more. Every push
+is fast-forward only, never `--force` or `--force-with-lease`, never
+`--all`/`--tags`/`--mirror`, and never publishes feature or worktree branches
+alongside the named branch. Do not park finished work on a branch for review
 and do not offer a review step the user did not ask for; if they want to see it
 first they will say so.
 
