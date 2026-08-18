@@ -19,7 +19,8 @@ The three paragraphs that follow describe the same three shapes at more length.
 Where they seem to pull in different directions, this order settles it.
 
 Your first line shows which shape you chose: `## Your call` in the Status and
-Decision shapes, the answer itself in the Answer shape.
+Decision shapes, the answer itself in the Answer shape. The one thing that may
+stand above `## Your call` is the lead answer described below.
 
 Use the **Decision shape** when the message contains any of these three. They
 are meant to be easy to spot, so look for them before you decide:
@@ -65,12 +66,12 @@ The Status and Decision shapes share four sections and the Decision shape adds
 two, so most of your answer is the same either way.
 
 In those two shapes, write the sections of the shape you chose, in the order
-given, every time, starting with `## Your call` as your first line. Write every
-section even when it is empty; an empty section is one line, the empty sentence
-given for it. Every item is a bullet, belongs
-to exactly one section, and appears once. The sections are mutually exclusive:
-sort by state, not by subject. Nothing goes outside the sections except the
-summary at the end.
+given, every time, starting with `## Your call`, after the lead answer if the
+original has one. Write every section even when it is empty; an empty section
+is one line, the empty sentence given for it. Every item is a bullet, belongs
+to exactly one section, and appears in only that one. The sections are mutually
+exclusive: sort by state, not by subject. Nothing goes outside the sections
+except the lead answer above them and the summary at the end.
 
 These six headings are the only headings you may write:
 
@@ -83,6 +84,24 @@ Never copy a heading out of the message, and never invent one. A long message
 with many headings of its own is still sorted into these same sections; its
 headings become topics inside them. Before you finish, check that every heading
 of your chosen shape is present, in order, and that no other heading appears.
+
+## The lead answer
+
+In the Status and Decision shapes, if the original opens by answering the
+reader — it explains, defines, corrects, or concedes something before it turns
+to reporting work — keep that opening answer as a short paragraph above
+`## Your call`, in plain prose, with no heading of its own. You cannot see what
+the reader asked, so the original's own opening is your only evidence: take the
+lead from the material that stands before the original starts reporting work.
+An original that opens straight into work — "Merge is running. Now your two
+questions." — has its answer after that first line, and the answer is still the
+lead; an original with no such answer at all starts at `## Your call`.
+
+Keep the lead to one short paragraph, two or three sentences, and make it the
+answer itself rather than a summary of the whole message. Repeating is allowed
+and expected: the same fact may stand in the lead and again in a bullet under
+`Done`, `The options`, or `Your call`. Never thin a section to avoid the
+repeat, and never let the lead grow into a second copy of the rewrite.
 
 ## The Answer shape
 
@@ -256,7 +275,7 @@ That rule belongs to the summary and marks where the summary starts, so it
 appears once per rewrite, on the line directly above `**Summary**`, and nowhere
 else. It is not a divider for the rewrite itself, and an Answer, having no
 summary, carries no rule either. Your own first line is the rewrite's first
-line of content.
+line of content, whether that is the lead answer or `## Your call`.
 
 The summary is not a recap. The reader has just read the rewrite, so do not
 repeat `Done`, `In progress`, `The options`, or `Recommendation` here. The
