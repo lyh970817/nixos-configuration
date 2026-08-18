@@ -129,7 +129,6 @@ let
   codexSkillNames = [
     "nix-environment-setup"
     "bro"
-    "sync-mattpocock-skills"
     "commit-guidelines"
     "domain-context"
     "herdr"
@@ -1081,14 +1080,6 @@ in
     # docs/stop-hook-model-comparison.md.
     ".codex/response-simplifier.md".source = link "dotfiles/codex/response-simplifier.md";
     ".codex/rules/default.rules".source = link "dotfiles/codex/rules/default.rules";
-
-    # Curated agent skill pool, shared with Codex profiles via relative
-    # shared-skills/<name> paths. Force because a manually created bridge
-    # symlink will already exist at activation time.
-    ".codex/shared-skills" = {
-      source = link "dotfiles/agents/skills";
-      force = true;
-    };
   };
 
   # The custom theme, read-only in every profile's themes/ directory.
@@ -1114,9 +1105,6 @@ in
     "claude/skills/bro".source = link "dotfiles/claude/skills/bro";
     "claude/skills/visual-verification".source = link "dotfiles/claude/skills/visual-verification";
     "claude/skills/domain-context".source = link "dotfiles/claude/skills/domain-context";
-    # Independent copy of the pool's domain-modeling skill: the
-    # sync-mattpocock-skills preflight aborts if anything under
-    # ~/.config/claude*/skills resolves into dotfiles/agents/skills.
     "claude/skills/domain-modeling".source = link "dotfiles/claude/skills/domain-modeling";
     "claude/skills/herdr".source = link "dotfiles/claude/skills/herdr";
     "claude/skills/r-dev-shell".source = link "dotfiles/claude/skills/r-dev-shell";
