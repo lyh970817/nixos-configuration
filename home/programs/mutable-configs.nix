@@ -129,7 +129,6 @@ let
   codexSkillNames = [
     "nix-environment-setup"
     "bro"
-    "sync-mattpocock-skills"
     "commit-guidelines"
     "domain-context"
     "herdr"
@@ -1106,9 +1105,6 @@ in
     "claude/skills/bro".source = link "dotfiles/claude/skills/bro";
     "claude/skills/visual-verification".source = link "dotfiles/claude/skills/visual-verification";
     "claude/skills/domain-context".source = link "dotfiles/claude/skills/domain-context";
-    # Independent copy of the pool's domain-modeling skill: the
-    # sync-mattpocock-skills preflight aborts if anything under
-    # ~/.config/claude*/skills resolves into dotfiles/agents/skills.
     "claude/skills/domain-modeling".source = link "dotfiles/claude/skills/domain-modeling";
     "claude/skills/herdr".source = link "dotfiles/claude/skills/herdr";
     "claude/skills/r-dev-shell".source = link "dotfiles/claude/skills/r-dev-shell";
