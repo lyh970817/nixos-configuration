@@ -17,29 +17,32 @@ transcript, and lifetime.
 ## Behaviour
 
 1. Launches an independent instance with `claude --bg`, which lands in agent view.
-2. Working directory defaults to the parent session's directory. No worktree.
-3. A worktree is created only on explicit request, via `-w <name>`.
+2. A fresh worktree is the default, via `-w <name>`: the new session starts
+   inside `.claude/worktrees/<name>` on branch `worktree-<name>`, and that
+   worktree is the integration target for the new session's own subagents.
+3. Launching in the parent's directory (no `-w`) is reserved for handoffs that
+   will not change the repository.
 4. The new session must carry the same `--append-system-prompt` text as the
    parent. Hard requirement: the orchestrator instructions live in that flag.
    See "append-system-prompt inheritance" — it is **not** inherited, so the skill
    must pass it.
 5. The initial prompt is a handoff briefing written by the parent.
-6. Communication back to the parent is **out of scope in this version** (deferred,
-   not unsupported).
+6. Communication back to the parent is a **ready-report file**; see "Ready
+   report" at the bottom.
 
 ## Command shapes
 
-Default case — same directory, no worktree, prompt first:
-
-```sh
-claude --bg "<handoff briefing>" --append-system-prompt-file ~/.config/claude/orchestrator-opus.md
-```
-
-Worktree case — creates or reuses `.claude/worktrees/<name>` on branch
-`worktree-<name>`:
+Default case — fresh worktree, prompt first; `-w` creates or reuses
+`.claude/worktrees/<name>` on branch `worktree-<name>`:
 
 ```sh
 claude --bg "<handoff briefing>" --append-system-prompt-file ~/.config/claude/orchestrator-opus.md -w handoff-auth
+```
+
+Repository-untouching case — same directory, no worktree:
+
+```sh
+claude --bg "<handoff briefing>" --append-system-prompt-file ~/.config/claude/orchestrator-opus.md
 ```
 
 Inline variant, if the prompt text is not kept in a file:
@@ -96,6 +99,10 @@ git worktree remove --force .claude/worktrees/<name>
   `--add-dir` take optional or variadic arguments and will swallow a trailing
   prompt. Put the prompt first, or use `=` forms. A `--bg` banner ending in
   `(idle — send a prompt to start)` means the prompt was eaten and nothing runs.
+- **The receiving session's merge agent defaults to the main checkout.** Its
+  merge-agent definition says it "runs in the main checkout, not a worktree",
+  so subagent branches land in the wrong tree unless the briefing names the
+  worktree's absolute path as the integration target explicitly.
 - **Worktree base ref.** This checkout configures Claude's
   `worktree.baseRef` as `head`, so a requested new worktree branches from the
   local HEAD. Uncommitted changes still are not copied into the worktree, but
@@ -155,9 +162,19 @@ Implementation note: the skill must not modify the launcher, shell config, or an
 Claude config. If the file does not exist, it should say so and fall back to
 launching without the flag rather than inventing content.
 
-## Deferred
+## Ready report
 
-- **Child-to-parent communication.** No result reporting, status callback, or
-  message channel back to the launching session in this version. The parent
-  learns nothing automatically; the user inspects the new session through
-  `claude agents`. Revisit once a supported channel exists.
+Checked on Claude Code 2.1.234: there is still no session-to-session message
+channel — `--brief`/SendUserMessage is agent-to-user only. The child-to-parent
+channel is therefore a file.
+
+When the receiving session has merged all its subagents' branches and
+committed the result on `worktree-<name>`, its last action is to write
+`~/.local/state/session-handoff/<name>.md` (creating the directory if needed)
+containing the branch name, the worktree's absolute path, what was merged, and
+anything unresolved — then stop. The launching session polls for that file in
+the background (`until [ -f … ]; do sleep 15; done`, re-armed on expiry),
+reads it, merges `worktree-<name>` into master from the main checkout, and
+delivers per repo policy. Cleanup once fully merged: unlock and remove the
+worktree, delete the branch, remove the report file. Everything short of the
+ready signal still goes through `claude agents`.

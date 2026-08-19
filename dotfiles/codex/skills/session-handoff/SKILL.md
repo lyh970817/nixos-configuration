@@ -20,9 +20,22 @@ workflow needed here.
 Require an explicit session ID for `resume` and `fork`. If it is missing, ask
 for it. Never substitute `--last` or choose from the interactive picker.
 
-Use the current checkout and physical current directory by default. Create or
-select another worktree only when the user explicitly asks to keep both sessions
-working concurrently.
+Use the current checkout and physical current directory by default. Use a
+dedicated worktree only when the user explicitly asks to keep both sessions
+working concurrently. For that concurrent handoff:
+
+- First create the worktree — `git worktree add` with a new descriptive branch
+  from HEAD — and pass its path as `--cwd` to the launch helper.
+- The briefing must tell the receiving orchestrator: integrate its agents'
+  branches only into that worktree; never merge into master, never push; when
+  done, report back, then stop. Under Herdr it reports by prompting the calling
+  agent with `herdr agent prompt` — name the calling agent in the briefing;
+  otherwise, or on Herdr failure, it writes a ready report (branch name,
+  worktree absolute path, what was merged, anything unresolved) to
+  `~/.local/state/session-handoff/<name>.md`, creating the directory if needed.
+- "Stop doing task work" below applies to control-transfer handoffs. In a
+  concurrent handoff the original session stays in charge and, on the ready
+  signal, merges the branch and cleans up the worktree.
 
 ## Write the briefing
 
