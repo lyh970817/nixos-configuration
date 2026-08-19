@@ -35,6 +35,7 @@
     ./programs/gemini.nix
     ./programs/twitter-cli.nix
     ./programs/xiaohongshu-cli.nix
+    ./programs/scansci-oa.nix
     ./programs/herdr.nix
     ./programs/tuicr.nix
     ./programs/pi.nix
