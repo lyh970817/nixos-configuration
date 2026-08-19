@@ -82,7 +82,9 @@ let
   # that target's arguments, so execute the target directly: invoking either
   # user-facing launcher here would wrap the wrapper recursively. Keep the
   # process-wrapper variable inherited so every descendant Claude process uses
-  # the same path for any later self-exec.
+  # the same path for any later self-exec. One spawn is exempt: the background
+  # service (argv carries --origin) rejects any prepended flag, so it is exec'd
+  # untouched below.
   claudeProcessWrapper = pkgs.writeShellApplication {
     name = "claude-process-wrapper";
     text = ''
@@ -93,6 +95,17 @@ let
 
       claude_target="$1"
       shift
+
+      # The background-service spawn (argv carries --origin) rejects a
+      # prepended --settings and must be exec'd untouched; it is headless,
+      # so the theme is irrelevant there.
+      for arg in "$@"; do
+        case "$arg" in
+          --origin | --origin=*)
+            exec "$claude_target" "$@"
+            ;;
+        esac
+      done
 
       ${claudeThemeSettings}
       exec "$claude_target" --settings "$claude_flag_settings" "$@"
