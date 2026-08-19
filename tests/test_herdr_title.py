@@ -154,6 +154,43 @@ class HerdrTitleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(calls, 1)
         self.assertEqual(connection.renames[-1], ("w1:t1", "Generated Numeric Tab Topic"))
 
+    async def test_persisted_numeric_pin_recovers_to_codex_project_title(self):
+        connection = FakeConnection(
+            self.coordinator, "/fake/herdr.sock",
+            [pane(agent="codex", title="gwas", cwd="/tmp/gwas")],
+            [tab(label="1")],
+        )
+        state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
+        state.update({
+            "pinned": True, "title": "1", "owner_pane": "w1:p1",
+            "owner_kind": "codex", "session_id": "s1", "epoch": 4,
+        })
+
+        await self.coordinator.reconcile(connection)
+
+        self.assertFalse(state.get("pinned", False))
+        self.assertEqual(connection.renames, [("w1:t1", "gwas")])
+        self.assertEqual(state["title"], "gwas")
+        self.assertEqual(state["session_id"], "s1")
+
+    async def test_persisted_semantic_pin_remains_manual(self):
+        connection = FakeConnection(
+            self.coordinator, "/fake/herdr.sock",
+            [pane(agent="codex", title="gwas", cwd="/tmp/gwas")],
+            [tab(label="Manual Topic")],
+        )
+        state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
+        state.update({
+            "pinned": True, "title": "Manual Topic", "owner_pane": "w1:p1",
+            "owner_kind": "codex", "session_id": "s1", "epoch": 4,
+        })
+
+        await self.coordinator.reconcile(connection)
+
+        self.assertTrue(state["pinned"])
+        self.assertEqual(connection.renames, [])
+        self.assertEqual(state["title"], "Manual Topic")
+
     async def test_auxiliary_cwd_cannot_replace_live_pane_session(self):
         connection = FakeConnection(self.coordinator, "/fake/herdr.sock", [pane(cwd="/tmp/project")])
         self.coordinator.connections[connection.socket_path] = connection

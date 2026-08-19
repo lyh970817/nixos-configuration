@@ -329,6 +329,19 @@ class Coordinator:
             # label longer than 64 characters, so it never matched the recorded
             # title and the tab was misread as an offline manual rename.
             label = clean_title(tab.get("label"), 256)
+            positional_label = bool(label and re.fullmatch(r"[0-9]+", label))
+            recovered_numeric_pin = False
+            if (
+                state.get("pinned")
+                and positional_label
+                and clean_title(state.get("title"), 256) == label
+            ):
+                # Numeric labels are Herdr positions, never durable manual
+                # topics. Recover state pinned by an older reconciliation race
+                # so a new Codex session cannot remain frozen at (for example)
+                # `1` forever.
+                state.pop("pinned", None)
+                recovered_numeric_pin = True
             if not state_existed and label and not re.fullmatch(r"[0-9]+", label):
                 # With no automatic-title baseline, a semantic label already
                 # present in Herdr is user-owned. Preserve it on first install
@@ -371,6 +384,15 @@ class Coordinator:
                     title = clean_title(owner.get("terminal_title_stripped"), 256)
                     if title:
                         await connection.rename(tab_id, title)
+                elif recovered_numeric_pin:
+                    # Codex topics normally come from the prompt hook. Until
+                    # the next substantive prompt arrives, replace a recovered
+                    # positional label with Codex's own project title so the
+                    # tab is useful immediately after daemon reconciliation.
+                    title = clean_title(owner.get("terminal_title_stripped"), 256)
+                    if not title:
+                        title = fallback_title(str(owner.get("foreground_cwd") or owner.get("cwd") or ""))
+                    await connection.rename(tab_id, title)
             state.setdefault("title", label)
         self.state.save()
 
