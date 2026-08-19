@@ -1,0 +1,23 @@
+<!doctype html>
+<!--
+  Hand-built stand-in for an Anna's Archive search page. The real page cannot be
+  captured without a browser (every non-browser request gets a 403 from the
+  anti-bot interstitial), so this reproduces only the one thing the parser
+  relies on: every result is an anchor to /md5/<hash>.
+-->
+<html>
+  <head><title>Search - Anna's Archive</title></head>
+  <body>
+    <div id="aarecord-list">
+      <a href="/md5/2F8800A7B88C5C81EEA1A04C6FA3E1BC">
+        <div>Structure and Interpretation of Computer Programs</div>
+      </a>
+      <a href="/md5/480fe74fe104d87fc504da0ef24d85af?index=meta">
+        <div>Structure and Interpretation of Computer Programs, 2nd ed.</div>
+      </a>
+      <a href="/md5/480fe74fe104d87fc504da0ef24d85af">duplicate link, same record</a>
+      <a href="/search?q=lisp">Refine search</a>
+      <a href="/faq">FAQ</a>
+    </div>
+  </body>
+</html>
