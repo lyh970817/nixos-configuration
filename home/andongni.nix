@@ -53,6 +53,7 @@
     ./directories.nix
     ./desktop/audio-mute-notify.nix
     ./desktop/btop-workspace.nix
+    ./desktop/chatgpt-workspace.nix
     ./desktop/mandala-wallpaper.nix
     ./desktop/theming.nix
     ./desktop/hyprsunset.nix

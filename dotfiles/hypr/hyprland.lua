@@ -697,6 +697,15 @@ hl.window_rule({
   no_initial_focus = true,
 })
 
+-- ChatGPT Desktop opens on workspace 9 (autostarted by the `chatgpt` user
+-- service). A workspace rule only applies when the window maps, so the window
+-- stays freely movable afterwards -- nothing pulls it back.
+hl.window_rule({
+  name = "chatgpt-workspace-9",
+  match = { class = "^(chatgpt)$" },
+  workspace = "9 silent",
+})
+
 -- Quiet Graphite is deliberately an application treatment, not the dark
 -- desktop's default window chrome. The shadow engine itself is global, so the
 -- first rule suppresses it everywhere and the target rule opts Brave and
