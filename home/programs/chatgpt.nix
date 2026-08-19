@@ -15,5 +15,6 @@ in
     pkgs.codex
   ];
 
-  home.file.".codex-desktop/skills/herdr".source = link "dotfiles/universal-skills/herdr";
+  home.file.".codex-desktop/skills/nix-environment-setup".source =
+    link "dotfiles/universal-skills/nix-environment-setup";
 }
