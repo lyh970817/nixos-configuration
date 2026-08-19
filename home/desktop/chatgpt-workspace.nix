@@ -1,4 +1,9 @@
-{ pkgs, ... }:
+{
+  pkgs,
+  lib,
+  osConfig,
+  ...
+}:
 
 {
   # ChatGPT Desktop starts with the graphical session and lands on workspace 9
@@ -9,20 +14,25 @@
   # (forcekillactive -> SIGKILL) is a unit failure and brings the app back on
   # workspace 9, while Super+Q (killactive -> a clean close) exits 0 and leaves
   # it down until the user launches it again.
-  systemd.user.services.chatgpt = {
-    Unit = {
-      Description = "ChatGPT Desktop";
-      PartOf = [ "graphical-session.target" ];
-      After = [ "graphical-session.target" ];
+  #
+  # Home role only: the remote laptop should not autostart an Electron app at
+  # login.
+  config = lib.mkIf (osConfig.portable.role == "home") {
+    systemd.user.services.chatgpt = {
+      Unit = {
+        Description = "ChatGPT Desktop";
+        PartOf = [ "graphical-session.target" ];
+        After = [ "graphical-session.target" ];
+      };
+      Service = {
+        Type = "simple";
+        ExecStart = "${pkgs.chatgpt}/bin/chatgpt --class=chatgpt";
+        Restart = "on-failure";
+        RestartSec = "2s";
+        StandardOutput = "journal";
+        StandardError = "journal";
+      };
+      Install.WantedBy = [ "graphical-session.target" ];
     };
-    Service = {
-      Type = "simple";
-      ExecStart = "${pkgs.chatgpt}/bin/chatgpt --class=chatgpt";
-      Restart = "on-failure";
-      RestartSec = "2s";
-      StandardOutput = "journal";
-      StandardError = "journal";
-    };
-    Install.WantedBy = [ "graphical-session.target" ];
   };
 }
