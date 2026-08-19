@@ -96,13 +96,15 @@ git worktree remove --force .claude/worktrees/<name>
   so `claude logs <id>` starts a brand-new agentic session whose task is the
   literal string `logs <id>`. These must never appear in the skill. Re-verified
   on 2.1.234: still absent from the Commands list, still parse as prompts.
-- **The background-service spawn rejects prepended flags.** On 2.1.234 the CLI
-  starts its background service by re-exec'ing itself through
-  `CLAUDE_CODE_PROCESS_WRAPPER` with an argv carrying `--origin ...`; a wrapper
-  that injects `--settings` there kills `claude --bg` with
-  `error: unknown option '--origin'` ("Couldn't reach the background service").
-  The home wrapper now skips injection for that spawn
-  (`home/programs/claude.nix`).
+- **The process wrapper's hidden spawn modes are positional.** On 2.1.234 the
+  CLI spawns helper processes by re-exec'ing itself through
+  `CLAUDE_CODE_PROCESS_WRAPPER` in hidden modes detected from the first
+  argument: `daemon run --origin ...` for the background service and
+  `--bg-pty-host ...` for the dispatched session's PTY host. A wrapper that
+  PREPENDS flags shifts the mode flag out of first position and breaks both
+  with `unknown option` errors (`--origin`, `--bg-pty-host`). The home wrapper
+  therefore appends its `--settings` after the original argv and passes the
+  `--origin` service spawn through untouched (`home/programs/claude.nix`).
 - **Flag order.** `-w [name]`, `--allowedTools <tools...>`, `--tools`, and
   `--add-dir` take optional or variadic arguments and will swallow a trailing
   prompt. Put the prompt first, or use `=` forms. A `--bg` banner ending in

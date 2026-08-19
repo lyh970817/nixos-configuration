@@ -82,8 +82,10 @@ let
   # that target's arguments, so execute the target directly: invoking either
   # user-facing launcher here would wrap the wrapper recursively. Keep the
   # process-wrapper variable inherited so every descendant Claude process uses
-  # the same path for any later self-exec. One spawn is exempt: the background
-  # service (argv carries --origin) rejects any prepended flag, so it is exec'd
+  # the same path for any later self-exec. Claude detects its hidden spawn
+  # modes positionally from the first argument (daemon run --origin ...,
+  # --bg-pty-host ...), so injected flags must follow the original argv, and
+  # the --origin service spawn accepts no extra flags at all — it is exec'd
   # untouched below.
   claudeProcessWrapper = pkgs.writeShellApplication {
     name = "claude-process-wrapper";
@@ -96,9 +98,9 @@ let
       claude_target="$1"
       shift
 
-      # The background-service spawn (argv carries --origin) rejects a
-      # prepended --settings and must be exec'd untouched; it is headless,
-      # so the theme is irrelevant there.
+      # The background-service spawn (argv carries --origin) accepts no extra
+      # flags at all and must be exec'd untouched; it is headless, so the
+      # theme is irrelevant there.
       for arg in "$@"; do
         case "$arg" in
           --origin | --origin=*)
@@ -107,8 +109,12 @@ let
         esac
       done
 
+      # Mode detection is positional on the first argument (e.g. daemon,
+      # --bg-pty-host), so injected flags must follow the original argv:
+      # prepending shifts the mode flag and the child dies with
+      # "unknown option".
       ${claudeThemeSettings}
-      exec "$claude_target" --settings "$claude_flag_settings" "$@"
+      exec "$claude_target" "$@" --settings "$claude_flag_settings"
     '';
   };
 
