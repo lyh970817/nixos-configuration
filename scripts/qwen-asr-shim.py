@@ -96,6 +96,7 @@ QWEN_AGGRESSIVE_CLEANUP_PROMPT = _env(
     "QWEN_AGGRESSIVE_CLEANUP_PROMPT", DEFAULT_AGGRESSIVE_CLEANUP_PROMPT
 )
 QWEN_WARM_TIMEOUT = float(_env("QWEN_WARM_TIMEOUT", "8"))
+QWEN_COMMIT_TIMEOUT = float(_env("QWEN_COMMIT_TIMEOUT", "8"))
 
 # Silence-gate tuning (see _RealtimeSilenceGate). Floor measured over 1611
 # archived takes: quiet-room ambient ~40-140 RMS, speech mass >= ~1000;
@@ -104,6 +105,14 @@ QWEN_WARM_TIMEOUT = float(_env("QWEN_WARM_TIMEOUT", "8"))
 TARGET_RATE = 16000
 _TRIM_MARGIN_MS = 200
 _TRIM_FLOOR = 150.0  # chunks below this int16 RMS count as silence
+# qwen-audio-3.0-realtime-plus now rejects an individual uncommitted audio
+# buffer above 30 seconds. Commit at 25 seconds to leave headroom for timing
+# and framing differences; all committed items remain in the same upstream
+# conversation and receive one response.create when recording stops.
+QWEN_AUDIO3_SEGMENT_SECONDS = float(
+    _env("QWEN_AUDIO3_SEGMENT_SECONDS", "25")
+)
+QWEN_AUDIO3_SEGMENT_BYTES = int(QWEN_AUDIO3_SEGMENT_SECONDS * TARGET_RATE * 2)
 
 QWEN_OMNI_REALTIME_WS_URL = (
     f"wss://{QWEN_ASR_HOST}/api-ws/v1/realtime?model={QWEN_OMNI_REALTIME_MODEL}"
@@ -330,14 +339,145 @@ class _RealtimeSilenceGate:
         return events, forwarded
 
 
+class _SegmentedAudioBuffer:
+    """Split PCM16 appends into bounded, separately committed audio items.
+
+    Returned entries are ``(event, commit_kind)`` pairs. ``commit_kind`` is
+    ``None`` for appends, ``"automatic"`` for a size-boundary commit, and
+    ``"final"`` for the client's end-of-utterance commit. A final commit is
+    omitted when an automatic commit landed exactly on the recording boundary,
+    avoiding an invalid empty-buffer commit.
+    """
+
+    def __init__(self, max_bytes=None):
+        if max_bytes is not None and max_bytes <= 0:
+            raise ValueError("max_bytes must be positive")
+        self.max_bytes = max_bytes
+        self.clear()
+
+    def clear(self):
+        self.buffered_bytes = 0
+        self.has_buffered_audio = False
+        self.total_bytes = 0
+        self.automatic_commits = 0
+        self.commits = 0
+
+    @staticmethod
+    def _append_event(original, pcm, split):
+        event = dict(original)
+        event["audio"] = base64.b64encode(pcm).decode("ascii")
+        # Client event IDs identify one event. A split produces new upstream
+        # events, so reusing that ID would make the pieces duplicates.
+        if split:
+            event.pop("event_id", None)
+        return event
+
+    def push(self, msg):
+        """Return bounded append events plus any automatic commit events."""
+        audio = msg.get("audio") or ""
+        try:
+            pcm = base64.b64decode(audio, validate=True)
+        except (TypeError, ValueError):
+            # Preserve the provider's normal validation behavior for malformed
+            # input instead of silently changing or discarding it.
+            self.has_buffered_audio = True
+            return [(msg, None)]
+        if not pcm:
+            return [(msg, None)]
+        if len(pcm) % 2:
+            # PCM16 must contain whole samples. Let upstream report malformed
+            # input rather than cutting a sample at a segment boundary.
+            self.has_buffered_audio = True
+            return [(msg, None)]
+
+        self.total_bytes += len(pcm)
+        if self.max_bytes is None:
+            self.buffered_bytes += len(pcm)
+            self.has_buffered_audio = True
+            return [(msg, None)]
+
+        pieces = []
+        remaining = pcm
+        will_split = self.buffered_bytes + len(pcm) > self.max_bytes
+        while remaining:
+            capacity = self.max_bytes - self.buffered_bytes
+            take = min(capacity, len(remaining))
+            # max_bytes and all preceding PCM16 pieces are even, so take is
+            # also even and never splits a sample.
+            piece, remaining = remaining[:take], remaining[take:]
+            pieces.append((self._append_event(msg, piece, will_split), None))
+            self.buffered_bytes += len(piece)
+            self.has_buffered_audio = True
+            if self.buffered_bytes == self.max_bytes:
+                pieces.append(({"type": "input_audio_buffer.commit"}, "automatic"))
+                self.buffered_bytes = 0
+                self.has_buffered_audio = False
+                self.automatic_commits += 1
+                self.commits += 1
+        return pieces
+
+    def finish(self, commit_msg):
+        """Return the final commit, or nothing when no buffer remains."""
+        if not self.has_buffered_audio:
+            return []
+        self.buffered_bytes = 0
+        self.has_buffered_audio = False
+        self.commits += 1
+        return [(commit_msg, "final")]
+
+
+class _RawTranscriptAccumulator:
+    """Assemble one fallback transcript from every committed audio item."""
+
+    def __init__(self):
+        self.clear()
+
+    def clear(self):
+        self.by_item = collections.OrderedDict()
+        self.item_order = []
+        self.unkeyed = []
+
+    def record_committed(self, item_id):
+        if item_id and item_id not in self.item_order:
+            self.item_order.append(item_id)
+
+    def add_completed(self, event):
+        transcript = (event.get("transcript") or event.get("text") or "").strip()
+        item_id = event.get("item_id")
+        if item_id:
+            self.by_item[item_id] = transcript
+        elif transcript:
+            self.unkeyed.append(transcript)
+
+    @property
+    def text(self):
+        ordered = [
+            self.by_item[item_id]
+            for item_id in self.item_order
+            if item_id in self.by_item
+        ]
+        unordered = [
+            transcript
+            for item_id, transcript in self.by_item.items()
+            if item_id not in self.item_order
+        ]
+        parts = ordered + unordered + self.unkeyed
+        return " ".join(part for part in parts if part)
+
+    @property
+    def completed_items(self):
+        return len(self.by_item) + len(self.unkeyed)
+
+
 class RealtimeTranslator:
     """One loopback WS server bridging hyprwhspr's converse client to one
     persistent DashScope realtime-omni-family upstream connection."""
 
-    def __init__(self, name, ws_url, port):
+    def __init__(self, name, ws_url, port, max_segment_bytes=None):
         self.name = name
         self.ws_url = ws_url
         self.port = port
+        self.max_segment_bytes = max_segment_bytes
         self.backoff = _Backoff()
 
     async def open_upstream(self):
@@ -373,22 +513,31 @@ class RealtimeTranslator:
         conn = {"ws": None}
         reconnect_lock = asyncio.Lock()
         conn_ready = asyncio.Event()
+        client_send_lock = asyncio.Lock()
         # Per-utterance counters; reset on input_audio_buffer.clear (recording
         # start). raw_asr holds the upstream's raw transcription for the
         # current utterance so the output guard can fall back to it if the
         # cleaned text looks like a reply. in_flight marks an utterance in
-        # progress so a mid-utterance upstream drop still reconnects instantly
-        # (only an idle drop between utterances defers to on-demand).
+        # progress so a mid-utterance upstream drop fails the whole dictation
+        # instead of returning a plausible-looking suffix. Only an idle drop
+        # between utterances reconnects on demand.
         state = {
             "frames": 0,
             "abytes": 0,
             "sent_bytes": 0,
             "commit_t": None,
-            "raw_asr": "",
+            "raw_asr": _RawTranscriptAccumulator(),
             "in_flight": False,
             "item_ids": [],
+            "committed_item_ids": [],
             "request_id": None,
             "silence_gate": _RealtimeSilenceGate(),
+            "audio_buffer": _SegmentedAudioBuffer(self.max_segment_bytes),
+            "commit_ack": asyncio.Event(),
+            "pending_commit_kind": None,
+            "commit_error": None,
+            "commit_acks": 0,
+            "last_commit_event": None,
         }
         stop = asyncio.Event()
 
@@ -406,19 +555,9 @@ class RealtimeTranslator:
         conn_ready.set()
         log(f"translator[{self.name}]: upstream session established")
 
-        async def reconnect(old):
-            async with reconnect_lock:
-                if conn["ws"] is not old:
-                    return  # another path already reconnected
-                try:
-                    await old.close()
-                except Exception:
-                    pass
-                conn["ws"] = None  # dead until open_upstream() below succeeds
-                state["item_ids"].clear()
-                conn["ws"] = await self.open_upstream()
-                conn_ready.set()
-                log(f"translator[{self.name}]: upstream reconnected; session re-sent")
+        async def send_client(event):
+            async with client_send_lock:
+                await client_ws.send(json.dumps(event))
 
         async def ensure_upstream():
             """Lazily open the upstream on demand if it's currently dead (idle-closed)."""
@@ -428,6 +567,75 @@ class RealtimeTranslator:
                 conn["ws"] = await self.open_upstream()
                 conn_ready.set()
                 log(f"translator[{self.name}]: upstream reconnected on demand")
+
+        async def replace_upstream_after_cancel():
+            """Give a canceled, already-committed utterance a hard boundary."""
+            async with reconnect_lock:
+                old = conn["ws"]
+                conn_ready.clear()
+                conn["ws"] = None
+                if old is not None:
+                    try:
+                        await old.close()
+                    except Exception:
+                        pass
+                conn["ws"] = await self.open_upstream()
+                conn_ready.set()
+                log(
+                    f"translator[{self.name}]: upstream session replaced "
+                    "after committed utterance cancellation"
+                )
+
+        async def send_upstream(payload_msg, commit_kind=None):
+            """Send one event, awaiting acknowledgement for every commit.
+
+            Waiting prevents audio for the next item (and the final
+            response.create) from racing ahead of DashScope's commit.
+            """
+            if conn["ws"] is None:
+                await ensure_upstream()
+            if commit_kind:
+                state["commit_ack"].clear()
+                state["pending_commit_kind"] = commit_kind
+                state["commit_error"] = None
+            payload = json.dumps(payload_msg)
+            try:
+                await conn["ws"].send(payload)
+            except websockets.exceptions.ConnectionClosed as e:
+                # Replaying one event on a fresh session cannot restore audio
+                # already accepted by the old one. Fail the whole utterance
+                # instead of silently returning only its suffix.
+                raise RuntimeError("upstream closed during utterance") from e
+            if commit_kind:
+                try:
+                    await asyncio.wait_for(
+                        state["commit_ack"].wait(), QWEN_COMMIT_TIMEOUT
+                    )
+                except TimeoutError:
+                    raise RuntimeError(
+                        f"timed out waiting for {commit_kind} audio commit acknowledgement"
+                    ) from None
+                finally:
+                    state["pending_commit_kind"] = None
+                if state["commit_error"]:
+                    raise RuntimeError(state["commit_error"])
+
+        async def send_empty_response(request_id):
+            """Complete a truly empty recording without asking Qwen to infer."""
+            metadata = (
+                {"hyprwhspr_request_id": request_id} if request_id else {}
+            )
+            events = [
+                {"type": "response.output_text.done", "text": ""},
+                {
+                    "type": "response.done",
+                    "response": {"status": "completed", "output": []},
+                },
+            ]
+            for event in events:
+                if metadata:
+                    event["metadata"] = metadata
+                await send_client(event)
 
         async def client_to_upstream():
             try:
@@ -441,7 +649,7 @@ class RealtimeTranslator:
                         # Translator owns the upstream (flat) session config;
                         # drop hyprwhspr's nested realtime session.update.
                         continue
-                    payloads = [msg]
+                    payloads = [(msg, None)]
                     if t == "response.create":
                         # Instructions are already set at session level;
                         # force text. Remember hyprwhspr's correlation id
@@ -451,48 +659,104 @@ class RealtimeTranslator:
                         state["request_id"] = (
                             (msg.get("response") or {}).get("metadata") or {}
                         ).get("hyprwhspr_request_id")
-                        payloads = [{
+                        if state["audio_buffer"].commits == 0:
+                            await send_empty_response(state["request_id"])
+                            state["request_id"] = None
+                            state["in_flight"] = False
+                            log(
+                                f"translator[{self.name}]: empty utterance done "
+                                f"frames={state['frames']} bytes={state['abytes']}"
+                            )
+                            continue
+                        payloads = [({
                             "type": "response.create",
                             "response": {"modalities": ["text"]},
-                        }]
+                        }, None)]
                     elif t == "input_audio_buffer.append":
                         state["frames"] += 1
                         state["in_flight"] = True
                         audio = msg.get("audio") or ""
                         state["abytes"] += (len(audio) * 3) // 4
-                        payloads, sent = state["silence_gate"].push(msg)
+                        gated, sent = state["silence_gate"].push(msg)
                         state["sent_bytes"] += sent
+                        payloads = []
+                        for append_msg in gated:
+                            payloads.extend(state["audio_buffer"].push(append_msg))
                     elif t == "input_audio_buffer.commit":
                         trailing, sent = state["silence_gate"].finish()
                         state["sent_bytes"] += sent
-                        payloads = trailing + [msg]
+                        payloads = []
+                        for append_msg in trailing:
+                            payloads.extend(state["audio_buffer"].push(append_msg))
+                        payloads.extend(state["audio_buffer"].finish(msg))
                         state["commit_t"] = time.perf_counter()
+                        if not payloads:
+                            # An exact-boundary automatic commit was hidden
+                            # from the client; expose its acknowledgement now.
+                            # A truly empty buffer has no provider commit at
+                            # all, so synthesize the acknowledgement that lets
+                            # hyprwhspr proceed to response.create (which is
+                            # completed locally below).
+                            final_ack = state.get("last_commit_event") or {
+                                "type": "input_audio_buffer.committed",
+                                "item_id": None,
+                                "previous_item_id": None,
+                            }
+                            await send_client(final_ack)
                     elif t == "input_audio_buffer.clear":
+                        if state["committed_item_ids"]:
+                            # input_audio_buffer.clear cannot erase items that
+                            # have already been committed into conversation
+                            # history. Start a fresh session so a canceled
+                            # prefix cannot affect the next dictation even if
+                            # item deletion fails or is delayed.
+                            state["in_flight"] = False
+                            try:
+                                await replace_upstream_after_cancel()
+                            except Exception as e:
+                                log(
+                                    f"translator[{self.name}]: replacement "
+                                    f"after cancellation failed, closing client ({e})"
+                                )
+                                try:
+                                    await client_ws.close(code=1011)
+                                except Exception:
+                                    pass
+                                stop.set()
+                                return
+                        payloads = [(msg, None)]
                         state["frames"] = 0
                         state["abytes"] = 0
                         state["sent_bytes"] = 0
                         state["commit_t"] = None
-                        state["raw_asr"] = ""
+                        state["raw_asr"].clear()
                         state["in_flight"] = False
                         state["item_ids"].clear()
+                        state["committed_item_ids"].clear()
                         state["request_id"] = None
                         state["silence_gate"].clear()
+                        state["audio_buffer"].clear()
+                        state["commit_ack"].clear()
+                        state["pending_commit_kind"] = None
+                        state["commit_error"] = None
+                        state["commit_acks"] = 0
+                        state["last_commit_event"] = None
                     if not payloads:
                         continue
-                    if conn["ws"] is None:
+                    for payload_msg, commit_kind in payloads:
                         try:
-                            await ensure_upstream()
+                            await send_upstream(payload_msg, commit_kind)
                         except Exception as e:
-                            log(f"translator[{self.name}]: on-demand upstream connect failed, closing client ({e})")
+                            log(
+                                f"translator[{self.name}]: upstream send failed, "
+                                f"closing client ({e})"
+                            )
+                            try:
+                                await client_ws.close(code=1011)
+                            except Exception:
+                                pass
                             stop.set()
-                            break
-                    for payload_msg in payloads:
-                        payload = json.dumps(payload_msg)
-                        try:
-                            await conn["ws"].send(payload)
-                        except websockets.exceptions.ConnectionClosed:
-                            await reconnect(conn["ws"])
-                            await conn["ws"].send(payload)
+                            return
             except websockets.exceptions.ConnectionClosed:
                 pass
             finally:
@@ -514,6 +778,10 @@ class RealtimeTranslator:
                             ev = json.loads(raw)
                         except (TypeError, ValueError):
                             continue
+                        if conn["ws"] is not ws:
+                            # Ignore events that were already in flight from a
+                            # deliberately replaced canceled session.
+                            continue
                         t = ev.get("type", "")
                         delete_ids = ()
                         if t == "conversation.item.deleted":
@@ -522,6 +790,22 @@ class RealtimeTranslator:
                             item_id = (ev.get("item") or {}).get("id")
                             if item_id:
                                 state["item_ids"].append(item_id)
+                        if t == "input_audio_buffer.committed":
+                            state["commit_acks"] += 1
+                            state["last_commit_event"] = ev
+                            committed_id = ev.get("item_id")
+                            if (
+                                committed_id
+                                and committed_id not in state["committed_item_ids"]
+                            ):
+                                state["committed_item_ids"].append(committed_id)
+                            state["raw_asr"].record_committed(committed_id)
+                            commit_kind = state.get("pending_commit_kind")
+                            state["commit_ack"].set()
+                            # Automatic commits are an implementation detail;
+                            # hyprwhspr should observe one final commit only.
+                            if commit_kind == "automatic":
+                                continue
                         # hyprwhspr's converse reader must see only the cleaned
                         # text: swallow raw ASR transcription events and any
                         # audio output.
@@ -532,9 +816,7 @@ class RealtimeTranslator:
                             # fallback) but do not forward it: the converse
                             # client sees cleaned text only.
                             if t.endswith(".completed"):
-                                state["raw_asr"] = (
-                                    ev.get("transcript") or ev.get("text") or ""
-                                )
+                                state["raw_asr"].add_completed(ev)
                             continue
                         if t == "response.text.delta":
                             ev = {
@@ -547,13 +829,30 @@ class RealtimeTranslator:
                             # like a reply rather than a cleanup, fall back to
                             # the raw ASR.
                             cleaned = ev.get("text", "")
-                            reason = cleanup_suspect(state.get("raw_asr"), cleaned)
+                            raw_asr = state["raw_asr"].text
+                            reason = cleanup_suspect(raw_asr, cleaned)
                             if reason:
-                                log(
-                                    f"translator[{self.name}] guard: {reason}; "
-                                    "falling back to raw transcript"
-                                )
-                                cleaned = state.get("raw_asr") or ""
+                                raw_items = state["raw_asr"].completed_items
+                                commits = state["audio_buffer"].commits
+                                raw_is_partial = raw_items < commits
+                                if reason == "length-ratio" and raw_is_partial:
+                                    # Audio3 currently emits one raw
+                                    # transcription after several committed
+                                    # items, while the cleaned response covers
+                                    # the full linked chain. That partial raw
+                                    # text is not a safe length baseline or
+                                    # fallback.
+                                    log(
+                                        f"translator[{self.name}] guard: {reason}; "
+                                        "retaining cleaned transcript because "
+                                        f"raw coverage is partial ({raw_items}/{commits} items)"
+                                    )
+                                else:
+                                    log(
+                                        f"translator[{self.name}] guard: {reason}; "
+                                        "falling back to raw transcript"
+                                    )
+                                    cleaned = raw_asr
                             ev = {
                                 "type": "response.output_text.done",
                                 "text": cleaned,
@@ -571,9 +870,15 @@ class RealtimeTranslator:
                                 f"frames={state['frames']} bytes={state['abytes']} "
                                 f"sent_bytes={sent_bytes} "
                                 f"trimmed_bytes={state['abytes'] - sent_bytes} "
+                                f"commits={state['audio_buffer'].commits} "
+                                f"automatic_commits={state['audio_buffer'].automatic_commits} "
+                                f"commit_acks={state['commit_acks']} "
                                 f"commit->final={ms:.0f}ms"
                             )
-                            delete_ids = tuple(state["item_ids"])
+                            delete_ids = tuple(dict.fromkeys(
+                                state["committed_item_ids"] + state["item_ids"]
+                            ))
+                            state["committed_item_ids"].clear()
                             state["item_ids"].clear()
                             state["commit_t"] = None
                             state["in_flight"] = False
@@ -586,7 +891,7 @@ class RealtimeTranslator:
                             if t == "response.done":
                                 state["request_id"] = None
                         try:
-                            await client_ws.send(json.dumps(ev))
+                            await send_client(ev)
                         except websockets.exceptions.ConnectionClosed:
                             stop.set()
                             return
@@ -603,18 +908,27 @@ class RealtimeTranslator:
                     pass
                 if stop.is_set():
                     break
+                if conn["ws"] is not ws:
+                    # A canceled committed utterance deliberately replaced
+                    # this session. Continue reading the replacement; the
+                    # new utterance's in_flight state does not describe the
+                    # old socket that just drained.
+                    continue
                 if state["in_flight"]:
-                    # Mid-utterance drop: reconnect immediately, same as before.
+                    # A new session cannot recover already-sent audio. Abort
+                    # promptly rather than produce a plausible-looking suffix.
+                    state["commit_error"] = "upstream closed during utterance"
+                    state["commit_ack"].set()
+                    log(
+                        f"translator[{self.name}]: upstream closed during "
+                        "utterance; closing client"
+                    )
+                    stop.set()
                     try:
-                        await reconnect(ws)
-                    except Exception as e:
-                        log(f"translator[{self.name}]: upstream reconnect failed, closing client ({e})")
-                        stop.set()
-                        try:
-                            await client_ws.close(code=1011)
-                        except Exception:
-                            pass
-                        break
+                        await client_ws.close(code=1011)
+                    except Exception:
+                        pass
+                    break
                 else:
                     # Idle drop (DashScope's own 180s inactivity close): go dead
                     # and wait for the next demand instead of reconnecting
@@ -622,7 +936,11 @@ class RealtimeTranslator:
                     async with reconnect_lock:
                         if conn["ws"] is ws:
                             conn["ws"] = None
-                    log(f"translator[{self.name}]: upstream closed idle; deferring reconnect to next demand")
+                    if conn["ws"] is None:
+                        log(
+                            f"translator[{self.name}]: upstream closed idle; "
+                            "deferring reconnect to next demand"
+                        )
 
         reader = asyncio.create_task(upstream_to_client())
         try:
@@ -649,7 +967,12 @@ class RealtimeTranslator:
 # together.
 _TRANSLATORS = [
     RealtimeTranslator("omni", QWEN_OMNI_REALTIME_WS_URL, QWEN_TRANSLATOR_PORT),
-    RealtimeTranslator("audio3", QWEN_AUDIO3_REALTIME_WS_URL, QWEN_AUDIO3_TRANSLATOR_PORT),
+    RealtimeTranslator(
+        "audio3",
+        QWEN_AUDIO3_REALTIME_WS_URL,
+        QWEN_AUDIO3_TRANSLATOR_PORT,
+        max_segment_bytes=QWEN_AUDIO3_SEGMENT_BYTES,
+    ),
 ]
 
 
