@@ -21,9 +21,15 @@ return {
         below = 0,
       },
       heading = {
+        -- No circled level digits (the default 󰲡..󰲫 icons render as ①②③
+        -- glyphs here) before heading text; headings keep their styled
+        -- text with the raw `##` marker visible -- heading.lua only
+        -- conceals the marker when an icon replaces it, so disabling
+        -- icons brings the marker back by design.
+        icons = {},
         -- No background pills/bands behind headings: the defaults link
         -- H1Bg..H6Bg to DiffText/DiffAdd/... which all carry a filled
-        -- background in the phosphor scheme. Headings keep their icon and
+        -- background in the phosphor scheme. Headings keep their
         -- foreground emphasis on the plain terminal background.
         backgrounds = {},
         -- A lone `=` (or `-`) line inside a `$$ ... $$` block makes
