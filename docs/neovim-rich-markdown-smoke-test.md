@@ -6,7 +6,10 @@ Reproducible fixture for the explanation-workspace rendering stack (issue
 mathematics plus ordinary images and PDFs. Open this file in the dedicated
 Kitty/Neovim workspace and walk top to bottom; every section names what
 correct rendering looks like. The document is deliberately long enough to
-exercise scrolling and image prefetching.
+exercise scrolling and image prefetching. `:ReadMode` (or `<localleader>r`)
+toggles the reading mode in which the cursor hops over display equations and
+nothing pops open into raw source; explanation-tree buffers open in it by
+default.
 
 ## Terminal graphics support
 
