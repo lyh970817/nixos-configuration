@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# Fork the focused Claude session into an explanation workspace, out-of-band:
+# nothing is typed into the agent and its transcript is untouched. Bound to f7
+# in dotfiles/herdr/config.toml. Resolves the pane's Claude session from
+# Herdr, the launcher profile from the silent SessionStart mapping written by
+# dotfiles/claude/hooks/explain-session-register.sh, then opens the dedicated
+# Kitty/Neovim workspace, which prompts for the question and calls
+# `explainctl new` itself (see the handshake in the explain Neovim module).
+set -euo pipefail
+
+notify() {
+  herdr notification show "$1" --body "$2" --sound request >/dev/null 2>&1 || true
+  printf 'herdr-explain-current: %s: %s\n' "$1" "$2" >&2
+}
+
+for required_command in herdr jq kitty nvim; do
+  command -v "$required_command" >/dev/null 2>&1 || {
+    notify "Explain failed" "$required_command is required"
+    exit 1
+  }
+done
+
+pane_id=${HERDR_ACTIVE_PANE_ID:-${HERDR_PANE_ID:-}}
+pane_cwd=${HERDR_ACTIVE_PANE_CWD:-$PWD}
+if [[ -z $pane_id ]]; then
+  notify "Explain failed" "no active Herdr pane"
+  exit 1
+fi
+
+if ! agent_json=$(herdr agent get "$pane_id" 2>&1); then
+  notify "Explain failed" "focused pane has no agent"
+  exit 1
+fi
+
+agent_kind=$(jq -r '.result.agent.agent // empty' <<<"$agent_json")
+if [[ $agent_kind != claude ]]; then
+  notify "Explain failed" "focused pane is not a Claude agent"
+  exit 1
+fi
+
+# Forking during a partially written turn risks an incomplete snapshot, so
+# only a settled agent may be forked; trigger again once the turn finishes.
+agent_status=$(jq -r '.result.agent.agent_status // empty' <<<"$agent_json")
+case "$agent_status" in
+  idle | done) ;;
+  *)
+    notify "Claude is still working" \
+      "status: ${agent_status:-unknown}; trigger again after the turn finishes"
+    exit 1
+    ;;
+esac
+
+session_id=$(jq -r '.result.agent.agent_session.value // empty' <<<"$agent_json")
+if [[ -z $session_id ]]; then
+  notify "Explain failed" "no Claude session recorded for this pane"
+  exit 1
+fi
+
+# Launcher and true working directory from the per-pane registration, when it
+# matches the session Herdr reports (a /resume may have replaced the session
+# since an old record was written). Herdr does not retain the launcher.
+uid=$(id -u)
+runtime_dir=${XDG_RUNTIME_DIR:-/run/user/$uid}
+mapping="$runtime_dir/explain-session/by-pane/${pane_id//\//_}.json"
+launcher=""
+origin_cwd=$(jq -r '.result.agent.cwd // empty' <<<"$agent_json")
+if [[ -f $mapping ]]; then
+  mapped_session=$(jq -r '.session_id // empty' "$mapping" 2>/dev/null || true)
+  if [[ $mapped_session == "$session_id" ]]; then
+    launcher=$(jq -r '.launcher // empty' "$mapping" 2>/dev/null || true)
+    mapped_cwd=$(jq -r '.cwd // empty' "$mapping" 2>/dev/null || true)
+    [[ -n $mapped_cwd ]] && origin_cwd=$mapped_cwd
+  fi
+fi
+# Without a registration record the standard launcher is the safe default.
+[[ -n $launcher ]] || launcher=claude
+[[ -n $origin_cwd ]] || origin_cwd=$pane_cwd
+
+# The question is entered in the workspace itself: Neovim sees these
+# variables, prompts, and runs
+#   explainctl new --session-id ... --cwd ... --launcher ... --question ... \
+#     --json --no-open
+export EXPLAIN_ORIGIN_SESSION_ID="$session_id"
+export EXPLAIN_ORIGIN_CWD="$origin_cwd"
+export EXPLAIN_ORIGIN_LAUNCHER="$launcher"
+kitty --detach --class explanation-nvim --title "Explanation" nvim
