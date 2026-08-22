@@ -133,7 +133,14 @@ async def run_utterance(ws, pcm):
         t = ev.get("type", "")
         if t == "conversation.item.created":
             item_id = (ev.get("item") or {}).get("id")
-            if item_id:
+            if item_id and item_id not in item_ids:
+                item_ids.append(item_id)
+        elif t == "input_audio_buffer.committed":
+            # The committed audio item may never appear as
+            # conversation.item.created; track it here like the shim does,
+            # or it is never deleted and history accumulates.
+            item_id = ev.get("item_id")
+            if item_id and item_id not in item_ids:
                 item_ids.append(item_id)
         elif t == "conversation.item.input_audio_transcription.completed":
             raw_parts.append(
