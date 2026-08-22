@@ -11,6 +11,23 @@ return {
         replace_netrw = true,
         trash = false,
       },
+      image = {
+        enabled = true,
+        -- Ordinary Markdown images and PDF previews, inline via the Kitty
+        -- graphics protocol with a float fallback elsewhere.
+        doc = {
+          enabled = true,
+          inline = true,
+          float = true,
+          max_width = 80,
+          max_height = 40,
+          -- Conservative start: keep the raw image-link syntax visible until
+          -- edits/undo/scrolling are proven to leave no stale placements.
+          conceal = false,
+        },
+        -- render-latex.nvim owns all mathematics (plugins/markdown.lua).
+        math = { enabled = false },
+      },
       input = { enabled = true },
       notifier = { enabled = true },
       picker = {
