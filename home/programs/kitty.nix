@@ -89,6 +89,12 @@ let
     font_size 12.0
     window_padding_width 8
 
+    # Match foot's fontconfig CJK fallback (fc-match :lang=zh-cn → WenQuanYi
+    # Zen Hei, from home/packages/fonts.nix). Kitty's own fallback picks Noto
+    # Sans Mono CJK KR instead, so Chinese text rendered differently than in
+    # foot. Ranges: CJK punctuation, ext A, Han, compat ideographs, fullwidth.
+    symbol_map U+3000-U+303F,U+3400-U+4DBF,U+4E00-U+9FFF,U+F900-U+FAFF,U+FF00-U+FFEF WenQuanYi Zen Hei
+
     # Kitty's rasterizer effectively ignores fontconfig hinting (an A/B of
     # hintfull vs forced hintnone changed ~126 of 50k pixels), so the crispness
     # lever is this compositing knob, not fontconfig. "legacy" composites
