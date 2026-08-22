@@ -68,8 +68,8 @@ Checkboxes:
 | Content | Owner | Notes |
 |---|---|---|
 | Headings, lists, tables, callouts | `render-markdown.nvim` | anti-conceal on the cursor line |
-| Display equations `$$...$$` | `render-latex.nvim` | transparent PNG, no background halo |
-| Inline equations `$...$` | `Snacks.image` | tectonic-rendered image fitted to the line |
+| Display equations `$$...$$` and `\[...\]` | `render-latex.nvim` | transparent PNG, no background halo |
+| Inline equations `$...$` and `\(...\)` | `Snacks.image` | tectonic-rendered image fitted to the line |
 | Images, PDFs | `Snacks.image` | Kitty graphics protocol |
 | A deliberately long cell to force horizontal layout decisions in narrow windows | everyone | wraps or scrolls, never overlaps |
 
@@ -126,6 +126,11 @@ unbiased when $\mathbb{E}[\hat\theta_n] = \theta$ for all $\theta \in
 the sample version $s^2 = \tfrac{1}{n-1}\sum_{i=1}^n (x_i - \bar x)^2$, and
 Greek mixes with scripts as in $\alpha_i^{(t+1)}$, $\beta_{j,k}$, and
 $\gamma^{\delta^\epsilon}$.
+
+LaTeX bracket delimiters must render exactly like the dollar form: the
+share \(S_p\) stays in the text flow, the indicator \(D_{pm}\in\{0,1\}\)
+keeps its set braces, and scripts survive as in \(\alpha_i^{(t+1)}\). A
+literal `\(x\)` inside inline code must stay raw text.
 
 ## 8. Display mathematics
 
@@ -203,6 +208,10 @@ own:
 \operatorname{argmax}_{\theta} \; \log \mathcal{L}(\theta \mid x_{1:n})
 = \operatorname{argmax}_{\theta} \sum_{i=1}^n \log f(x_i \mid \theta)
 \]
+
+And its single-line variant:
+
+\[ S_p = \frac{\sum_m D_{pm} w_m}{\sum_m w_m} \]
 
 ## 9. Malformed LaTeX
 
