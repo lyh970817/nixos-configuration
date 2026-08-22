@@ -82,6 +82,12 @@ return {
           -- over the text size. 1.0 renders at display resolution: math
           -- glyphs come out at the match_text preset's 0.85 * cell height.
           scale = 1.0,
+          -- 0.85 * cell height made display equations read smaller than
+          -- body text (fractions/limits shrink their glyphs further).
+          -- text_scale multiplies the worker's font size directly
+          -- (renderer.resolve_font_size), so 1.35 puts equation glyphs
+          -- slightly above body-text size without the old 2.4x blowup.
+          text_scale = 1.35,
         },
         image = {
           cell_width_px = cell_width,
