@@ -139,6 +139,36 @@ in
 
   xdg.configFile = {
     "kitty/kitty.conf".text = kittyConf;
+    # Kitty has no hinting option of its own: it takes hinting/hintstyle from
+    # the fontconfig pattern of the matched face, which the system defaults
+    # resolve to hintslight. Force full hinting (crispest rendering) and plain
+    # grayscale AA for the Hack Nerd Font families. Foot matches this family
+    # too, but foot is being retired. A target="pattern" match is enough —
+    # verified via kitty's fc_match descriptor (hint_style 1 -> 3).
+    "fontconfig/conf.d/10-hack-full-hinting.conf".text = ''
+      <?xml version="1.0"?>
+      <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+      <fontconfig>
+        <match target="pattern">
+          <test name="family" compare="eq">
+            <string>Hack Nerd Font</string>
+          </test>
+          <edit name="hinting" mode="assign"><bool>true</bool></edit>
+          <edit name="hintstyle" mode="assign"><const>hintfull</const></edit>
+          <edit name="antialias" mode="assign"><bool>true</bool></edit>
+          <edit name="rgba" mode="assign"><const>none</const></edit>
+        </match>
+        <match target="pattern">
+          <test name="family" compare="eq">
+            <string>Hack Nerd Font Mono</string>
+          </test>
+          <edit name="hinting" mode="assign"><bool>true</bool></edit>
+          <edit name="hintstyle" mode="assign"><const>hintfull</const></edit>
+          <edit name="antialias" mode="assign"><bool>true</bool></edit>
+          <edit name="rgba" mode="assign"><const>none</const></edit>
+        </match>
+      </fontconfig>
+    '';
     "kitty/phosphor-theme.sh" = {
       text = phosphorTheme;
       executable = true;
