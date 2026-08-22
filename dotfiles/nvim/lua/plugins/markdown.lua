@@ -50,17 +50,44 @@ return {
     -- downloads on first load; validate with :RenderLatex doctor and
     -- :checkhealth render_latex on each host.
     version = "v0.1.0-rc4",
-    opts = {
-      -- Default render_modes = { "n", "i" } keeps equations rendered while
-      -- editing (the live-preview behaviour; rc4 has no `live_preview` key).
-      install = { version = "v0.1.0-rc4" },
-      render = {
-        -- Match buffer text colour/size; display math becomes transparent
-        -- PNGs, inline math stays a conceal fallback (no image flicker).
-        preset = "match_text",
-        inline = "conceal",
-        inline_symbols = true,
-      },
-    },
+    opts = function()
+      -- render-latex never measures the terminal: image.cell_*_px default to
+      -- 10x20 while e.g. the desktop kitty runs 16x31 cells, so equation PNGs
+      -- were stretched ~1.6x. Snacks already reads the real cell size via
+      -- ioctl(TIOCGWINSZ); reuse it, keeping the defaults as fallback for
+      -- headless/odd terminals.
+      local cell_width, cell_height = 10, 20
+      local ok, term = pcall(function()
+        return require("snacks.image.terminal").size()
+      end)
+      if ok and term and term.cell_width > 0 and term.cell_height > 0 then
+        cell_width, cell_height = term.cell_width, term.cell_height
+      end
+
+      return {
+        -- Default render_modes = { "n", "i" } keeps equations rendered while
+        -- editing (the live-preview behaviour; rc4 has no `live_preview` key).
+        install = { version = "v0.1.0-rc4" },
+        render = {
+          -- Match buffer text colour/size; display math becomes transparent
+          -- PNGs, inline math stays a conceal fallback (no image flicker).
+          preset = "match_text",
+          inline = "conceal",
+          inline_symbols = true,
+          -- No "Eq. N" virtual-text labels on display equations.
+          equation_labels = false,
+          -- The worker's device_pixel_ratio default of 1.5 supersamples the
+          -- PNG, but kitty shows those pixels 1:1 (the placement grid is
+          -- ceil(px/cell) cells), so 1.5 just inflated every glyph ~1.5x
+          -- over the text size. 1.0 renders at display resolution: math
+          -- glyphs come out at the match_text preset's 0.85 * cell height.
+          scale = 1.0,
+        },
+        image = {
+          cell_width_px = cell_width,
+          cell_height_px = cell_height,
+        },
+      }
+    end,
   },
 }
