@@ -95,5 +95,42 @@ return {
         },
       }
     end,
+    config = function(_, opts)
+      require("render_latex").setup(opts)
+
+      -- Snacks.image (snacks/image/image.lua) and render-latex's kitty
+      -- backend (render_latex/image_backends/kitty.lua) build kitty image
+      -- ids with the *same* formula: (pid-hash << 14) | counter, counter
+      -- starting at 31, pid-hash = band(bxor(pid, pid>>5, pid>>10), 0x3FF).
+      -- Both run in this nvim process, so they claim identical ids:
+      -- Snacks's inline-math transmissions overwrite display-equation
+      -- images and its deletes remove them -- display equations then leave
+      -- blank reserved lines. Which equations survive depends on how many
+      -- inline images Snacks has placed, so the failure looks random.
+      -- Move render-latex into the adjacent (guaranteed different) hash
+      -- bucket by swapping the backend's generate_id upvalue; the pinned
+      -- rc4 backend calls it only from set(). If the upvalue ever
+      -- disappears in an update, leave the backend untouched.
+      local kb = require("render_latex.image_backends.kitty")
+      local bit = require("bit")
+      local pid = vim.fn.getpid()
+      local snacks_hash = bit.band(bit.bxor(pid, bit.rshift(pid, 5), bit.rshift(pid, 10)), 0x3FF)
+      local hash = bit.band(snacks_hash + 1, 0x3FF)
+      local counter = 30
+      local function disjoint_id()
+        counter = counter + 1
+        return bit.bor(bit.lshift(hash, 14), counter)
+      end
+      for i = 1, 64 do
+        local name = debug.getupvalue(kb.set, i)
+        if name == nil then
+          break
+        end
+        if name == "generate_id" then
+          debug.setupvalue(kb.set, i, disjoint_id)
+          break
+        end
+      end
+    end,
   },
 }
