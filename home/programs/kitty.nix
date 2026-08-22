@@ -89,6 +89,16 @@ let
     font_size 12.0
     window_padding_width 8
 
+    # Kitty's rasterizer effectively ignores fontconfig hinting (an A/B of
+    # hintfull vs forced hintnone changed ~126 of 50k pixels), so the crispness
+    # lever is this compositing knob, not fontconfig. "legacy" composites
+    # glyphs thinner than the default "platform" gamma and measured closest to
+    # foot's rendering of the same phosphor text (RMSE 0.109 vs 0.113;
+    # custom "<gamma> <contrast>" values all landed further away). Kitty still
+    # draws Hack a touch wider than foot — that residue is cell-metric
+    # rounding, which no composition value changes.
+    text_composition_strategy legacy
+
     # foot: [cursor] style=block, blink=yes, blink-rate=500. Kitty stops
     # blinking after 15s by default; 0 blinks indefinitely like foot.
     cursor_shape block
@@ -143,36 +153,6 @@ in
 
   xdg.configFile = {
     "kitty/kitty.conf".text = kittyConf;
-    # Kitty has no hinting option of its own: it takes hinting/hintstyle from
-    # the fontconfig pattern of the matched face, which the system defaults
-    # resolve to hintslight. Force full hinting (crispest rendering) and plain
-    # grayscale AA for the Hack Nerd Font families. Foot matches this family
-    # too, but foot is being retired. A target="pattern" match is enough —
-    # verified via kitty's fc_match descriptor (hint_style 1 -> 3).
-    "fontconfig/conf.d/10-hack-full-hinting.conf".text = ''
-      <?xml version="1.0"?>
-      <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
-      <fontconfig>
-        <match target="pattern">
-          <test name="family" compare="eq">
-            <string>Hack Nerd Font</string>
-          </test>
-          <edit name="hinting" mode="assign"><bool>true</bool></edit>
-          <edit name="hintstyle" mode="assign"><const>hintfull</const></edit>
-          <edit name="antialias" mode="assign"><bool>true</bool></edit>
-          <edit name="rgba" mode="assign"><const>none</const></edit>
-        </match>
-        <match target="pattern">
-          <test name="family" compare="eq">
-            <string>Hack Nerd Font Mono</string>
-          </test>
-          <edit name="hinting" mode="assign"><bool>true</bool></edit>
-          <edit name="hintstyle" mode="assign"><const>hintfull</const></edit>
-          <edit name="antialias" mode="assign"><bool>true</bool></edit>
-          <edit name="rgba" mode="assign"><const>none</const></edit>
-        </match>
-      </fontconfig>
-    '';
     "kitty/phosphor-theme.sh" = {
       text = phosphorTheme;
       executable = true;
