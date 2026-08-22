@@ -67,6 +67,24 @@ let
     '';
   };
 
+  # The nvim-treesitter plugin (main branch, pinned in
+  # dotfiles/nvim/lazy-lock.json) ships latex queries written for the grammar
+  # rev its own lockfile pins; nixpkgs' older 7e0ecdc parser lacks nodes like
+  # curly_group_text, so highlights.scm fails with "Impossible pattern" on
+  # every markdown buffer containing math. Rebuild the grammar at the plugin's
+  # pinned rev (lockfile.json in the lazy-installed plugin) with the same
+  # nixpkgs builder; bump this rev when a lazy-lock.json update moves the
+  # plugin's latex pin.
+  latexGrammar = pkgs.vimPlugins.nvim-treesitter.builtGrammars.latex.overrideAttrs {
+    version = "0.0.0+rev=7b06f6e";
+    src = pkgs.fetchFromGitHub {
+      owner = "latex-lsp";
+      repo = "tree-sitter-latex";
+      rev = "7b06f6ed394308e7407a1703d2724128c45fc9d7";
+      hash = "sha256-HbRjblLBExpBkBBjHyEHfnK0oootjAsqkwjmGH3/UYI=";
+    };
+  };
+
   # Lua fragment included by dotfiles/hypr/hyprland.lua. The Hyprland .conf
   # format is removed in 0.57, so this is Lua rather than keyword lines.
   roleLua =
@@ -188,8 +206,9 @@ in
     # tree-sitter CLI 0.26.9 (it removed the `--no-bindings` flag
     # nvim-treesitter passes to `tree-sitter generate`), so Nix supplies the
     # compiled parser instead; dotfiles/nvim/lua/plugins/treesitter.lua keeps
-    # latex out of ensure_installed/TSUpdate.
-    "nvim/parser/latex.so".source = "${pkgs.vimPlugins.nvim-treesitter.builtGrammars.latex}/parser";
+    # latex out of ensure_installed/TSUpdate. The rev is overridden above to
+    # match the plugin's queries.
+    "nvim/parser/latex.so".source = "${latexGrammar}/parser";
     # Recursive so the generated role.lua can live alongside the symlinked tree.
     "hypr" = {
       source = ../../dotfiles/hypr;
