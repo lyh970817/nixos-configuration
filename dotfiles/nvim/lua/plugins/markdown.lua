@@ -1,7 +1,30 @@
 -- Markdown rendering stack (issue #11, phase 5). Ownership is exclusive:
--- render-latex.nvim owns all mathematics; Snacks.image owns ordinary
+-- render-markdown.nvim owns Markdown structure (LaTeX disabled below),
+-- render-latex.nvim owns all mathematics, and Snacks.image owns ordinary
 -- images/PDFs (plugins/snacks.lua disables its math path).
+--
+-- Markview rendered .qmd/.Rmd too; those filetypes are intentionally left
+-- raw here until tested (issue #11), rather than adding brittle injections.
 return {
+  {
+    "MeanderingProgrammer/render-markdown.nvim",
+    ft = { "markdown" },
+    dependencies = { "nvim-treesitter/nvim-treesitter", "nvim-mini/mini.icons" },
+    opts = {
+      -- Markview's hybrid preview, reproduced: keep the buffer rendered in
+      -- normal/command/insert mode while anti-conceal reveals raw source on
+      -- the cursor line, so the active line is edited as plain text.
+      render_modes = { "n", "c", "i" },
+      anti_conceal = {
+        enabled = true,
+        above = 0,
+        below = 0,
+      },
+      -- render-latex.nvim owns all mathematics.
+      latex = { enabled = false },
+    },
+  },
+
   {
     "techwizrd/render-latex.nvim",
     ft = { "markdown" },
