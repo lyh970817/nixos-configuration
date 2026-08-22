@@ -41,6 +41,9 @@ return {
         "groovy",
         "json",
         "jsonc",
+        -- No generated parser.c upstream: :TSInstall latex generates from
+        -- grammar and needs the tree-sitter CLI on PATH.
+        "latex",
         "lua",
         "luadoc",
         "markdown",
