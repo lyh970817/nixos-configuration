@@ -239,6 +239,113 @@ return {
           img.content = img.content:gsub("\\%[", "\\[\\textstyle ", 1)
         end
       end
+
+      -- `\(...\)` inline math. markdown_inline's grammar lexes the
+      -- delimiters as two unrelated backslash_escape tokens (verified with
+      -- the tree: no node spans the formula), so no latex injection exists
+      -- and no tree-sitter query can ever capture the span. Instead,
+      -- doc.find() is wrapped to append synthetic matches from a plain
+      -- line scan: Snacks placements consume only plain fields
+      -- (id/pos/range/src/type/lang), never TSNodes, so the synthetic
+      -- items flow through inline placement, conceal and hover unchanged.
+      -- Display `\[...\]` needs none of this: render-latex.nvim detects it
+      -- natively (render_latex/detect.lua bracket_equations line scan).
+
+      --- Odd number of backslashes immediately before byte i.
+      local function escaped(line, i)
+        local n, j = 0, i - 1
+        while j >= 1 and line:sub(j, j) == "\\" do
+          n, j = n + 1, j - 1
+        end
+        return n % 2 == 1
+      end
+
+      --- Build one synthetic snacks.image.match for `\(tex\)` on a line,
+      --- replicating doc._img's content-to-cache-file step. Rows are
+      --- 1-based, s/e are 1-based inclusive byte positions of `\(`/`\)`.
+      local function bracket_match(buf, row, s, e, tex)
+        local img = {
+          id = ("bracket_math:%d:%d"):format(row, s),
+          pos = { row, s - 1 },
+          range = { row, s - 1, row, e },
+          lang = "latex",
+          type = "math",
+          ext = "math.tex",
+          content = tex,
+        }
+        -- The plugin's own transform strips `\(`/`\)`-style delimiters and
+        -- wraps the formula in the tectonic template; then the same
+        -- \textstyle fix as for inline_formula nodes above.
+        latex_transform(img, { buf = buf, lang = "latex" })
+        img.content = img.content:gsub("\\%[", "\\[\\textstyle ", 1)
+        local root = require("snacks").image.config.cache
+        vim.fn.mkdir(root, "p")
+        img.src = root .. "/" .. vim.fn.sha256(img.content):sub(1, 8) .. "-content.math.tex"
+        if vim.fn.filereadable(img.src) == 0 then
+          local fd = assert(io.open(img.src, "w"), "failed to open " .. img.src)
+          fd:write(img.content)
+          fd:close()
+        end
+        return img
+      end
+
+      --- Scan rows [from, to] (1-based, nil = whole buffer) for single-line
+      --- `\(...\)` spans outside fenced code blocks and inline code spans
+      --- (backtick-parity heuristic), mirroring what the tree-sitter query
+      --- yields for `$...$` inline formulas.
+      local function bracket_inline_matches(buf, from, to)
+        if vim.bo[buf].filetype ~= "markdown" then
+          return {}
+        end
+        if not require("snacks").image.config.math.enabled then
+          return {}
+        end
+        local ret = {}
+        local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+        -- Fence state must be tracked from the top of the buffer even when
+        -- only a window range is requested.
+        local fenced, fence = {}, nil
+        for row, line in ipairs(lines) do
+          local marker = line:match("^%s*(```+)") or line:match("^%s*(~~~+)")
+          if fence == nil and marker then
+            fence, fenced[row] = marker:sub(1, 1), true
+          elseif fence ~= nil then
+            fenced[row] = true
+            if marker and marker:sub(1, 1) == fence then
+              fence = nil
+            end
+          end
+        end
+        for row = math.max(from or 1, 1), math.min(to or #lines, #lines) do
+          local line = lines[row]
+          if not fenced[row] then
+            local col = 1
+            while true do
+              local s, e, tex = line:find("\\%((..-)\\%)", col)
+              if not s then
+                break
+              end
+              local _, ticks = line:sub(1, s - 1):gsub("`", "")
+              if not escaped(line, s) and ticks % 2 == 0 and not tex:find("%$") then
+                ret[#ret + 1] = bracket_match(buf, row, s, e, tex)
+              end
+              col = e + 1
+            end
+          end
+        end
+        return ret
+      end
+
+      local find = doc.find
+      doc.find = function(buf, cb, opts)
+        find(buf, function(imgs)
+          local ok, extra = pcall(bracket_inline_matches, buf, opts and opts.from, opts and opts.to)
+          if ok then
+            vim.list_extend(imgs, extra)
+          end
+          cb(imgs)
+        end, opts)
+      end
     end,
   },
 }

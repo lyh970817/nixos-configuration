@@ -21,9 +21,15 @@ return {
         below = 0,
       },
       heading = {
+        -- No circled level digits (the default 󰲡..󰲫 icons render as ①②③
+        -- glyphs here) before heading text; headings keep their styled
+        -- text with the raw `##` marker visible -- heading.lua only
+        -- conceals the marker when an icon replaces it, so disabling
+        -- icons brings the marker back by design.
+        icons = {},
         -- No background pills/bands behind headings: the defaults link
         -- H1Bg..H6Bg to DiffText/DiffAdd/... which all carry a filled
-        -- background in the phosphor scheme. Headings keep their icon and
+        -- background in the phosphor scheme. Headings keep their
         -- foreground emphasis on the plain terminal background.
         backgrounds = {},
         -- A lone `=` (or `-`) line inside a `$$ ... $$` block makes
@@ -82,12 +88,55 @@ return {
           -- over the text size. 1.0 renders at display resolution: math
           -- glyphs come out at the match_text preset's 0.85 * cell height.
           scale = 1.0,
+          -- 0.85 * cell height made display equations read smaller than
+          -- body text (fractions/limits shrink their glyphs further).
+          -- text_scale multiplies the worker's font size directly
+          -- (renderer.resolve_font_size), so 1.35 puts equation glyphs
+          -- slightly above body-text size without the old 2.4x blowup.
+          text_scale = 1.35,
         },
         image = {
           cell_width_px = cell_width,
           cell_height_px = cell_height,
         },
       }
+    end,
+    config = function(_, opts)
+      require("render_latex").setup(opts)
+
+      -- Snacks.image (snacks/image/image.lua) and render-latex's kitty
+      -- backend (render_latex/image_backends/kitty.lua) build kitty image
+      -- ids with the *same* formula: (pid-hash << 14) | counter, counter
+      -- starting at 31, pid-hash = band(bxor(pid, pid>>5, pid>>10), 0x3FF).
+      -- Both run in this nvim process, so they claim identical ids:
+      -- Snacks's inline-math transmissions overwrite display-equation
+      -- images and its deletes remove them -- display equations then leave
+      -- blank reserved lines. Which equations survive depends on how many
+      -- inline images Snacks has placed, so the failure looks random.
+      -- Move render-latex into the adjacent (guaranteed different) hash
+      -- bucket by swapping the backend's generate_id upvalue; the pinned
+      -- rc4 backend calls it only from set(). If the upvalue ever
+      -- disappears in an update, leave the backend untouched.
+      local kb = require("render_latex.image_backends.kitty")
+      local bit = require("bit")
+      local pid = vim.fn.getpid()
+      local snacks_hash = bit.band(bit.bxor(pid, bit.rshift(pid, 5), bit.rshift(pid, 10)), 0x3FF)
+      local hash = bit.band(snacks_hash + 1, 0x3FF)
+      local counter = 30
+      local function disjoint_id()
+        counter = counter + 1
+        return bit.bor(bit.lshift(hash, 14), counter)
+      end
+      for i = 1, 64 do
+        local name = debug.getupvalue(kb.set, i)
+        if name == nil then
+          break
+        end
+        if name == "generate_id" then
+          debug.setupvalue(kb.set, i, disjoint_id)
+          break
+        end
+      end
     end,
   },
 }
