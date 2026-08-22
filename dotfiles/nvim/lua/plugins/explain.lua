@@ -325,6 +325,97 @@ local function explain_open_root()
 end
 
 ---------------------------------------------------------------------------
+-- Initial-question entry (out-of-band Herdr launch)
+---------------------------------------------------------------------------
+
+-- The Herdr `herdr-explain-current` script opens this Neovim inside the
+-- dedicated Kitty window and passes the origin Claude session out-of-band via
+-- EXPLAIN_ORIGIN_SESSION_ID / EXPLAIN_ORIGIN_CWD / EXPLAIN_ORIGIN_LAUNCHER
+-- (always set together). Nothing touches the original Claude transcript: the
+-- question is asked here and handed straight to `explainctl new`.
+
+local creating = false
+
+local function on_new_exit(res)
+  creating = false
+  local result
+  if res.stdout and res.stdout ~= "" then
+    local ok, parsed = pcall(vim.json.decode, res.stdout)
+    if ok and type(parsed) == "table" then
+      result = parsed
+    end
+  end
+  local focus = result and type(result.focus) == "string" and result.focus or nil
+  if res.code ~= 0 or not focus then
+    local detail = (result and result.message) or vim.trim(res.stderr or "")
+    notify(
+      ("Creating the explanation failed (exit %d)%s\n:ExplainNew retries the prompt"):format(
+        res.code,
+        detail ~= "" and ": " .. detail or ""
+      ),
+      vim.log.levels.ERROR
+    )
+    return
+  end
+  vim.cmd("edit " .. vim.fn.fnameescape(focus))
+  notify("Explanation created: " .. (result.root or focus))
+end
+
+--- Prompt for the initial explanation question and create the workspace by
+--- running `explainctl new` against the origin metadata from the launcher.
+--- This Neovim already is the workspace, hence --no-open.
+local function explain_new()
+  local sid = vim.env.EXPLAIN_ORIGIN_SESSION_ID
+  local cwd = vim.env.EXPLAIN_ORIGIN_CWD
+  local launcher = vim.env.EXPLAIN_ORIGIN_LAUNCHER
+  if not sid or sid == "" then
+    notify("EXPLAIN_ORIGIN_SESSION_ID is not set; launch via herdr-explain-current", vim.log.levels.ERROR)
+    return
+  end
+  if not cwd or cwd == "" or not launcher or launcher == "" then
+    notify("Incomplete origin metadata: EXPLAIN_ORIGIN_CWD and EXPLAIN_ORIGIN_LAUNCHER must be set",
+      vim.log.levels.ERROR)
+    return
+  end
+  if creating then
+    notify("An explanation is already being created", vim.log.levels.WARN)
+    return
+  end
+  vim.ui.input({ prompt = "What needs explaining? " }, function(question)
+    question = question and vim.trim(question) or ""
+    if question == "" then
+      notify("Cancelled; :ExplainNew retries the prompt")
+      return
+    end
+    creating = true
+    local ok, err = pcall(vim.system, {
+      "explainctl",
+      "new",
+      "--session-id",
+      sid,
+      "--cwd",
+      cwd,
+      "--launcher",
+      launcher,
+      "--question",
+      question,
+      "--json",
+      "--no-open",
+    }, { text = true }, function(res)
+      vim.schedule(function()
+        on_new_exit(res)
+      end)
+    end)
+    if not ok then
+      creating = false
+      notify("Could not start explainctl: " .. err, vim.log.levels.ERROR)
+      return
+    end
+    notify("Creating explanation\u{2026}")
+  end)
+end
+
+---------------------------------------------------------------------------
 -- Per-buffer activation
 ---------------------------------------------------------------------------
 
@@ -350,12 +441,29 @@ local function attach(bufnr)
   map("n", "<localleader>s", explain_submit, { buffer = bufnr, desc = "Explain: submit" })
 end
 
+local group = vim.api.nvim_create_augroup("explain-workspace", { clear = true })
+
 vim.api.nvim_create_autocmd("FileType", {
-  group = vim.api.nvim_create_augroup("explain-workspace", { clear = true }),
+  group = group,
   pattern = "markdown",
   callback = function(ev)
     attach(ev.buf)
   end,
 })
+
+-- Global: also the retry path when the startup prompt was cancelled or failed.
+vim.api.nvim_create_user_command("ExplainNew", explain_new, { desc = "Create an explanation from the origin session" })
+
+-- Launched by herdr-explain-current: ask for the initial question once the UI
+-- is up (snacks.nvim loads eagerly, so Snacks.input backs vim.ui.input here).
+if vim.env.EXPLAIN_ORIGIN_SESSION_ID and vim.env.EXPLAIN_ORIGIN_SESSION_ID ~= "" then
+  vim.api.nvim_create_autocmd("VimEnter", {
+    group = group,
+    once = true,
+    callback = function()
+      vim.schedule(explain_new)
+    end,
+  })
+end
 
 return {}
