@@ -1,7 +1,7 @@
 -- Markdown rendering stack (issue #11, phase 5). Ownership is exclusive:
 -- render-markdown.nvim owns Markdown structure (LaTeX disabled below),
--- render-latex.nvim owns all mathematics, and Snacks.image owns ordinary
--- images/PDFs (plugins/snacks.lua disables its math path).
+-- render-latex.nvim owns display mathematics, Snacks.image owns inline
+-- mathematics plus ordinary images/PDFs (plugins/snacks.lua).
 --
 -- Markview rendered .qmd/.Rmd too; those filetypes are intentionally left
 -- raw here until tested (issue #11), rather than adding brittle injections.
@@ -37,7 +37,7 @@ return {
       -- Same background objection for fenced code blocks (default links
       -- RenderMarkdownCode to ColorColumn). Language icon and border stay.
       code = { disable_background = true },
-      -- render-latex.nvim owns all mathematics.
+      -- render-latex.nvim and Snacks.image own all mathematics.
       latex = { enabled = false },
     },
   },
@@ -70,10 +70,10 @@ return {
         install = { version = "v0.1.0-rc4" },
         render = {
           -- Match buffer text colour/size; display math becomes transparent
-          -- PNGs, inline math stays a conceal fallback (no image flicker).
+          -- PNGs. Inline math is owned by Snacks.image math
+          -- (plugins/snacks.lua), so the text-level conceal fallback is off.
           preset = "match_text",
-          inline = "conceal",
-          inline_symbols = true,
+          inline = false,
           -- No "Eq. N" virtual-text labels on display equations.
           equation_labels = false,
           -- The worker's device_pixel_ratio default of 1.5 supersamples the

@@ -135,6 +135,10 @@ in
     # the explanation stack stays self-describing.)
     pkgs.imagemagick
     pkgs.ghostscript
+    # Snacks.image math: compiles the `$...$` inline-math snippets to PDF
+    # (small self-contained engine; fetches TeX assets into ~/.cache/Tectonic
+    # on first use). Display math stays with render-latex.nvim's own worker.
+    pkgs.tectonic
   ];
 
   xdg.configFile = {
