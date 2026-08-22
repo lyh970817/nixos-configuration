@@ -147,12 +147,28 @@ async def run_utterance(ws, pcm):
         elif t == "error":
             raise RuntimeError(f"provider error: {ev}")
     # Mirror the shim: drop conversation history so utterances stay
-    # independent and tokens do not accumulate.
+    # independent and tokens do not accumulate. Unlike the human-paced shim,
+    # this replays back to back, so wait for the delete acknowledgements --
+    # otherwise the next utterance's response covers accumulated history.
     for item_id in item_ids:
         await ws.send(json.dumps({
             "type": "conversation.item.delete",
             "item_id": item_id,
         }))
+    deleted = 0
+    deadline = time.monotonic() + 10.0
+    while deleted < len(item_ids):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("conversation.item.delete not acknowledged")
+        ev = json.loads(await asyncio.wait_for(ws.recv(), remaining))
+        t = ev.get("type", "")
+        if t == "conversation.item.deleted":
+            deleted += 1
+        elif t == "error":
+            # A failed delete would poison every later utterance on this
+            # session; force a reconnect instead.
+            raise TimeoutError(f"delete error: {ev}")
     raw = " ".join(part for part in raw_parts if part)
     return cleaned, raw, latency_ms
 
