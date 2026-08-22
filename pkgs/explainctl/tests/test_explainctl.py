@@ -37,7 +37,14 @@ def run_cli(argv):
     stderr = io.StringIO()
     with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
         code = cli.main(argv)
-    return code, json.loads(stdout.getvalue()), stderr.getvalue()
+    try:
+        result = json.loads(stdout.getvalue())
+    except ValueError:
+        raise AssertionError(
+            "CLI printed no JSON; exit %r\nstdout: %r\nstderr: %r"
+            % (code, stdout.getvalue(), stderr.getvalue())
+        ) from None
+    return code, result, stderr.getvalue()
 
 
 class QuestionParsingTest(unittest.TestCase):
@@ -369,8 +376,11 @@ class CliNewTest(unittest.TestCase):
     """End-to-end `new --no-open` against a stub claude binary."""
 
     def _fake_claude(self, tmp, body):
+        # The shebang names the running interpreter directly: /usr/bin/env
+        # does not exist inside the Nix build sandbox, and a failed shebang
+        # exec is indistinguishable from a missing launcher.
         fake = Path(tmp) / "fake-claude"
-        fake.write_text("#!/usr/bin/env python3\n" + body)
+        fake.write_text("#!%s\n" % sys.executable + body)
         fake.chmod(0o755)
         return fake
 
@@ -426,7 +436,7 @@ print(json.dumps({"session_id": "fork-123", "result": "done"}))
                         os.environ.pop(key, None)
                     else:
                         os.environ[key] = value
-            self.assertEqual(code, 0)
+            self.assertEqual(code, 0, msg=f"result={result!r} stderr={_err!r}")
             self.assertEqual(result["status"], "created")
             self.assertEqual(result["session_id"], "fork-123")
             self.assertEqual(result["origin_session_id"], "origin-999")
