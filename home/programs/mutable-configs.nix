@@ -44,6 +44,15 @@ let
   claudeHerdrSessionCommand = "bash '${
     lib.replaceStrings [ "'" ] [ "'\\''" ] claudeHerdrSessionHook
   }' session";
+  # Silent per-pane session registration for scripts/herdr-explain-current;
+  # linked into each launcher-backed profile's hooks/ below, so the command
+  # path is per profile.
+  claudeExplainRegisterCommand =
+    configDir:
+    "bash '${
+      lib.replaceStrings [ "'" ] [ "'\\''" ]
+        "${config.home.homeDirectory}/${configDir}/hooks/explain-session-register.sh"
+    }'";
   claudeProfiles = [
     {
       name = "standard";
@@ -720,6 +729,8 @@ in
     claude_environment=${lib.escapeShellArg "${claudeEnvironment}"}
     claude_marketplaces=${lib.escapeShellArg "${claudeMarketplaces}"}
     claude_herdr_session_command=${lib.escapeShellArg claudeHerdrSessionCommand}
+    claude_explain_register_standard=${lib.escapeShellArg (claudeExplainRegisterCommand ".config/claude")}
+    claude_explain_register_gpt56=${lib.escapeShellArg (claudeExplainRegisterCommand ".config/claude-gpt56")}
 
     # Which ANSI-only theme matches this machine's current mode. Derived from
     # the hypr current-theme symlink, the same source the claude-theme helper
@@ -743,6 +754,8 @@ in
         --arg profile "$profile_name" \
         --arg claude_theme "$claude_theme" \
         --arg claude_herdr_session_command "$claude_herdr_session_command" \
+        --arg claude_explain_register_standard "$claude_explain_register_standard" \
+        --arg claude_explain_register_gpt56 "$claude_explain_register_gpt56" \
         '
           ($template[0]) as $template |
           ($environment[0]) as $environment |
@@ -773,6 +786,19 @@ in
                 hooks: [{
                   type: "command",
                   command: $claude_herdr_session_command,
+                  timeout: 10
+                }, {
+                  type: "command",
+                  command: $claude_explain_register_standard,
+                  timeout: 10
+                }]
+              }]
+            elif $profile == "gpt56" then
+              .hooks.SessionStart = [{
+                matcher: "*",
+                hooks: [{
+                  type: "command",
+                  command: $claude_explain_register_gpt56,
                   timeout: 10
                 }]
               }]
@@ -820,7 +846,9 @@ in
         ' "$input" > "$output" &&
         { [ "$profile_name" != "standard" ] ||
           "$claude_jq" -e --arg expected "$claude_herdr_session_command" \
-            '.hooks.SessionStart[0].hooks[0].command == $expected' \
+            --arg register "$claude_explain_register_standard" \
+            '.hooks.SessionStart[0].hooks[0].command == $expected
+             and .hooks.SessionStart[0].hooks[1].command == $register' \
             "$output" >/dev/null; }
     }
 
@@ -1101,6 +1129,14 @@ in
     # --system-prompt-file.
     "claude/response-simplifier.md".source = link "dotfiles/claude/response-simplifier.md";
     "claude/skills/session-handoff".source = link "dotfiles/claude/skills/session-handoff";
+    "claude/skills/explain-session".source = link "dotfiles/claude/skills/explain-session";
+    "claude/skills/explain-session-sync".source = link "dotfiles/claude/skills/explain-session-sync";
+    # Prompt templates read by explainctl (pkgs/explainctl) at fork/resume
+    # time; linked per launcher-backed profile so the recorded launcher finds
+    # its own copy.
+    "claude/explain-session".source = link "dotfiles/claude/explain-session";
+    "claude/hooks/explain-session-register.sh".source =
+      link "dotfiles/claude/hooks/explain-session-register.sh";
     "claude/skills/nix-environment-setup".source = link "dotfiles/claude/skills/nix-environment-setup";
     "claude/skills/bro".source = link "dotfiles/claude/skills/bro";
     "claude/skills/visual-verification".source = link "dotfiles/claude/skills/visual-verification";
@@ -1134,6 +1170,12 @@ in
     "claude-gpt56/skills/r-dev-shell".source = link "dotfiles/claude/skills/r-dev-shell";
     "claude-gpt56/skills/social-bookmarks".source = link "dotfiles/claude/skills/social-bookmarks";
     "claude-gpt56/skills/tuicr".source = link "dotfiles/claude/skills/tuicr";
+    "claude-gpt56/skills/explain-session".source = link "dotfiles/claude/skills/explain-session";
+    "claude-gpt56/skills/explain-session-sync".source =
+      link "dotfiles/claude/skills/explain-session-sync";
+    "claude-gpt56/explain-session".source = link "dotfiles/claude/explain-session";
+    "claude-gpt56/hooks/explain-session-register.sh".source =
+      link "dotfiles/claude/hooks/explain-session-register.sh";
 
     # Claude has a profile per CLAUDE_CONFIG_DIR. Share only portable authored
     # assets with claude-mattpocock; its credential, settings, plugin state,

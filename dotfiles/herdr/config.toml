@@ -146,6 +146,15 @@ type = "shell"
 command = "$HOME/.nixos-config/scripts/herdr-agent-launch codex down new"
 description = "start a Codex orchestrator in a horizontal split"
 
+# Out-of-band explanation fork: no prompt is sent to the agent and its
+# transcript is untouched. f7 is the next free function key after the f1-f6
+# launcher block.
+[[keys.command]]
+key = "f7"
+type = "shell"
+command = "$HOME/.nixos-config/scripts/herdr-explain-current"
+description = "fork the focused Claude session into an explanation workspace"
+
 [theme]
 name = "terminal"
 
