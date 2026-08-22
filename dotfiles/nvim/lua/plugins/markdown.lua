@@ -20,6 +20,23 @@ return {
         above = 0,
         below = 0,
       },
+      heading = {
+        -- No background pills/bands behind headings: the defaults link
+        -- H1Bg..H6Bg to DiffText/DiffAdd/... which all carry a filled
+        -- background in the phosphor scheme. Headings keep their icon and
+        -- foreground emphasis on the plain terminal background.
+        backgrounds = {},
+        -- A lone `=` (or `-`) line inside a `$$ ... $$` block makes
+        -- tree-sitter parse the preceding equation lines as a setext
+        -- heading, which painted a full-width H1 band plus the H1 icon
+        -- (the stray circled ①) across rendered equations. Setext headings
+        -- are unused in these documents, so drop their rendering entirely
+        -- rather than special-casing math blocks.
+        setext = false,
+      },
+      -- Same background objection for fenced code blocks (default links
+      -- RenderMarkdownCode to ColorColumn). Language icon and border stay.
+      code = { disable_background = true },
       -- render-latex.nvim owns all mathematics.
       latex = { enabled = false },
     },
