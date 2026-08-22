@@ -18,6 +18,7 @@
     ./programs/htop.nix
     ./programs/btop.nix
     ./programs/foot.nix
+    ./programs/kitty.nix
     ./programs/mako.nix
     ./programs/rofi.nix
     ./programs/shortcut-cheatsheet.nix
