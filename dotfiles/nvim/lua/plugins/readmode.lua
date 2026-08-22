@@ -75,8 +75,16 @@ local function hop_off_equation(buf)
   vim.b[buf].read_mode_last_row = row
 end
 
-local function set_read_mode(buf, on)
+local function set_read_mode(buf, on, opts)
+  opts = opts or {}
   if vim.b[buf].read_mode == on then
+    return
+  end
+  -- plugins/explain.lua freezes explanation buffers while explainctl rewrites
+  -- the tree; flipping modifiable underneath that lock would corrupt the
+  -- options it restores when the run finishes.
+  if vim.b[buf].explain_submit_lock then
+    vim.notify("Buffer is frozen by a running explain submit", vim.log.levels.WARN)
     return
   end
   vim.b[buf].read_mode = on
@@ -120,7 +128,9 @@ local function set_read_mode(buf, on)
     vim.b[buf].read_mode_saved = nil
   end
   rm_refresh(buf)
-  vim.notify("Markdown " .. (on and "READ" or "EDIT") .. " mode", vim.log.levels.INFO)
+  if not opts.silent then
+    vim.notify("Markdown " .. (on and "READ" or "EDIT") .. " mode", vim.log.levels.INFO)
+  end
 end
 
 local function toggle(buf)
@@ -160,5 +170,26 @@ vim.api.nvim_create_autocmd("FileType", {
     end
   end,
 })
+
+-- Programmatic API for other config modules (plugins/explain.lua switches to
+-- EDIT before writing question blocks and restores READ after a submit).
+-- Seeded into package.loaded directly: lazy.nvim owns require("plugins.*")
+-- for specs, and this file's spec-list return value must stay a plain list.
+local M = {}
+
+--- Whether the buffer is currently in READ mode.
+function M.is_read(buf)
+  return vim.b[buf].read_mode == true
+end
+
+--- Switch a buffer to "read" or "edit" through the same path as :ReadMode,
+--- keeping the saved per-buffer state consistent. opts.silent skips the
+--- mode-change notification.
+function M.set_mode(buf, mode, opts)
+  assert(mode == "read" or mode == "edit", "mode must be 'read' or 'edit'")
+  set_read_mode(buf, mode == "read", opts)
+end
+
+package.loaded["markdown-readmode"] = M
 
 return {}
