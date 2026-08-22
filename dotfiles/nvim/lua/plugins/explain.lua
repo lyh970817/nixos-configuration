@@ -60,6 +60,18 @@ local function read_metadata(root)
   return ok and type(meta) == "table" and meta or nil
 end
 
+local function notify(msg, level)
+  vim.notify(msg, level or vim.log.levels.INFO, { title = "Explain" })
+end
+
+--- plugins/readmode.lua's mode API (is_read/set_mode), or nil before that
+--- file has loaded. Going through set_mode instead of setting 'modifiable'
+--- keeps readmode's saved per-buffer state consistent.
+local function readmode()
+  local ok, mod = pcall(require, "markdown-readmode")
+  return ok and mod or nil
+end
+
 ---------------------------------------------------------------------------
 -- Question blocks (phase 3 protocol)
 ---------------------------------------------------------------------------
@@ -90,6 +102,20 @@ end
 --- `explainctl` flips status="open" to "resolved", never rewrites the id.
 local function explain_ask(cmd)
   local bufnr = vim.api.nvim_get_current_buf()
+
+  -- Reading is exactly when questions come up: leave READ mode through
+  -- readmode's own API so its saved state stays consistent, instead of
+  -- failing on the nomodifiable edit guard.
+  local rm = readmode()
+  if rm and rm.is_read(bufnr) then
+    rm.set_mode(bufnr, "edit", { silent = true })
+    notify("Switched to EDIT mode for the question")
+  end
+  if not vim.bo[bufnr].modifiable or vim.bo[bufnr].readonly then
+    notify("Buffer is not modifiable (submit running?)", vim.log.levels.ERROR)
+    return
+  end
+
   local last = vim.api.nvim_buf_line_count(bufnr)
   local line_at = function(l)
     return vim.api.nvim_buf_get_lines(bufnr, l - 1, l, true)[1]
@@ -130,10 +156,6 @@ end
 -- flock on <root>/.explain.lock (a second Neovim instance bypasses this table).
 local active = {}
 
-local function notify(msg, level)
-  vim.notify(msg, level or vim.log.levels.INFO, { title = "Explain" })
-end
-
 --- Freeze loaded explanation buffers while the external writer runs,
 --- remembering the options to restore afterwards.
 local function lock_buffers(root)
@@ -142,6 +164,9 @@ local function lock_buffers(root)
     saved[buf] = { modifiable = vim.bo[buf].modifiable, readonly = vim.bo[buf].readonly }
     vim.bo[buf].modifiable = false
     vim.bo[buf].readonly = true
+    -- Freeze marker: readmode refuses to change modes while this is set, so
+    -- :ReadMode cannot flip 'modifiable' underneath the lock.
+    vim.b[buf].explain_submit_lock = true
   end
   return saved
 end
@@ -151,6 +176,7 @@ local function unlock_buffers(saved)
     if vim.api.nvim_buf_is_valid(buf) and vim.api.nvim_buf_is_loaded(buf) then
       vim.bo[buf].modifiable = opts.modifiable
       vim.bo[buf].readonly = opts.readonly
+      vim.b[buf].explain_submit_lock = nil
     end
   end
 end
@@ -180,6 +206,21 @@ local function save_tree(root)
   return true
 end
 
+--- Return the buffers that were dropped from READ to EDIT for a submit back
+--- to READ mode. Runs after unlock_buffers: the unlock restores the pre-lock
+--- EDIT options, and set_mode("read") then re-saves them consistently.
+local function restore_reading(reading)
+  local rm = readmode()
+  if not rm then
+    return
+  end
+  for _, buf in ipairs(reading or {}) do
+    if vim.api.nvim_buf_is_valid(buf) and vim.api.nvim_buf_is_loaded(buf) then
+      rm.set_mode(buf, "read", { silent = true })
+    end
+  end
+end
+
 --- Apply the explainctl result protocol:
 --- {status, root, submitted, updated, created, focus, resolved_question_ids}.
 local function on_submit_exit(root, res)
@@ -187,6 +228,7 @@ local function on_submit_exit(root, res)
   active[root] = nil
   if state then
     unlock_buffers(state.saved)
+    restore_reading(state.reading)
   end
 
   local result
@@ -249,11 +291,26 @@ local function explain_submit()
     notify("A submit for this explanation is already running", vim.log.levels.WARN)
     return
   end
+  -- READ-mode buffers are nomodifiable, which save_tree would refuse to
+  -- write. Drop them to EDIT through readmode's API for the duration of the
+  -- submit; on_submit_exit (or any early failure) puts them back to READ.
+  local rm = readmode()
+  local reading = {}
+  if rm then
+    for _, buf in ipairs(buffers_under(root)) do
+      if rm.is_read(buf) then
+        table.insert(reading, buf)
+        rm.set_mode(buf, "edit", { silent = true })
+      end
+    end
+  end
+
   if not save_tree(root) then
+    restore_reading(reading)
     return
   end
 
-  active[root] = { saved = lock_buffers(root) }
+  active[root] = { saved = lock_buffers(root), reading = reading }
   local ok, err = pcall(vim.system, { "explainctl", "submit", "--json", file }, { text = true }, function(res)
     vim.schedule(function()
       on_submit_exit(root, res)
@@ -262,6 +319,7 @@ local function explain_submit()
   if not ok then
     unlock_buffers(active[root].saved)
     active[root] = nil
+    restore_reading(reading)
     notify("Could not start explainctl: " .. err, vim.log.levels.ERROR)
     return
   end

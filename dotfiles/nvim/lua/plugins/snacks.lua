@@ -21,12 +21,21 @@ return {
           float = true,
           max_width = 80,
           max_height = 40,
-          -- Conservative start: keep the raw image-link syntax visible until
-          -- edits/undo/scrolling are proven to leave no stale placements.
-          conceal = false,
+          -- Conservative start for ordinary images: keep the raw image-link
+          -- syntax visible until edits/undo/scrolling are proven to leave no
+          -- stale placements. Math expressions do conceal their source (the
+          -- image replaces the `$...$` span; the cursor line reveals it).
+          conceal = function(_, type)
+            return type == "math"
+          end,
         },
-        -- render-latex.nvim owns all mathematics (plugins/markdown.lua).
-        math = { enabled = false },
+        -- Inline mathematics only: `$...$` spans become images rendered by
+        -- tectonic (home/programs/kitty.nix) and fitted to the line height.
+        -- Display mathematics stays with render-latex.nvim
+        -- (plugins/markdown.lua); the images query override in `config`
+        -- below keeps this split exclusive. Fenced ```math blocks also land
+        -- here (render-latex ignores them).
+        math = { enabled = true },
       },
       input = { enabled = true },
       notifier = { enabled = true },
@@ -200,6 +209,36 @@ return {
     },
     config = function(_, opts)
       require("snacks").setup(opts)
+      -- Snacks ships queries/latex/images.scm matching inline_formula,
+      -- displayed_equation and math_environment in every injected latex tree
+      -- (`$...$` and `$$...$$` in Markdown both inject latex). Display math
+      -- belongs to render-latex.nvim (plugins/markdown.lua), so override the
+      -- query to inline formulas only. A file in our config's queries/ dir
+      -- cannot do this: the plugin's non-`;; extends` file later on the
+      -- runtimepath would win.
+      vim.treesitter.query.set(
+        "latex",
+        "images",
+        [[
+          (inline_formula
+            (#set! image.ext "math.tex"))
+            @image.content @image
+        ]]
+      )
+      -- Snacks' latex transform wraps every snippet in display-style
+      -- `\[...\]`, which gives inline sums/integrals full-height limits and
+      -- pushes the image below the line. Force text style for inline
+      -- formulas so they keep fitting the line height; fenced ```math blocks
+      -- (the only other math.tex source) are left display-style.
+      local doc = require("snacks.image.doc")
+      local latex_transform = doc.transforms.latex
+      doc.transforms.latex = function(img, ctx)
+        latex_transform(img, ctx)
+        local node = ctx.content and ctx.content.node
+        if img.content and node and node:type() == "inline_formula" then
+          img.content = img.content:gsub("\\%[", "\\[\\textstyle ", 1)
+        end
+      end
     end,
   },
 }
