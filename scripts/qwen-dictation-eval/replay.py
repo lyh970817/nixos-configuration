@@ -106,8 +106,14 @@ def session_update(instructions):
     return {"type": "session.update", "session": session}
 
 
-async def run_utterance(ws, pcm):
-    """Stream one utterance; return (cleaned, raw_asr, latency_ms)."""
+async def run_utterance(ws, pcm, raw_by_item):
+    """Stream one utterance; return (cleaned, raw_asr, latency_ms).
+
+    ``raw_by_item`` is per-connection state mapping audio item id to its raw
+    input-audio transcription: those events lag and can arrive after
+    response.done or even in the next utterance's window, so they are keyed
+    by item id rather than attributed by arrival order.
+    """
     for i in range(0, len(pcm), CHUNK_BYTES):
         await ws.send(json.dumps({
             "type": "input_audio_buffer.append",
@@ -121,15 +127,11 @@ async def run_utterance(ws, pcm):
     }))
 
     cleaned = ""
-    raw_parts = []
     item_ids = []
+    audio_ids = []
     latency_ms = None
-    deadline = time.monotonic() + RESPONSE_TIMEOUT
-    while True:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise TimeoutError("no response.done within timeout")
-        ev = json.loads(await asyncio.wait_for(ws.recv(), remaining))
+
+    def handle(ev):
         t = ev.get("type", "")
         if t == "conversation.item.created":
             item_id = (ev.get("item") or {}).get("id")
@@ -140,19 +142,45 @@ async def run_utterance(ws, pcm):
             # conversation.item.created; track it here like the shim does,
             # or it is never deleted and history accumulates.
             item_id = ev.get("item_id")
-            if item_id and item_id not in item_ids:
-                item_ids.append(item_id)
+            if item_id:
+                if item_id not in item_ids:
+                    item_ids.append(item_id)
+                if item_id not in audio_ids:
+                    audio_ids.append(item_id)
         elif t == "conversation.item.input_audio_transcription.completed":
-            raw_parts.append(
-                (ev.get("transcript") or ev.get("text") or "").strip()
-            )
-        elif t == "response.text.done":
+            transcript = (ev.get("transcript") or ev.get("text") or "").strip()
+            item_id = ev.get("item_id")
+            if item_id:
+                raw_by_item[item_id] = transcript
+        elif t == "error":
+            raise RuntimeError(f"provider error: {ev}")
+        return t
+
+    deadline = time.monotonic() + RESPONSE_TIMEOUT
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("no response.done within timeout")
+        ev = json.loads(await asyncio.wait_for(ws.recv(), remaining))
+        t = handle(ev)
+        if t == "response.text.done":
             cleaned = ev.get("text", "")
         elif t == "response.done":
             latency_ms = (time.perf_counter() - commit_t) * 1000
             break
-        elif t == "error":
-            raise RuntimeError(f"provider error: {ev}")
+
+    # Give the lagging raw transcription a short grace window.
+    deadline = time.monotonic() + 3.0
+    while any(item_id not in raw_by_item for item_id in audio_ids):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        try:
+            ev = json.loads(await asyncio.wait_for(ws.recv(), remaining))
+        except TimeoutError:
+            break
+        handle(ev)
+
     # Mirror the shim: drop conversation history so utterances stay
     # independent and tokens do not accumulate. Unlike the human-paced shim,
     # this replays back to back, so wait for the delete acknowledgements --
@@ -169,23 +197,24 @@ async def run_utterance(ws, pcm):
         if remaining <= 0:
             raise TimeoutError("conversation.item.delete not acknowledged")
         ev = json.loads(await asyncio.wait_for(ws.recv(), remaining))
-        t = ev.get("type", "")
+        t = handle(ev)
         if t == "conversation.item.deleted":
             deleted += 1
-        elif t == "error":
-            # A failed delete would poison every later utterance on this
-            # session; force a reconnect instead.
-            raise TimeoutError(f"delete error: {ev}")
-    raw = " ".join(part for part in raw_parts if part)
+
+    raw = " ".join(
+        raw_by_item[item_id] for item_id in audio_ids if raw_by_item.get(item_id)
+    )
     return cleaned, raw, latency_ms
 
 
 async def run_condition(name, instructions, utterances, api_key, results):
     ws = None
+    raw_by_item = {}
     for path, duration in utterances:
         pcm = decode_pcm16(path)
         for attempt in (1, 2):
             if ws is None:
+                raw_by_item = {}
                 ws = await websockets.connect(
                     WS_URL,
                     additional_headers={"Authorization": f"Bearer {api_key}"},
@@ -194,9 +223,15 @@ async def run_condition(name, instructions, utterances, api_key, results):
                 )
                 await ws.send(json.dumps(session_update(instructions)))
             try:
-                cleaned, raw, latency_ms = await run_utterance(ws, pcm)
+                cleaned, raw, latency_ms = await run_utterance(
+                    ws, pcm, raw_by_item
+                )
                 break
-            except (websockets.exceptions.ConnectionClosed, TimeoutError) as e:
+            except (
+                websockets.exceptions.ConnectionClosed,
+                TimeoutError,
+                RuntimeError,
+            ) as e:
                 print(f"  {name} {path.name}: {e}; reconnecting", file=sys.stderr)
                 try:
                     await ws.close()
