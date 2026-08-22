@@ -183,6 +183,13 @@ in
       source = ../../dotfiles/nvim;
       recursive = true;
     };
+    # Prebuilt latex tree-sitter parser on the runtimepath. The latex grammar
+    # has no generated parser.c upstream, and :TSInstall latex breaks with
+    # tree-sitter CLI 0.26.9 (it removed the `--no-bindings` flag
+    # nvim-treesitter passes to `tree-sitter generate`), so Nix supplies the
+    # compiled parser instead; dotfiles/nvim/lua/plugins/treesitter.lua keeps
+    # latex out of ensure_installed/TSUpdate.
+    "nvim/parser/latex.so".source = "${pkgs.vimPlugins.nvim-treesitter.builtGrammars.latex}/parser";
     # Recursive so the generated role.lua can live alongside the symlinked tree.
     "hypr" = {
       source = ../../dotfiles/hypr;
