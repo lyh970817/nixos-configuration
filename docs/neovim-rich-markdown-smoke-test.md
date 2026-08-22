@@ -8,6 +8,19 @@ top to bottom; every section names what correct rendering looks like. The
 document is deliberately long enough to exercise scrolling and image
 prefetching.
 
+## Terminal graphics support
+
+Where the equation PNGs and images actually appear depends on the terminal
+in front of Neovim (validated 2026-08):
+
+- **Kitty, direct**: full rendering — Kitty graphics protocol works, all
+  image placements appear. This is the supported layout: a dedicated
+  Kitty+Neovim window beside the Herdr window.
+- **Herdr**: no graphics passthrough — Neovim reserves the vertical space
+  but the pixels never arrive, so equations and images come out blank.
+  Do not run the rendering stack inside Herdr's terminal matrix.
+- **Foot**: raw fallback — no graphics protocol; text-level rendering only.
+
 ## 1. Headings and inline styles
 
 Second-level heading above; below, inline styles inside a paragraph: **bold**,

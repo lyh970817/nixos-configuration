@@ -41,9 +41,13 @@ return {
         "groovy",
         "json",
         "jsonc",
-        -- No generated parser.c upstream: :TSInstall latex generates from
-        -- grammar and needs the tree-sitter CLI on PATH.
-        "latex",
+        -- latex is deliberately absent: it has no generated parser.c
+        -- upstream, and tree-sitter CLI 0.26.9 removed the `--no-bindings`
+        -- flag this plugin passes to `tree-sitter generate`, so :TSInstall
+        -- latex fails on every attempt. The parser is instead prebuilt by
+        -- Nix and deployed to ~/.config/nvim/parser/latex.so (on the
+        -- runtimepath; see home/programs/dotfiles.nix), which Neovim core
+        -- and the markdown latex injections pick up directly.
         "lua",
         "luadoc",
         "markdown",
@@ -58,6 +62,11 @@ return {
         "vimdoc",
         "yaml",
       },
+      -- The Nix-provided latex parser lives outside this plugin's own
+      -- parser dir, so :TSUpdate would treat it as installed-but-outdated
+      -- and try to rebuild it (hitting the same broken `tree-sitter
+      -- generate`). Ignoring it keeps every install path away from latex.
+      ignore_install = { "latex" },
       highlight = { enable = true },
       indent = { enable = true },
     },
