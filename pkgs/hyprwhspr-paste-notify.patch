@@ -1,0 +1,42 @@
+--- a/lib/src/text_injector.py
++++ b/lib/src/text_injector.py
+@@ -1150,12 +1150,39 @@
+                       f"Using clipboard+paste instead.")
+ 
+             injected = self._inject_via_clipboard_and_hotkey(processed_text)
++            if injected:
++                self._notify_paste_complete(processed_text)
+             return InjectionOutcome.INJECTED if injected else InjectionOutcome.FAILED
+ 
+         except Exception as e:
+             print(f"Primary injection method failed: {e}")
+             return InjectionOutcome.FAILED
+ 
++    def _notify_paste_complete(self, text: str) -> None:
++        """Best-effort local datagram announcing a completed paste.
++
++        The qwen-asr-shim listens on this loopback UDP port to stamp the
++        paste-complete timestamp on its per-dictation latency record and to
++        store the exact injected text (post filler-filter/hook) so a raw
++        revert can erase precisely what was pasted. No listener, no harm.
++        Env: HYPRWHSPR_PASTE_NOTIFY_PORT (default 8773, 0 disables).
++        """
++        try:
++            import socket
++            port = int(os.environ.get('HYPRWHSPR_PASTE_NOTIFY_PORT', '8773'))
++            if not port:
++                return
++            payload = json.dumps({
++                'event': 'paste_complete',
++                'ts': time.time(),
++                'audio_ts': os.environ.get('HYPRWHSPR_DICTATION_TS'),
++                'text': text,
++            }, ensure_ascii=False).encode('utf-8')
++            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
++                sock.sendto(payload, ('127.0.0.1', port))
++        except Exception:
++            pass
++
+     # ------------------------ Helpers ------------------------
+ 
+     def _preprocess_text(self, text: str) -> str:

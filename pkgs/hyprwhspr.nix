@@ -86,11 +86,16 @@ stdenvNoCC.mkDerivation rec {
   # refuses while it is set — the first idle/server-side disconnect kills
   # dictation until the service restarts. Let an explicit connect() clear
   # the latch.
+  # hyprwhspr-paste-notify.patch: after a successful text injection, send a
+  # best-effort loopback UDP datagram (port 8773) carrying the paste
+  # timestamp and the exact injected text; qwen-asr-shim uses it for
+  # paste-complete latency and for the raw-revert record.
   patches = [
     ./hyprwhspr-realtime-sample-rate.patch
     ./hyprwhspr-short-audio-archive.patch
     ./hyprwhspr-notification-text.patch
     ./hyprwhspr-realtime-reopen.patch
+    ./hyprwhspr-paste-notify.patch
   ];
 
   nativeBuildInputs = [ makeWrapper ];

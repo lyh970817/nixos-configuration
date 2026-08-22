@@ -95,6 +95,17 @@ QWEN_CLEANUP_PROMPT = _env("QWEN_CLEANUP_PROMPT", DEFAULT_TIDY_CLEANUP_PROMPT)
 QWEN_WARM_TIMEOUT = float(_env("QWEN_WARM_TIMEOUT", "8"))
 QWEN_COMMIT_TIMEOUT = float(_env("QWEN_COMMIT_TIMEOUT", "8"))
 
+# Per-dictation record ring ({raw, cleaned, pasted, timings}) and the loopback
+# UDP port on which the patched hyprwhspr (pkgs/hyprwhspr-paste-notify.patch)
+# announces paste completion. hyprwhspr-raw-revert consumes the ring.
+QWEN_SHORT_DIR = os.path.expanduser(
+    _env("QWEN_SHORT_DIR", "~/.local/share/hyprwhspr/short")
+)
+QWEN_DICTATION_RING_PATH = os.path.join(QWEN_SHORT_DIR, "dictations.jsonl")
+QWEN_DICTATION_RING_SIZE = int(_env("QWEN_DICTATION_RING_SIZE", "50"))
+QWEN_PASTE_NOTIFY_PORT = int(_env("QWEN_PASTE_NOTIFY_PORT", "8773"))
+QWEN_PASTE_WAIT_TIMEOUT = float(_env("QWEN_PASTE_WAIT_TIMEOUT", "10"))
+
 # Silence-gate tuning (see _RealtimeSilenceGate). Floor measured over 1611
 # archived takes: quiet-room ambient ~40-140 RMS, speech mass >= ~1000;
 # high-ambient sessions idle at 500-1100 and cannot be gated safely by any
@@ -180,6 +191,126 @@ def cleanup_suspect(raw, cleaned):
     if raw_len > 0 and len(cleaned.strip()) > raw_len * 2.5:
         return "length-ratio"
     return None
+
+
+# --------------------------------------------------------------------------
+# Per-dictation records: latency instrumentation + raw-transcript preservation
+#
+# Every completed (non-empty) dictation produces one record with four
+# timestamps -- key release (the client's final audio commit), first output
+# delta, response done, paste complete -- plus warm/cold connection and
+# model/profile labels. Timings are logged to the journal as one JSON line
+# per dictation ("latency {...}"), content-free so the journal never carries
+# dictation text; distributions:
+#
+#   journalctl --user -u qwen-asr-shim.service -o cat \
+#     | sed -n 's/.*latency //p' | jq -s 'map(.done_ms)'
+#
+# The full record (raw ASR, cleaned text, exact pasted text) goes to a small
+# JSONL ring at QWEN_DICTATION_RING_PATH for hyprwhspr-raw-revert. The paste
+# timestamp and pasted text arrive over loopback UDP from the patched
+# hyprwhspr (pkgs/hyprwhspr-paste-notify.patch); if no paste happens within
+# QWEN_PASTE_WAIT_TIMEOUT (empty text, capture mode, injection failure), the
+# record is finalized with paste fields null.
+# --------------------------------------------------------------------------
+
+
+def _append_dictation_record(record):
+    """Append one record to the JSONL ring, keeping the newest N entries."""
+    try:
+        os.makedirs(QWEN_SHORT_DIR, exist_ok=True)
+        lines = []
+        try:
+            with open(QWEN_DICTATION_RING_PATH, "r", encoding="utf-8") as f:
+                lines = [line for line in f.read().splitlines() if line.strip()]
+        except FileNotFoundError:
+            pass
+        lines.append(json.dumps(record, ensure_ascii=False))
+        lines = lines[-QWEN_DICTATION_RING_SIZE:]
+        tmp_path = QWEN_DICTATION_RING_PATH + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+        os.chmod(tmp_path, 0o600)
+        os.replace(tmp_path, QWEN_DICTATION_RING_PATH)
+    except Exception as e:
+        log(f"dictation ring write failed: {e}")
+
+
+class _PendingDictation:
+    """One finished dictation awaiting hyprwhspr's paste notification."""
+
+    __slots__ = ("record", "commit_perf", "finalized", "timer")
+
+    def __init__(self, record, commit_perf):
+        self.record = record
+        self.commit_perf = commit_perf
+        self.finalized = False
+        self.timer = None
+
+
+_PENDING_PASTE = collections.deque()
+
+
+def _finalize_dictation(pending, paste_msg=None):
+    if pending.finalized:
+        return
+    pending.finalized = True
+    if pending.timer is not None:
+        pending.timer.cancel()
+    record = pending.record
+    if paste_msg is not None:
+        record["paste_ms"] = round(
+            (time.perf_counter() - pending.commit_perf) * 1000
+        )
+        record["pasted"] = paste_msg.get("text")
+        record["audio_ts"] = paste_msg.get("audio_ts")
+    timing = {
+        key: record.get(key)
+        for key in (
+            "ts",
+            "profile",
+            "model",
+            "connection",
+            "first_delta_ms",
+            "done_ms",
+            "paste_ms",
+            "audio_ts",
+            "fallback",
+            "raw_partial",
+        )
+    }
+    timing["raw_chars"] = len(record.get("raw") or "")
+    timing["cleaned_chars"] = len(record.get("cleaned") or "")
+    log("latency " + json.dumps(timing, ensure_ascii=False))
+    _append_dictation_record(record)
+
+
+def _register_pending_dictation(record, commit_perf):
+    pending = _PendingDictation(record, commit_perf)
+    _PENDING_PASTE.append(pending)
+    while len(_PENDING_PASTE) > 8:
+        stale = _PENDING_PASTE.popleft()
+        _finalize_dictation(stale)
+    pending.timer = asyncio.get_running_loop().call_later(
+        QWEN_PASTE_WAIT_TIMEOUT, _finalize_dictation, pending
+    )
+
+
+class _PasteNotifyProtocol(asyncio.DatagramProtocol):
+    """Receive paste_complete datagrams from the patched hyprwhspr."""
+
+    def datagram_received(self, data, addr):
+        try:
+            msg = json.loads(data.decode("utf-8"))
+        except (TypeError, ValueError, UnicodeDecodeError):
+            return
+        if msg.get("event") != "paste_complete":
+            return
+        while _PENDING_PASTE:
+            pending = _PENDING_PASTE.popleft()
+            if not pending.finalized:
+                _finalize_dictation(pending, msg)
+                return
 
 
 # --------------------------------------------------------------------------
@@ -470,10 +601,11 @@ class RealtimeTranslator:
     """One loopback WS server bridging hyprwhspr's converse client to one
     persistent DashScope realtime-omni-family upstream connection."""
 
-    def __init__(self, name, ws_url, port, max_segment_bytes=None):
+    def __init__(self, name, ws_url, port, model, max_segment_bytes=None):
         self.name = name
         self.ws_url = ws_url
         self.port = port
+        self.model = model
         self.max_segment_bytes = max_segment_bytes
         self.backoff = _Backoff()
 
@@ -523,6 +655,9 @@ class RealtimeTranslator:
             "abytes": 0,
             "sent_bytes": 0,
             "commit_t": None,
+            "commit_epoch": None,
+            "first_delta_t": None,
+            "start_t": time.perf_counter(),
             "raw_asr": _RawTranscriptAccumulator(),
             "in_flight": False,
             "item_ids": [],
@@ -535,11 +670,16 @@ class RealtimeTranslator:
             "commit_error": None,
             "commit_acks": 0,
             "last_commit_event": None,
+            "final_text": None,
+            "fallback": None,
+            "raw_partial": False,
+            "session_fresh": False,
         }
         stop = asyncio.Event()
 
         try:
             conn["ws"] = await self.open_upstream()
+            conn["opened_t"] = time.perf_counter()
         except Exception as e:
             # Cannot serve: close the client so hyprwhspr fails the dictation
             # within its realtime_timeout rather than hanging.
@@ -562,6 +702,7 @@ class RealtimeTranslator:
                 if conn["ws"] is not None:
                     return
                 conn["ws"] = await self.open_upstream()
+                conn["opened_t"] = time.perf_counter()
                 conn_ready.set()
                 log(f"translator[{self.name}]: upstream reconnected on demand")
 
@@ -577,6 +718,7 @@ class RealtimeTranslator:
                     except Exception:
                         pass
                 conn["ws"] = await self.open_upstream()
+                conn["opened_t"] = time.perf_counter()
                 conn_ready.set()
                 log(
                     f"translator[{self.name}]: upstream session replaced "
@@ -686,7 +828,11 @@ class RealtimeTranslator:
                         for append_msg in trailing:
                             payloads.extend(state["audio_buffer"].push(append_msg))
                         payloads.extend(state["audio_buffer"].finish(msg))
+                        # The client's final commit follows key release
+                        # immediately; treat it as the key-release timestamp.
                         state["commit_t"] = time.perf_counter()
+                        state["commit_epoch"] = time.time()
+                        state["first_delta_t"] = None
                         if not payloads:
                             # An exact-boundary automatic commit was hidden
                             # from the client; expose its acknowledgement now.
@@ -701,6 +847,7 @@ class RealtimeTranslator:
                             }
                             await send_client(final_ack)
                     elif t == "input_audio_buffer.clear":
+                        session_replaced = bool(state["committed_item_ids"])
                         if state["committed_item_ids"]:
                             # input_audio_buffer.clear cannot erase items that
                             # have already been committed into conversation
@@ -726,6 +873,13 @@ class RealtimeTranslator:
                         state["abytes"] = 0
                         state["sent_bytes"] = 0
                         state["commit_t"] = None
+                        state["commit_epoch"] = None
+                        state["first_delta_t"] = None
+                        state["start_t"] = time.perf_counter()
+                        state["session_fresh"] = session_replaced
+                        state["final_text"] = None
+                        state["fallback"] = None
+                        state["raw_partial"] = False
                         state["raw_asr"].clear()
                         state["in_flight"] = False
                         state["item_ids"].clear()
@@ -816,6 +970,8 @@ class RealtimeTranslator:
                                 state["raw_asr"].add_completed(ev)
                             continue
                         if t == "response.text.delta":
+                            if state["first_delta_t"] is None:
+                                state["first_delta_t"] = time.perf_counter()
                             ev = {
                                 "type": "response.output_text.delta",
                                 "delta": ev.get("delta", ""),
@@ -827,10 +983,11 @@ class RealtimeTranslator:
                             # the raw ASR.
                             cleaned = ev.get("text", "")
                             raw_asr = state["raw_asr"].text
+                            raw_items = state["raw_asr"].completed_items
+                            commits = state["audio_buffer"].commits
+                            state["raw_partial"] = raw_items < commits
                             reason = cleanup_suspect(raw_asr, cleaned)
                             if reason:
-                                raw_items = state["raw_asr"].completed_items
-                                commits = state["audio_buffer"].commits
                                 raw_is_partial = raw_items < commits
                                 if reason == "length-ratio" and raw_is_partial:
                                     # Audio3 currently emits one raw
@@ -850,17 +1007,16 @@ class RealtimeTranslator:
                                         "falling back to raw transcript"
                                     )
                                     cleaned = raw_asr
+                                    state["fallback"] = reason
+                            state["final_text"] = cleaned
                             ev = {
                                 "type": "response.output_text.done",
                                 "text": cleaned,
                             }
                         elif t == "response.done":
                             commit_t = state.get("commit_t")
-                            ms = (
-                                (time.perf_counter() - commit_t) * 1000
-                                if commit_t
-                                else -1.0
-                            )
+                            now = time.perf_counter()
+                            ms = (now - commit_t) * 1000 if commit_t else -1.0
                             sent_bytes = state["sent_bytes"]
                             log(
                                 f"translator[{self.name}]: utterance done "
@@ -872,6 +1028,38 @@ class RealtimeTranslator:
                                 f"commit_acks={state['commit_acks']} "
                                 f"commit->final={ms:.0f}ms"
                             )
+                            if commit_t:
+                                # Cold when this utterance had to (re)open the
+                                # upstream: an on-demand reconnect after an
+                                # idle drop, or a session replaced at
+                                # recording start after a cancel.
+                                cold = (
+                                    state.get("session_fresh")
+                                    or conn.get("opened_t", 0.0)
+                                    >= state["start_t"]
+                                )
+                                first_delta_t = state.get("first_delta_t")
+                                record = {
+                                    "ts": state.get("commit_epoch"),
+                                    "profile": self.name,
+                                    "model": self.model,
+                                    "connection": "cold" if cold else "warm",
+                                    "first_delta_ms": (
+                                        round((first_delta_t - commit_t) * 1000)
+                                        if first_delta_t
+                                        else None
+                                    ),
+                                    "done_ms": round(ms),
+                                    "paste_ms": None,
+                                    "audio_ts": None,
+                                    "raw": state["raw_asr"].text,
+                                    "raw_partial": state.get("raw_partial", False),
+                                    "cleaned": state.get("final_text"),
+                                    "pasted": None,
+                                    "fallback": state.get("fallback"),
+                                    "reverted": False,
+                                }
+                                _register_pending_dictation(record, commit_t)
                             delete_ids = tuple(dict.fromkeys(
                                 state["committed_item_ids"] + state["item_ids"]
                             ))
@@ -963,11 +1151,17 @@ class RealtimeTranslator:
 # One instance per realtime-ws profile; every instance is always started
 # together.
 _TRANSLATORS = [
-    RealtimeTranslator("omni", QWEN_OMNI_REALTIME_WS_URL, QWEN_TRANSLATOR_PORT),
+    RealtimeTranslator(
+        "omni",
+        QWEN_OMNI_REALTIME_WS_URL,
+        QWEN_TRANSLATOR_PORT,
+        QWEN_OMNI_REALTIME_MODEL,
+    ),
     RealtimeTranslator(
         "audio3",
         QWEN_AUDIO3_REALTIME_WS_URL,
         QWEN_AUDIO3_TRANSLATOR_PORT,
+        QWEN_AUDIO3_REALTIME_MODEL,
         max_segment_bytes=QWEN_AUDIO3_SEGMENT_BYTES,
     ),
 ]
@@ -989,6 +1183,13 @@ def main():
                 f"realtime translator[{inst.name}] listening on "
                 f"ws://{BIND_HOST}:{inst.port} (upstream={inst.ws_url})"
             )
+        transport, _ = await asyncio.get_running_loop().create_datagram_endpoint(
+            _PasteNotifyProtocol,
+            local_addr=(BIND_HOST, QWEN_PASTE_NOTIFY_PORT),
+        )
+        log(
+            f"paste-notify listener on udp://{BIND_HOST}:{QWEN_PASTE_NOTIFY_PORT}"
+        )
         await asyncio.Future()  # run forever
 
     try:
