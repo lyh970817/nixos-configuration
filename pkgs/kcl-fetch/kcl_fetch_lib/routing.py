@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from . import paths
 from .urls import EZPROXY, OPENATHENS, TEMPLATES
 
 #: Publishers KCL subscribes to whose SP is known to speak Shibboleth. Listing
@@ -65,12 +66,15 @@ class RoutingTable:
             }
 
     def _save(self) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        paths.ensure(self.path.parent)
         tmp = self.path.with_suffix(".json.tmp")
         tmp.write_text(
             json.dumps({"hosts": self._learned}, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
+        # `rename` carries the inode, and the mode with it, so the visible file
+        # is never briefly world-readable.
+        paths.secure_file(tmp)
         tmp.replace(self.path)
 
     def _match(self, host: str) -> str | None:

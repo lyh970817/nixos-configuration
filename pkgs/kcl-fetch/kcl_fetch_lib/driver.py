@@ -29,6 +29,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import paths
 from .pdfcheck import PdfFacts, validate
 from .urls import KCL_IDP_ENTITY_ID, host_of
 
@@ -142,8 +143,11 @@ class Browser:
     def __enter__(self) -> "Browser":
         from playwright.sync_api import sync_playwright
 
-        self.profile_dir.mkdir(parents=True, exist_ok=True)
-        self.downloads_dir.mkdir(parents=True, exist_ok=True)
+        # 0700, enforced rather than inherited from the umask: this directory
+        # is the institutional session. What Chromium writes *inside* it is
+        # Chromium's business; the containing directory is the boundary.
+        paths.ensure(self.profile_dir)
+        paths.ensure(self.downloads_dir)
         self._playwright = sync_playwright().start()
         self.context = self._playwright.chromium.launch_persistent_context(
             user_data_dir=str(self.profile_dir),
@@ -213,10 +217,13 @@ class Browser:
                 "article, or the link is behind a purchase option"
             )
 
+        # The output directory is the user's, chosen with `-o`, so its mode is
+        # left alone. The two files written into it are ours, and are not.
         out_dir = Path(out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         target = out_dir / f"{stem}.pdf"
         download.save_as(str(target))
+        paths.secure_file(target)
         facts = validate(target, min_bytes=min_bytes)
 
         provenance = {
@@ -231,9 +238,9 @@ class Browser:
             "pages": facts.pages,
             "sha256": hashlib.sha256(target.read_bytes()).hexdigest(),
         }
-        target.with_suffix(".provenance.json").write_text(
-            json.dumps(provenance, indent=2) + "\n", encoding="utf-8"
-        )
+        sidecar = target.with_suffix(".provenance.json")
+        sidecar.write_text(json.dumps(provenance, indent=2) + "\n", encoding="utf-8")
+        paths.secure_file(sidecar)
         return Fetched(target, facts, page.url, template, provenance)
 
     def _trigger_download(self, page):

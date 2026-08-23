@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable, Sequence
 
+from . import paths
 from .limits import DEFAULTS, Limits
 
 # --------------------------------------------------------------------------
@@ -195,9 +196,14 @@ class Gate:
         self.limits = limits
         self.clock = clock or Clock()
         self._lock_path = Path(lock_path)
-        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-        self._lock_path.parent.mkdir(parents=True, exist_ok=True)
+        db_path = Path(db_path)
+        paths.ensure(db_path.parent)
+        paths.ensure(self._lock_path.parent)
         self.db = sqlite3.connect(str(db_path), isolation_level=None)
+        # sqlite3 creates the file on connect, at 0666 & ~umask. Tightening it
+        # before any schema runs also settles the journal, which SQLite creates
+        # with the database file's own permissions.
+        paths.secure_file(db_path)
         self.db.row_factory = sqlite3.Row
         self.db.executescript(_SCHEMA)
 
@@ -481,6 +487,7 @@ class _ProcessLock:
 
     def acquire(self) -> None:
         self._fh = open(self.path, "a+")
+        paths.secure_file(self.path)
         try:
             fcntl.flock(self._fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
