@@ -228,7 +228,12 @@ return {
       local cell_h = math.max(1, math.floor(term.cell_height + 0.5))
       -- \Large in the snacks 12pt standalone template is 17.28pt.
       local MATH_EM_PT = 17.28
-      local density = math.floor(72 * cell_h / MATH_EM_PT + 0.5)
+      -- Legibility bump: one math em spans 1.12 terminal cells instead of
+      -- exactly one. The strut below shrinks by the same factor so the
+      -- shared line box still maps to one cell; ink taller than that box
+      -- (full-height parens and up) is capped back by placement as before.
+      local MATH_EM_CELLS = 1.12
+      local density = math.floor(72 * cell_h * MATH_EM_CELLS / MATH_EM_PT + 0.5)
       -- Grow renders shorter than a cell to exactly one cell (transparent,
       -- ink centered): kitty scales an image to fit its cell box in BOTH
       -- directions, so without the padding a short image would be scaled
@@ -241,28 +246,30 @@ return {
         "-background", "none", "-gravity", "center", "-extent", pad_extent,
       }
       -- "imath": inline LaTeX formulas (query + bracket scan below). No
-      -- `-trim`: the `\vphantom{(}` strut added by the transform keeps the
-      -- compiled page at the full line box (>= 1em = one cell), placing
-      -- every formula's baseline at 0.75 of the cell -- a bare `m` stays
-      -- x-height-sized on the common baseline instead of filling the row.
+      -- `-trim`: the rule strut added by the transform keeps the compiled
+      -- page at the shared line box (1/MATH_EM_CELLS em = one cell),
+      -- placing every formula's baseline at 0.75 of the cell -- a bare `m`
+      -- stays x-height-sized on the common baseline instead of filling the
+      -- row.
       image_cfg.convert.magick.imath = {
         "-density", density, "{src}[{page}]",
         "-background", "none", "-gravity", "center", "-extent", pad_extent,
       }
       image_cfg.icons.imath = image_cfg.icons.math
-      -- Same templates as stock, with the cell height baked into a comment
-      -- so the content hash -- and thus the render cache -- turns over
-      -- when a font or cell-size change alters the density.
+      -- Same templates as stock, with the render density baked into a
+      -- comment so the content hash -- and thus the render cache -- turns
+      -- over when a font, cell-size, or anchor (MATH_EM_CELLS) change
+      -- alters the density.
       image_cfg.math.latex.tpl = ([[
 \documentclass[preview,border=0pt,varwidth,12pt]{standalone}
 \usepackage{${packages}}
-%% cell=%dpx
+%% density=%ddpi
 \begin{document}
 ${header}
 { \${font_size} \selectfont
   \color[HTML]{${color}}
 ${content}}
-\end{document}]]):format(cell_h)
+\end{document}]]):format(density)
 
       -- Snacks ships queries/latex/images.scm matching inline_formula,
       -- displayed_equation and math_environment in every injected latex tree
@@ -285,13 +292,20 @@ ${content}}
       -- `\[...\]`, which gives inline sums/integrals full-height limits and
       -- pushes the image below the line. Rewrite inline formulas to a text
       -- style `\(...\)` box (natural width, no display skips -- the page
-      -- box is croppable without `-trim`) carrying a `\vphantom{(}` strut
+      -- box is croppable without `-trim`) carrying a zero-width rule strut
       -- for the common baseline; fenced ```math blocks (the only other
       -- markdown math.tex source) are left display-style.
       local doc = require("snacks.image.doc")
       local latex_transform = doc.transforms.latex
+      -- The strut spans the shared line box: 1/MATH_EM_CELLS em total
+      -- (baseline at 0.75 of it, like `\vphantom{(}`) is exactly one cell
+      -- at the density above. Keeping the box at one cell is what lets the
+      -- em grow past the cell: a plain 1em strut would overflow the row
+      -- and the placement cap would scale every formula straight back down.
+      local strut = ("\\rule[-%.5fem]{0pt}{%.5fem}")
+        :format(0.25 / MATH_EM_CELLS, 1 / MATH_EM_CELLS)
       local function inline_box(content)
-        content = content:gsub("\\%[", "\\(\\textstyle\\vphantom{(} ", 1)
+        content = content:gsub("\\%[", "\\(\\textstyle" .. strut .. " ", 1)
         return (content:gsub("\\%]", "\\)", 1))
       end
       -- The stock transform only acts on ext == "math.tex", so present
