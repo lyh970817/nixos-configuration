@@ -17,12 +17,12 @@
 -- - Long lines soft-wrap to the window (wrap/linebreak/breakindent), set
 --   directly per window: render-markdown's win_options channel only manages
 --   conceal* here, so nothing fights a plain setlocal. Wrap is skipped when
---   the buffer holds a pipe-table row wider than the window: wrapping such a
---   row shatters the rendered table (see wrap_breaks_table), and wrapping
---   WITHIN cells has no supported implementation -- render-markdown's cell
---   wrapping is an open request (its issue #616), and the one plugin doing
---   it (ice345/markdown-table-wrap.nvim) needs render-markdown's table
---   renderer disabled and itself recommends nowrap for its inline mode.
+--   the buffer holds a pipe-table row wider than the window AND
+--   render-markdown cannot wrap table cells itself: with the vendored PR
+--   #617 (plugins/markdown.lua, max_table_width) wide tables re-render
+--   within the window under 'wrap', so the suppression only remains as a
+--   fallback for configs where that wrapping is inactive (max_table_width
+--   0, or a cell mode other than padded/trimmed).
 --
 -- Surveyed alternatives (2026-08) before keeping this custom:
 -- - render-markdown has no supported runtime per-buffer config API: the
@@ -173,8 +173,16 @@ local function set_read_mode(buf, on, opts)
         or { default = vim.o.concealcursor }
       cfg.win_options.concealcursor.rendered = "nvc"
     end
+    -- Vendored render-markdown PR #617 wraps over-wide table cells onto
+    -- virtual lines when 'wrap' is on, so wide tables no longer shatter and
+    -- wrap needs no suppression. The check keys off the same config fields
+    -- the renderer gates on (table.lua compute_wrap).
+    local rm_wraps_tables = cfg
+      and cfg.pipe_table
+      and (cfg.pipe_table.max_table_width or 0) ~= 0
+      and vim.tbl_contains({ "padded", "trimmed" }, cfg.pipe_table.cell)
     local read_opts = vim.tbl_extend("force", {}, read_win_options)
-    if wrap_breaks_table(buf, win) then
+    if not rm_wraps_tables and wrap_breaks_table(buf, win) then
       read_opts.wrap = false
       vim.b[buf].read_mode_wrap_suppressed = true
     end

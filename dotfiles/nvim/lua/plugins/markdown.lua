@@ -8,6 +8,11 @@
 return {
   {
     "MeanderingProgrammer/render-markdown.nvim",
+    -- Vendored: upstream pin 4663eb3 plus its open PR #617 (max_table_width
+    -- cell wrapping), rebased and applied as a Nix patch -- see
+    -- home/programs/dotfiles.nix, which symlinks the patched source here.
+    -- Drop the dir override (and the Nix block) when upstream merges #617.
+    dir = vim.fn.stdpath("config") .. "/vendor/render-markdown.nvim",
     ft = { "markdown" },
     dependencies = { "nvim-treesitter/nvim-treesitter", "nvim-mini/mini.icons" },
     opts = {
@@ -43,6 +48,11 @@ return {
       -- Same background objection for fenced code blocks (default links
       -- RenderMarkdownCode to ColorColumn). Language icon and border stay.
       code = { disable_background = true },
+      -- PR #617 (vendored above): tables wider than the window wrap their
+      -- cells onto virtual lines instead of shattering when 'wrap' is on
+      -- (READ mode); inert under nowrap. Full window width -- the wrapped
+      -- table replaces horizontal overflow, so it may use every column.
+      pipe_table = { max_table_width = 1.0 },
       -- render-latex.nvim and Snacks.image own all mathematics.
       latex = { enabled = false },
     },
