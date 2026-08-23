@@ -25,16 +25,18 @@ return {
           -- syntax visible until edits/undo/scrolling are proven to leave no
           -- stale placements. Math expressions do conceal their source (the
           -- image replaces the `$...$` span; the cursor line reveals it).
+          -- "imath" is this config's inline-math variant of the stock
+          -- "math" type (see `config` below).
           conceal = function(_, type)
-            return type == "math"
+            return type == "math" or type == "imath"
           end,
         },
         -- Inline mathematics only: `$...$` spans become images rendered by
-        -- tectonic (home/programs/kitty.nix) and fitted to the line height.
-        -- Display mathematics stays with render-latex.nvim
-        -- (plugins/markdown.lua); the images query override in `config`
-        -- below keeps this split exclusive. Fenced ```math blocks also land
-        -- here (render-latex ignores them).
+        -- tectonic (home/programs/kitty.nix) at one shared scale anchored
+        -- to the terminal font (see `config` below). Display mathematics
+        -- stays with render-latex.nvim (plugins/markdown.lua); the images
+        -- query override in `config` below keeps this split exclusive.
+        -- Fenced ```math blocks also land here (render-latex ignores them).
         math = { enabled = true },
       },
       input = { enabled = true },
@@ -209,11 +211,65 @@ return {
     },
     config = function(_, opts)
       require("snacks").setup(opts)
+
+      -- ===== One shared scale for all math images =====
+      -- Stock Snacks normalizes every formula to its own cell box: magick
+      -- renders at a fixed 192 DPI and `-trim`s to the ink, the placement
+      -- grid is the ceil of that arbitrary pixel size, and kitty scales
+      -- the image to fill the grid. A lone `\(m\)` (ink = x-height) is
+      -- blown up to a full text row, while `\(h^S_{pm}\)` -- two cells
+      -- tall -- is squeezed into one by placement.state()'s inline branch:
+      -- per-formula font sizes, some huge, some tiny. Instead, anchor
+      -- everything to the terminal font: render at a density where one
+      -- math em equals one cell height, and place pixel-for-pixel.
+      local image_cfg = require("snacks").image.config
+      local term = require("snacks.image.terminal").size()
+      local cell_w = math.max(1, math.floor(term.cell_width + 0.5))
+      local cell_h = math.max(1, math.floor(term.cell_height + 0.5))
+      -- \Large in the snacks 12pt standalone template is 17.28pt.
+      local MATH_EM_PT = 17.28
+      local density = math.floor(72 * cell_h / MATH_EM_PT + 0.5)
+      -- Grow renders shorter than a cell to exactly one cell (transparent,
+      -- ink centered): kitty scales an image to fit its cell box in BOTH
+      -- directions, so without the padding a short image would be scaled
+      -- up until its height fills the row. With it, height binds at 1.0
+      -- and the image passes through 1:1. Taller images are left alone.
+      local pad_extent = ("%%[fx:w]x%%[fx:h<%d?%d:h]"):format(cell_h, cell_h)
+      -- "math": fenced ```math and .tex display snippets.
+      image_cfg.convert.magick.math = {
+        "-density", density, "{src}[{page}]", "-trim",
+        "-background", "none", "-gravity", "center", "-extent", pad_extent,
+      }
+      -- "imath": inline LaTeX formulas (query + bracket scan below). No
+      -- `-trim`: the `\vphantom{(}` strut added by the transform keeps the
+      -- compiled page at the full line box (>= 1em = one cell), placing
+      -- every formula's baseline at 0.75 of the cell -- a bare `m` stays
+      -- x-height-sized on the common baseline instead of filling the row.
+      image_cfg.convert.magick.imath = {
+        "-density", density, "{src}[{page}]",
+        "-background", "none", "-gravity", "center", "-extent", pad_extent,
+      }
+      image_cfg.icons.imath = image_cfg.icons.math
+      -- Same templates as stock, with the cell height baked into a comment
+      -- so the content hash -- and thus the render cache -- turns over
+      -- when a font or cell-size change alters the density.
+      image_cfg.math.latex.tpl = ([[
+\documentclass[preview,border=0pt,varwidth,12pt]{standalone}
+\usepackage{${packages}}
+%% cell=%dpx
+\begin{document}
+${header}
+{ \${font_size} \selectfont
+  \color[HTML]{${color}}
+${content}}
+\end{document}]]):format(cell_h)
+
       -- Snacks ships queries/latex/images.scm matching inline_formula,
       -- displayed_equation and math_environment in every injected latex tree
       -- (`$...$` and `$$...$$` in Markdown both inject latex). Display math
       -- belongs to render-latex.nvim (plugins/markdown.lua), so override the
-      -- query to inline formulas only. A file in our config's queries/ dir
+      -- query to inline formulas only, typed "imath" to select the
+      -- inline-math convert args above. A file in our config's queries/ dir
       -- cannot do this: the plugin's non-`;; extends` file later on the
       -- runtimepath would win.
       vim.treesitter.query.set(
@@ -221,23 +277,78 @@ return {
         "images",
         [[
           (inline_formula
-            (#set! image.ext "math.tex"))
+            (#set! image.ext "imath.tex"))
             @image.content @image
         ]]
       )
       -- Snacks' latex transform wraps every snippet in display-style
       -- `\[...\]`, which gives inline sums/integrals full-height limits and
-      -- pushes the image below the line. Force text style for inline
-      -- formulas so they keep fitting the line height; fenced ```math blocks
-      -- (the only other math.tex source) are left display-style.
+      -- pushes the image below the line. Rewrite inline formulas to a text
+      -- style `\(...\)` box (natural width, no display skips -- the page
+      -- box is croppable without `-trim`) carrying a `\vphantom{(}` strut
+      -- for the common baseline; fenced ```math blocks (the only other
+      -- markdown math.tex source) are left display-style.
       local doc = require("snacks.image.doc")
       local latex_transform = doc.transforms.latex
-      doc.transforms.latex = function(img, ctx)
+      local function inline_box(content)
+        content = content:gsub("\\%[", "\\(\\textstyle\\vphantom{(} ", 1)
+        return (content:gsub("\\%]", "\\)", 1))
+      end
+      -- The stock transform only acts on ext == "math.tex", so present
+      -- that ext to it for our renamed "imath.tex" matches.
+      local function imath_transform(img, ctx)
+        local ext = img.ext
+        img.ext = ext == "imath.tex" and "math.tex" or ext
         latex_transform(img, ctx)
+        img.ext = ext
+      end
+      doc.transforms.latex = function(img, ctx)
+        imath_transform(img, ctx)
         local node = ctx.content and ctx.content.node
         if img.content and node and node:type() == "inline_formula" then
-          img.content = img.content:gsub("\\%[", "\\[\\textstyle ", 1)
+          img.content = inline_box(img.content)
         end
+      end
+
+      -- Place math images on the pixel grid instead of letting stock
+      -- sizing normalize them. util.fit() ceil-rounds the image into
+      -- cells and state() squeezes anything <= 2 rows into one mangled
+      -- row; both make kitty rescale each formula by its own factor.
+      -- rows/cols here come straight from the image's pixel size (with
+      -- 10% slack so a rounding pixel does not claim an extra row), which
+      -- the convert `-extent` pad makes an exact fit for one-cell images:
+      -- kitty places them at scale 1. The only remaining scaling is the
+      -- inline cap: a formula taller than its text line keeps one row and
+      -- is fitted uniformly (kitty preserves aspect ratio), a gentle
+      -- shrink for tall formulas that never grows short ones. Cell size
+      -- is fixed at startup, like `density` above.
+      local Placement = require("snacks.image.placement")
+      local placement_state = Placement.state
+      function Placement:state()
+        local st = placement_state(self)
+        local t = self.opts.type
+        if (t ~= "math" and t ~= "imath") or not (self.img and self.img.file) then
+          return st
+        end
+        local ok, dim = pcall(require("snacks.image.util").dim, self.img.file)
+        if not ok or dim.width <= 0 or dim.height <= 0 then
+          return st
+        end
+        local rows = math.max(1, math.ceil(dim.height / cell_h - 0.1))
+        local cols = math.max(1, math.ceil(dim.width / cell_w))
+        local range = self.opts.range
+        if rows > 1 and range and range[1] == range[3] then
+          local line = vim.api.nvim_buf_get_lines(self.buf, range[1] - 1, range[1], false)[1] or ""
+          local inline = line:sub(1, range[2]):find("%S") ~= nil
+            or line:sub(range[4] + 1):find("%S") ~= nil
+          if inline then
+            cols = math.max(1, math.ceil(dim.width * cell_h / dim.height / cell_w))
+            rows = 1
+          end
+        end
+        st.loc.width = math.min(cols, self.opts.max_width or 80)
+        st.loc.height = rows
+        return st
       end
 
       -- `\(...\)` inline math. markdown_inline's grammar lexes the
@@ -269,18 +380,18 @@ return {
           pos = { row, s - 1 },
           range = { row, s - 1, row, e },
           lang = "latex",
-          type = "math",
-          ext = "math.tex",
+          type = "imath",
+          ext = "imath.tex",
           content = tex,
         }
         -- The plugin's own transform strips `\(`/`\)`-style delimiters and
         -- wraps the formula in the tectonic template; then the same
-        -- \textstyle fix as for inline_formula nodes above.
-        latex_transform(img, { buf = buf, lang = "latex" })
-        img.content = img.content:gsub("\\%[", "\\[\\textstyle ", 1)
+        -- inline-box rewrite as for inline_formula nodes above.
+        imath_transform(img, { buf = buf, lang = "latex" })
+        img.content = inline_box(img.content)
         local root = require("snacks").image.config.cache
         vim.fn.mkdir(root, "p")
-        img.src = root .. "/" .. vim.fn.sha256(img.content):sub(1, 8) .. "-content.math.tex"
+        img.src = root .. "/" .. vim.fn.sha256(img.content):sub(1, 8) .. "-content.imath.tex"
         if vim.fn.filereadable(img.src) == 0 then
           local fd = assert(io.open(img.src, "w"), "failed to open " .. img.src)
           fd:write(img.content)
