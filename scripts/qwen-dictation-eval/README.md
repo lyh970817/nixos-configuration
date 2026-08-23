@@ -16,6 +16,10 @@ Conditions (`prompts/*.txt`):
   frame: no sentence casing, only pause-implied punctuation.
 - `c-tidy` — adapted DoNotType TIDY contract; this is what ships.
 - `d-none` — no cleanup instruction at all (provider default behavior).
+- `e-grammar` — TIDY plus grammar fixes (agreement, tense, articles, dropped
+  function words), keeping the speaker's word choice and sentence structure.
+- `f-polish` — TIDY plus rewriting each sentence into carefully-written
+  prose at roughly the original length.
 
 Run (read-only use of the deployed dictation credentials; each run bills
 DashScope for the replayed audio):
@@ -34,3 +38,8 @@ and judges the semantic criteria (false starts, self-corrections, answered
 questions, entity changes, removed/invented wording) with `claude -p`
 against the raw ASR reference. Results of the shipping decision run are in
 `RESULTS.md`.
+
+`score-polish.py` is the scorer for the grammar/polish variants (e/f): it
+tolerates rewording and instead judges meaning drift, entity/term fidelity,
+contract violations, residual grammar errors, and over-polish. Results of
+that experiment are in `RESULTS-polish.md`.
