@@ -105,6 +105,15 @@ let
     # rounding, which no composition value changes.
     text_composition_strategy legacy
 
+    # Box-drawing weight parity with foot. Kitty sizes its self-rendered box
+    # glyphs in pts scaled by monitor DPI (thin/normal/thick/very-thick;
+    # default 0.001, 1, 1.5, 2): at this monitor's 1.67 scale the default 1pt
+    # "normal" made herdr's light pane borders (│ ─) ~3px against foot's 1px
+    # hairline. 0.4pt measured exactly 1px full-intensity here and floors to
+    # kitty's 1px minimum on lower-DPI outputs. Heavy lines (┃ ━) already
+    # measured 5px in both terminals, so the thick weights stay default.
+    box_drawing_scale 0.001, 0.4, 1.5, 2
+
     # foot: [cursor] style=block, blink=yes, blink-rate=500. Kitty stops
     # blinking after 15s by default; 0 blinks indefinitely like foot.
     cursor_shape block
