@@ -582,19 +582,28 @@ def _add_origin_flags(parser: argparse.ArgumentParser) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="explainctl",
-        description="Forked Claude explanation workspaces: persistent Markdown "
-        "trees updated by a dormant forked session.",
-    )
-    parser.add_argument(
+    # A parent-parser optional is never matched once argparse has dispatched
+    # into a subparser, so the compat flag must be inherited by every
+    # subcommand or `explainctl submit --json f` exits 2 (the F7 regression).
+    compat = argparse.ArgumentParser(add_help=False)
+    compat.add_argument(
         "--json",
         action="store_true",
         help="accepted for compatibility; JSON is always printed on stdout",
     )
+    parser = argparse.ArgumentParser(
+        prog="explainctl",
+        parents=[compat],
+        description="Forked Claude explanation workspaces: persistent Markdown "
+        "trees updated by a dormant forked session.",
+    )
     commands = parser.add_subparsers(dest="command", required=True)
 
-    new = commands.add_parser("new", help="fork the origin session into a new explanation tree")
+    new = commands.add_parser(
+        "new",
+        parents=[compat],
+        help="fork the origin session into a new explanation tree",
+    )
     new.add_argument("--question", required=True, help="what needs explaining")
     _add_origin_flags(new)
     new.add_argument(
@@ -604,29 +613,37 @@ def build_parser() -> argparse.ArgumentParser:
     )
     new.set_defaults(func=cmd_new)
 
-    submit = commands.add_parser("submit", help="process open question blocks in a tree")
+    submit = commands.add_parser(
+        "submit", parents=[compat], help="process open question blocks in a tree"
+    )
     submit.add_argument("file", help="Markdown file inside the explanation tree")
     submit.set_defaults(func=cmd_submit)
 
     sync = commands.add_parser(
-        "sync", help="rebase an existing tree onto the current main session"
+        "sync",
+        parents=[compat],
+        help="rebase an existing tree onto the current main session",
     )
     sync.add_argument("target", help="explanation root or a file inside it")
     _add_origin_flags(sync)
     sync.set_defaults(func=cmd_sync)
 
-    status = commands.add_parser("status", help="tree status, lock state, open questions")
+    status = commands.add_parser(
+        "status", parents=[compat], help="tree status, lock state, open questions"
+    )
     status.add_argument("target", nargs="?", default=".", help="path or slug fragment")
     status.set_defaults(func=cmd_status)
 
-    listing = commands.add_parser("list", help="list explanation trees")
+    listing = commands.add_parser("list", parents=[compat], help="list explanation trees")
     listing.set_defaults(func=cmd_list)
 
-    opener = commands.add_parser("open", help="reopen a tree in the Kitty/Neovim workspace")
+    opener = commands.add_parser(
+        "open", parents=[compat], help="reopen a tree in the Kitty/Neovim workspace"
+    )
     opener.add_argument("target", help="path or slug fragment")
     opener.set_defaults(func=cmd_open)
 
-    doctor = commands.add_parser("doctor", help="environment checks")
+    doctor = commands.add_parser("doctor", parents=[compat], help="environment checks")
     doctor.set_defaults(func=cmd_doctor)
     return parser
 

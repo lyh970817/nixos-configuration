@@ -85,7 +85,7 @@ fi
 # variables (set on the tab at creation so its whole process tree inherits
 # them), prompts, and runs
 #   explainctl new --session-id ... --cwd ... --launcher ... --question ... \
-#     --json --no-open
+#     --no-open
 workspace_id=${HERDR_ACTIVE_WORKSPACE_ID:-${HERDR_WORKSPACE_ID:-}}
 tab_args=(
   --cwd "$origin_cwd"

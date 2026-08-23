@@ -316,6 +316,29 @@ class ClaudeOutputTest(unittest.TestCase):
             cli.parse_claude_output("not json at all")
 
 
+class JsonCompatFlagTest(unittest.TestCase):
+    """`--json` is a no-op accepted anywhere: JSON is always printed. The F7
+    regression was argparse exiting 2 on `submit --json f` because a
+    parent-parser optional is never matched after subcommand dispatch."""
+
+    def test_json_flag_accepted_in_both_positions(self):
+        parser = cli.build_parser()
+        for argv in (
+            ["submit", "--json", "some.md"],
+            ["--json", "submit", "some.md"],
+            ["new", "--question", "q", "--json", "--no-open"],
+            ["status", "--json"],
+            ["list", "--json"],
+            ["sync", "target", "--json"],
+            ["open", "target", "--json"],
+            ["doctor", "--json"],
+        ):
+            try:
+                parser.parse_args(argv)  # exits 2 on unrecognized arguments
+            except SystemExit as error:
+                self.fail(f"parser rejected {argv}: exit {error.code}")
+
+
 class CliBusyTest(unittest.TestCase):
     def test_submit_on_locked_tree_exits_75(self):
         with tempfile.TemporaryDirectory() as tmp:
