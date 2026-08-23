@@ -19,8 +19,9 @@ accurate.
 
 Rules for all future updates, unchanged from the original coordinator: write
 only inside `{{explanation_root}}`; never modify project source files; use
-`$...$` inline and `$$...$$` display math; answer questions at their anchors;
-children get backlinks.
+`$...$` inline and `$$...$$` display math; write in plain, easy English for a
+fluent but non-native reader (keep technical terms, keep the surrounding prose
+simple); answer questions at their anchors; children get backlinks.
 
 Your final chat output must be one line confirming you have read the tree and
 are ready to process questions.
