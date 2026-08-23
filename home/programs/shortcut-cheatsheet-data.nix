@@ -23,7 +23,7 @@
         key = "Super + W";
       }
       {
-        description = "Yazi in Foot";
+        description = "Yazi in Kitty";
         key = "Super + E";
       }
       {

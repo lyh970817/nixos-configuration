@@ -109,7 +109,8 @@ in
       bind -n C-1 run-shell -b "${scratchNote} horizontal #{q:pane_id} #{q:pane_current_path}"
       bind -n C-S-1 run-shell -b "${scratchNote} vertical #{q:pane_id} #{q:pane_current_path}"
 
-      # Enable extended keys so tmux recognizes the CSI-u codes sent by foot
+      # Enable extended keys so tmux recognizes the CSI-u codes sent by kitty
+      # and foot (xterm-kitty matches the xterm* glob below)
       set -s extended-keys on
       set -as terminal-features 'xterm*:extkeys'
 
@@ -234,7 +235,7 @@ in
         set -g mode-style fg=#${p.background},bg=#${p.accent}
       %endif
 
-      set -ag terminal-overrides ",foot*:RGB"
+      set -ag terminal-overrides ",foot*:RGB,xterm-kitty:RGB"
     '';
   };
 }
