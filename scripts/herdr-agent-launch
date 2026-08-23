@@ -98,11 +98,15 @@ rollback_unparsed_destination() {
   esac
 }
 
+# HERDR_SCRIPTED_PANE makes the pane's zsh skip its login greeting
+# (home/programs/print_welcome.sh), so the shell reaches a quiet prompt almost
+# immediately instead of after a second-plus of fastfetch/poem output.
 case "$placement" in
   tab)
     created=$(herdr tab create \
       --workspace "$workspace_id" \
       --cwd "$pane_cwd" \
+      --env HERDR_SCRIPTED_PANE=1 \
       --no-focus)
     if ! new_tab_id=$(jq -er \
       '.result.tab.tab_id | select(type == "string" and length > 0)' \
@@ -120,6 +124,7 @@ case "$placement" in
       --current \
       --direction "$placement" \
       --cwd "$pane_cwd" \
+      --env HERDR_SCRIPTED_PANE=1 \
       --no-focus)
     if ! new_pane_id=$(jq -er \
       '.result.pane.pane_id | select(type == "string" and length > 0)' \

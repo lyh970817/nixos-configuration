@@ -91,6 +91,9 @@ tab_args=(
   --cwd "$origin_cwd"
   --label Explanation
   --focus
+  # Skip the pane's login greeting (home/programs/print_welcome.sh) so the
+  # shell reaches a quiet prompt fast and nvim starts sooner.
+  --env HERDR_SCRIPTED_PANE=1
   --env EXPLAIN_ORIGIN_SESSION_ID="$session_id"
   --env EXPLAIN_ORIGIN_CWD="$origin_cwd"
   --env EXPLAIN_ORIGIN_LAUNCHER="$launcher"
