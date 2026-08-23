@@ -200,8 +200,11 @@ let
         "$root/" "$PEER:$VAULT/$slug/"
 
       focus="$(jq -r '.root_document // "explanation.md"' "$root/.explain.json")"
-      # Loose coupling: the Obsidian launcher may not be installed on the
-      # peer yet; the sync above already delivered the document.
+      # A bare SSH command carries no Wayland session env; like show-url
+      # (html-open.nix), obsidian-explain rediscovers it on the peer and
+      # detaches, so this plain invocation is enough. Loose coupling: the
+      # launcher may not be installed on the peer yet; the sync above already
+      # delivered the document, so failure here only prints where it is.
       if ! ssh -o BatchMode=yes -o ConnectTimeout=10 \
           -o StrictHostKeyChecking=accept-new "$PEER" \
           "$(printf '%q ' ${profileBin}/obsidian-explain "$VAULT/$slug/$focus")"; then

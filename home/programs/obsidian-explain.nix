@@ -91,16 +91,68 @@ let
     }
   ];
 
-  # Opens (and on first use registers) the managed vault. The path form of the
-  # URI is used instead of vault=explanations-vault because a vault name only
-  # resolves after Obsidian has seen the vault once; the path form works on a
-  # fresh machine too. A running instance receives the URI through Obsidian's
+  # Opens the managed vault. The path form of the URI resolves only vaults
+  # already listed in ~/.config/obsidian/obsidian.json — on an unregistered
+  # path Obsidian shows a native error dialog (or silently does nothing)
+  # rather than registering it, so the launcher writes the registry entry
+  # itself first. A running instance receives the URI through Obsidian's
   # single-instance lock, otherwise this starts one.
   vaultUri = "obsidian://open?path=${lib.replaceStrings [ "/" ] [ "%2F" ] vaultDir}";
   obsidianExplain = pkgs.writeShellApplication {
     name = "obsidian-explain";
+    runtimeInputs = [
+      pkgs.jq
+      pkgs.coreutils
+      pkgs.util-linux
+    ];
     text = ''
-      exec ${pkgs.obsidian}/bin/obsidian ${lib.escapeShellArg vaultUri} "$@"
+      vault=${lib.escapeShellArg vaultDir}
+      registry="$HOME/.config/obsidian/obsidian.json"
+
+      # Register the vault if the registry does not know it yet. Only ever add
+      # a missing entry, atomically: a running Obsidian rewrites this file for
+      # its own bookkeeping (ts, open) and tolerates a new entry appearing,
+      # but not being clobbered.
+      mkdir -p "''${registry%/*}"
+      [ -s "$registry" ] || printf '{"vaults":{}}' > "$registry"
+      if ! jq -e --arg path "$vault" \
+          '.vaults // {} | any(.[]; .path == $path)' "$registry" >/dev/null; then
+        id="$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
+        tmp="$(mktemp "$registry.XXXXXX")"
+        jq --arg id "$id" --arg path "$vault" --argjson ts "$(date +%s%3N)" \
+          '.vaults = ((.vaults // {}) + { ($id): { path: $path, ts: $ts } })' \
+          "$registry" > "$tmp"
+        mv "$tmp" "$registry"
+      fi
+
+      # Invoked over SSH (explain-dispatch-new) this inherits no session env;
+      # rediscover it the way show-url does (html-open.nix), or Electron dies
+      # on the missing XDG_RUNTIME_DIR. NIXOS_OZONE_WL makes the wrapper pick
+      # the Wayland backend, as the desktop session does (hyprland.nix).
+      export XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+      if [ -z "''${WAYLAND_DISPLAY:-}" ]; then
+        for sock in "$XDG_RUNTIME_DIR"/wayland-*; do
+          case "$sock" in
+            *.lock) continue ;;
+          esac
+          [ -S "$sock" ] || continue
+          WAYLAND_DISPLAY="$(basename "$sock")"
+          export WAYLAND_DISPLAY
+          break
+        done
+      fi
+      if [ -z "''${WAYLAND_DISPLAY:-}" ]; then
+        echo "obsidian-explain: no Wayland socket under $XDG_RUNTIME_DIR" >&2
+        exit 1
+      fi
+      export DISPLAY="''${DISPLAY:-:0}"
+      export XDG_CURRENT_DESKTOP="''${XDG_CURRENT_DESKTOP:-Hyprland}"
+      export NIXOS_OZONE_WL=1
+
+      # Detached, so an SSH caller returning does not take Obsidian with it;
+      # a running instance picks the URI up and the child exits on its own.
+      setsid -f ${pkgs.obsidian}/bin/obsidian ${lib.escapeShellArg vaultUri} "$@" \
+        >/dev/null 2>&1 < /dev/null
     '';
   };
 in
