@@ -11,6 +11,9 @@ let
   #   Desktop/voice/hardware: dotfiles/hypr/hyprland.lua and the remote
   #     role fragment in home/programs/dotfiles.nix.
   #   Herdr: direct custom bindings in dotfiles/herdr/config.toml.
+  #   Explain: the fork binding in dotfiles/herdr/config.toml plus the
+  #     buffer-local maps and commands in dotfiles/nvim/lua/plugins/explain.lua
+  #     and dotfiles/nvim/lua/plugins/readmode.lua.
   #   Yazi: dotfiles/yazi/keymap.toml plus the shipped built-in keymap.
   #   MPV: built-in input map; home/programs/mpv.nix leaves it unchanged.
   #   Shell: aliases and ZLE bindings in home/programs/shell.nix.
