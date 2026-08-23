@@ -52,6 +52,7 @@
     ./programs/html-open.nix
     ./programs/explain-preview.nix
     ./programs/explain-sync.nix
+    ./programs/obsidian-explain.nix
     ./programs/pre-commit.nix
     ./programs/qutebrowser.nix
     ./programs/nvim-theme.nix
