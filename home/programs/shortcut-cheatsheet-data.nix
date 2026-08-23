@@ -330,6 +330,10 @@
         key = ":ExplainOpenRoot";
       }
       {
+        description = "Open / reopen browser preview tab";
+        key = ":ExplainPreview";
+      }
+      {
         description = "Create from origin session";
         key = ":ExplainNew";
       }
