@@ -231,16 +231,17 @@ return {
       -- (full-height parens and up) is capped back by placement as before.
       local MATH_EM_CELLS = 1.12
       local cell_w, cell_h
-      -- Derive the render metrics from the terminal cell size, refreshed on
-      -- VimResized. A pty without pixel geometry -- ws_xpixel/ws_ypixel 0,
-      -- which every herdr pane reports until its attached client knows the
-      -- host cell size (kitty_graphics off, or pre-reattach) -- slips
-      -- through snacks' size() guard as cell_width/cell_height 0. Clamping
-      -- that to 1 once baked `-density 5` renders: 1px-tall formula strips
-      -- that kitty scaled into dark smudges. Treat it as unknown and use
-      -- snacks' own 9x18 fallback instead; the VimResized refresh lets a
-      -- long-lived nvim pick up the real geometry when the pane gains it
-      -- (herdr re-resizes its pty on client attach and layout changes).
+      -- Derive the render metrics from the terminal cell size, refreshed by
+      -- the resize watchers below; returns whether they changed. A pty
+      -- without pixel geometry -- ws_xpixel/ws_ypixel 0, which every herdr
+      -- pane reports until its attached client knows the host cell size
+      -- (kitty_graphics off, or pre-reattach) -- slips through snacks'
+      -- size() guard as cell_width/cell_height 0. Clamping that to 1 once
+      -- baked `-density 5` renders: 1px-tall formula strips that kitty
+      -- scaled into dark smudges. Treat it as unknown and use snacks' own
+      -- 9x18 fallback instead; the refresh lets a long-lived nvim pick up
+      -- the real geometry when the pane gains it (herdr re-resizes its pty
+      -- on client attach and layout changes).
       local function refresh_math_metrics()
         local term = require("snacks.image.terminal").size()
         local cw = math.floor(term.cell_width + 0.5)
@@ -249,7 +250,7 @@ return {
           cw, ch = 9, 18
         end
         if cw == cell_w and ch == cell_h then
-          return
+          return false
         end
         cell_w, cell_h = cw, ch
         local density = math.floor(72 * cell_h * MATH_EM_CELLS / MATH_EM_PT + 0.5)
@@ -288,16 +289,65 @@ ${header}
   \color[HTML]{${color}}
 ${content}}
 \end{document}]]):format(density)
+        return true
       end
       refresh_math_metrics()
-      -- Scheduled so snacks' own VimResized autocmd (registered first, at
-      -- module load) has cleared its cached size() before we re-read it.
+
+      -- Changed metrics only affect future compiles: nothing in snacks
+      -- re-scans a buffer on resize, so images already on screen would keep
+      -- their old density until the next edit. Poke every attached buffer's
+      -- inline updater (its debounced doc.find re-scan; the density baked
+      -- into the template changes the content hash, so stale placements
+      -- fall out of the src match and are closed), and let render-latex
+      -- (plugins/markdown.lua) re-derive display math from the same cells.
+      local function rerender_math()
+        for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+          if vim.b[buf].snacks_image_attached then
+            pcall(vim.api.nvim_exec_autocmds, "BufWinEnter", {
+              group = "snacks.image.inline." .. buf,
+              buffer = buf,
+            })
+          end
+        end
+        vim.api.nvim_exec_autocmds("User", {
+          pattern = "MathMetricsChanged",
+          data = { cell_width = cell_w, cell_height = cell_h },
+        })
+      end
+
+      -- A kitty font zoom reaches this pty as one or more TIOCSWINSZ
+      -- ioctls, and VimResized alone misses two of the shapes they take:
+      -- a pixel-only update (zoom that leaves this pane's rows/cols alone,
+      -- e.g. when herdr's layout holds the pane grid while the client cell
+      -- size changes) fires no event at all, and a torn update (rows/cols
+      -- first, pixel fields moments later) fires VimResized while the
+      -- ioctl still reports stale pixels, baking the wrong density with
+      -- nothing after it to correct. No event can cover the gap: SIGWINCH
+      -- only reaches nvim's TUI process (the embed server running this
+      -- code sits in its own session, off the pty's foreground group), so
+      -- re-poll instead -- a fast confirm after each VimResized for the
+      -- torn shape, and a slow drift poll (one ioctl and a compare per
+      -- second) for the eventless one.
+      local function poke()
+        -- Snacks caches size() until its own VimResized autocmd clears it;
+        -- run just that group so poll-triggered refreshes read the live
+        -- ioctl too.
+        pcall(vim.api.nvim_exec_autocmds, "VimResized", { group = "snacks.image.terminal" })
+        if refresh_math_metrics() then
+          rerender_math()
+        end
+      end
+      local confirm = assert(vim.uv.new_timer())
       vim.api.nvim_create_autocmd("VimResized", {
         group = vim.api.nvim_create_augroup("config.snacks.math_metrics", { clear = true }),
         callback = function()
-          vim.schedule(refresh_math_metrics)
+          vim.schedule(poke)
+          confirm:stop()
+          confirm:start(250, 0, vim.schedule_wrap(poke))
         end,
       })
+      local drift = assert(vim.uv.new_timer())
+      drift:start(1000, 1000, vim.schedule_wrap(poke))
       image_cfg.icons.imath = image_cfg.icons.math
 
       -- Snacks ships queries/latex/images.scm matching inline_formula,

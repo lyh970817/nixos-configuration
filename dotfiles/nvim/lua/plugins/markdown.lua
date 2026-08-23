@@ -5,6 +5,24 @@
 --
 -- Markview rendered .qmd/.Rmd too; those filetypes are intentionally left
 -- raw here until tested (issue #11), rather than adding brittle injections.
+
+-- Display-math font scale for a given cell height, used at setup below and
+-- again on every MathMetricsChanged refresh (font zoom).
+-- 0.85 * cell height made display equations read smaller than body text
+-- (fractions/limits shrink their glyphs further). text_scale multiplies the
+-- worker's font size directly (renderer.resolve_font_size), so ~1.5 puts
+-- equation glyphs clearly above body-text size without the old 2.4x blowup,
+-- and keeps display math a step above the inline-math anchor
+-- (plugins/snacks.lua, MATH_EM_CELLS).
+-- Snap the resulting font size to a whole pixel: the worker rasterizes
+-- Computer Modern hairlines at exactly this size, and a fractional em grid
+-- lands thin stems between pixels, washing them out on the dark theme
+-- (e.g. 31 * 0.85 * 1.5 = 39.53px; rounded to 40px the ratio becomes
+-- 1.518, visually still the chosen ~1.5).
+local function display_text_scale(cell_height)
+  return math.max(1, math.floor(cell_height * 0.85 * 1.5 + 0.5)) / (cell_height * 0.85)
+end
+
 return {
   {
     "MeanderingProgrammer/render-markdown.nvim",
@@ -98,21 +116,7 @@ return {
           -- over the text size. 1.0 renders at display resolution: math
           -- glyphs come out at the match_text preset's 0.85 * cell height.
           scale = 1.0,
-          -- 0.85 * cell height made display equations read smaller than
-          -- body text (fractions/limits shrink their glyphs further).
-          -- text_scale multiplies the worker's font size directly
-          -- (renderer.resolve_font_size), so ~1.5 puts equation glyphs
-          -- clearly above body-text size without the old 2.4x blowup,
-          -- and keeps display math a step above the inline-math anchor
-          -- (plugins/snacks.lua, MATH_EM_CELLS).
-          -- Snap the resulting font size to a whole pixel: the worker
-          -- rasterizes Computer Modern hairlines at exactly this size, and
-          -- a fractional em grid lands thin stems between pixels, washing
-          -- them out on the dark theme (e.g. 31 * 0.85 * 1.5 = 39.53px;
-          -- rounded to 40px the ratio becomes 1.518, visually still the
-          -- chosen ~1.5).
-          text_scale = math.max(1, math.floor(cell_height * 0.85 * 1.5 + 0.5))
-            / (cell_height * 0.85),
+          text_scale = display_text_scale(cell_height),
         },
         image = {
           cell_width_px = cell_width,
@@ -122,6 +126,29 @@ return {
     end,
     config = function(_, opts)
       require("render_latex").setup(opts)
+
+      -- Font zoom: plugins/snacks.lua watches the pty for cell-size changes
+      -- (VimResized alone misses pixel-only and torn winsize updates) and
+      -- fires this event after re-deriving the shared math metrics. Adopt
+      -- the same cell box, re-derive the display scale, and re-queue every
+      -- markdown buffer -- the renderer's fingerprint includes cell size
+      -- and font size, so existing equations re-render at the new size.
+      vim.api.nvim_create_autocmd("User", {
+        pattern = "MathMetricsChanged",
+        group = vim.api.nvim_create_augroup("config.render_latex.math_metrics", { clear = true }),
+        callback = function(ev)
+          local config = require("render_latex.config")
+          config.image.cell_width_px = ev.data.cell_width
+          config.image.cell_height_px = ev.data.cell_height
+          config.render.text_scale = display_text_scale(ev.data.cell_height)
+          local renderer = require("render_latex.renderer")
+          for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+            if vim.api.nvim_buf_is_loaded(buf) and vim.bo[buf].filetype == "markdown" then
+              pcall(renderer.queue, buf)
+            end
+          end
+        end,
+      })
 
       -- rc4's incremental scan runs `parser:parse(true)` from inside its
       -- `on_lines` buf_attach callback (renderer.lua attach -> Detect.update
