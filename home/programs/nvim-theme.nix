@@ -204,6 +204,17 @@ let
     call s:h('PmenuSbar',     {'fg': s:fg, 'bg': s:deep_amber})
     call s:h('PmenuThumb',    {'fg': s:fg, 'bg': s:muted_amber})
     call s:h('NormalFloat',   {'fg': s:fg, 'bg': s:black})
+
+    " Snacks.input paints its float through SnacksInput* groups whose plugin
+    " defaults link to Diagnostic* (builtin cyan on a cleared scheme).
+    " Re-anchor them to the groups every other float resolves to (builtin
+    " links: FloatBorder -> NormalFloat, FloatTitle -> Title). Defined here
+    " because `hi clear` on a mode toggle wipes the plugin's default links.
+    hi! link SnacksInputNormal NormalFloat
+    hi! link SnacksInputBorder FloatBorder
+    hi! link SnacksInputTitle  FloatTitle
+    hi! link SnacksInputPrompt FloatTitle
+    hi! link SnacksInputIcon   FloatTitle
     call s:h('TabLine',       {'fg': s:grey, 'bg': s:deep_amber})
     call s:h('TabLineSel',    {'fg': s:fg, 'bg': s:bg, 'gui': 'bold', 'cterm': 'bold'})
     call s:h('TabLineFill',   {'fg': s:subtle_border, 'bg': s:deep_amber})
