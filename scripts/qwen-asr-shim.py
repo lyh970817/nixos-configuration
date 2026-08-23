@@ -41,8 +41,10 @@ import websockets
 # contract for the streaming client. The Chinese-script rule is a deliberate
 # local choice (Simplified environment). Qwen follows the filler instruction
 # only loosely, so hyprwhspr's deterministic filter_filler_words filtering
-# stays on as a backstop. Prompt variants A-D and the replay harness that
-# compared them live in scripts/qwen-dictation-eval/.
+# stays on as a backstop. Prompt variants A-F and the replay harness that
+# compared them live in scripts/qwen-dictation-eval/; the grammar (E) and
+# polish (F) variants measurably added errors without delivering polish
+# (RESULTS-polish.md), so TIDY stays.
 DEFAULT_TIDY_CLEANUP_PROMPT = """You are a transcription engine. Transcribe only the speaker.
 
 1. Remove vocal fillers and empty discourse fillers, repetitions, stutters,
