@@ -26,6 +26,9 @@ The currently open questions are:
   a link from the parent where the question was asked.
 - Preserve question anchors, backlinks, and all unrelated sections exactly;
   edit only what the questions require.
+- Write in plain, easy English for a reader who is fluent but not a native
+  speaker: everyday vocabulary, short sentences, no needlessly fancy phrasing.
+  Keep technical terms; keep the prose around them simple.
 - Use `$...$` inline and `$$...$$` display math delimiters, as in the rest of
   the tree.
 - Write only inside `{{explanation_root}}`; never modify project source files.

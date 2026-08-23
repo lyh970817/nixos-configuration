@@ -29,6 +29,9 @@ be reread, not a chat reply:
 - Do not repeat background the user has already demonstrated understanding of
   in the conversation.
 - Preserve the project's exact terminology, symbol names, and file names.
+- Write in plain, easy English for a reader who is fluent but not a native
+  speaker: everyday vocabulary, short sentences, no needlessly fancy phrasing.
+  Keep technical terms; keep the prose around them simple.
 - Use `$...$` for inline math and `$$...$$` on their own lines for display
   math; these are the delimiters the renderer understands. Keep LaTeX
   self-contained (no custom macros).
