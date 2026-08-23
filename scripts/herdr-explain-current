@@ -87,9 +87,23 @@ fi
 #   explainctl new --session-id ... --cwd ... --launcher ... --question ... \
 #     --no-open
 workspace_id=${HERDR_ACTIVE_WORKSPACE_ID:-${HERDR_WORKSPACE_ID:-}}
+
+# Label the tab with the origin session's project so several explanation tabs
+# stay tellable apart. Herdr renders tab labels at full width — no ellipsis,
+# a long label just crowds the bar until it scrolls (ui/tabs.rs tab_width) —
+# so truncate here; degenerate cwds fall back to the plain label.
+tab_label=Explanation
+origin_base=$(basename -- "$origin_cwd")
+if [[ -n $origin_base && $origin_base != / && $origin_base != . ]]; then
+  if ((${#origin_base} > 24)); then
+    origin_base="${origin_base:0:23}…"
+  fi
+  tab_label="Explain: $origin_base"
+fi
+
 tab_args=(
   --cwd "$origin_cwd"
-  --label Explanation
+  --label "$tab_label"
   --focus
   # Skip the pane's login greeting (home/programs/print_welcome.sh) so the
   # shell reaches a quiet prompt fast and nvim starts sooner.
