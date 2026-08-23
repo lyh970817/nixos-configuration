@@ -13,6 +13,9 @@
   "primary_shortcut": "SUPER+O",
   "cancel_shortcut": "SUPER+ESCAPE",
   "applications": {
+    "kitty": { "auto_paste": "ctrl+shift+v" },
+    "kitty-float": { "auto_paste": "ctrl+shift+v" },
+    "kitty-main": { "auto_paste": "ctrl+shift+v" },
     "foot": { "auto_paste": "ctrl+shift+v" },
     "foot-float": { "auto_paste": "ctrl+shift+v" },
     "foot-main": { "auto_paste": "ctrl+shift+v" }
