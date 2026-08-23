@@ -27,5 +27,10 @@ in
   #
   # ~/.config/kcl-fetch/config.json can tighten the limits and nothing else;
   # any value that would loosen one is rejected at startup rather than clamped.
+  #
+  # $KCL_FETCH_CONTACT is unset by default and stays that way unless you want
+  # it: setting it to an email address puts the (free, publisher-independent)
+  # Crossref metadata lookup into their polite pool, at the cost of handing
+  # that address to Crossref on every lookup.
   home.packages = [ kclFetch ];
 }

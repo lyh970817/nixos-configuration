@@ -21,6 +21,7 @@ string, still applies.
 from __future__ import annotations
 
 import json
+import os
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -30,8 +31,17 @@ from .gate import ArticleMeta
 
 API = "https://api.crossref.org/works/"
 
-#: Crossref asks for a contact address in the User-Agent for the polite pool.
-USER_AGENT = "kcl-fetch/0.1 (mailto:lyh970817@yandex.com)"
+#: Crossref's "polite pool" gives better service to clients that supply a
+#: contact address. It is opt-in on purpose -- an address is personal data and
+#: this tool will not hand one to a third party on its owner's behalf without
+#: being told to. Unset simply means the ordinary anonymous pool.
+CONTACT_ENV = "KCL_FETCH_CONTACT"
+
+
+def user_agent(env: dict | None = None) -> str:
+    env = os.environ if env is None else env
+    contact = (env.get(CONTACT_ENV) or "").strip()
+    return f"kcl-fetch/0.1 (mailto:{contact})" if contact else "kcl-fetch/0.1"
 
 
 @dataclass(frozen=True)
@@ -42,7 +52,7 @@ class Record:
 
 def lookup(doi: str, *, opener=None, timeout: float = 8.0) -> Record:
     url = API + urllib.parse.quote(doi, safe="/")
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    request = urllib.request.Request(url, headers={"User-Agent": user_agent()})
     try:
         opener = opener or urllib.request.urlopen
         with opener(request, timeout=timeout) as response:
