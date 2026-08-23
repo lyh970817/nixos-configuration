@@ -101,15 +101,17 @@ return {
           -- 0.85 * cell height made display equations read smaller than
           -- body text (fractions/limits shrink their glyphs further).
           -- text_scale multiplies the worker's font size directly
-          -- (renderer.resolve_font_size), so ~1.35 puts equation glyphs
-          -- slightly above body-text size without the old 2.4x blowup.
+          -- (renderer.resolve_font_size), so ~1.5 puts equation glyphs
+          -- clearly above body-text size without the old 2.4x blowup,
+          -- and keeps display math a step above the inline-math anchor
+          -- (plugins/snacks.lua, MATH_EM_CELLS).
           -- Snap the resulting font size to a whole pixel: the worker
           -- rasterizes Computer Modern hairlines at exactly this size, and
           -- a fractional em grid lands thin stems between pixels, washing
-          -- them out on the dark theme (e.g. 31 * 0.85 * 1.35 = 35.57px;
-          -- rounded to 36px the ratio becomes 1.366, visually still the
-          -- chosen ~1.35).
-          text_scale = math.max(1, math.floor(cell_height * 0.85 * 1.35 + 0.5))
+          -- them out on the dark theme (e.g. 31 * 0.85 * 1.5 = 39.53px;
+          -- rounded to 40px the ratio becomes 1.518, visually still the
+          -- chosen ~1.5).
+          text_scale = math.max(1, math.floor(cell_height * 0.85 * 1.5 + 0.5))
             / (cell_height * 0.85),
         },
         image = {
