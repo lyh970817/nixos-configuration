@@ -85,6 +85,27 @@ let
     };
   };
 
+  # render-markdown.nvim with table cell wrapping (its open PR #617,
+  # max_table_width). The upstream pin 4663eb3 (2026-08-11, matching the
+  # lazy-lock.json entry it replaces) postdates the PR head by 27 commits, so
+  # the PR is carried as a patch rebased onto the pin: upstream had replaced
+  # request/offset.lua with request/inline.lua, which already stores the
+  # inlined virtual text the PR needs. dotfiles/nvim/lua/plugins/markdown.lua
+  # loads this store path via lazy's `dir` (lazy cannot fetch refs/pull/*
+  # commits, and the PR head alone would downgrade two months of fixes).
+  # Delete patch + block when upstream merges #617 and the lazy pin moves past
+  # it.
+  renderMarkdownWrap = pkgs.applyPatches {
+    name = "render-markdown.nvim-4663eb3-pr617";
+    src = pkgs.fetchFromGitHub {
+      owner = "MeanderingProgrammer";
+      repo = "render-markdown.nvim";
+      rev = "4663eb3ecd538bd5062628fb6d95bbe6bdca78f6";
+      hash = "sha256-t9mgh+4/5BWUSeXea8757xWhxJDe4XCzJAi1KumG0co=";
+    };
+    patches = [ ./render-markdown-pr617-table-wrap.patch ];
+  };
+
   # Lua fragment included by dotfiles/hypr/hyprland.lua. The Hyprland .conf
   # format is removed in 0.57, so this is Lua rather than keyword lines.
   roleLua =
@@ -209,6 +230,9 @@ in
     # latex out of ensure_installed/TSUpdate. The rev is overridden above to
     # match the plugin's queries.
     "nvim/parser/latex.so".source = "${latexGrammar}/parser";
+    # Patched render-markdown.nvim source for the lazy `dir` spec in
+    # dotfiles/nvim/lua/plugins/markdown.lua; see renderMarkdownWrap above.
+    "nvim/vendor/render-markdown.nvim".source = renderMarkdownWrap;
     # Recursive so the generated role.lua can live alongside the symlinked tree.
     "hypr" = {
       source = ../../dotfiles/hypr;
