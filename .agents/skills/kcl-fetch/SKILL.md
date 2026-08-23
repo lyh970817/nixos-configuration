@@ -40,6 +40,11 @@ MFA (Microsoft Entra / Authenticator) is enforced. **Never ask the user for thei
 password, never type into the login window, never attempt to script sign-in.** If a
 session is needed, tell the user to run `kcl-fetch login` and complete it themselves.
 
+The window needs a display on the machine it opens on. `get` and `login` pass
+`--ozone-platform=x11` when `$WAYLAND_DISPLAY` is unset, so a plain SSH shell does not
+fail at browser start; `--ozone-platform` overrides that either way. Sign-in still has to
+happen on a screen the user is sitting at.
+
 ## When it refuses
 
 The gate refuses before any browser exists. Read which refusal you got — they mean

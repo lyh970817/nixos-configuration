@@ -50,6 +50,22 @@ def _resolve_chromium(configured: str | None) -> str:
     )
 
 
+def _ozone_args(explicit: str | None) -> tuple[str, ...]:
+    """Pick Chromium's ozone platform.
+
+    nixpkgs chromium 144 defaults to Wayland, so the headed browser fails to
+    start wherever there is no Wayland session -- most often an SSH shell on
+    the other host. An explicit `--ozone-platform` always wins; otherwise fall
+    back to x11 exactly when $WAYLAND_DISPLAY is absent, which leaves a normal
+    Wayland desktop untouched.
+    """
+    if explicit:
+        return (f"--ozone-platform={explicit}",)
+    if not os.environ.get("WAYLAND_DISPLAY"):
+        return ("--ozone-platform=x11",)
+    return ()
+
+
 def _doi_stem(doi: str) -> str:
     return doi.replace("/", "_").replace(":", "_")
 
@@ -124,6 +140,7 @@ def cmd_get(args, cfg: config_mod.Config) -> int:
                         profile_dir=paths.profile_dir(),
                         chromium=chromium,
                         downloads_dir=paths.ensure(paths.state_dir() / "downloads"),
+                        extra_args=_ozone_args(args.ozone_platform),
                     ) as browser:
                         result = browser.fetch_pdf(
                             access_url,
@@ -196,6 +213,7 @@ def cmd_login(args, cfg: config_mod.Config) -> int:
         profile_dir=paths.profile_dir(),
         chromium=chromium,
         downloads_dir=paths.ensure(paths.state_dir() / "downloads"),
+        extra_args=_ozone_args(args.ozone_platform),
     ) as browser:
         if browser.interactive_login(start, wait_seconds=args.timeout):
             print("kcl-fetch: signed in; the session is stored in the profile.")
@@ -246,12 +264,29 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    get = sub.add_parser("get", help="fetch one article by DOI")
+    # Shared by the two subcommands that open a window. `status` never does.
+    browser_opts = argparse.ArgumentParser(add_help=False)
+    browser_opts.add_argument(
+        "--ozone-platform",
+        metavar="PLATFORM",
+        help=(
+            "Chromium ozone platform (wayland, x11). Default: x11 when "
+            "$WAYLAND_DISPLAY is unset, otherwise Chromium's own choice."
+        ),
+    )
+
+    get = sub.add_parser(
+        "get", parents=[browser_opts], help="fetch one article by DOI"
+    )
     get.add_argument("doi")
     get.add_argument("-o", "--output", default=".", metavar="DIR")
     get.set_defaults(func=cmd_get)
 
-    login = sub.add_parser("login", help="one-time manual SSO in a visible window")
+    login = sub.add_parser(
+        "login",
+        parents=[browser_opts],
+        help="one-time manual SSO in a visible window",
+    )
     login.add_argument("--timeout", type=float, default=900.0, metavar="SECONDS")
     login.set_defaults(func=cmd_login)
 
