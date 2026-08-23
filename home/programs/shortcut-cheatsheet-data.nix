@@ -303,6 +303,39 @@
     ];
   }
   {
+    name = "EXPLAIN";
+    bindings = [
+      {
+        description = "Fork focused Claude session (Herdr)";
+        key = "F7";
+      }
+      {
+        description = "Insert anchored question";
+        key = "\\q";
+      }
+      {
+        description = "Save and submit open questions";
+        key = "\\s";
+      }
+      {
+        description = "Toggle READ / EDIT mode";
+        key = "\\r";
+      }
+      {
+        description = "Root, metadata, lock state";
+        key = ":ExplainStatus";
+      }
+      {
+        description = "Open root document";
+        key = ":ExplainOpenRoot";
+      }
+      {
+        description = "Create from origin session";
+        key = ":ExplainNew";
+      }
+    ];
+  }
+  {
     name = "YAZI · NAVIGATION";
     bindings = [
       {
