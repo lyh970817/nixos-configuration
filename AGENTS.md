@@ -105,9 +105,11 @@ copy-mode paging keys`; no unrelated changes in one commit.
 
 Committing your own work on your own branch or worktree needs no approval. Never
 open pull requests. Merging into `master`, running `rebuild`, and pushing belong
-to the top-level session: if another session gave you this task, never merge
-into `master` and never push — leave the finished work committed on your branch
-and report it. In the top-level session, merge, rebuild both hosts, and push
+to the top-level session: if another session gave you an implementation task,
+never merge your own work into `master` and never push — leave it committed on
+your branch and report it. A session that was explicitly delegated the merge
+itself is the top-level session acting through you, and should merge, rebuild
+and push as below. In the top-level session, merge, rebuild both hosts, and push
 `master` to `origin` in the same turn you finish the change — that is delivering
 it, not a separate thing to ask about. Pushing `master` to `origin` after a
 merge is the only push that needs no asking; for anything else wait until the
