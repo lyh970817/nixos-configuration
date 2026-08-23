@@ -114,17 +114,16 @@ let
 
   wallpaperTerminal = pkgs.writeShellApplication {
     name = "mandala-terminal-wallpaper";
-    runtimeInputs = [ pkgs.foot ];
+    runtimeInputs = [ pkgs.kitty ];
     text = ''
-      # --app-id is what the Hyprland windowrule below matches on Wayland
-      # (`match:class` reads the app id). pad=0x0 keeps the art flush to the
-      # window edge; alpha is set in both palette slots because foot never
-      # inherits one into the other (see ../programs/foot.nix).
-      exec foot \
-        --app-id=${wallpaperClass} \
-        -o main.pad=0x0 \
-        -o colors-dark.alpha=1.0 \
-        -o colors-light.alpha=1.0 \
+      # --class is what the Hyprland windowrule below matches on Wayland
+      # (`match:class` reads the app id). window_padding_width=0 keeps the art
+      # flush to the window edge; background_opacity pins the glass fully
+      # opaque regardless of what kitty.conf might come to say.
+      exec kitty \
+        --class=${wallpaperClass} \
+        -o window_padding_width=0 \
+        -o background_opacity=1.0 \
         ${wallpaperViewer}/bin/mandala-wallpaper-viewer ${wallpaperArt}
     '';
   };

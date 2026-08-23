@@ -1,11 +1,13 @@
 # Kitty Terminal Configuration
 #
-# Kitty exists only for the dedicated explanation Neovim window (launched as
-# `kitty --detach --class explanation-nvim ... nvim <file>` by explainctl): it
-# is the Kitty Graphics Protocol terminal that Snacks.image and
-# render-latex.nvim draw images through. Foot remains the default terminal for
-# everything else; nothing here changes Foot's role or its signal/relink
-# phosphor path.
+# Kitty is the default terminal (keybinds, scratchpads, the btop dashboard —
+# see dotfiles/hypr/hyprland.lua and home/programs/dotfiles.nix) and also
+# hosts the dedicated explanation Neovim window (launched as
+# `kitty --detach --class explanation-nvim ... nvim <file>` by explainctl),
+# drawing images through the Kitty Graphics Protocol for Snacks.image and
+# render-latex.nvim. Foot stays installed until the migration settles; its
+# signal/relink phosphor path (home/desktop/phosphor-switch.nix,
+# home/desktop/theming.nix) remains the theme state kitty reads at startup.
 { lib, pkgs, ... }:
 
 let

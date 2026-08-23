@@ -89,7 +89,7 @@ in
         Name=Network Manager
         GenericName=Network Configuration
         Comment=Text-based network configuration tool
-        Exec=foot --title nmtui zsh -i -c nmtui
+        Exec=kitty --title nmtui zsh -i -c nmtui
         Icon=network-wired
         Terminal=false
         Categories=System;Network;Settings;

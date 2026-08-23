@@ -113,10 +113,10 @@ let
       ''
         -- Remote role: Super+Enter and boot connect to the home box; Super+Shift+Enter opens local Herdr.
         local onHyprlandStart = ...
-        hl.bind("SUPER + Return", hl.dsp.exec_cmd("btop-workspace exec foot --app-id foot-float home-terminal"))
-        hl.bind("SUPER + SHIFT + Return", hl.dsp.exec_cmd("btop-workspace exec foot --app-id foot-float herdr"))
+        hl.bind("SUPER + Return", hl.dsp.exec_cmd("btop-workspace exec kitty --class kitty-float home-terminal"))
+        hl.bind("SUPER + SHIFT + Return", hl.dsp.exec_cmd("btop-workspace exec kitty --class kitty-float herdr"))
         onHyprlandStart(function()
-          hl.exec_cmd("btop-workspace exec foot --app-id foot-float home-terminal")
+          hl.exec_cmd("btop-workspace exec kitty --class kitty-float home-terminal")
         end)
         -- Remote laptop: lid close turns the screen off via DPMS without
         -- suspending. logind ignores the lid; see modules/system/lid.nix.
@@ -159,9 +159,9 @@ let
     else
       ''
         -- Home role: Super+Enter attaches to the 'main' tmux session, Super+Shift+Enter opens 'secondary', Super+Ctrl+Enter attaches the laptop's remote Herdr session.
-        hl.bind("SUPER + Return", hl.dsp.exec_cmd("btop-workspace exec foot --app-id foot-float tmux new-session -A -s main"))
-        hl.bind("SUPER + SHIFT + Return", hl.dsp.exec_cmd("btop-workspace exec foot --app-id foot-float tmux new-session -A -s secondary"))
-        hl.bind("SUPER + CTRL + Return", hl.dsp.exec_cmd("btop-workspace exec foot --app-id foot-float attach-remote"))
+        hl.bind("SUPER + Return", hl.dsp.exec_cmd("btop-workspace exec kitty --class kitty-float tmux new-session -A -s main"))
+        hl.bind("SUPER + SHIFT + Return", hl.dsp.exec_cmd("btop-workspace exec kitty --class kitty-float tmux new-session -A -s secondary"))
+        hl.bind("SUPER + CTRL + Return", hl.dsp.exec_cmd("btop-workspace exec kitty --class kitty-float attach-remote"))
       '';
 
   # TRANSITIONAL twin of roleLua in the legacy hyprlang format, for a
@@ -176,9 +176,9 @@ let
     if role == "remote" then
       ''
         # Remote role: Super+Enter and boot connect to the home box; Super+Shift+Enter opens local Herdr.
-        bind = $mainMod, Return, exec, btop-workspace exec foot --app-id foot-float home-terminal
-        bind = $mainMod SHIFT, Return, exec, btop-workspace exec foot --app-id foot-float herdr
-        exec-once = ~/.config/hypr/scripts/run-session-startup.sh btop-workspace exec foot --app-id foot-float home-terminal
+        bind = $mainMod, Return, exec, btop-workspace exec kitty --class kitty-float home-terminal
+        bind = $mainMod SHIFT, Return, exec, btop-workspace exec kitty --class kitty-float herdr
+        exec-once = ~/.config/hypr/scripts/run-session-startup.sh btop-workspace exec kitty --class kitty-float home-terminal
         # Remote laptop: lid close turns the screen off via DPMS without
         # suspending. logind ignores the lid; see modules/system/lid.nix.
         bindl = , switch:on:Lid Switch, exec, hyprctl dispatch dpms off
@@ -204,9 +204,9 @@ let
     else
       ''
         # Home role: Super+Enter attaches to the 'main' tmux session, Super+Shift+Enter opens 'secondary', Super+Ctrl+Enter attaches the laptop's remote Herdr session.
-        bind = $mainMod, Return, exec, btop-workspace exec foot --app-id foot-float tmux new-session -A -s main
-        bind = $mainMod SHIFT, Return, exec, btop-workspace exec foot --app-id foot-float tmux new-session -A -s secondary
-        bind = $mainMod CTRL, Return, exec, btop-workspace exec foot --app-id foot-float attach-remote
+        bind = $mainMod, Return, exec, btop-workspace exec kitty --class kitty-float tmux new-session -A -s main
+        bind = $mainMod SHIFT, Return, exec, btop-workspace exec kitty --class kitty-float tmux new-session -A -s secondary
+        bind = $mainMod CTRL, Return, exec, btop-workspace exec kitty --class kitty-float attach-remote
       '';
 in
 {

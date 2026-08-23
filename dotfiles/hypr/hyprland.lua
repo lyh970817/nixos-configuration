@@ -81,9 +81,9 @@ hl.monitor({
 ---- MY PROGRAMS ----
 ---------------------
 
-local terminal = "foot"
+local terminal = "kitty"
 local fileManager = "thunar"
-local fileManagerCli = "foot $SHELL -l -c yazi"
+local fileManagerCli = "kitty $SHELL -l -c yazi"
 local menu = "rofi -show drun -location 2"
 local windowSelect = "rofi -show window -location 2"
 
@@ -237,7 +237,7 @@ hl.bind(mainMod .. " + N", hl.dsp.exec_cmd("hyprsunset-night"))
 hl.bind(mainMod .. " + W", hl.dsp.exec_cmd("btop-workspace exec brave"))
 hl.bind(mainMod .. " + Q", hl.dsp.exec_cmd(protect .. "killactive"))
 hl.bind(mainMod .. " + SHIFT + Q", hl.dsp.exec_cmd(protect .. "forcekillactive"))
-hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(scripts .. "/raise-or-launch.sh foot " .. fileManagerCli))
+hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(scripts .. "/raise-or-launch.sh kitty " .. fileManagerCli))
 hl.bind(mainMod .. " + SHIFT + E", hl.dsp.exec_cmd(scripts .. "/raise-or-launch.sh Thunar " .. fileManager))
 hl.bind(mainMod .. " + S", hl.dsp.exec_cmd(protect .. "togglefloating"))
 hl.bind(mainMod .. " + F", hl.dsp.exec_cmd(protect .. "fullscreen 1"))
@@ -448,10 +448,11 @@ local autofloat = {
   min_height = 400,
   tag = "autofloat-probe",
   never_probe = {
-    "foot", -- yazi, nmtui and the other keybind terminals
-    "foot-main",
-    "foot-float",
-    "foot-btop",
+    "kitty", -- yazi, nmtui and the other keybind terminals
+    "foot", -- still installed until the migration to kitty settles
+    "kitty-main",
+    "kitty-float",
+    "kitty-btop",
     "brave-browser",
     "chatgpt",
     "115Browser",
@@ -483,7 +484,7 @@ end
 -- `match.float` is evaluated before any rule effect is applied, so `false` here
 -- selects exactly the windows Hyprland did not float on its own -- the probe
 -- never second-guesses a native dialog. Declared ahead of the application rules
--- because the last matching rule wins: `float = false` on foot-main, nmtui and
+-- because the last matching rule wins: `float = false` on kitty-main, nmtui and
 -- workspace 10 still overrides it.
 hl.window_rule({
   name = "autofloat-probe",
@@ -530,10 +531,10 @@ hl.window_rule({
   float = true,
 })
 
--- Terminal (Foot) - floating windows launched via keybindings
+-- Terminal (Kitty) - floating windows launched via keybindings
 hl.window_rule({
-  name = "foot-float",
-  match = { class = "^(foot-float)$" },
+  name = "kitty-float",
+  match = { class = "^(kitty-float)$" },
   float = true,
   size = "1000 700",
   center = true,
@@ -543,11 +544,11 @@ hl.window_rule({
 -- This is the *floating* scratch terminal's treatment, so it is matched on
 -- `float` as well as on the class: the same terminal tiled is an ordinary
 -- terminal and dims like the rest of them through the inactive-dim rule below.
--- Matching on the class alone left a tiled foot-float wearing the floating
+-- Matching on the class alone left a tiled kitty-float wearing the floating
 -- terminal's translucency -- see-through even while focused, which in dark mode
 -- meant a full-tile everyday terminal sitting at 0.9.
 --
--- That also settles the overlap with inactive-dim: both rules name foot-float,
+-- That also settles the overlap with inactive-dim: both rules name kitty-float,
 -- and they are mutually exclusive by construction because `float = true` here
 -- and `float = false` there can never both hold. Only the exclusivity makes
 -- this safe -- two rules setting `opacity` do not compose, the later one simply
@@ -567,8 +568,8 @@ hl.window_rule({
 -- previous state across a reload, which is what `enabled` exists for here and
 -- in the Quiet Graphite set below.
 hl.window_rule({
-  name = "foot-float-opacity",
-  match = { class = "^(foot-float)$", float = true },
+  name = "kitty-float-opacity",
+  match = { class = "^(kitty-float)$", float = true },
   enabled = float_terminal_opacity < 1,
   opacity = float_terminal_opacity .. " " .. float_terminal_opacity,
 })
@@ -590,13 +591,13 @@ hl.window_rule({
 -- -- Super+S on a Brave window drops its dimming immediately, and tiling it
 -- again brings it back.
 --
--- The class list is the second half. foot-btop is left out deliberately: the
+-- The class list is the second half. kitty-btop is left out deliberately: the
 -- workspace-10 dashboard opens with no_initial_focus and is almost never the
 -- focused window, so dimming it would just mean a permanently dimmed
--- dashboard. foot-float is in the list: `float = false` hands the floating
+-- dashboard. kitty-float is in the list: `float = false` hands the floating
 -- scratch terminal to the rule above and keeps the tiled one here, where it
 -- gets the same opaque-when-focused treatment as every other tiled terminal.
-local inactive_dim_classes = { "brave-browser", "foot", "foot-main", "foot-float" }
+local inactive_dim_classes = { "brave-browser", "kitty", "kitty-main", "kitty-float", "foot" }
 
 hl.window_rule({
   name = "inactive-dim",
@@ -612,7 +613,7 @@ hl.window_rule({
 -- window that covers the screen, and both slots go back to fully opaque
 -- whether the window is floating or tiled underneath. It has to be declared
 -- *after* the two rules above, because a repeated property is last-declaration
--- wins rather than a merge -- declared first, as it was, foot-float-opacity
+-- wins rather than a merge -- declared first, as it was, kitty-float-opacity
 -- and inactive-dim simply overwrote it and a fullscreen terminal stayed
 -- see-through. quiet-graphite-fullscreen at the end of the file is the same
 -- exception for the same reason; it sets no opacity, so it does not take this
@@ -654,13 +655,13 @@ hl.window_rule({
 
 -- Main Terminal (Startup) - tile (not fullscreen)
 hl.window_rule({
-  name = "foot-main",
-  match = { class = "^(foot-main)$" },
+  name = "kitty-main",
+  match = { class = "^(kitty-main)$" },
   float = false,
 })
 
 -- Network Manager (nmtui)
--- Note: Ensure you launch with `foot --title nmtui nmtui`
+-- Note: Ensure you launch with `kitty --title nmtui nmtui`
 hl.window_rule({
   name = "nmtui-tile",
   match = { title = "^(nmtui)$" },
@@ -690,7 +691,7 @@ hl.window_rule({
 -- after the general workspace-10 rule so its fullscreen state takes precedence.
 hl.window_rule({
   name = "btop-dashboard",
-  match = { class = "^(foot-btop)$" },
+  match = { class = "^(kitty-btop)$" },
   workspace = "10 silent",
   float = false,
   border_size = 0,
@@ -742,7 +743,7 @@ quiet_graphite_rule({
 
 quiet_graphite_rule({
   name = "quiet-graphite-btop",
-  match = { class = "^(foot-btop)$" },
+  match = { class = "^(kitty-btop)$" },
   border_size = 0,
   rounding = 0,
   no_shadow = true,

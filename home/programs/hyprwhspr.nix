@@ -27,6 +27,10 @@ let
   shortArchiveRetentionDays = "30d";
 
   terminalPasteKeys = {
+    kitty = "ctrl+shift+v";
+    kitty-float = "ctrl+shift+v";
+    kitty-main = "ctrl+shift+v";
+    # foot stays installed (and pasteable) until the kitty migration settles.
     foot = "ctrl+shift+v";
     foot-float = "ctrl+shift+v";
     foot-main = "ctrl+shift+v";
