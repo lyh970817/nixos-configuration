@@ -24,7 +24,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import socket
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -97,6 +99,78 @@ class NoFullText(DriverError):
     """Reached the article page, found no PDF we are entitled to."""
 
 
+class StaleProfileLock(DriverError):
+    """Chromium refused to start over a lock left by a process that is gone."""
+
+
+#: Chromium's single-instance guard, written into the profile at startup and
+#: normally reclaimed on the next run. `SingletonLock` is a symlink whose
+#: *target* -- not content -- is `hostname-pid`.
+SINGLETON_ENTRIES = ("SingletonLock", "SingletonCookie", "SingletonSocket")
+
+#: "The caller took no before-picture." Distinct from `None`, which is a
+#: before-picture showing no lock at all.
+_NO_SNAPSHOT = object()
+
+
+def singleton_target(profile_dir: Path) -> str | None:
+    """What `SingletonLock` points at, or None if there is no lock."""
+    try:
+        return os.readlink(Path(profile_dir) / "SingletonLock")
+    except OSError:
+        return None
+
+
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        # Someone else's process, but a process. Not stale.
+        return True
+    except OSError:
+        return True
+    return True
+
+
+def stale_singleton_advice(profile_dir: Path, *, before=_NO_SNAPSHOT) -> str | None:
+    """A message naming a stale lock, or None if the lock is absent or live.
+
+    `before` is `singleton_target` as it read *before* the launch that failed.
+    It matters more than it looks: a Chromium that dies for an unrelated reason
+    -- no display, a bad flag -- still writes its own `SingletonLock` on the way
+    down, and that lock's pid is dead the moment we look at it. Without the
+    before-picture every launch failure would be misdiagnosed as a stale lock,
+    which is exactly the opposite of a legible error.
+
+    Deliberately advisory. This profile is the institutional session and one
+    bad `rm` costs a fresh MFA round trip, so nothing here deletes anything --
+    it tells the user which entries to remove and stops.
+    """
+    target = singleton_target(profile_dir)
+    if target is None:
+        return None
+    if before is not _NO_SNAPSHOT and before != target:
+        return None
+    host, _, pid_text = target.rpartition("-")
+    if not pid_text.isdigit():
+        return None
+    # A lock from another machine (a synced or copied profile) says nothing
+    # about a pid on this one, so it is left alone.
+    if host and host != socket.gethostname():
+        return None
+    if _pid_alive(int(pid_text)):
+        return None
+    listed = "\n".join(f"  {Path(profile_dir) / name}" for name in SINGLETON_ENTRIES)
+    return (
+        f"Chromium would not start, and the profile holds a stale lock "
+        f"(SingletonLock -> {target}, pid {pid_text} is gone).\n"
+        f"Nothing is deleted automatically -- this profile holds the "
+        f"institutional session. Remove these yourself and retry:\n{listed}"
+    )
+
+
 @dataclass
 class Fetched:
     path: Path
@@ -129,6 +203,7 @@ class Browser:
         downloads_dir: Path,
         slow_mo: float = 0.0,
         extra_args: tuple[str, ...] = (),
+        env: dict[str, str] | None = None,
     ):
         self.profile_dir = Path(profile_dir)
         self.chromium = chromium
@@ -137,6 +212,11 @@ class Browser:
         # nixpkgs chromium picks its ozone platform from the session; a
         # display-less harness (Xvfb, CI) has to say `--ozone-platform=x11`.
         self.extra_args = tuple(extra_args)
+        # Display variables the caller probed for (see `display.py`). They are
+        # layered over our own environment rather than replacing it, because
+        # Playwright's `env=` is the browser's *whole* environment -- passing
+        # only these two would strip PATH, HOME and the rest.
+        self.env = dict(env or {})
         self._playwright = None
         self.context = None
 
@@ -148,23 +228,36 @@ class Browser:
         # Chromium's business; the containing directory is the boundary.
         paths.ensure(self.profile_dir)
         paths.ensure(self.downloads_dir)
+        # Read before the attempt: only a lock that was already here can be the
+        # thing that stopped us.
+        lock_before = singleton_target(self.profile_dir)
         self._playwright = sync_playwright().start()
-        self.context = self._playwright.chromium.launch_persistent_context(
-            user_data_dir=str(self.profile_dir),
-            executable_path=self.chromium,
-            headless=False,
-            accept_downloads=True,
-            downloads_path=str(self.downloads_dir),
-            slow_mo=self.slow_mo,
-            viewport={"width": 1280, "height": 900},
-            args=["--no-first-run", "--no-default-browser-check", *self.extra_args],
-            # Playwright passes `--enable-automation` by default, which sets
-            # `navigator.webdriver` and the "controlled by automated software"
-            # banner. Running headed to avoid looking like a bot and then
-            # announcing it in the UA surface would be self-defeating; this is
-            # one human's reading session, and it should look like one.
-            ignore_default_args=["--enable-automation"],
-        )
+        try:
+            self.context = self._playwright.chromium.launch_persistent_context(
+                user_data_dir=str(self.profile_dir),
+                executable_path=self.chromium,
+                headless=False,
+                accept_downloads=True,
+                downloads_path=str(self.downloads_dir),
+                slow_mo=self.slow_mo,
+                viewport={"width": 1280, "height": 900},
+                args=["--no-first-run", "--no-default-browser-check", *self.extra_args],
+                env={**os.environ, **self.env},
+                # Playwright passes `--enable-automation` by default, which sets
+                # `navigator.webdriver` and the "controlled by automated software"
+                # banner. Running headed to avoid looking like a bot and then
+                # announcing it in the UA surface would be self-defeating; this is
+                # one human's reading session, and it should look like one.
+                ignore_default_args=["--enable-automation"],
+            )
+        except Exception as exc:
+            advice = stale_singleton_advice(self.profile_dir, before=lock_before)
+            if self._playwright is not None:
+                self._playwright.stop()
+                self._playwright = None
+            if advice is not None:
+                raise StaleProfileLock(advice) from exc
+            raise
         return self
 
     def __exit__(self, exc_type, exc, tb) -> bool:
