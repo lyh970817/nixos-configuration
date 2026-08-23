@@ -91,15 +91,39 @@ let
     }
   ];
 
-  # Opens (and on first use registers) the managed vault. The path form of the
-  # URI is used instead of vault=explanations-vault because a vault name only
-  # resolves after Obsidian has seen the vault once; the path form works on a
-  # fresh machine too. A running instance receives the URI through Obsidian's
+  # Opens the managed vault. The path form of the URI resolves only vaults
+  # already listed in ~/.config/obsidian/obsidian.json — on an unregistered
+  # path Obsidian shows a native error dialog (or silently does nothing)
+  # rather than registering it, so the launcher writes the registry entry
+  # itself first. A running instance receives the URI through Obsidian's
   # single-instance lock, otherwise this starts one.
   vaultUri = "obsidian://open?path=${lib.replaceStrings [ "/" ] [ "%2F" ] vaultDir}";
   obsidianExplain = pkgs.writeShellApplication {
     name = "obsidian-explain";
+    runtimeInputs = [
+      pkgs.jq
+      pkgs.coreutils
+    ];
     text = ''
+      vault=${lib.escapeShellArg vaultDir}
+      registry="$HOME/.config/obsidian/obsidian.json"
+
+      # Register the vault if the registry does not know it yet. Only ever add
+      # a missing entry, atomically: a running Obsidian rewrites this file for
+      # its own bookkeeping (ts, open) and tolerates a new entry appearing,
+      # but not being clobbered.
+      mkdir -p "''${registry%/*}"
+      [ -s "$registry" ] || printf '{"vaults":{}}' > "$registry"
+      if ! jq -e --arg path "$vault" \
+          '.vaults // {} | any(.[]; .path == $path)' "$registry" >/dev/null; then
+        id="$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
+        tmp="$(mktemp "$registry.XXXXXX")"
+        jq --arg id "$id" --arg path "$vault" --argjson ts "$(date +%s%3N)" \
+          '.vaults = ((.vaults // {}) + { ($id): { path: $path, ts: $ts } })' \
+          "$registry" > "$tmp"
+        mv "$tmp" "$registry"
+      fi
+
       exec ${pkgs.obsidian}/bin/obsidian ${lib.escapeShellArg vaultUri} "$@"
     '';
   };
