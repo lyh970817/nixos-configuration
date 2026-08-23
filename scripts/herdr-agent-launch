@@ -101,13 +101,15 @@ rollback_unparsed_destination() {
 # HERDR_SCRIPTED_PANE makes the pane's zsh skip its login greeting
 # (home/programs/print_welcome.sh), so the shell reaches a quiet prompt almost
 # immediately instead of after a second-plus of fastfetch/poem output.
+# The tab is created focused so the key press gives immediate visual feedback;
+# splits stay --no-focus since they are visible in the current tab anyway.
 case "$placement" in
   tab)
     created=$(herdr tab create \
       --workspace "$workspace_id" \
       --cwd "$pane_cwd" \
       --env HERDR_SCRIPTED_PANE=1 \
-      --no-focus)
+      --focus)
     if ! new_tab_id=$(jq -er \
       '.result.tab.tab_id | select(type == "string" and length > 0)' \
       <<<"$created") \
@@ -280,6 +282,7 @@ if ! herdr agent start "$agent_name" \
   exit 1
 fi
 
-# Keep the calling pane visible while the agent starts, then reveal the ready
-# orchestrator so the function key behaves like a complete launch action.
+# The tab placement is already focused at creation for immediate feedback;
+# this still moves focus to the ready orchestrator for splits (created
+# --no-focus) and re-reveals the destination if the user switched away.
 herdr agent focus "$agent_name"
