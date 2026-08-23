@@ -506,6 +506,15 @@ local function on_new_exit(res)
   then
     pcall(vim.api.nvim_buf_delete, origin, {})
   end
+  -- Remote-viewer dispatch: explain-dispatch-new (home/programs/
+  -- explain-sync.nix) rsyncs the fresh tree into the laptop's Obsidian vault
+  -- and opens it there — but only when the viewer really is remote; it
+  -- decides that itself and exits quietly otherwise. Fire-and-forget and
+  -- loose-coupled: when the dispatcher is not installed nothing happens, and
+  -- this nvim tab stays the local flow either way.
+  if type(result.root) == "string" and vim.fn.executable("explain-dispatch-new") == 1 then
+    pcall(vim.system, { "explain-dispatch-new", result.root }, { detach = true })
+  end
   notify("Explanation created: " .. (result.root or focus), nil, { id = CREATE_PROGRESS_ID })
 end
 
