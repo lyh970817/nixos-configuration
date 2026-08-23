@@ -1,0 +1,47 @@
+--- a/lib/src/text_injector.py
++++ b/lib/src/text_injector.py
+@@ -1336,7 +1336,21 @@
+         processed = text
+         for word in filler_words:
+             if word:
+-                pattern = r'\b' + re.escape(word) + r'\b'
++                escaped = re.escape(word)
++                # Clause-leading filler (start of text, or right after a
++                # punctuation mark): ASR backends that punctuate transcripts
++                # give the filler its own punctuation ("Um. Uh, what"), so
++                # take that punctuation along instead of stranding it
++                # (". , what"), and restore the capitalization the next word
++                # lost to the filler's clause.
++                pattern = (r'(^|[.,;:!?]\s+)(?:' + escaped +
++                           r'\b(\.\.\.|[.,;:!?])?\s*)+(\w?)')
++                processed = re.sub(pattern, self._close_filler_gap,
++                                   processed, flags=re.IGNORECASE)
++                # Filler right after a word ("the um, but"): drop the filler
++                # and the space before it, leaving its punctuation attached
++                # to the preceding word ("the, but").
++                pattern = r'\s+' + escaped + r'\b(?=[\s.,;:!?]|$)'
+                 processed = re.sub(pattern, '', processed, flags=re.IGNORECASE)
+ 
+         # Clean up extra spaces left by word deletions
+@@ -1345,6 +1359,21 @@
+ 
+         return processed
+ 
++    @staticmethod
++    def _close_filler_gap(match) -> str:
++        """Rejoin text around a removed clause-leading filler word"""
++        lead = match.group(1)
++        trail = match.group(2) or ''
++        follower = match.group(3)
++        if lead and lead[0] in ',;:' and trail in ('.', '!', '?'):
++            # The filler carried the clause's sentence-ending mark
++            # ("check it, um?"): keep the ender, drop the separator
++            lead = trail + lead[1:]
++        if not lead or lead[0] in '.!?':
++            # The follower starts a sentence now that the filler is gone
++            follower = follower.upper()
++        return lead + follower
++
+     # ------------------------ Paste injection (primary method) ------------------------
+ 
+     def _inject_via_clipboard_and_hotkey(self, text: str) -> bool:

@@ -90,12 +90,18 @@ stdenvNoCC.mkDerivation rec {
   # best-effort loopback UDP datagram (port 8773) carrying the paste
   # timestamp and the exact injected text; qwen-asr-shim uses it for
   # paste-complete latency and for the raw-revert record.
+  # hyprwhspr-filler-punctuation.patch: upstream's filler-word filter strips
+  # only the letters, so an ASR backend that punctuates transcripts turns
+  # "Fair enough. Um. Uh, what" into "Fair enough. . , what". Remove a
+  # filler together with its own punctuation and re-capitalize the word
+  # that now starts the sentence.
   patches = [
     ./hyprwhspr-realtime-sample-rate.patch
     ./hyprwhspr-short-audio-archive.patch
     ./hyprwhspr-notification-text.patch
     ./hyprwhspr-realtime-reopen.patch
     ./hyprwhspr-paste-notify.patch
+    ./hyprwhspr-filler-punctuation.patch
   ];
 
   nativeBuildInputs = [ makeWrapper ];
