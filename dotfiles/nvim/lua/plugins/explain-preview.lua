@@ -20,6 +20,9 @@
 -- every buffer under it gets its own tab, opened once per file per session
 -- (the plugin routes updates and scroll messages per file, so children live
 -- in tabs of their own; plain buffer switching never spawns duplicates).
+-- Typst-canonical trees (`"math_syntax": "typst"` in .explain.json) opt out
+-- of the automatic paths entirely -- KaTeX cannot render Typst math -- and
+-- open only on an explicit :ExplainPreview.
 --
 -- Like plugins/explain.lua this file is not a plugin itself: it registers
 -- autocmds at import time, seeds package.loaded for the cross-file hook in
@@ -37,6 +40,23 @@ local function find_root(file)
   end
   local marker = vim.fs.find(".explain.json", { path = vim.fs.dirname(file), upward = true })[1]
   return marker and vim.fs.dirname(marker) or nil
+end
+
+--- Whether the tree's `.explain.json` declares Typst-canonical math. The
+--- preview renders with KaTeX, which cannot read Typst, so these trees are
+--- excluded from every automatic open below; :ExplainPreview stays available
+--- for whoever wants the (math-less) rendering anyway. A plain string probe,
+--- not a JSON parse: the marker is machine-written verbatim by explainctl.
+---@param root string
+---@return boolean
+local function typst_tree(root)
+  local fd = io.open(root .. "/.explain.json", "r")
+  if not fd then
+    return false
+  end
+  local text = fd:read("*a") or ""
+  fd:close()
+  return text:find('"math_syntax"%s*:%s*"typst"') ~= nil
 end
 
 local function buf_file(bufnr)
@@ -148,6 +168,12 @@ function M.preview(bufnr, force)
   local file = buf_file(bufnr)
   local root = find_root(file)
   if not root then
+    return
+  end
+  -- Ambient/auto callers (attach below, explain.lua's :ExplainOpenRoot hook)
+  -- pass force=false and are skipped for Typst-canonical trees; only the
+  -- explicit :ExplainPreview (force=true) goes through.
+  if not force and typst_tree(root) then
     return
   end
   state.activated[root] = true

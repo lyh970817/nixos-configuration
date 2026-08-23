@@ -11,10 +11,9 @@ in
   # explain-session skills, the Herdr trigger (scripts/herdr-explain-current),
   # and the Neovim explanation UI. Prompt templates and skill links are wired
   # in programs/mutable-configs.nix; the Kitty terminal it opens is installed
-  # separately. tylax ships `t2l`: explainctl pipes agent LaTeX math through
-  # it (l2t) to keep the trees canonically Typst, and the Neovim
-  # `<localleader>t` keymap (dotfiles/nvim/lua/plugins/explain-typst.lua)
-  # uses the other direction.
+  # separately. tylax ships `t2l`, the Typst <-> LaTeX math converter
+  # explainctl drives: agent LaTeX math is converted on the way in, keeping
+  # the trees canonically Typst.
   home.packages = [
     explainctl
     tylax

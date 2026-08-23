@@ -322,10 +322,6 @@
         key = "\\r";
       }
       {
-        description = "Typst math → LaTeX (selection / inline $…$)";
-        key = "\\t";
-      }
-      {
         description = "Root, metadata, lock state";
         key = ":ExplainStatus";
       }
