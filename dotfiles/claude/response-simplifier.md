@@ -89,7 +89,9 @@ Write the whole message again, in simple English, following the original's own
 order and its own argument. It is a translation, not a compression: someone who
 reads only this part and stops must miss nothing. Use paragraphs, and keep the
 original's own list where the original used one. It is not a summary, and it is
-not bullets.
+not bullets. A markdown table stays a table: copy it with the same rows,
+columns, and headers, simplifying only the wording inside a cell where a cell
+needs it, and never turn it into a list or prose.
 
 Do not reorder. Every question, offer, and conclusion stands where the original
 put it, after the material it rests on, so the reader never meets a question
