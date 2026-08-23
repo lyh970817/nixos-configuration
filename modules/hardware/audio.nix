@@ -18,6 +18,24 @@
     alsa.enable = true;
     alsa.support32Bit = true;
     pulse.enable = true;
+
+    # DALI KATCH advertises both AudioSource and AudioSink UUIDs. With the
+    # local a2dp_sink (receive-audio-from-remote) role enabled, BlueZ races to
+    # configure the speaker->laptop capture stream first and the playback
+    # connect then fails with EBUSY, so no audio sink ever appears. Keep only
+    # a2dp_source (laptop sends audio) for A2DP; this drops the rarely-used
+    # ability to use this machine as a Bluetooth speaker for a phone.
+    wireplumber.extraConfig."50-bluez-no-a2dp-sink-role" = {
+      "monitor.bluez.properties" = {
+        "bluez5.roles" = [
+          "a2dp_source"
+          "bap_sink"
+          "bap_source"
+          "hfp_hf"
+          "hfp_ag"
+        ];
+      };
+    };
   };
 
   # Portege X30W-K: NHLT under-reports 2 DMICs instead of 4, leaving the
