@@ -455,7 +455,10 @@ local function on_new_exit(res)
   creating = false
   -- Restore the pre-creation buffer either way: on failure :ExplainNew must
   -- be able to retry from a live buffer, on success the root document is
-  -- about to replace it in the window.
+  -- about to replace it in the window. Unlocking before any delete also
+  -- matters: a buffer left nomodifiable/readonly by the lock is not the
+  -- state nvim_buf_delete should see.
+  local origin = creation_lock and creation_lock.buf or nil
   unlock_creation_buffer(creation_lock)
   creation_lock = nil
   local result
@@ -479,6 +482,23 @@ local function on_new_exit(res)
     return
   end
   vim.cmd("edit " .. vim.fn.fnameescape(focus))
+  -- Creation usually starts from the empty [No Name] buffer this Neovim
+  -- opened with; 'hidden' keeps it alive behind the :edit above, so it would
+  -- linger as a second Bufferline entry. Drop it -- but only a genuinely
+  -- disposable buffer (nameless, empty, unmodified): launched from a real
+  -- file, :ExplainNew keeps that file listed.
+  if
+    origin
+    and origin ~= vim.api.nvim_get_current_buf()
+    and vim.api.nvim_buf_is_valid(origin)
+    and vim.api.nvim_buf_is_loaded(origin)
+    and vim.api.nvim_buf_get_name(origin) == ""
+    and not vim.bo[origin].modified
+    and vim.api.nvim_buf_line_count(origin) == 1
+    and vim.api.nvim_buf_get_lines(origin, 0, 1, true)[1] == ""
+  then
+    pcall(vim.api.nvim_buf_delete, origin, {})
+  end
   notify("Explanation created: " .. (result.root or focus), nil, { id = CREATE_PROGRESS_ID })
 end
 
