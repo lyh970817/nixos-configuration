@@ -60,8 +60,8 @@ local function read_metadata(root)
   return ok and type(meta) == "table" and meta or nil
 end
 
-local function notify(msg, level)
-  vim.notify(msg, level or vim.log.levels.INFO, { title = "Explain" })
+local function notify(msg, level, opts)
+  vim.notify(msg, level or vim.log.levels.INFO, vim.tbl_extend("keep", opts or {}, { title = "Explain" }))
 end
 
 --- plugins/readmode.lua's mode API (is_read/set_mode), or nil before that
@@ -394,8 +394,70 @@ end
 
 local creating = false
 
+-- One Snacks notification carries the whole creation run: shown with
+-- timeout = false so it cannot fade while the forked `claude -p` run (tens of
+-- seconds to minutes) is in flight, then replaced in place -- same id, normal
+-- timeout -- by the outcome toast. Replacing rather than stacking matters
+-- twice: the outcome never sits under a stale "Creating…" float, and
+-- render-latex blanks equation images while any notification float is
+-- visible, so the persistent float must be gone the moment the root document
+-- opens (during creation there is no rendered document yet, so it is
+-- harmless until then).
+local CREATE_PROGRESS_ID = "explain-create-progress"
+
+-- Creation runs against the buffer Neovim happened to open with (usually the
+-- empty [No Name] one); typing into it during the run goes nowhere. Freeze
+-- it like the submit path freezes tree buffers, and reuse readmode for
+-- markdown buffers so its saved per-buffer state stays consistent.
+---@return table lock state for unlock_creation_buffer
+local function lock_creation_buffer()
+  local buf = vim.api.nvim_get_current_buf()
+  local rm = readmode()
+  local state = { buf = buf }
+  local markdown = vim.bo[buf].filetype == "markdown" and rm ~= nil
+  if markdown and rm.is_read(buf) then
+    state.mode = "keep-read" -- READ mode already guards edits; nothing to restore
+  elseif markdown then
+    state.mode = "read"
+    rm.set_mode(buf, "read", { silent = true })
+  else
+    state.mode = "options"
+    state.saved = { modifiable = vim.bo[buf].modifiable, readonly = vim.bo[buf].readonly }
+    vim.bo[buf].modifiable = false
+    vim.bo[buf].readonly = true
+  end
+  -- Same freeze marker as the submit lock: readmode refuses to change modes
+  -- while it is set, so :ReadMode cannot flip 'modifiable' underneath.
+  vim.b[buf].explain_submit_lock = true
+  return state
+end
+
+local function unlock_creation_buffer(state)
+  local buf = state and state.buf
+  if not buf or not (vim.api.nvim_buf_is_valid(buf) and vim.api.nvim_buf_is_loaded(buf)) then
+    return
+  end
+  vim.b[buf].explain_submit_lock = nil
+  if state.mode == "read" then
+    local rm = readmode()
+    if rm then
+      rm.set_mode(buf, "edit", { silent = true })
+    end
+  elseif state.mode == "options" then
+    vim.bo[buf].modifiable = state.saved.modifiable
+    vim.bo[buf].readonly = state.saved.readonly
+  end
+end
+
+local creation_lock = nil
+
 local function on_new_exit(res)
   creating = false
+  -- Restore the pre-creation buffer either way: on failure :ExplainNew must
+  -- be able to retry from a live buffer, on success the root document is
+  -- about to replace it in the window.
+  unlock_creation_buffer(creation_lock)
+  creation_lock = nil
   local result
   if res.stdout and res.stdout ~= "" then
     local ok, parsed = pcall(vim.json.decode, res.stdout)
@@ -411,12 +473,13 @@ local function on_new_exit(res)
         res.code,
         detail ~= "" and ": " .. detail or ""
       ),
-      vim.log.levels.ERROR
+      vim.log.levels.ERROR,
+      { id = CREATE_PROGRESS_ID }
     )
     return
   end
   vim.cmd("edit " .. vim.fn.fnameescape(focus))
-  notify("Explanation created: " .. (result.root or focus))
+  notify("Explanation created: " .. (result.root or focus), nil, { id = CREATE_PROGRESS_ID })
 end
 
 --- Prompt for the initial explanation question and create the workspace by
@@ -446,6 +509,7 @@ local function explain_new()
       return
     end
     creating = true
+    creation_lock = lock_creation_buffer()
     local ok, err = pcall(vim.system, {
       "explainctl",
       "new",
@@ -465,10 +529,12 @@ local function explain_new()
     end)
     if not ok then
       creating = false
+      unlock_creation_buffer(creation_lock)
+      creation_lock = nil
       notify("Could not start explainctl: " .. err, vim.log.levels.ERROR)
       return
     end
-    notify("Creating explanation\u{2026}")
+    notify("Creating explanation\u{2026}", nil, { id = CREATE_PROGRESS_ID, timeout = false })
   end)
 end
 
