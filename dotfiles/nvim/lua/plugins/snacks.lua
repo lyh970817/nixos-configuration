@@ -223,9 +223,6 @@ return {
       -- everything to the terminal font: render at a density where one
       -- math em equals one cell height, and place pixel-for-pixel.
       local image_cfg = require("snacks").image.config
-      local term = require("snacks.image.terminal").size()
-      local cell_w = math.max(1, math.floor(term.cell_width + 0.5))
-      local cell_h = math.max(1, math.floor(term.cell_height + 0.5))
       -- \Large in the snacks 12pt standalone template is 17.28pt.
       local MATH_EM_PT = 17.28
       -- Legibility bump: one math em spans 1.12 terminal cells instead of
@@ -233,34 +230,55 @@ return {
       -- shared line box still maps to one cell; ink taller than that box
       -- (full-height parens and up) is capped back by placement as before.
       local MATH_EM_CELLS = 1.12
-      local density = math.floor(72 * cell_h * MATH_EM_CELLS / MATH_EM_PT + 0.5)
-      -- Grow renders shorter than a cell to exactly one cell (transparent,
-      -- ink centered): kitty scales an image to fit its cell box in BOTH
-      -- directions, so without the padding a short image would be scaled
-      -- up until its height fills the row. With it, height binds at 1.0
-      -- and the image passes through 1:1. Taller images are left alone.
-      local pad_extent = ("%%[fx:w]x%%[fx:h<%d?%d:h]"):format(cell_h, cell_h)
-      -- "math": fenced ```math and .tex display snippets.
-      image_cfg.convert.magick.math = {
-        "-density", density, "{src}[{page}]", "-trim",
-        "-background", "none", "-gravity", "center", "-extent", pad_extent,
-      }
-      -- "imath": inline LaTeX formulas (query + bracket scan below). No
-      -- `-trim`: the rule strut added by the transform keeps the compiled
-      -- page at the shared line box (1/MATH_EM_CELLS em = one cell),
-      -- placing every formula's baseline at 0.75 of the cell -- a bare `m`
-      -- stays x-height-sized on the common baseline instead of filling the
-      -- row.
-      image_cfg.convert.magick.imath = {
-        "-density", density, "{src}[{page}]",
-        "-background", "none", "-gravity", "center", "-extent", pad_extent,
-      }
-      image_cfg.icons.imath = image_cfg.icons.math
-      -- Same templates as stock, with the render density baked into a
-      -- comment so the content hash -- and thus the render cache -- turns
-      -- over when a font, cell-size, or anchor (MATH_EM_CELLS) change
-      -- alters the density.
-      image_cfg.math.latex.tpl = ([[
+      local cell_w, cell_h
+      -- Derive the render metrics from the terminal cell size, refreshed on
+      -- VimResized. A pty without pixel geometry -- ws_xpixel/ws_ypixel 0,
+      -- which every herdr pane reports until its attached client knows the
+      -- host cell size (kitty_graphics off, or pre-reattach) -- slips
+      -- through snacks' size() guard as cell_width/cell_height 0. Clamping
+      -- that to 1 once baked `-density 5` renders: 1px-tall formula strips
+      -- that kitty scaled into dark smudges. Treat it as unknown and use
+      -- snacks' own 9x18 fallback instead; the VimResized refresh lets a
+      -- long-lived nvim pick up the real geometry when the pane gains it
+      -- (herdr re-resizes its pty on client attach and layout changes).
+      local function refresh_math_metrics()
+        local term = require("snacks.image.terminal").size()
+        local cw = math.floor(term.cell_width + 0.5)
+        local ch = math.floor(term.cell_height + 0.5)
+        if cw < 2 or ch < 4 then
+          cw, ch = 9, 18
+        end
+        if cw == cell_w and ch == cell_h then
+          return
+        end
+        cell_w, cell_h = cw, ch
+        local density = math.floor(72 * cell_h * MATH_EM_CELLS / MATH_EM_PT + 0.5)
+        -- Grow renders shorter than a cell to exactly one cell (transparent,
+        -- ink centered): kitty scales an image to fit its cell box in BOTH
+        -- directions, so without the padding a short image would be scaled
+        -- up until its height fills the row. With it, height binds at 1.0
+        -- and the image passes through 1:1. Taller images are left alone.
+        local pad_extent = ("%%[fx:w]x%%[fx:h<%d?%d:h]"):format(cell_h, cell_h)
+        -- "math": fenced ```math and .tex display snippets.
+        image_cfg.convert.magick.math = {
+          "-density", density, "{src}[{page}]", "-trim",
+          "-background", "none", "-gravity", "center", "-extent", pad_extent,
+        }
+        -- "imath": inline LaTeX formulas (query + bracket scan below). No
+        -- `-trim`: the rule strut added by the transform keeps the compiled
+        -- page at the shared line box (1/MATH_EM_CELLS em = one cell),
+        -- placing every formula's baseline at 0.75 of the cell -- a bare `m`
+        -- stays x-height-sized on the common baseline instead of filling the
+        -- row.
+        image_cfg.convert.magick.imath = {
+          "-density", density, "{src}[{page}]",
+          "-background", "none", "-gravity", "center", "-extent", pad_extent,
+        }
+        -- Same templates as stock, with the render density baked into a
+        -- comment so the content hash -- and thus the render cache -- turns
+        -- over when a font, cell-size, or anchor (MATH_EM_CELLS) change
+        -- alters the density.
+        image_cfg.math.latex.tpl = ([[
 \documentclass[preview,border=0pt,varwidth,12pt]{standalone}
 \usepackage{${packages}}
 %% density=%ddpi
@@ -270,6 +288,17 @@ ${header}
   \color[HTML]{${color}}
 ${content}}
 \end{document}]]):format(density)
+      end
+      refresh_math_metrics()
+      -- Scheduled so snacks' own VimResized autocmd (registered first, at
+      -- module load) has cleared its cached size() before we re-read it.
+      vim.api.nvim_create_autocmd("VimResized", {
+        group = vim.api.nvim_create_augroup("config.snacks.math_metrics", { clear = true }),
+        callback = function()
+          vim.schedule(refresh_math_metrics)
+        end,
+      })
+      image_cfg.icons.imath = image_cfg.icons.math
 
       -- Snacks ships queries/latex/images.scm matching inline_formula,
       -- displayed_equation and math_environment in every injected latex tree
@@ -334,8 +363,9 @@ ${content}}
       -- kitty places them at scale 1. The only remaining scaling is the
       -- inline cap: a formula taller than its text line keeps one row and
       -- is fitted uniformly (kitty preserves aspect ratio), a gentle
-      -- shrink for tall formulas that never grows short ones. Cell size
-      -- is fixed at startup, like `density` above.
+      -- shrink for tall formulas that never grows short ones. cell_w and
+      -- cell_h are the refresh_math_metrics() upvalues above, so placement
+      -- follows the same VimResized refresh as the render density.
       local Placement = require("snacks.image.placement")
       local placement_state = Placement.state
       function Placement:state()
