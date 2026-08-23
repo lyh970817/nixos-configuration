@@ -21,6 +21,7 @@ import sys
 from pathlib import Path
 
 from kcl_fetch_lib import config as config_mod
+from kcl_fetch_lib import display as display_mod
 from kcl_fetch_lib import driver as driver_mod
 from kcl_fetch_lib import libkey, metadata, paths, routing, urls
 from kcl_fetch_lib.gate import (
@@ -50,20 +51,22 @@ def _resolve_chromium(configured: str | None) -> str:
     )
 
 
-def _ozone_args(explicit: str | None) -> tuple[str, ...]:
-    """Pick Chromium's ozone platform.
+def _display(args) -> display_mod.Display:
+    """Resolve the display before anything is spent on the attempt.
 
-    nixpkgs chromium 144 defaults to Wayland, so the headed browser fails to
-    start wherever there is no Wayland session -- most often an SSH shell on
-    the other host. An explicit `--ozone-platform` always wins; otherwise fall
-    back to x11 exactly when $WAYLAND_DISPLAY is absent, which leaves a normal
-    Wayland desktop untouched.
+    Called first in every subcommand that opens a window, so a session-less
+    shell costs neither a gate slot nor a browser launch. `NoDisplay` is caught
+    in `main` and printed as one line.
     """
-    if explicit:
-        return (f"--ozone-platform={explicit}",)
-    if not os.environ.get("WAYLAND_DISPLAY"):
-        return ("--ozone-platform=x11",)
-    return ()
+    resolved = display_mod.resolve(args.ozone_platform)
+    if getattr(args, "verbose", False):
+        print(
+            f"kcl-fetch: display -- {resolved.platform} via {resolved.detail}",
+            file=sys.stderr,
+        )
+        for name, value in sorted(resolved.env.items()):
+            print(f"kcl-fetch: display -- {name}={value}", file=sys.stderr)
+    return resolved
 
 
 def _doi_stem(doi: str) -> str:
@@ -84,6 +87,10 @@ def _open_gate(cfg: config_mod.Config) -> Gate:
 
 
 def cmd_get(args, cfg: config_mod.Config) -> int:
+    # Before LibKey, before Crossref, before the gate: a fetch that cannot open
+    # a window should not consume a budget slot discovering that.
+    screen = _display(args)
+
     doi = urls.normalise_doi(args.doi)
     if not urls.is_doi(doi):
         print(f"kcl-fetch: {args.doi!r} is not a DOI", file=sys.stderr)
@@ -140,7 +147,8 @@ def cmd_get(args, cfg: config_mod.Config) -> int:
                         profile_dir=paths.profile_dir(),
                         chromium=chromium,
                         downloads_dir=paths.ensure(paths.state_dir() / "downloads"),
-                        extra_args=_ozone_args(args.ozone_platform),
+                        extra_args=screen.ozone_args(),
+                        env=screen.env,
                     ) as browser:
                         result = browser.fetch_pdf(
                             access_url,
@@ -198,6 +206,7 @@ def cmd_login(args, cfg: config_mod.Config) -> int:
     stay reachable even when the fetch budget is spent -- otherwise a spent
     budget would also lock the user out of renewing the session.
     """
+    screen = _display(args)
     chromium = _resolve_chromium(cfg.chromium)
     start = urls.openathens_url("https://my.openathens.net/")
     print(
@@ -213,7 +222,8 @@ def cmd_login(args, cfg: config_mod.Config) -> int:
         profile_dir=paths.profile_dir(),
         chromium=chromium,
         downloads_dir=paths.ensure(paths.state_dir() / "downloads"),
-        extra_args=_ozone_args(args.ozone_platform),
+        extra_args=screen.ozone_args(),
+        env=screen.env,
     ) as browser:
         if browser.interactive_login(start, wait_seconds=args.timeout):
             print("kcl-fetch: signed in; the session is stored in the profile.")
@@ -270,9 +280,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--ozone-platform",
         metavar="PLATFORM",
         help=(
-            "Chromium ozone platform (wayland, x11). Default: x11 when "
-            "$WAYLAND_DISPLAY is unset, otherwise Chromium's own choice."
+            "Chromium ozone platform (wayland, x11). Default: whichever of a "
+            "Wayland socket in $XDG_RUNTIME_DIR or an X socket in "
+            "/tmp/.X11-unix is actually there, Wayland first. An explicit "
+            "value is used even if its socket was not found."
         ),
+    )
+    browser_opts.add_argument(
+        "--verbose",
+        action="store_true",
+        help="report which display was chosen and why",
     )
 
     get = sub.add_parser(
@@ -304,7 +321,13 @@ def main(argv: list[str] | None = None) -> int:
     except LimitsConfigError as exc:
         print(f"kcl-fetch: {exc}", file=sys.stderr)
         return 2
-    return args.func(args, cfg)
+    try:
+        return args.func(args, cfg)
+    except (display_mod.NoDisplay, driver_mod.StaleProfileLock) as exc:
+        # Both are facts about the machine, not failures of the tool. One line,
+        # no traceback, no Chromium flag dump.
+        print(f"kcl-fetch: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

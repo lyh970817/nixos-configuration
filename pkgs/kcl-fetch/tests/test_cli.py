@@ -1,36 +1,68 @@
-"""The CLI surface: what it offers, and how it picks an ozone platform."""
+"""The CLI surface: what it offers, and how it reports the display it picked.
+
+The resolution itself lives in `test_display.py`; what is checked here is that
+the CLI asks for it, passes the answer on, and says so under `--verbose`.
+"""
 
 from __future__ import annotations
 
-import os
+import argparse
 import unittest
 from unittest import mock
 
 import kcl_fetch
+from kcl_fetch_lib import display as display_mod
 
 
-class TestOzoneArgs(unittest.TestCase):
-    """chromium 144 defaults to Wayland; over SSH there is no Wayland to use."""
+class TestDisplayReporting(unittest.TestCase):
+    def _args(self, **kwargs):
+        return argparse.Namespace(
+            **{"ozone_platform": None, "verbose": False, **kwargs}
+        )
 
-    def test_absent_wayland_display_falls_back_to_x11(self):
-        with mock.patch.dict(os.environ, {}, clear=True):
-            self.assertEqual(kcl_fetch._ozone_args(None), ("--ozone-platform=x11",))
+    def test_the_resolved_display_is_handed_back_untouched(self):
+        chosen = display_mod.Display("wayland", {"WAYLAND_DISPLAY": "wayland-1"}, "d")
+        with mock.patch.object(display_mod, "resolve", return_value=chosen) as resolve:
+            self.assertIs(kcl_fetch._display(self._args()), chosen)
+        resolve.assert_called_once_with(None)
 
-    def test_an_empty_wayland_display_is_treated_as_absent(self):
-        with mock.patch.dict(os.environ, {"WAYLAND_DISPLAY": ""}, clear=True):
-            self.assertEqual(kcl_fetch._ozone_args(None), ("--ozone-platform=x11",))
+    def test_an_explicit_platform_is_forwarded_to_the_resolver(self):
+        chosen = display_mod.Display("x11", {}, "forced")
+        with mock.patch.object(display_mod, "resolve", return_value=chosen) as resolve:
+            kcl_fetch._display(self._args(ozone_platform="x11"))
+        resolve.assert_called_once_with("x11")
 
-    def test_a_wayland_session_is_left_to_chromiums_own_choice(self):
-        with mock.patch.dict(os.environ, {"WAYLAND_DISPLAY": "wayland-1"}, clear=True):
-            self.assertEqual(kcl_fetch._ozone_args(None), ())
+    def test_verbose_names_the_platform_and_the_exported_variables(self):
+        chosen = display_mod.Display(
+            "wayland",
+            {"WAYLAND_DISPLAY": "wayland-1", "XDG_RUNTIME_DIR": "/run/user/1000"},
+            "wayland socket /run/user/1000/wayland-1",
+        )
+        with mock.patch.object(display_mod, "resolve", return_value=chosen):
+            with mock.patch("sys.stderr", new_callable=_Capture) as err:
+                kcl_fetch._display(self._args(verbose=True))
+        self.assertIn("wayland socket /run/user/1000/wayland-1", err.text)
+        self.assertIn("WAYLAND_DISPLAY=wayland-1", err.text)
+        self.assertIn("XDG_RUNTIME_DIR=/run/user/1000", err.text)
 
-    def test_an_explicit_platform_wins_over_the_environment(self):
-        with mock.patch.dict(os.environ, {}, clear=True):
-            self.assertEqual(
-                kcl_fetch._ozone_args("wayland"), ("--ozone-platform=wayland",)
-            )
-        with mock.patch.dict(os.environ, {"WAYLAND_DISPLAY": "wayland-1"}, clear=True):
-            self.assertEqual(kcl_fetch._ozone_args("x11"), ("--ozone-platform=x11",))
+    def test_quiet_by_default(self):
+        chosen = display_mod.Display("wayland", {}, "d")
+        with mock.patch.object(display_mod, "resolve", return_value=chosen):
+            with mock.patch("sys.stderr", new_callable=_Capture) as err:
+                kcl_fetch._display(self._args())
+        self.assertEqual(err.text, "")
+
+
+class _Capture:
+    def __init__(self) -> None:
+        self.text = ""
+
+    def write(self, chunk: str) -> int:
+        self.text += chunk
+        return len(chunk)
+
+    def flush(self) -> None:
+        pass
 
 
 class TestParser(unittest.TestCase):
@@ -45,6 +77,10 @@ class TestParser(unittest.TestCase):
         self.assertEqual(
             self.parser.parse_args(["get", "10.1000/x"]).ozone_platform, None
         )
+
+    def test_the_browser_subcommands_accept_verbose(self):
+        self.assertTrue(self.parser.parse_args(["login", "--verbose"]).verbose)
+        self.assertFalse(self.parser.parse_args(["get", "10.1000/x"]).verbose)
 
     def test_there_is_no_batch_subcommand(self):
         """Bulk retrieval is the abuse signature; its absence is the feature."""
