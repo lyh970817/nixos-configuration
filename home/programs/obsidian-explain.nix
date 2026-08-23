@@ -103,6 +103,7 @@ let
     runtimeInputs = [
       pkgs.jq
       pkgs.coreutils
+      pkgs.util-linux
     ];
     text = ''
       vault=${lib.escapeShellArg vaultDir}
@@ -124,7 +125,34 @@ let
         mv "$tmp" "$registry"
       fi
 
-      exec ${pkgs.obsidian}/bin/obsidian ${lib.escapeShellArg vaultUri} "$@"
+      # Invoked over SSH (explain-dispatch-new) this inherits no session env;
+      # rediscover it the way show-url does (html-open.nix), or Electron dies
+      # on the missing XDG_RUNTIME_DIR. NIXOS_OZONE_WL makes the wrapper pick
+      # the Wayland backend, as the desktop session does (hyprland.nix).
+      export XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+      if [ -z "''${WAYLAND_DISPLAY:-}" ]; then
+        for sock in "$XDG_RUNTIME_DIR"/wayland-*; do
+          case "$sock" in
+            *.lock) continue ;;
+          esac
+          [ -S "$sock" ] || continue
+          WAYLAND_DISPLAY="$(basename "$sock")"
+          export WAYLAND_DISPLAY
+          break
+        done
+      fi
+      if [ -z "''${WAYLAND_DISPLAY:-}" ]; then
+        echo "obsidian-explain: no Wayland socket under $XDG_RUNTIME_DIR" >&2
+        exit 1
+      fi
+      export DISPLAY="''${DISPLAY:-:0}"
+      export XDG_CURRENT_DESKTOP="''${XDG_CURRENT_DESKTOP:-Hyprland}"
+      export NIXOS_OZONE_WL=1
+
+      # Detached, so an SSH caller returning does not take Obsidian with it;
+      # a running instance picks the URI up and the child exits on its own.
+      setsid -f ${pkgs.obsidian}/bin/obsidian ${lib.escapeShellArg vaultUri} "$@" \
+        >/dev/null 2>&1 < /dev/null
     '';
   };
 in
