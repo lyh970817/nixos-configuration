@@ -13,7 +13,7 @@ _G.float_terminal_opacity = 0.9
 
 -- How far an unfocused window is dimmed, spent by the window rules in
 -- hyprland.lua rather than by decoration:inactive_opacity below, so that only
--- tiled foot and Brave windows dim and dialogs, file pickers and image
+-- tiled kitty and Brave windows dim and dialogs, file pickers and image
 -- previews stay opaque. 1 turns it off.
 _G.inactive_opacity = 0.93
 

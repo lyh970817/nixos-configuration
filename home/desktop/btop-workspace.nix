@@ -55,7 +55,7 @@ in
       };
       Service = {
         Type = "simple";
-        ExecStart = "${pkgs.foot}/bin/foot --app-id foot-btop --title btop-dashboard %h/.config/hypr/scripts/btop-dashboard.sh";
+        ExecStart = "${pkgs.kitty}/bin/kitty --class kitty-btop --title btop-dashboard %h/.config/hypr/scripts/btop-dashboard.sh";
         Restart = "always";
         RestartSec = "1s";
         StandardOutput = "journal";
