@@ -380,6 +380,13 @@ local function explain_open_root()
     doc = root .. "/" .. doc
   end
   vim.cmd("edit " .. vim.fn.fnameescape(doc))
+  -- Opening the root is one of the deliberate entry points into the browser
+  -- preview (plugins/explain-preview.lua); from here on the tree is active
+  -- and children opened later get tabs of their own.
+  local preview = package.loaded["explain-preview"]
+  if preview then
+    preview.preview(vim.api.nvim_get_current_buf(), false)
+  end
 end
 
 ---------------------------------------------------------------------------

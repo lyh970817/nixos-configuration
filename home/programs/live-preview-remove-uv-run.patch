@@ -1,0 +1,19 @@
+Remove the trailing vim.uv.run() from Server:start. Inside Neovim the server
+handles already live on the editor's own event loop; the nested uv.run() never
+returns (the listening socket keeps the loop active forever) and wedges the
+main state machine -- keystrokes, RPC, autocmds, even SIGTERM stop being
+processed while HTTP/websocket traffic is still served. Verified empirically
+against the nixpkgs pin (0.9.6-unstable-2026-01-12); upstream main has since
+removed exactly this call. Drop this patch when the nixpkgs pin moves past it.
+
+--- a/lua/livepreview/server/init.lua
++++ b/lua/livepreview/server/init.lua
+@@ -210,8 +210,6 @@
+ 		end)
+ 		table.insert(M.connecting_clients, client)
+ 	end)
+-
+-	uv.run()
+ end
+ 
+ --- Stop the server
