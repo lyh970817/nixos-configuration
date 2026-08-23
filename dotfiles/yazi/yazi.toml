@@ -36,6 +36,10 @@ html = [
 extract = [
 	{ run = 'ya pub extract --list "$@"', desc = "Extract here" },
 ]
+bluray = [
+	# Plays locally on this machine. See home/programs/iso-open.nix.
+	{ run = 'yazi-open-iso "$@"', desc = "Play bluray ISO", orphan = true },
+]
 subtitle = [
 	{ run = ''' python3 -c 'import socket, sys; s = socket.socket(socket.AF_UNIX); s.connect("/tmp/mpv.sock"); s.sendall(f"sub-add \"{sys.argv[1]}\"\n".encode())' "$0" ''', desc = "Add sub to MPV" },
 ]
@@ -44,6 +48,7 @@ subtitle = [
 prepend_rules = [
 	{ url = "*.{ass,srt,ssa,sty,sup,vtt}", use = [ "subtitle", "edit" ] },
 	{ url = "*.{html,htm}", use = [ "html", "edit" ] },
+	{ url = "*.iso", use = "bluray" },
 	# Remote files start out as vfs/absent, so this only matches once Yazi has
 	# cached the file locally -- the built-in download rule runs first.
 	{ mime = "image/*", use = [ "image", "edit" ] },

@@ -48,6 +48,7 @@
     ./programs/quicktui.nix
     ./programs/launchers.nix
     ./programs/image-open.nix
+    ./programs/iso-open.nix
     ./programs/html-open.nix
     ./programs/pre-commit.nix
     ./programs/qutebrowser.nix
