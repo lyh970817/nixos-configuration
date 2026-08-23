@@ -201,3 +201,16 @@ show_agent_labels_on_pane_borders = false
 agent_panel_sort = "spaces"
 [ui.toast]
 delivery = "system"
+
+# Kitty graphics passthrough for panes. Off by default in herdr 0.8.0; without
+# it the pane emulator (libghostty-vt) silently drops every `ESC _G` APC, so
+# nvim math images (Snacks.image inline math, render-latex display math) in the
+# F7 explanation workspace leave blank regions. With the flag on, herdr decodes
+# pane graphics server-side and re-emits them to the attached client as
+# in-band direct transmissions (a=t,t=d base64 + a=p placements,
+# src/kitty_graphics.rs), so images survive the laptop's SSH hop — no file
+# paths cross hosts. Takes effect per pane at spawn: after `herdr server
+# reload-config` (or a server restart) new panes render images; existing panes
+# do not. Clients pick it up on reattach.
+[experimental]
+kitty_graphics = true
