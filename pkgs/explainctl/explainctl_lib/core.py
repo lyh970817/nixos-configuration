@@ -19,12 +19,15 @@ import shutil
 import tempfile
 from pathlib import Path
 
+from . import typst_math
+
 METADATA_NAME = ".explain.json"
 LOCK_NAME = ".explain.lock"
 CONTEXT_NAME = ".context.md"
 ROOT_DOCUMENT = "explanation.md"
 CHILDREN_DIR = "children"
 STAGING_DIR = ".staging"
+SUBMIT_STAGING_PREFIX = ".submit-"
 METADATA_VERSION = 1
 
 # EX_TEMPFAIL: a concurrent update holds the tree lock; try again later.
@@ -94,9 +97,8 @@ def resolve_root(path: Path) -> Path | None:
 
 
 def tree_markdown_files(root: Path) -> list[Path]:
-    """Every Markdown file in the tree, hidden entries (.staging, .snapshot-*,
-    .failed-*) excluded. .context.md is handled separately by callers that
-    need it."""
+    """Every Markdown file in the tree, hidden entries (.staging, .submit-*)
+    excluded. .context.md is handled separately by callers that need it."""
     files = []
     for path in sorted(root.rglob("*.md")):
         relative = path.relative_to(root)
@@ -127,6 +129,9 @@ def new_metadata(slug: str, question: str, origin: dict) -> dict:
         "coordinator_session_id": None,
         "root_document": ROOT_DOCUMENT,
         "last_sync_at": None,
+        # Flipped to "typst" once the deterministic post-agent conversion has
+        # run; migrate-typst does the same for pre-existing trees.
+        typst_math.MATH_SYNTAX_KEY: typst_math.MATH_SYNTAX_LATEX,
     }
 
 
@@ -149,6 +154,23 @@ def write_metadata(root: Path, data: dict) -> None:
 def read_metadata(root: Path) -> dict:
     with open(metadata_path(root), encoding="utf-8") as handle:
         return json.load(handle)
+
+
+def tree_is_typst(metadata: dict) -> bool:
+    return metadata.get(typst_math.MATH_SYNTAX_KEY) == typst_math.MATH_SYNTAX_TYPST
+
+
+def write_text_atomic(path: Path, text: str) -> None:
+    fd, temporary = tempfile.mkstemp(prefix=".%s." % path.name, dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
 
 
 def root_document(root: Path, metadata: dict) -> Path:
@@ -348,7 +370,41 @@ class TreeLock:
 
 
 # ---------------------------------------------------------------------------
-# Snapshot / restore
+# Submit staging
+
+# The submit agent edits a private copy of the tree, never the live files:
+# the laptop can rsync-push an edit at any moment, and the conflict check in
+# cmd_submit compares live hashes taken before the agent ran against the live
+# tree afterwards. Same filesystem as the root, so committing is os.replace.
+
+
+def stage_tree(root: Path) -> Path:
+    staging = Path(tempfile.mkdtemp(prefix=SUBMIT_STAGING_PREFIX, dir=str(root)))
+    for path in _snapshot_targets(root):
+        relative = path.relative_to(root)
+        destination = staging / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+    return staging
+
+
+def staged_targets(staging: Path) -> list[Path]:
+    """Markdown files (plus .context.md) in a staging copy; mirrors
+    _snapshot_targets but rooted at the staging directory."""
+    files = []
+    for path in sorted(Path(staging).rglob("*.md")):
+        relative = path.relative_to(staging)
+        if any(part.startswith(".") for part in relative.parts):
+            continue
+        files.append(path)
+    context = Path(staging) / CONTEXT_NAME
+    if context.is_file():
+        files.append(context)
+    return files
+
+
+# ---------------------------------------------------------------------------
+# Tree hashing
 
 
 def _snapshot_targets(root: Path) -> list[Path]:
@@ -359,53 +415,8 @@ def _snapshot_targets(root: Path) -> list[Path]:
     return targets
 
 
-def snapshot_tree(root: Path) -> Path:
-    """Copy the Markdown tree (plus .context.md) into a hidden temporary
-    directory under the root, so restore is a same-filesystem copy."""
-    snapshot = Path(tempfile.mkdtemp(prefix=".snapshot-", dir=str(root)))
-    for path in _snapshot_targets(root):
-        relative = path.relative_to(root)
-        destination = snapshot / relative
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(path, destination)
-    return snapshot
-
-
-def restore_snapshot(root: Path, snapshot: Path) -> dict:
-    """Put every snapshotted file back and quarantine files created since the
-    snapshot into a .failed-<timestamp> directory for inspection."""
-    root = Path(root)
-    snapshot = Path(snapshot)
-    snapshotted = set()
-    restored = []
-    for path in sorted(snapshot.rglob("*")):
-        if not path.is_file():
-            continue
-        relative = path.relative_to(snapshot)
-        snapshotted.add(relative)
-        destination = root / relative
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(path, destination)
-        restored.append(str(relative))
-    quarantined = []
-    quarantine = root / f".failed-{datetime.datetime.now():%Y%m%d-%H%M%S}"
-    for path in _snapshot_targets(root):
-        relative = path.relative_to(root)
-        if relative in snapshotted:
-            continue
-        destination = quarantine / relative
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(path), destination)
-        quarantined.append(str(relative))
-    return {
-        "restored": restored,
-        "quarantined": quarantined,
-        "quarantine_dir": str(quarantine) if quarantined else None,
-    }
-
-
-def discard_snapshot(snapshot: Path) -> None:
-    shutil.rmtree(snapshot, ignore_errors=True)
+def discard_staging(staging: Path) -> None:
+    shutil.rmtree(staging, ignore_errors=True)
 
 
 def hash_tree(root: Path) -> dict[str, str]:

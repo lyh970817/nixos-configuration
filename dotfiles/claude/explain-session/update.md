@@ -30,9 +30,7 @@ The currently open questions are:
   speaker: everyday vocabulary, short sentences, no needlessly fancy phrasing.
   Keep technical terms; keep the prose around them simple.
 - Use `$...$` inline and `$$...$$` display math delimiters, as in the rest of
-  the tree. Stay within KaTeX-supported LaTeX and avoid `\_`, `\,`, and
-  literal underscores inside `\text{...}` — the browser preview runs the
-  document through Markdown before KaTeX, which mangles those.
+  the tree.
 - Write only inside `{{explanation_root}}`; never modify project source files.
 
 ## Marking questions resolved

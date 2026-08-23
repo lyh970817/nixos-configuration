@@ -1,0 +1,217 @@
+{
+  config,
+  lib,
+  pkgs,
+  osConfig,
+  ...
+}:
+
+# Laptop-side editing for the explanation workflow. The trees stay canonical
+# on linglong (~/.local/share/explanations, where explainctl and the agents
+# run); the laptop edits a mirror in an Obsidian vault at
+# ~/Documents/explanations-vault. Sync is deliberately rough: explicit
+# push/submit/pull wrappers, no continuous sync — explainctl's staging-hash
+# conflict protocol catches the race where a push lands mid-update.
+#
+# `explain-sync` (remote role) runs on the laptop; `explain-dispatch-new`
+# (home role) runs on linglong, called by the Neovim explain module after
+# `explainctl new` so a remote viewer gets the fresh tree in the vault
+# without touching the local nvim-tab flow.
+
+let
+  peerHost = osConfig.portable.peerHost;
+
+  # Stable across generations; see html-open.nix for why SSH dispatch needs a
+  # fixed absolute location for peer-side helpers. Same username on both
+  # machines, so one path serves both directions.
+  profileBin = "/etc/profiles/per-user/${config.home.username}/bin";
+
+  viewerIsRemote = pkgs.callPackage ../../pkgs/viewer-is-remote.nix { };
+
+  vaultDir = "Documents/explanations-vault";
+  storeDir = ".local/share/explanations";
+
+  # Never sync explainctl's runtime state: the lock and the staging/failed
+  # directories stay on linglong.
+  pullExcludes = "--exclude '.explain.lock' --exclude '.staging*' --exclude '.submit-*' --exclude '.failed-*'";
+
+  explainSync = pkgs.writeShellApplication {
+    name = "explain-sync";
+    runtimeInputs = [
+      pkgs.rsync
+      pkgs.openssh
+      pkgs.jq
+      pkgs.coreutils
+    ];
+    text = ''
+      PEER=${pkgs.lib.escapeShellArg peerHost}
+      VAULT="$HOME/${vaultDir}"
+      STORE=${pkgs.lib.escapeShellArg storeDir}
+
+      usage() {
+        echo "explain-sync: usage: explain-sync pull [tree] | push [tree] | submit FILE" >&2
+        exit 2
+      }
+
+      [ -n "$PEER" ] || { echo "explain-sync: no peer host configured" >&2; exit 1; }
+      mkdir -p "$VAULT"
+
+      # accept-new rather than a pinned key: the peer's identity is enforced
+      # by the tailnet (see html-open.nix).
+      SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new)
+
+      # linglong -> vault: everything except explainctl runtime state, and
+      # never --delete: an unsaved local edit must survive a pull.
+      pull() {
+        local tree="''${1:-}"
+        rsync -a -e "ssh ''${SSH_OPTS[*]}" \
+          ${pullExcludes} \
+          "$PEER:$STORE/$tree''${tree:+/}" "$VAULT/$tree''${tree:+/}"
+      }
+
+      # vault -> linglong: only Markdown, the single thing the human edits.
+      # Hidden entries (vault config, .explain.json, .context.md) never
+      # travel this way, and nothing is ever deleted on the peer.
+      push() {
+        local tree="''${1:-}"
+        rsync -am -e "ssh ''${SSH_OPTS[*]}" \
+          --exclude '.*' --include '*/' --include '*.md' --exclude '*' \
+          "$VAULT/$tree''${tree:+/}" "$PEER:$STORE/$tree''${tree:+/}"
+      }
+
+      # Map a remote tree path (absolute, under .../explanations/) to its
+      # vault twin.
+      to_local() {
+        printf '%s/%s\n' "$VAULT" "''${1#*/explanations/}"
+      }
+
+      open_locally() {
+        # Loose coupling to the Obsidian side: use its launcher when
+        # installed, otherwise just say where the document is.
+        if command -v obsidian-explain >/dev/null 2>&1; then
+          obsidian-explain "$1" || true
+        else
+          echo "explain-sync: open: $1"
+        fi
+      }
+
+      submit() {
+        local file rel tree json code status
+        file="$(realpath "$1")"
+        case "$file" in
+          "$VAULT"/*/*) ;;
+          *)
+            echo "explain-sync: $file is not inside a tree in $VAULT" >&2
+            exit 1
+            ;;
+        esac
+        rel="''${file#"$VAULT"/}"
+        tree="''${rel%%/*}"
+
+        push "$tree"
+
+        # The remote path is relative to the peer's home, where the SSH
+        # command lands; printf %q survives the remote shell's word split.
+        # Client-side expansion is the point here, hence the %q quoting.
+        code=0
+        # shellcheck disable=SC2029
+        json=$(ssh "''${SSH_OPTS[@]}" "$PEER" \
+          "$(printf '%q ' ${profileBin}/explainctl submit --json "$STORE/$rel")") \
+          || code=$?
+        status=$(jq -r '.status // empty' <<<"$json" 2>/dev/null || true)
+
+        case "$status" in
+          updated)
+            pull "$tree"
+            jq -r '.resolved_question_ids[]? | "explain-sync: resolved \(.)"' <<<"$json"
+            local created
+            while IFS= read -r created; do
+              [ -n "$created" ] || continue
+              open_locally "$(to_local "$created")"
+            done < <(jq -r '.created[]?' <<<"$json")
+            ;;
+          no_questions)
+            echo "explain-sync: no open questions; nothing submitted"
+            ;;
+          conflict)
+            # The live tree changed while the update ran; nothing was
+            # committed. Pull the current state and point at the staged
+            # result kept on linglong.
+            pull "$tree"
+            echo "explain-sync: conflict — tree changed during the update" >&2
+            echo "explain-sync: staged result on $PEER: $(jq -r '.staged // empty' <<<"$json")" >&2
+            exit 1
+            ;;
+          busy)
+            echo "explain-sync: an update is already running on $PEER" >&2
+            exit 75
+            ;;
+          *)
+            echo "explain-sync: submit failed (exit $code)" >&2
+            [ -z "$json" ] || printf '%s\n' "$json" >&2
+            exit 1
+            ;;
+        esac
+      }
+
+      case "''${1:-}" in
+        pull) pull "''${2:-}" ;;
+        push) push "''${2:-}" ;;
+        submit)
+          [ -n "''${2:-}" ] || usage
+          submit "$2"
+          ;;
+        *) usage ;;
+      esac
+    '';
+  };
+
+  explainDispatchNew = pkgs.writeShellApplication {
+    name = "explain-dispatch-new";
+    runtimeInputs = [
+      pkgs.rsync
+      pkgs.openssh
+      pkgs.jq
+      pkgs.coreutils
+      viewerIsRemote
+    ];
+    text = ''
+      PEER=${pkgs.lib.escapeShellArg peerHost}
+      VAULT=${pkgs.lib.escapeShellArg vaultDir}
+
+      if [ -z "''${1:-}" ]; then
+        echo "explain-dispatch-new: usage: explain-dispatch-new TREE_ROOT" >&2
+        exit 2
+      fi
+      root="$(realpath "$1")"
+      if [ ! -f "$root/.explain.json" ]; then
+        echo "explain-dispatch-new: $root is not an explanation root" >&2
+        exit 2
+      fi
+
+      # A local viewer already has the nvim tab; nothing to dispatch.
+      if [ -z "$PEER" ] || ! viewer-is-remote; then
+        exit 0
+      fi
+
+      slug="$(basename "$root")"
+      rsync -a -e "ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new" \
+        ${pullExcludes} \
+        "$root/" "$PEER:$VAULT/$slug/"
+
+      focus="$(jq -r '.root_document // "explanation.md"' "$root/.explain.json")"
+      # Loose coupling: the Obsidian launcher may not be installed on the
+      # peer yet; the sync above already delivered the document.
+      if ! ssh -o BatchMode=yes -o ConnectTimeout=10 \
+          -o StrictHostKeyChecking=accept-new "$PEER" \
+          "$(printf '%q ' ${profileBin}/obsidian-explain "$VAULT/$slug/$focus")"; then
+        echo "explain-dispatch-new: synced to $PEER:$VAULT/$slug; could not open Obsidian" >&2
+      fi
+    '';
+  };
+in
+{
+  home.packages =
+    lib.optionals (osConfig.portable.role == "remote") [ explainSync ]
+    ++ lib.optionals (osConfig.portable.role == "home") [ explainDispatchNew ];
+}
