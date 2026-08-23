@@ -121,6 +121,25 @@ return {
     config = function(_, opts)
       require("render_latex").setup(opts)
 
+      -- rc4's incremental scan runs `parser:parse(true)` from inside its
+      -- `on_lines` buf_attach callback (renderer.lua attach -> Detect.update
+      -- -> detect.markdown_inline_parser). During a multi-step edit (`J`,
+      -- substitutes, undo blocks) that callback fires when treesitter's
+      -- on_bytes has already edited the tree but the buffer still shows the
+      -- pre-edit line count, so the parse bakes the OLD text into a tree that
+      -- is then marked fully valid. The cached markdown tree ends one line
+      -- past the buffer until the line count happens to match again; every
+      -- consumer that trusts node ranges then breaks - render-markdown's
+      -- handlers throw "Index out of bounds" from nvim_buf_get_text via
+      -- vim.schedule on each render, and conceal/highlight positions smear
+      -- across lines. Forcing the non-incremental path makes the callback
+      -- only set source_dirty; the rescan then happens lazily in
+      -- renderer.equations, outside the edit, where parsing is safe.
+      local Sources = require("render_latex.sources")
+      Sources.incremental = function()
+        return false
+      end
+
       -- Snacks.image (snacks/image/image.lua) and render-latex's kitty
       -- backend (render_latex/image_backends/kitty.lua) build kitty image
       -- ids with the *same* formula: (pid-hash << 14) | counter, counter
