@@ -111,7 +111,7 @@ def open_questions(text: str) -> list[Question]:
 ```
 
 ```sh
-explainctl submit --json "$HOME/.local/share/explanations/demo/explanation.md"
+explainctl submit "$HOME/.local/share/explanations/demo/explanation.md"
 ```
 
 ```text

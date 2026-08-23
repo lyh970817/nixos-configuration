@@ -311,7 +311,7 @@ local function explain_submit()
   end
 
   active[root] = { saved = lock_buffers(root), reading = reading }
-  local ok, err = pcall(vim.system, { "explainctl", "submit", "--json", file }, { text = true }, function(res)
+  local ok, err = pcall(vim.system, { "explainctl", "submit", file }, { text = true }, function(res)
     vim.schedule(function()
       on_submit_exit(root, res)
     end)
@@ -457,7 +457,6 @@ local function explain_new()
       launcher,
       "--question",
       question,
-      "--json",
       "--no-open",
     }, { text = true }, function(res)
       vim.schedule(function()
