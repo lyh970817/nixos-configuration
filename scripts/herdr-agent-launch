@@ -169,14 +169,15 @@ destination_state() {
   fi
 }
 
-# A freshly created pane runs its login greeting (fastfetch, starship) for a
-# second or more, and `herdr agent start` issued during that window never types
-# the command: it returns only after its own startup timeout, which then tears
-# the destination down again. Wait for a quiet prompt first, and require several
-# consecutive quiet polls so the gap before the greeting starts cannot itself
-# read as ready.
+# A command typed into a pane that is still running startup helpers is eaten:
+# `herdr agent start` then returns only after its own startup timeout, which
+# tears the destination down again. HERDR_SCRIPTED_PANE suppresses the login
+# greeting, so the shell settles in ~0.3s; poll fast and require consecutive
+# quiet polls so a momentary gap between helpers cannot read as ready.
 wait_for_available_shell() {
-  local poll_interval=0.25 max_polls=80 required_quiet_polls=4
+  # 0.05s polls, 2 consecutive quiet, 0.2s settle; max_polls keeps the
+  # previous ~20s overall budget (400 * 0.05).
+  local poll_interval=0.05 max_polls=400 required_quiet_polls=2
   local poll quiet_polls=0 process_state
   for ((poll = 0; poll < max_polls; poll++)); do
     if process_state=$(herdr pane process-info --pane "$new_pane_id" 2>/dev/null) \
@@ -188,7 +189,7 @@ wait_for_available_shell() {
       quiet_polls=$((quiet_polls + 1))
       if ((quiet_polls >= required_quiet_polls)); then
         # Let the drawn prompt settle before Herdr looks at the pane.
-        sleep 0.5
+        sleep 0.2
         return 0
       fi
     else
