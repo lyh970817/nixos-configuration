@@ -15,7 +15,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import core
+from . import core, typst_math
 
 
 class CommandError(Exception):
@@ -195,6 +195,23 @@ def _resolve_target_root(target: str, environ=None) -> Path:
     )
 
 
+def _convert_staged_to_typst(files: list[Path]) -> tuple[bool, list[dict]]:
+    """Deterministic post-agent step: agents write LaTeX math, the tree is
+    canonically Typst. Converts the given files in place and returns
+    (converted, warnings); a missing t2l degrades to no conversion so the
+    agent's output is never lost."""
+    if not typst_math.t2l_available():
+        return False, [{"detail": "t2l not found on PATH; math left as LaTeX"}]
+    warnings: list[dict] = []
+    for path in files:
+        text = path.read_text(encoding="utf-8")
+        converted, segment_warnings = typst_math.convert_markdown(text)
+        warnings.extend(warning.as_dict() for warning in segment_warnings)
+        if converted != text:
+            path.write_text(converted, encoding="utf-8")
+    return True, warnings
+
+
 def _question_digest(questions: list[core.Question], root: Path) -> str:
     lines = []
     for question in questions:
@@ -266,6 +283,15 @@ def cmd_new(args) -> int:
             fields = error.fields if isinstance(error, CommandError) else {}
             raise CommandError(str(error), root=str(root), **fields) from None
 
+        # Deterministic post-agent step: the bootstrap agent wrote LaTeX
+        # math; the canonical tree is Typst. Everything in staging is new, so
+        # every file is converted whole.
+        converted, conversion_warnings = _convert_staged_to_typst(
+            core.staged_targets(staging)
+        )
+        if converted:
+            metadata[typst_math.MATH_SYNTAX_KEY] = typst_math.MATH_SYNTAX_TYPST
+
         # Staged tree validated: move it into place, then mark ready.
         for entry in sorted(staging.iterdir()):
             os.replace(entry, root / entry.name)
@@ -294,6 +320,8 @@ def cmd_new(args) -> int:
         "launcher": origin["launcher"],
         "opened": opened,
     }
+    if conversion_warnings:
+        result["conversion_warnings"] = conversion_warnings
     human = f"created {root} (coordinator {coordinator})"
     if not args.no_open and not opened:
         result["warning"] = "kitty not found on PATH; workspace not opened"
@@ -336,40 +364,99 @@ def cmd_submit(args) -> int:
             )
 
         origin = metadata.get("origin") or {}
+        # Conflict protocol: hash the live tree, hand the agent a staged
+        # copy, and only commit the staged result if the live files are still
+        # exactly what was hashed. The flock serializes explainctl callers;
+        # the hashes catch out-of-band writers (the laptop's rsync push).
+        before = core.hash_tree(root)
+        open_before = {question.id for question in questions}
+        staging = core.stage_tree(root)
+        root_document_rel = metadata.get("root_document") or core.ROOT_DOCUMENT
         prompt = core.render_template(
             core.load_template("update.md", origin),
             {
-                "explanation_root": root,
-                "root_document": core.root_document(root, metadata),
-                "context_file": root / core.CONTEXT_NAME,
-                "children_dir": root / core.CHILDREN_DIR,
+                "explanation_root": staging,
+                "root_document": staging / root_document_rel,
+                "context_file": staging / core.CONTEXT_NAME,
+                "children_dir": staging / core.CHILDREN_DIR,
                 "questions": _question_digest(questions, root),
-                "submitted": submitted,
+                "submitted": staging / submitted.relative_to(root),
             },
         )
-        before = core.hash_tree(root)
-        open_before = {question.id for question in questions}
-        snapshot = core.snapshot_tree(root)
         try:
-            run_claude(origin, prompt, coordinator, root, fork=False)
+            # --add-dir grants the fork the staging copy only: even a
+            # confused agent reusing live paths from earlier turns cannot
+            # bypass the conflict check.
+            run_claude(origin, prompt, coordinator, staging, fork=False)
         except CommandError as error:
-            restore = core.restore_snapshot(root, snapshot)
-            core.discard_snapshot(snapshot)
+            # Live tree untouched; the staged partial result is kept (dot
+            # prefix hides it from tree scans) for inspection.
             raise CommandError(
                 str(error),
                 root=str(root),
                 submitted=str(submitted),
-                restored=True,
-                quarantine_dir=restore["quarantine_dir"],
+                staged=str(staging),
                 **error.fields,
             ) from None
-        core.discard_snapshot(snapshot)
 
-        after = core.hash_tree(root)
-        updated, created = core.diff_hashes(before, after)
+        live_now = core.hash_tree(root)
+        if live_now != before:
+            conflicting = sorted(
+                set(path for path in live_now if before.get(path) != live_now[path])
+                | (set(before) - set(live_now))
+            )
+            return _emit(
+                {
+                    "status": "conflict",
+                    "root": str(root),
+                    "submitted": str(submitted),
+                    "staged": str(staging),
+                    "conflicting_files": conflicting,
+                    "message": "tree changed while the update ran; "
+                    "staged result preserved, live files untouched",
+                },
+                "conflict: %d live file(s) changed during the update; "
+                "staged result kept at %s" % (len(conflicting), staging),
+                1,
+            )
+
+        # Deterministic post-agent step: convert the LaTeX math the agent
+        # just wrote to Typst — only in regions the agent changed, because
+        # pre-existing math is already Typst and t2l must not see it twice.
+        convert = core.tree_is_typst(metadata)
+        conversion_warnings: list[dict] = []
+        if convert and not typst_math.t2l_available():
+            convert = False
+            conversion_warnings.append(
+                {"detail": "t2l not found on PATH; new math left as LaTeX"}
+            )
+        updated, created = [], []
+        for staged in core.staged_targets(staging):
+            relative = staged.relative_to(staging)
+            live = root / relative
+            after_text = staged.read_text(encoding="utf-8")
+            before_text = (
+                live.read_text(encoding="utf-8") if live.is_file() else None
+            )
+            if before_text == after_text:
+                continue
+            if convert:
+                after_text, segment_warnings = typst_math.convert_changed(
+                    before_text, after_text
+                )
+                conversion_warnings.extend(w.as_dict() for w in segment_warnings)
+                staged.write_text(after_text, encoding="utf-8")
+            (created if before_text is None else updated).append(relative)
+
+        for relative in updated + created:
+            destination = root / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(staging / relative, destination)
+        core.discard_staging(staging)
+
         open_after = {question.id for question in core.open_questions_in_tree(root)}
         resolved = sorted(open_before - open_after)
-        created_absolute = [str(root / path) for path in created]
+        created_absolute = [str(root / path) for path in sorted(created)]
         if len(created_absolute) == 1:
             focus = created_absolute[0]
         else:
@@ -380,11 +467,13 @@ def cmd_submit(args) -> int:
             "status": "updated",
             "root": str(root),
             "submitted": str(submitted),
-            "updated": [str(root / path) for path in updated],
+            "updated": [str(root / path) for path in sorted(updated)],
             "created": created_absolute,
             "focus": focus,
             "resolved_question_ids": resolved,
         }
+        if conversion_warnings:
+            result["conversion_warnings"] = conversion_warnings
         return _emit(
             result,
             "updated %d file(s), created %d, resolved %d question(s)"
@@ -417,8 +506,27 @@ def cmd_sync(args) -> int:
                 "children_dir": root / core.CHILDREN_DIR,
             },
         )
+        # The takeover turn only reads the tree and may refresh .context.md;
+        # remember its content so any refresh gets the same deterministic
+        # LaTeX -> Typst pass as submit output.
+        context = root / core.CONTEXT_NAME
+        context_before = (
+            context.read_text(encoding="utf-8") if context.is_file() else None
+        )
         result = run_claude(origin, prompt, origin["session_id"], root, fork=True)
         coordinator = _session_id_from(result)
+        if (
+            core.tree_is_typst(metadata)
+            and typst_math.t2l_available()
+            and context.is_file()
+        ):
+            context_after = context.read_text(encoding="utf-8")
+            if context_after != context_before:
+                converted, _warnings = typst_math.convert_changed(
+                    context_before, context_after
+                )
+                if converted != context_after:
+                    core.write_text_atomic(context, converted)
         metadata["coordinator_session_id"] = coordinator
         metadata["origin"] = origin
         metadata["status"] = "ready"
@@ -438,6 +546,73 @@ def cmd_sync(args) -> int:
     )
 
 
+def _migrate_one_tree(root: Path) -> dict:
+    """Convert one tree's LaTeX math to Typst, exactly once: the
+    math_syntax marker in .explain.json makes re-runs no-ops, because t2l
+    over already-Typst math would mangle it."""
+    try:
+        metadata = core.read_metadata(root)
+    except (OSError, ValueError) as error:
+        return {"root": str(root), "status": "failed", "message": str(error)}
+    if core.tree_is_typst(metadata):
+        return {"root": str(root), "status": "skipped", "reason": "already typst"}
+    lock = core.TreeLock(root)
+    try:
+        lock.acquire("migrate-typst")
+    except core.ExplainBusy as error:
+        return {
+            "root": str(root),
+            "status": "busy",
+            "active_pid": error.owner.get("pid"),
+        }
+    with lock:
+        converted_files = []
+        warnings: list[dict] = []
+        for path in core.staged_targets(root):
+            text = path.read_text(encoding="utf-8")
+            converted, segment_warnings = typst_math.convert_markdown(text)
+            warnings.extend(warning.as_dict() for warning in segment_warnings)
+            if converted != text:
+                core.write_text_atomic(path, converted)
+                converted_files.append(str(path.relative_to(root)))
+        metadata[typst_math.MATH_SYNTAX_KEY] = typst_math.MATH_SYNTAX_TYPST
+        metadata["updated_at"] = core.iso_now()
+        core.write_metadata(root, metadata)
+    entry = {
+        "root": str(root),
+        "status": "migrated",
+        "converted_files": converted_files,
+    }
+    if warnings:
+        entry["warnings"] = warnings
+    return entry
+
+
+def cmd_migrate_typst(args) -> int:
+    if bool(args.all) == bool(args.target):
+        raise CommandError("pass exactly one of a tree target or --all")
+    if not typst_math.t2l_available():
+        raise CommandError("t2l not found on PATH", binary=typst_math.t2l_binary())
+    if args.all:
+        store = core.data_dir()
+        roots = [
+            entry
+            for entry in sorted(store.iterdir() if store.is_dir() else [])
+            if entry.is_dir() and (entry / core.METADATA_NAME).is_file()
+        ]
+    else:
+        roots = [_resolve_target_root(args.target)]
+    trees = [_migrate_one_tree(root) for root in roots]
+    migrated = sum(1 for tree in trees if tree["status"] == "migrated")
+    failed = [tree for tree in trees if tree["status"] in ("failed", "busy")]
+    return _emit(
+        {"status": "ok" if not failed else "error", "trees": trees},
+        "migrated %d tree(s), skipped %d, failed %d"
+        % (migrated, sum(1 for t in trees if t["status"] == "skipped"), len(failed)),
+        0 if not failed else 1,
+    )
+
+
 def cmd_status(args) -> int:
     root = _resolve_target_root(args.target)
     metadata = core.read_metadata(root)
@@ -449,6 +624,7 @@ def cmd_status(args) -> int:
         "locked": locked,
         "lock_owner": owner if locked else None,
         "open_questions": len(core.open_questions_in_tree(root)),
+        "math_syntax": metadata.get(typst_math.MATH_SYNTAX_KEY),
         "coordinator_session_id": metadata.get("coordinator_session_id"),
         "origin": metadata.get("origin"),
         "created_at": metadata.get("created_at"),
@@ -627,6 +803,19 @@ def build_parser() -> argparse.ArgumentParser:
     sync.add_argument("target", help="explanation root or a file inside it")
     _add_origin_flags(sync)
     sync.set_defaults(func=cmd_sync)
+
+    migrate = commands.add_parser(
+        "migrate-typst",
+        parents=[compat],
+        help="one-time conversion of a tree's LaTeX math to Typst",
+    )
+    migrate.add_argument(
+        "target", nargs="?", help="explanation root, file inside it, or slug fragment"
+    )
+    migrate.add_argument(
+        "--all", action="store_true", help="migrate every tree in the store"
+    )
+    migrate.set_defaults(func=cmd_migrate_typst)
 
     status = commands.add_parser(
         "status", parents=[compat], help="tree status, lock state, open questions"

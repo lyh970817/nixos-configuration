@@ -32,6 +32,43 @@ RESOLVED_BLOCK = """\
 """
 
 
+# A t2l-shaped stub binary: LATEX -> TYPST inside the delimiters, display
+# emitted as Typst's padded `$ ... $`, matching the real CLI's output shape.
+FAKE_T2L_BODY = """
+import sys
+src = sys.stdin.read().strip()
+def conv(s):
+    return s.replace("LATEX", "TYPST")
+if src.startswith("$$") and src.endswith("$$"):
+    print("$ " + conv(src[2:-2]) + " $")
+else:
+    print("$" + conv(src[1:-1]) + "$")
+"""
+
+
+def make_fake_bin(tmp, name, body):
+    # The shebang names the running interpreter directly: /usr/bin/env does
+    # not exist inside the Nix build sandbox.
+    fake = Path(tmp) / name
+    fake.write_text("#!%s\n" % sys.executable + body)
+    fake.chmod(0o755)
+    return fake
+
+
+@contextlib.contextmanager
+def patched_env(**environ):
+    old = {key: os.environ.get(key) for key in environ}
+    os.environ.update(environ)
+    try:
+        yield
+    finally:
+        for key, value in old.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
 def run_cli(argv):
     stdout = io.StringIO()
     stderr = io.StringIO()
@@ -189,7 +226,7 @@ class LockTest(unittest.TestCase):
             self.assertEqual(mode, 0o600)
 
 
-class SnapshotRestoreTest(unittest.TestCase):
+class StagingTest(unittest.TestCase):
     def _tree(self, tmp):
         root = Path(tmp)
         (root / "explanation.md").write_text("original root\n")
@@ -198,32 +235,31 @@ class SnapshotRestoreTest(unittest.TestCase):
         (root / "children" / "child.md").write_text("original child\n")
         return root
 
-    def test_restore_reverts_edits_and_quarantines_new_files(self):
+    def test_stage_copies_markdown_and_context(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = self._tree(tmp)
-            snapshot = core.snapshot_tree(root)
-            (root / "explanation.md").write_text("clobbered\n")
-            (root / "children" / "child.md").write_text("also clobbered\n")
-            (root / "children" / "rogue.md").write_text("half-written\n")
-            outcome = core.restore_snapshot(root, snapshot)
-            core.discard_snapshot(snapshot)
-            self.assertEqual((root / "explanation.md").read_text(), "original root\n")
+            staging = core.stage_tree(root)
+            staged = {
+                str(p.relative_to(staging)) for p in core.staged_targets(staging)
+            }
             self.assertEqual(
-                (root / "children" / "child.md").read_text(), "original child\n"
+                staged,
+                {"explanation.md", str(Path("children/child.md")), core.CONTEXT_NAME},
             )
-            self.assertFalse((root / "children" / "rogue.md").exists())
-            self.assertEqual(outcome["quarantined"], [str(Path("children/rogue.md"))])
-            quarantine = Path(outcome["quarantine_dir"])
-            self.assertTrue((quarantine / "children" / "rogue.md").is_file())
-            self.assertFalse(snapshot.exists())
+            # Editing the staging copy leaves the live tree alone.
+            (staging / "explanation.md").write_text("edited in staging\n")
+            self.assertEqual((root / "explanation.md").read_text(), "original root\n")
+            core.discard_staging(staging)
+            self.assertFalse(staging.exists())
 
-    def test_snapshot_is_hidden_from_tree_scans(self):
+    def test_staging_is_hidden_from_tree_scans(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = self._tree(tmp)
-            snapshot = core.snapshot_tree(root)
+            staging = core.stage_tree(root)
             files = {str(p.relative_to(root)) for p in core.tree_markdown_files(root)}
             self.assertEqual(files, {"explanation.md", str(Path("children/child.md"))})
-            core.discard_snapshot(snapshot)
+            self.assertEqual(core.hash_tree(root), core.hash_tree(root))
+            core.discard_staging(staging)
 
     def test_hash_diff(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -331,6 +367,8 @@ class JsonCompatFlagTest(unittest.TestCase):
             ["list", "--json"],
             ["sync", "target", "--json"],
             ["open", "target", "--json"],
+            ["migrate-typst", "--all", "--json"],
+            ["migrate-typst", "target", "--json"],
             ["doctor", "--json"],
         ):
             try:
@@ -395,6 +433,218 @@ class CliBusyTest(unittest.TestCase):
             self.assertEqual(result["status"], "failed")
 
 
+class CliSubmitProtocolTest(unittest.TestCase):
+    """End-to-end submit against stub claude/t2l binaries: the agent edits a
+    staging copy, the result is converted to Typst and committed only if the
+    live tree is unchanged."""
+
+    # Edits the staging directory received via --add-dir: resolves the open
+    # question, appends an answer carrying LaTeX math, creates a child.
+    AGENT_BODY = """
+import json, os, sys
+argv = sys.argv[1:]
+staging = argv[argv.index("--add-dir") + 1]
+doc = os.path.join(staging, "explanation.md")
+with open(doc) as fh:
+    text = fh.read()
+text = text.replace('status="open"', 'status="resolved"')
+text += "\\nAnswer: the rate is $LATEX$ exactly.\\n"
+with open(doc, "w") as fh:
+    fh.write(text)
+os.makedirs(os.path.join(staging, "children"), exist_ok=True)
+with open(os.path.join(staging, "children", "detour.md"), "w") as fh:
+    fh.write("# Detour\\n\\n$$LATEX$$\\n")
+print(json.dumps({"result": "done"}))
+"""
+
+    # Same, but also clobbers the LIVE tree (staging's parent) mid-run, the
+    # way a laptop rsync push would.
+    CONFLICT_BODY = AGENT_BODY.replace(
+        'print(json.dumps({"result": "done"}))',
+        """
+root = os.path.dirname(staging)
+with open(os.path.join(root, "explanation.md"), "a") as fh:
+    fh.write("\\nconcurrent user edit\\n")
+print(json.dumps({"result": "done"}))
+""",
+    )
+
+    def _tree(self, tmp, math_syntax="typst"):
+        root = Path(tmp) / "tree"
+        root.mkdir()
+        metadata = {
+            "version": 1,
+            "status": "ready",
+            "coordinator_session_id": "coord",
+            "root_document": "explanation.md",
+            "origin": {"launcher": "claude", "cwd": tmp, "config_dir": None},
+            "math_syntax": math_syntax,
+        }
+        core.write_metadata(root, metadata)
+        (root / "explanation.md").write_text(
+            "# Doc\n\nOld math $LATEX$ must stay LaTeX-shaped.\n\n" + OPEN_BLOCK
+        )
+        (root / core.CONTEXT_NAME).write_text("notes\n")
+        return root
+
+    def _env(self, tmp, agent_body):
+        templates = Path(tmp) / "templates"
+        templates.mkdir()
+        (templates / "update.md").write_text(
+            "Root {{explanation_root}}; submitted {{submitted}};\n{{questions}}\n"
+        )
+        return {
+            "EXPLAINCTL_TEMPLATES": str(templates),
+            "EXPLAINCTL_CLAUDE_BIN": str(make_fake_bin(tmp, "fake-claude", agent_body)),
+            "EXPLAINCTL_T2L": str(make_fake_bin(tmp, "fake-t2l", FAKE_T2L_BODY)),
+        }
+
+    def test_submit_converts_new_math_and_commits(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp)
+            document = root / "explanation.md"
+            with patched_env(**self._env(tmp, self.AGENT_BODY)):
+                code, result, _err = run_cli(["submit", str(document)])
+            self.assertEqual(code, 0, msg=repr(result))
+            self.assertEqual(result["status"], "updated")
+            text = document.read_text()
+            # The agent's new math was converted, pre-existing content was
+            # not re-run through the converter.
+            self.assertIn("the rate is $TYPST$ exactly.", text)
+            self.assertIn("Old math $LATEX$ must stay", text)
+            self.assertIn('status="resolved"', text)
+            child = root / "children" / "detour.md"
+            self.assertEqual(child.read_text(), "# Detour\n\n$$TYPST$$\n")
+            self.assertEqual(result["resolved_question_ids"], ["q-1111"])
+            self.assertEqual(result["created"], [str(child)])
+            self.assertEqual(result["focus"], str(child))
+            # Staging is gone and the lock is free.
+            self.assertEqual(list(root.glob(".submit-*")), [])
+            locked, _ = core.TreeLock.probe(root)
+            self.assertFalse(locked)
+
+    def test_submit_without_typst_marker_skips_conversion(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, math_syntax="latex")
+            document = root / "explanation.md"
+            with patched_env(**self._env(tmp, self.AGENT_BODY)):
+                code, result, _err = run_cli(["submit", str(document)])
+            self.assertEqual(code, 0)
+            self.assertEqual(result["status"], "updated")
+            self.assertIn("the rate is $LATEX$ exactly.", document.read_text())
+
+    def test_concurrent_live_edit_aborts_with_conflict(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp)
+            document = root / "explanation.md"
+            with patched_env(**self._env(tmp, self.CONFLICT_BODY)):
+                code, result, _err = run_cli(["submit", str(document)])
+            self.assertEqual(code, 1)
+            self.assertEqual(result["status"], "conflict")
+            self.assertEqual(result["conflicting_files"], ["explanation.md"])
+            # Live tree keeps the concurrent edit, never the agent's answer.
+            text = document.read_text()
+            self.assertIn("concurrent user edit", text)
+            self.assertNotIn("the rate is", text)
+            self.assertIn('status="open"', text)
+            self.assertFalse((root / "children" / "detour.md").exists())
+            # The staged result is preserved for inspection.
+            staged = Path(result["staged"])
+            self.assertTrue(staged.is_dir())
+            self.assertIn(
+                "the rate is $LATEX$", (staged / "explanation.md").read_text()
+            )
+            locked, _ = core.TreeLock.probe(root)
+            self.assertFalse(locked)
+
+
+class CliMigrateTypstTest(unittest.TestCase):
+    def _store_tree(self, store, name, text="Math $LATEX$ here.\n"):
+        root = store / name
+        root.mkdir(parents=True)
+        core.write_metadata(
+            root,
+            {
+                "version": 1,
+                "status": "ready",
+                "slug": name,
+                "root_document": "explanation.md",
+            },
+        )
+        (root / "explanation.md").write_text(text)
+        return root
+
+    def test_migrate_converts_marks_and_skips_on_rerun(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = Path(tmp) / "data" / "explanations"
+            root = self._store_tree(
+                store,
+                "20260101-000000-demo",
+                "Inline $LATEX$ and\n\n```\ncode $LATEX$\n```\n\n$$LATEX$$\n",
+            )
+            env = {
+                "XDG_DATA_HOME": str(Path(tmp) / "data"),
+                "EXPLAINCTL_T2L": str(
+                    make_fake_bin(tmp, "fake-t2l", FAKE_T2L_BODY)
+                ),
+            }
+            with patched_env(**env):
+                code, result, _err = run_cli(["migrate-typst", str(root)])
+                self.assertEqual(code, 0, msg=repr(result))
+                self.assertEqual(result["trees"][0]["status"], "migrated")
+                text = (root / "explanation.md").read_text()
+                self.assertEqual(
+                    text, "Inline $TYPST$ and\n\n```\ncode $LATEX$\n```\n\n$$TYPST$$\n"
+                )
+                self.assertTrue(core.tree_is_typst(core.read_metadata(root)))
+                # Idempotence: a second run must not touch the files again.
+                code, result, _err = run_cli(["migrate-typst", str(root)])
+                self.assertEqual(code, 0)
+                self.assertEqual(result["trees"][0]["status"], "skipped")
+                self.assertEqual((root / "explanation.md").read_text(), text)
+
+    def test_migrate_all_walks_the_store(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = Path(tmp) / "data" / "explanations"
+            first = self._store_tree(store, "20260101-000000-one")
+            second = self._store_tree(store, "20260102-000000-two")
+            env = {
+                "XDG_DATA_HOME": str(Path(tmp) / "data"),
+                "EXPLAINCTL_T2L": str(
+                    make_fake_bin(tmp, "fake-t2l", FAKE_T2L_BODY)
+                ),
+            }
+            with patched_env(**env):
+                code, result, _err = run_cli(["migrate-typst", "--all"])
+            self.assertEqual(code, 0)
+            self.assertEqual(
+                [tree["status"] for tree in result["trees"]],
+                ["migrated", "migrated"],
+            )
+            for root in (first, second):
+                self.assertIn("$TYPST$", (root / "explanation.md").read_text())
+
+    def test_target_and_all_are_mutually_exclusive(self):
+        code, result, _err = run_cli(["migrate-typst"])
+        self.assertEqual(code, 1)
+        self.assertEqual(result["status"], "failed")
+
+    def test_missing_t2l_fails_clearly(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = Path(tmp) / "data" / "explanations"
+            root = self._store_tree(store, "20260101-000000-demo")
+            env = {
+                "XDG_DATA_HOME": str(Path(tmp) / "data"),
+                "EXPLAINCTL_T2L": str(Path(tmp) / "missing-t2l"),
+            }
+            with patched_env(**env):
+                code, result, _err = run_cli(["migrate-typst", str(root)])
+            self.assertEqual(code, 1)
+            self.assertEqual(result["status"], "failed")
+            self.assertIn("t2l", result["message"])
+            self.assertIn("$LATEX$", (root / "explanation.md").read_text())
+
+
 class CliNewTest(unittest.TestCase):
     """End-to-end `new --no-open` against a stub claude binary."""
 
@@ -424,6 +674,7 @@ root = argv[argv.index("--add-dir") + 1]
 staging = os.path.join(root, ".staging")
 with open(os.path.join(staging, "explanation.md"), "w") as fh:
     fh.write("# Explanation\\n\\nBody derived from: " + prompt[:40] + "\\n")
+    fh.write("\\nMath: $LATEX$\\n")
 with open(os.path.join(staging, ".context.md"), "w") as fh:
     fh.write("context notes\\n")
 assert "--fork-session" in argv
@@ -435,10 +686,9 @@ print(json.dumps({"session_id": "fork-123", "result": "done"}))
                 "XDG_DATA_HOME": str(Path(tmp) / "data"),
                 "EXPLAINCTL_TEMPLATES": str(templates),
                 "EXPLAINCTL_CLAUDE_BIN": str(fake),
+                "EXPLAINCTL_T2L": str(make_fake_bin(tmp, "fake-t2l", FAKE_T2L_BODY)),
             }
-            old = {key: os.environ.get(key) for key in environ}
-            os.environ.update(environ)
-            try:
+            with patched_env(**environ):
                 code, result, _err = run_cli(
                     [
                         "new",
@@ -453,12 +703,6 @@ print(json.dumps({"session_id": "fork-123", "result": "done"}))
                         "--no-open",
                     ]
                 )
-            finally:
-                for key, value in old.items():
-                    if value is None:
-                        os.environ.pop(key, None)
-                    else:
-                        os.environ[key] = value
             self.assertEqual(code, 0, msg=f"result={result!r} stderr={_err!r}")
             self.assertEqual(result["status"], "created")
             self.assertEqual(result["session_id"], "fork-123")
@@ -469,8 +713,12 @@ print(json.dumps({"session_id": "fork-123", "result": "done"}))
             self.assertTrue((root / "explanation.md").is_file())
             self.assertTrue((root / ".context.md").is_file())
             self.assertFalse((root / ".staging").exists())
+            # The bootstrap agent's LaTeX math was deterministically
+            # converted to Typst before the tree went live.
+            self.assertIn("Math: $TYPST$", (root / "explanation.md").read_text())
             metadata = core.read_metadata(root)
             self.assertEqual(metadata["status"], "ready")
+            self.assertEqual(metadata["math_syntax"], "typst")
             self.assertEqual(metadata["coordinator_session_id"], "fork-123")
             self.assertEqual(metadata["root_document"], "explanation.md")
             self.assertEqual(metadata["origin"]["launcher"], "claude")
