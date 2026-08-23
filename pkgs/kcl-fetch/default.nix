@@ -4,6 +4,10 @@
   makeWrapper,
   python3,
   chromium,
+  # Tailscale/MagicDNS name of the other machine in the pair, from
+  # `portable.peerHost`. Baked in so `kcl-fetch login --on` (no value) knows
+  # which host to hop to; empty means `--on` needs an explicit host.
+  peerHost ? "",
 }:
 
 let
@@ -39,7 +43,8 @@ stdenvNoCC.mkDerivation {
     makeWrapper ${pythonEnv}/bin/python $out/bin/kcl-fetch \
       --add-flags "$out/libexec/kcl-fetch/kcl_fetch.py" \
       --set PYTHONPATH "$out/libexec/kcl-fetch" \
-      --set KCL_FETCH_CHROMIUM "${lib.getBin chromium}/bin/chromium"
+      --set KCL_FETCH_CHROMIUM "${lib.getBin chromium}/bin/chromium" \
+      ${lib.optionalString (peerHost != "") ''--set-default KCL_FETCH_PEER_HOST "${peerHost}"''}
     runHook postInstall
   '';
 
