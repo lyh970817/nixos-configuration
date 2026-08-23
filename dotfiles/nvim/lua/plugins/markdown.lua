@@ -91,9 +91,16 @@ return {
           -- 0.85 * cell height made display equations read smaller than
           -- body text (fractions/limits shrink their glyphs further).
           -- text_scale multiplies the worker's font size directly
-          -- (renderer.resolve_font_size), so 1.35 puts equation glyphs
+          -- (renderer.resolve_font_size), so ~1.35 puts equation glyphs
           -- slightly above body-text size without the old 2.4x blowup.
-          text_scale = 1.35,
+          -- Snap the resulting font size to a whole pixel: the worker
+          -- rasterizes Computer Modern hairlines at exactly this size, and
+          -- a fractional em grid lands thin stems between pixels, washing
+          -- them out on the dark theme (e.g. 31 * 0.85 * 1.35 = 35.57px;
+          -- rounded to 36px the ratio becomes 1.366, visually still the
+          -- chosen ~1.35).
+          text_scale = math.max(1, math.floor(cell_height * 0.85 * 1.35 + 0.5))
+            / (cell_height * 0.85),
         },
         image = {
           cell_width_px = cell_width,
@@ -136,6 +143,25 @@ return {
           debug.setupvalue(kb.set, i, disjoint_id)
           break
         end
+      end
+
+      -- The backend passes c/r (cells) with every placement, so kitty
+      -- rescales the PNG to fill the ceil-rounded cell box: a few percent
+      -- of non-1:1 resampling that blurs Computer Modern hairlines into
+      -- wispy strokes on the dark theme. The worker already renders at
+      -- display resolution (render.scale = 1.0 above), so drop c/r and
+      -- let kitty place the bitmap pixel-for-pixel: strokes stay crisp
+      -- and the aspect ratio is exact by construction. The reserved
+      -- virt_lines still use the ceil'd cell metadata (renderer.lua), so
+      -- the image never overlaps following text. Wrap AFTER the upvalue
+      -- swap above -- the swap must inspect the original function.
+      local kb_set = kb.set
+      kb.set = function(data_or_id, opts2)
+        if type(opts2) == "table" and (opts2.width ~= nil or opts2.height ~= nil) then
+          opts2 = vim.tbl_extend("force", {}, opts2)
+          opts2.width, opts2.height = nil, nil
+        end
+        return kb_set(data_or_id, opts2)
       end
     end,
   },
