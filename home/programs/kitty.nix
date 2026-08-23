@@ -144,6 +144,12 @@ let
     map shift+enter send_text all \x1b[13;2u
     map alt+enter send_text all \x1b[13;3u
 
+    # Kitty's defaults bind these to its own next_tab/previous_tab, swallowing
+    # the combos before the child sees them; no_op frees them so herdr's
+    # kitty-protocol push receives CSI 9;5u/9;6u natively (as in foot).
+    map ctrl+tab no_op
+    map ctrl+shift+tab no_op
+
     # Static fallback palette, then the startup-selected phosphor on top (a
     # later option wins in kitty.conf). If the geninclude script ever fails,
     # the window still opens on the active profile instead of kitty defaults.
