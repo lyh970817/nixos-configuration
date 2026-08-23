@@ -34,10 +34,7 @@ be reread, not a chat reply:
   Keep technical terms; keep the prose around them simple.
 - Use `$...$` for inline math and `$$...$$` on their own lines for display
   math; these are the delimiters the renderer understands. Keep LaTeX
-  self-contained (no custom macros). Stay within KaTeX-supported LaTeX and
-  avoid `\_`, `\,`, and literal underscores inside `\text{...}` — the browser
-  preview runs the document through Markdown before KaTeX, and Markdown's
-  escape and emphasis handling mangles those.
+  self-contained (no custom macros).
 - Create a child document under `{{children_dir}}/` only when a conceptual
   detour genuinely warrants a separate page; give every child a clear title,
   a backlink to the parent section, and enough context to stand alone. Link
