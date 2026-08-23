@@ -1,7 +1,12 @@
-{ pkgs, ... }:
+{ pkgs, osConfig, ... }:
 
 let
-  kclFetch = pkgs.callPackage ../../pkgs/kcl-fetch { };
+  # `login` opens a window on the host the browser runs on, which in an SSH
+  # session is not the host the command was typed on. Baking the peer's name in
+  # lets `kcl-fetch login --on` (no value) mean "the other machine".
+  kclFetch = pkgs.callPackage ../../pkgs/kcl-fetch {
+    peerHost = osConfig.portable.peerHost;
+  };
 in
 {
   # The last rung of the paper ladder, below `scansci-oa` and `annas-books`:
@@ -19,6 +24,11 @@ in
   # a dedicated Chromium profile under $XDG_DATA_HOME/kcl-fetch/profile until
   # it expires. That profile holds an institutional session and is deliberately
   # not the everyday browser profile.
+  #
+  # Signing in from an SSH session would paint that window on the far host's
+  # screen, so `kcl-fetch login --on [HOST]` re-runs the sign-in over SSH on
+  # HOST (default: the peer) against HOST's own profile. Sessions are never
+  # copied between machines; each side signs in once for itself.
   #
   # Optional LibKey pre-check ("does KCL hold full text?"): write
   # {"library_id": "...", "token": "..."} to ~/.config/kcl-fetch/libkey with

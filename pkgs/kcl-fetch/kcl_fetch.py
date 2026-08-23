@@ -23,7 +23,7 @@ from pathlib import Path
 from kcl_fetch_lib import config as config_mod
 from kcl_fetch_lib import display as display_mod
 from kcl_fetch_lib import driver as driver_mod
-from kcl_fetch_lib import libkey, metadata, paths, routing, urls
+from kcl_fetch_lib import libkey, metadata, paths, remote, routing, urls
 from kcl_fetch_lib.gate import (
     ArticleMeta,
     Gate,
@@ -206,6 +206,15 @@ def cmd_login(args, cfg: config_mod.Config) -> int:
     stay reachable even when the fetch budget is spent -- otherwise a spent
     budget would also lock the user out of renewing the session.
     """
+    if args.on is not None:
+        return _login_elsewhere(args)
+
+    # Before the display probe, so it is also said when there turns out to be
+    # no session here at all -- that is the same mistake, one step earlier.
+    note = remote.ssh_hint()
+    if note:
+        print(note, file=sys.stderr)
+
     screen = _display(args)
     chromium = _resolve_chromium(cfg.chromium)
     start = urls.openathens_url("https://my.openathens.net/")
@@ -230,6 +239,45 @@ def cmd_login(args, cfg: config_mod.Config) -> int:
             return 0
     print("kcl-fetch: sign-in did not complete", file=sys.stderr)
     return 1
+
+
+def _stdin_is_tty() -> bool:
+    try:
+        return sys.stdin is not None and sys.stdin.isatty()
+    except (AttributeError, ValueError):
+        return False
+
+
+def _login_elsewhere(args) -> int:
+    """`--on HOST`: the same sign-in, one SSH hop away, on that host's profile."""
+    try:
+        host = remote.resolve_host(args.on)
+    except remote.RemoteError as exc:
+        print(f"kcl-fetch: {exc}", file=sys.stderr)
+        return 2
+    print(
+        f"kcl-fetch: running the sign-in on {host}; the window opens there.",
+        file=sys.stderr,
+    )
+    try:
+        status = remote.dispatch_login(
+            host,
+            timeout=args.timeout,
+            ozone_platform=args.ozone_platform,
+            verbose=args.verbose,
+            # A tty lets an interrupt reach the far side, so aborting here also
+            # closes the browser there.
+            tty=_stdin_is_tty(),
+        )
+    except remote.RemoteError as exc:
+        print(f"kcl-fetch: {exc}", file=sys.stderr)
+        return 2
+    if status == remote.SSH_FAILURE_STATUS:
+        print(
+            f"kcl-fetch: ssh never reached {host}; the sign-in did not start.",
+            file=sys.stderr,
+        )
+    return status
 
 
 # ---------------------------------------------------------------------------
@@ -305,6 +353,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="one-time manual SSO in a visible window",
     )
     login.add_argument("--timeout", type=float, default=900.0, metavar="SECONDS")
+    peer = remote.peer_host()
+    login.add_argument(
+        "--on",
+        nargs="?",
+        const=remote.PEER,
+        metavar="HOST",
+        help=(
+            "run the sign-in on HOST over SSH, so the window opens on that "
+            "machine's screen -- against its own profile, which is where its "
+            "session belongs. With no value: "
+            + (f"{peer}." if peer else f"${remote.PEER_HOST_ENV}, unset here.")
+        ),
+    )
     login.set_defaults(func=cmd_login)
 
     status = sub.add_parser("status", help="budget, blocks and recent attempts")
@@ -323,9 +384,14 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         return args.func(args, cfg)
-    except (display_mod.NoDisplay, driver_mod.StaleProfileLock) as exc:
-        # Both are facts about the machine, not failures of the tool. One line,
-        # no traceback, no Chromium flag dump.
+    except (
+        display_mod.NoDisplay,
+        driver_mod.StaleProfileLock,
+        remote.RemoteError,
+    ) as exc:
+        # All three are facts about the machine -- no session, a profile
+        # already in use, no way to reach the host asked for -- not failures of
+        # the tool. One line, no traceback, no Chromium flag dump.
         print(f"kcl-fetch: {exc}", file=sys.stderr)
         return 2
 
