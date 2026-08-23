@@ -3,9 +3,14 @@
 # nothing is typed into the agent and its transcript is untouched. Bound to f7
 # in dotfiles/herdr/config.toml. Resolves the pane's Claude session from
 # Herdr, the launcher profile from the silent SessionStart mapping written by
-# dotfiles/claude/hooks/explain-session-register.sh, then opens the dedicated
-# Kitty/Neovim workspace, which prompts for the question and calls
-# `explainctl new` itself (see the handshake in the explain Neovim module).
+# dotfiles/claude/hooks/explain-session-register.sh, then opens the explain
+# Neovim workspace in a new Herdr tab, which prompts for the question and
+# calls `explainctl new` itself (see the handshake in the explain Neovim
+# module). A Herdr tab rather than a detached GUI window: the herdr server
+# may have no display environment (started over SSH), and a window on this
+# machine's monitor is invisible when the user drives from the laptop. The
+# terminal hosting the Herdr client (kitty on both hosts) renders the math
+# images, so no display-env derivation is needed here.
 set -euo pipefail
 
 notify() {
@@ -13,7 +18,7 @@ notify() {
   printf 'herdr-explain-current: %s: %s\n' "$1" "$2" >&2
 }
 
-for required_command in herdr jq kitty nvim; do
+for required_command in herdr jq nvim; do
   command -v "$required_command" >/dev/null 2>&1 || {
     notify "Explain failed" "$required_command is required"
     exit 1
@@ -77,10 +82,102 @@ fi
 [[ -n $origin_cwd ]] || origin_cwd=$pane_cwd
 
 # The question is entered in the workspace itself: Neovim sees these
-# variables, prompts, and runs
+# variables (set on the tab at creation so its whole process tree inherits
+# them), prompts, and runs
 #   explainctl new --session-id ... --cwd ... --launcher ... --question ... \
 #     --json --no-open
-export EXPLAIN_ORIGIN_SESSION_ID="$session_id"
-export EXPLAIN_ORIGIN_CWD="$origin_cwd"
-export EXPLAIN_ORIGIN_LAUNCHER="$launcher"
-kitty --detach --class explanation-nvim --title "Explanation" nvim
+workspace_id=${HERDR_ACTIVE_WORKSPACE_ID:-${HERDR_WORKSPACE_ID:-}}
+tab_args=(
+  --cwd "$origin_cwd"
+  --label Explanation
+  --focus
+  --env EXPLAIN_ORIGIN_SESSION_ID="$session_id"
+  --env EXPLAIN_ORIGIN_CWD="$origin_cwd"
+  --env EXPLAIN_ORIGIN_LAUNCHER="$launcher"
+)
+if [[ -n $workspace_id ]]; then
+  tab_args+=(--workspace "$workspace_id")
+fi
+
+if ! created=$(herdr tab create "${tab_args[@]}" 2>&1); then
+  notify "Explain failed" "could not create the explanation tab"
+  exit 1
+fi
+if ! tab_id=$(jq -er \
+  '.result.tab.tab_id | select(type == "string" and length > 0)' \
+  <<<"$created") \
+  || ! new_pane_id=$(jq -er \
+    '.result.root_pane.pane_id | select(type == "string" and length > 0)' \
+    <<<"$created"); then
+  notify "Explain failed" "created tab response was unparseable"
+  exit 1
+fi
+
+# Only the shell itself in the foreground counts as ready: a freshly created
+# pane may still be drawing its login greeting, and a command typed into that
+# window is eaten (same hazard as scripts/herdr-agent-launch). Require a few
+# consecutive quiet polls so the gap before the greeting cannot read as ready.
+shell_is_idle() {
+  local process_state
+  process_state=$(herdr pane process-info --pane "$new_pane_id" 2>/dev/null) \
+    || return 1
+  jq -e '
+    .result.process_info as $info
+    | ($info.shell_pid | numbers) as $shell_pid
+    | (all($info.foreground_processes[]?; .pid == $shell_pid))
+      and ([$info.foreground_processes[]?] | length > 0)
+  ' <<<"$process_state" >/dev/null
+}
+
+wait_for_available_shell() {
+  local poll quiet_polls=0
+  for ((poll = 0; poll < 60; poll++)); do
+    if shell_is_idle; then
+      quiet_polls=$((quiet_polls + 1))
+      if ((quiet_polls >= 4)); then
+        sleep 0.5
+        return 0
+      fi
+    else
+      quiet_polls=0
+    fi
+    sleep 0.25
+  done
+  return 1
+}
+
+# The tab is removed only while it is still a lone idle shell — that removal
+# destroys nothing, and leaving it would look like silent success. A busy or
+# vanished pane is left alone; the notification still reports the failure.
+fail_tab() {
+  if herdr tab get "$tab_id" >/dev/null 2>&1 && shell_is_idle; then
+    herdr tab close "$tab_id" >/dev/null 2>&1 || true
+  fi
+  notify "Explain failed" "$1"
+  exit 1
+}
+
+wait_for_available_shell \
+  || fail_tab "the explanation tab never reached an idle shell"
+
+# exec so quitting Neovim closes the tab, like the old dedicated window.
+herdr pane run "$new_pane_id" exec nvim >/dev/null 2>&1 \
+  || fail_tab "could not start nvim in the explanation tab"
+
+# The old window spawn failed silently; verify the editor actually came up.
+nvim_running() {
+  local process_state
+  process_state=$(herdr pane process-info --pane "$new_pane_id" 2>/dev/null) \
+    || return 1
+  jq -e '
+    any(.result.process_info.foreground_processes[]?; .name == "nvim")
+  ' <<<"$process_state" >/dev/null
+}
+
+for ((poll = 0; poll < 40; poll++)); do
+  if nvim_running; then
+    exit 0
+  fi
+  sleep 0.25
+done
+fail_tab "nvim did not start in the explanation tab"
