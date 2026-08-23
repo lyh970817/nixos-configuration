@@ -98,12 +98,18 @@ rollback_unparsed_destination() {
   esac
 }
 
+# HERDR_SCRIPTED_PANE makes the pane's zsh skip its login greeting
+# (home/programs/print_welcome.sh), so the shell reaches a quiet prompt almost
+# immediately instead of after a second-plus of fastfetch/poem output.
+# The tab is created focused so the key press gives immediate visual feedback;
+# splits stay --no-focus since they are visible in the current tab anyway.
 case "$placement" in
   tab)
     created=$(herdr tab create \
       --workspace "$workspace_id" \
       --cwd "$pane_cwd" \
-      --no-focus)
+      --env HERDR_SCRIPTED_PANE=1 \
+      --focus)
     if ! new_tab_id=$(jq -er \
       '.result.tab.tab_id | select(type == "string" and length > 0)' \
       <<<"$created") \
@@ -120,6 +126,7 @@ case "$placement" in
       --current \
       --direction "$placement" \
       --cwd "$pane_cwd" \
+      --env HERDR_SCRIPTED_PANE=1 \
       --no-focus)
     if ! new_pane_id=$(jq -er \
       '.result.pane.pane_id | select(type == "string" and length > 0)' \
@@ -164,14 +171,15 @@ destination_state() {
   fi
 }
 
-# A freshly created pane runs its login greeting (fastfetch, starship) for a
-# second or more, and `herdr agent start` issued during that window never types
-# the command: it returns only after its own startup timeout, which then tears
-# the destination down again. Wait for a quiet prompt first, and require several
-# consecutive quiet polls so the gap before the greeting starts cannot itself
-# read as ready.
+# A command typed into a pane that is still running startup helpers is eaten:
+# `herdr agent start` then returns only after its own startup timeout, which
+# tears the destination down again. HERDR_SCRIPTED_PANE suppresses the login
+# greeting, so the shell settles in ~0.3s; poll fast and require consecutive
+# quiet polls so a momentary gap between helpers cannot read as ready.
 wait_for_available_shell() {
-  local poll_interval=0.25 max_polls=80 required_quiet_polls=4
+  # 0.05s polls, 2 consecutive quiet, 0.2s settle; max_polls keeps the
+  # previous ~20s overall budget (400 * 0.05).
+  local poll_interval=0.05 max_polls=400 required_quiet_polls=2
   local poll quiet_polls=0 process_state
   for ((poll = 0; poll < max_polls; poll++)); do
     if process_state=$(herdr pane process-info --pane "$new_pane_id" 2>/dev/null) \
@@ -183,7 +191,7 @@ wait_for_available_shell() {
       quiet_polls=$((quiet_polls + 1))
       if ((quiet_polls >= required_quiet_polls)); then
         # Let the drawn prompt settle before Herdr looks at the pane.
-        sleep 0.5
+        sleep 0.2
         return 0
       fi
     else
@@ -274,6 +282,7 @@ if ! herdr agent start "$agent_name" \
   exit 1
 fi
 
-# Keep the calling pane visible while the agent starts, then reveal the ready
-# orchestrator so the function key behaves like a complete launch action.
+# The tab placement is already focused at creation for immediate feedback;
+# this still moves focus to the ready orchestrator for splits (created
+# --no-focus) and re-reveals the destination if the user switched away.
 herdr agent focus "$agent_name"

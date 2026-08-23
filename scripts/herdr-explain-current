@@ -91,6 +91,9 @@ tab_args=(
   --cwd "$origin_cwd"
   --label Explanation
   --focus
+  # Skip the pane's login greeting (home/programs/print_welcome.sh) so the
+  # shell reaches a quiet prompt fast and nvim starts sooner.
+  --env HERDR_SCRIPTED_PANE=1
   --env EXPLAIN_ORIGIN_SESSION_ID="$session_id"
   --env EXPLAIN_ORIGIN_CWD="$origin_cwd"
   --env EXPLAIN_ORIGIN_LAUNCHER="$launcher"
@@ -113,10 +116,11 @@ if ! tab_id=$(jq -er \
   exit 1
 fi
 
-# Only the shell itself in the foreground counts as ready: a freshly created
-# pane may still be drawing its login greeting, and a command typed into that
-# window is eaten (same hazard as scripts/herdr-agent-launch). Require a few
-# consecutive quiet polls so the gap before the greeting cannot read as ready.
+# Only the shell itself in the foreground counts as ready: a command typed
+# while startup helpers still run is eaten (same hazard as
+# scripts/herdr-agent-launch). HERDR_SCRIPTED_PANE suppresses the greeting, so
+# the shell settles in ~0.3s; poll fast and require consecutive quiet polls so
+# a momentary gap between helpers cannot read as ready.
 shell_is_idle() {
   local process_state
   process_state=$(herdr pane process-info --pane "$new_pane_id" 2>/dev/null) \
@@ -130,18 +134,21 @@ shell_is_idle() {
 }
 
 wait_for_available_shell() {
+  # 0.05s polls, 2 consecutive quiet, 0.2s settle; max_polls keeps the
+  # previous ~15s overall budget (300 * 0.05).
+  local poll_interval=0.05 max_polls=300 required_quiet_polls=2
   local poll quiet_polls=0
-  for ((poll = 0; poll < 60; poll++)); do
+  for ((poll = 0; poll < max_polls; poll++)); do
     if shell_is_idle; then
       quiet_polls=$((quiet_polls + 1))
-      if ((quiet_polls >= 4)); then
-        sleep 0.5
+      if ((quiet_polls >= required_quiet_polls)); then
+        sleep 0.2
         return 0
       fi
     else
       quiet_polls=0
     fi
-    sleep 0.25
+    sleep "$poll_interval"
   done
   return 1
 }
