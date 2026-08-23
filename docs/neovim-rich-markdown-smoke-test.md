@@ -17,11 +17,15 @@ Where the equation PNGs and images actually appear depends on the terminal
 in front of Neovim (validated 2026-08):
 
 - **Kitty, direct**: full rendering — Kitty graphics protocol works, all
-  image placements appear. This is the supported layout: a dedicated
-  Kitty+Neovim window beside the Herdr window.
-- **Herdr**: no graphics passthrough — Neovim reserves the vertical space
-  but the pixels never arrive, so equations and images come out blank.
-  Do not run the rendering stack inside Herdr's terminal matrix.
+  image placements appear.
+- **Herdr pane inside Kitty** (the F7 explanation tab): full rendering,
+  provided `[experimental] kitty_graphics = true` is set in
+  `dotfiles/herdr/config.toml` (validated 2026-08, herdr 0.8.0, including
+  across an SSH hop between the outer Kitty and the herdr client — herdr
+  re-emits pane graphics as in-band direct transmissions). Without that
+  flag the pane emulator silently drops every graphics sequence: Neovim
+  reserves the vertical space but the pixels never arrive, so equations
+  and images come out blank.
 - **Foot**: raw fallback — no graphics protocol; text-level rendering only.
 
 ## 1. Headings and inline styles
