@@ -39,6 +39,7 @@
     ./programs/xiaohongshu-cli.nix
     ./programs/scansci-oa.nix
     ./programs/annas-books.nix
+    ./programs/kcl-fetch.nix
     ./programs/herdr.nix
     ./programs/tuicr.nix
     ./programs/pi.nix
