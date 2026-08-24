@@ -144,6 +144,26 @@ let
   codexChromePlugin = "${chatgptResources}/plugins/openai-bundled/plugins/chrome";
   codexChromeMarketplaceName = "openai-cli-runtime";
   codexChromePluginId = "chrome@${codexChromeMarketplaceName}";
+  codexChromeNativeHostName = "com.openai.codexextension";
+  codexChromeExtensionIds = [
+    "hehggadaopoacecdllhhajmbjkdcmajg"
+    "odlomjlbamekndcpllcnffbgeohgkmjh"
+  ];
+  codexChromeExtensionHostArch =
+    if pkgs.stdenv.hostPlatform.isx86_64 then
+      "x64"
+    else if pkgs.stdenv.hostPlatform.isAarch64 then
+      "arm64"
+    else
+      throw "Codex Chrome native host supports only x86_64 and aarch64";
+  codexChromeExtensionHost = "${codexChromePlugin}/extension-host/linux/${codexChromeExtensionHostArch}/extension-host";
+  codexChromeNativeHostLauncher = pkgs.writeShellScript "codex-cli-chrome-native-host" ''
+    export CODEX_HOME="''${HOME}/.codex"
+    export CODEX_CHROMIUM_USER_DATA_DIR="''${HOME}/.config/chromium-browser"
+    export CODEX_CHROMIUM_PREFERENCES_PATH="''${HOME}/.config/chromium-browser/Default/Preferences"
+    export CODEX_CHROMIUM_NATIVE_HOST_MANIFEST_PATH="''${HOME}/.config/chromium/NativeMessagingHosts/${codexChromeNativeHostName}.json"
+    exec ${codexChromeExtensionHost} "$@"
+  '';
   codexChromeMarketplace =
     pkgs.runCommand "codex-cli-chrome-marketplace-${pkgs.chatgpt.unwrapped.version}"
       { nativeBuildInputs = [ pkgs.jq ]; }
@@ -174,6 +194,9 @@ let
       ];
       NODE_REPL_TRUSTED_RPC_ENABLED = "1";
       CODEX_HOME = "${config.home.homeDirectory}/.codex";
+      CODEX_CHROMIUM_USER_DATA_DIR = "${config.home.homeDirectory}/.config/chromium-browser";
+      CODEX_CHROMIUM_PREFERENCES_PATH = "${config.home.homeDirectory}/.config/chromium-browser/Default/Preferences";
+      CODEX_CHROMIUM_NATIVE_HOST_MANIFEST_PATH = "${config.home.homeDirectory}/.config/chromium/NativeMessagingHosts/${codexChromeNativeHostName}.json";
       BROWSER_USE_AVAILABLE_BACKENDS = "chrome";
       NODE_REPL_INSTRUCTIONS_USE_CASE_CHROME = "Control the Chrome browser in conjunction with the Chrome Plugin. Prefer this method of controlling Chrome over alternatives (such as Computer Use) unless the user explicitly mentions an alternative.";
       BROWSER_USE_CODEX_APP_BUILD_FLAVOR = "prod";
@@ -186,6 +209,211 @@ let
     tools.js.approval_mode = "approve";
   };
   codexAgentNames = [ "merge" ];
+
+  # The extension host reads a multi-runtime registry shared by Desktop and
+  # CLI installations. Reconcile only this CODEX_HOME's production entry so a
+  # ChatGPT package update replaces its paired paths without erasing Desktop
+  # or other channel entries.
+  codexChromeNativeHostReconcile = pkgs.writeText "codex-chrome-native-host-reconcile.py" ''
+    import argparse
+    import datetime
+    import hashlib
+    import json
+    import os
+    import tempfile
+
+
+    SCHEMA_VERSION = 2
+    APP_SERVER_PROTOCOL_VERSION = 2
+    NATIVE_HOST_PROTOCOL_VERSION = 2
+
+
+    def parse_args():
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--codex-home", required=True)
+        parser.add_argument("--version", required=True)
+        parser.add_argument("--resources-path", required=True)
+        parser.add_argument("--plugin-root", required=True)
+        parser.add_argument("--extension-host-path", required=True)
+        parser.add_argument("--launcher-path", required=True)
+        parser.add_argument("--manifest-path", required=True)
+        parser.add_argument("--native-host-name", required=True)
+        parser.add_argument("--extension-id", action="append", required=True)
+        parser.add_argument("--registry-path", action="append", required=True)
+        return parser.parse_args()
+
+
+    def identifier(prefix, parts):
+        digest = hashlib.sha256()
+        for part in parts:
+            digest.update(part.encode("utf-8"))
+            digest.update(b"\0")
+        return prefix + digest.hexdigest()[:32]
+
+
+    def read_registry(path):
+        try:
+            with open(path, encoding="utf-8") as handle:
+                raw = handle.read()
+            parsed = json.loads(raw)
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            return None, {"schemaVersion": SCHEMA_VERSION, "entries": []}
+
+        if (
+            isinstance(parsed, dict)
+            and parsed.get("schemaVersion") == SCHEMA_VERSION
+            and isinstance(parsed.get("entries"), list)
+        ):
+            return raw, parsed
+        return raw, {"schemaVersion": SCHEMA_VERSION, "entries": []}
+
+
+    def write_atomic(path, document, old_contents=None, mode=0o600):
+        contents = json.dumps(document, indent=2, ensure_ascii=False) + "\n"
+        if old_contents == contents:
+            return
+        parent = os.path.dirname(path)
+        os.makedirs(parent, mode=0o700, exist_ok=True)
+        fd, temporary = tempfile.mkstemp(prefix=os.path.basename(path) + ".", dir=parent)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(contents)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.chmod(temporary, mode)
+            os.replace(temporary, path)
+        finally:
+            try:
+                os.unlink(temporary)
+            except FileNotFoundError:
+                pass
+
+
+    def managed_entry(entry, args):
+        if not isinstance(entry, dict):
+            return False
+        paths = entry.get("paths")
+        native_host_names = entry.get("nativeHostNames")
+        extension_ids = entry.get("extensionIds")
+        return (
+            isinstance(paths, dict)
+            and paths.get("codexHome") == args.codex_home
+            and entry.get("channel") == "prod"
+            and isinstance(native_host_names, list)
+            and args.native_host_name in native_host_names
+            and isinstance(extension_ids, list)
+            and any(extension_id in args.extension_id for extension_id in extension_ids)
+        )
+
+
+    def entry_sort_key(entry):
+        if not isinstance(entry, dict):
+            return ""
+        native_hosts = entry.get("nativeHostNames")
+        native_host = native_hosts[0] if isinstance(native_hosts, list) and native_hosts else ""
+        return "{}:{}:{}".format(
+            native_host,
+            entry.get("channel", ""),
+            entry.get("entryId", ""),
+        )
+
+
+    def equivalent(left, right):
+        ignored = {"presence", "updatedAt"}
+        return (
+            isinstance(left, dict)
+            and {key: value for key, value in left.items() if key not in ignored}
+            == {key: value for key, value in right.items() if key not in ignored}
+        )
+
+
+    def main():
+        args = parse_args()
+        extension_ids = list(dict.fromkeys(args.extension_id))
+        paths = {
+            "browserClientPath": os.path.join(args.plugin_root, "scripts", "browser-client.mjs"),
+            "browserServicePath": os.path.join(args.plugin_root, "scripts", "browser-service.mjs"),
+            "codexCliPath": os.path.join(args.resources_path, "codex"),
+            "codexHome": args.codex_home,
+            "extensionHostPath": args.extension_host_path,
+            "nodePath": os.path.join(args.resources_path, "cua_node", "bin", "node"),
+            "nodeModuleDirs": [os.path.join(args.resources_path, "cua_node", "lib", "node_modules")],
+            "nodeReplPath": os.path.join(args.resources_path, "cua_node", "bin", "node_repl"),
+            "resourcesPath": args.resources_path,
+        }
+        timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
+        resource = {
+            "schemaVersion": SCHEMA_VERSION,
+            "appServerProtocolVersion": APP_SERVER_PROTOCOL_VERSION,
+            "appVersion": args.version,
+            "channel": "prod",
+            "cliVersion": args.version,
+            "entryId": identifier(
+                "codex-runtime-",
+                [
+                    args.native_host_name,
+                    *extension_ids,
+                    "prod",
+                    args.version,
+                    args.extension_host_path,
+                    paths["codexCliPath"],
+                    args.codex_home,
+                    args.resources_path,
+                ],
+            ),
+            "extensionBuildChannels": ["prod"],
+            "extensionIds": extension_ids,
+            "installId": identifier(
+                "codex-install-",
+                [args.native_host_name, args.resources_path, args.codex_home],
+            ),
+            "nativeHostNames": [args.native_host_name],
+            "nativeHostProtocolVersion": NATIVE_HOST_PROTOCOL_VERSION,
+            "nativeHostVersion": args.version,
+            "paths": paths,
+            "proxyHost": "127.0.0.1",
+            "proxyPort": 0,
+            "updatedAt": timestamp,
+        }
+
+        for registry_path in args.registry_path:
+            old_contents, registry = read_registry(registry_path)
+            managed = next(
+                (entry for entry in registry["entries"] if managed_entry(entry, args)),
+                None,
+            )
+            selected = managed if equivalent(managed, resource) else resource
+            entries = [
+                entry for entry in registry["entries"] if not managed_entry(entry, args)
+            ]
+            entries.append(selected)
+            write_atomic(
+                registry_path,
+                {"schemaVersion": SCHEMA_VERSION, "entries": sorted(entries, key=entry_sort_key)},
+                old_contents,
+            )
+
+        manifest = {
+            "allowed_origins": [
+                f"chrome-extension://{extension_id}/" for extension_id in extension_ids
+            ],
+            "description": "ChatGPT browser native messaging host",
+            "name": args.native_host_name,
+            "path": args.launcher_path,
+            "type": "stdio",
+        }
+        old_manifest = None
+        try:
+            with open(args.manifest_path, encoding="utf-8") as handle:
+                old_manifest = handle.read()
+        except OSError:
+            pass
+        write_atomic(args.manifest_path, manifest, old_manifest)
+
+
+    if __name__ == "__main__":
+        main()
+  '';
 
   codexAgentFiles = lib.listToAttrs (
     map (name: {
@@ -1265,6 +1493,45 @@ in
         --profile ${lib.escapeShellArg name} ${lib.escapeShellArg "${codexProfileConfigs.${name}}"} \
         "$codex_home/${name}.config.toml"
     '') codexProfileNames}
+  '';
+
+  home.activation.codexChromeNativeHost = lib.hm.dag.entryAfter [ "codexPolicy" ] ''
+    codex_home="$HOME/.codex"
+    codex_chrome_runtime_dir="$codex_home/plugins/linux-runtime-cache/${codexChromeMarketplaceName}/chrome"
+    codex_chrome_launcher="$codex_chrome_runtime_dir/native-host"
+    codex_chromium_manifest="$HOME/.config/chromium/NativeMessagingHosts/${codexChromeNativeHostName}.json"
+    codex_chrome_global_registry="$HOME/.local/state/openai-codex/chrome-native-hosts-v2.json"
+    codex_chrome_home_registry="$codex_home/chrome-native-hosts-v2.json"
+
+    run ${pkgs.coreutils}/bin/install -d -m 0700 "$codex_chrome_runtime_dir"
+    if [ ! -f "$codex_chrome_launcher" ] \
+      || ! ${pkgs.diffutils}/bin/cmp -s \
+        ${lib.escapeShellArg codexChromeNativeHostLauncher} \
+        "$codex_chrome_launcher"; then
+      codex_chrome_launcher_tmp="$(${pkgs.coreutils}/bin/mktemp "$codex_chrome_launcher.XXXXXX")"
+      run ${pkgs.coreutils}/bin/cp \
+        ${lib.escapeShellArg codexChromeNativeHostLauncher} \
+        "$codex_chrome_launcher_tmp"
+      run ${pkgs.coreutils}/bin/chmod 0700 "$codex_chrome_launcher_tmp"
+      run ${pkgs.coreutils}/bin/mv -f "$codex_chrome_launcher_tmp" "$codex_chrome_launcher"
+    fi
+
+    run ${pkgs.python3}/bin/python3 ${codexChromeNativeHostReconcile} \
+      --codex-home "$codex_home" \
+      --version ${lib.escapeShellArg pkgs.chatgpt.unwrapped.version} \
+      --resources-path ${lib.escapeShellArg chatgptResources} \
+      --plugin-root ${lib.escapeShellArg codexChromePlugin} \
+      --extension-host-path ${lib.escapeShellArg codexChromeExtensionHost} \
+      --launcher-path "$codex_chrome_launcher" \
+      --manifest-path "$codex_chromium_manifest" \
+      --native-host-name ${lib.escapeShellArg codexChromeNativeHostName} \
+      ${
+        lib.concatMapStringsSep " \\\n      " (
+          extensionId: "--extension-id ${lib.escapeShellArg extensionId}"
+        ) codexChromeExtensionIds
+      } \
+      --registry-path "$codex_chrome_global_registry" \
+      --registry-path "$codex_chrome_home_registry"
   '';
 
   # Codex opens custom-agent definitions through its sensitive-file reader,
