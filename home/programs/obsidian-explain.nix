@@ -148,12 +148,13 @@ let
       );
     }
     # App hotkeys. Frees the chords Obsidian's defaults steal from
-    # CodeMirror-vim (Ctrl+F search, Ctrl+B bold, Ctrl+D delete-paragraph) and
-    # binds the explanation workflow: Ctrl+Enter submit, Ctrl+Shift+Q insert
-    # question. Ctrl+Q would be swallowed by the Electron menu's quit
-    # accelerator on Linux, hence the Shift. Ctrl+U stays broken for vim:
-    # CodeMirror's built-in history keymap binds Mod-u (undoSelection) below
-    # the hotkey layer, where no Obsidian setting reaches.
+    # CodeMirror-vim (Ctrl+F search, Ctrl+B bold) and binds the explanation
+    # workflow: Ctrl+Enter submit, Ctrl+Shift+Q insert question. Ctrl+Q would
+    # be swallowed by the Electron menu's quit accelerator on Linux, hence the
+    # Shift. Ctrl+U stays broken for vim: CodeMirror's built-in history keymap
+    # binds Mod-u (undoSelection) below the hotkey layer, where no Obsidian
+    # setting reaches — so Ctrl+D keeps its delete-paragraph default rather
+    # than freeing only half of the half-page pair.
     {
       name = "hotkeys.json";
       value = pkgs.writeText "obsidian-hotkeys.json" (builtins.readFile ./obsidian-explain/hotkeys.json);

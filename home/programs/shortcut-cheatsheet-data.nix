@@ -330,8 +330,8 @@
         key = "Ctrl + Shift + b";
       }
       {
-        description = "Vim page / half-page scroll (Obsidian; Ctrl+u still shadowed)";
-        key = "Ctrl + f / b / d";
+        description = "Vim page scroll (Obsidian)";
+        key = "Ctrl + f / Ctrl + b";
       }
       {
         description = "Insert anchored question (nvim)";
