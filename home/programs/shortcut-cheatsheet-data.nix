@@ -310,15 +310,39 @@
         key = "F7";
       }
       {
-        description = "Insert anchored question";
+        description = "Insert anchored question (Obsidian)";
+        key = "Ctrl + Shift + q";
+      }
+      {
+        description = "Submit open questions (Obsidian)";
+        key = "Ctrl + Enter";
+      }
+      {
+        description = "Pull trees from linglong (Obsidian palette)";
+        key = "Explain: pull";
+      }
+      {
+        description = "Search in file / vault (Obsidian)";
+        key = "Ctrl + Shift + f / g";
+      }
+      {
+        description = "Bold (Obsidian; Ctrl+b freed for vim)";
+        key = "Ctrl + Shift + b";
+      }
+      {
+        description = "Vim page / half-page scroll (Obsidian; Ctrl+u still shadowed)";
+        key = "Ctrl + f / b / d";
+      }
+      {
+        description = "Insert anchored question (nvim)";
         key = "\\q";
       }
       {
-        description = "Save and submit open questions";
+        description = "Save and submit open questions (nvim)";
         key = "\\s";
       }
       {
-        description = "Toggle READ / EDIT mode";
+        description = "Toggle READ / EDIT mode (nvim)";
         key = "\\r";
       }
       {
