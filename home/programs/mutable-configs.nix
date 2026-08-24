@@ -243,7 +243,7 @@ let
     ENABLED_PLUGINS = [
         "${codexChromePluginId}",
     ]
-    NODE_REPL_POLICY = ${builtins.toJSON codexNodeReplPolicy}
+    NODE_REPL_POLICY = json.loads(${builtins.toJSON (builtins.toJSON codexNodeReplPolicy)})
     NODE_REPL_OBSOLETE_ENV = [
         "NODE_REPL_INSTRUCTIONS_USE_CASE_BROWSER",
     ]
