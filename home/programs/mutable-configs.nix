@@ -182,12 +182,15 @@ let
     ASSIGNMENT = re.compile(
         r"^\s*(?:[A-Za-z0-9_-]+|\"(?:[^\"\\]|\\.)*\"|'[^']*')\s*="
     )
-    PLUGINS = [
+    DISABLED_PLUGINS = [
         "browser@openai-bundled",
         "computer-use@openai-bundled",
         "sites@openai-bundled",
         "visualize@openai-bundled",
         "deep-research@openai-bundled",
+    ]
+    ENABLED_PLUGINS = [
+        "chrome@openai-bundled",
     ]
     # Curated remote skills remain blocked even if a future CLI release ignores
     # remote_plugin for an already-cached plugin.  These names come from the
@@ -235,6 +238,7 @@ let
     # These are explicit enables, rather than relying on Codex's default, so
     # an older mutable config cannot keep a required bundled skill hidden.
     ENABLED_SKILLS = [
+        "control-chrome",
         "openai-docs",
         "skill-creator",
         "skill-installer",
@@ -254,6 +258,7 @@ let
         "build-iso": "build-iso",
         "kcl-fetch": "kcl-fetch",
         "last30days": "last30days:last30days",
+        "control-chrome": "control-chrome",
         "control-in-app-browser": "control-in-app-browser",
         "sites-hosting": "sites-hosting",
         "sites-building": "sites-building",
@@ -517,8 +522,10 @@ let
             "NO_COLOR",
             case_insensitive=True,
         ) or changed
-        for plugin in PLUGINS:
+        for plugin in DISABLED_PLUGINS:
             changed = table_key(lines, 'plugins."%s"' % plugin, "enabled", "false") or changed
+        for plugin in ENABLED_PLUGINS:
+            changed = table_key(lines, 'plugins."%s"' % plugin, "enabled", "true") or changed
         present = set()
         for start, end in reversed(list(skill_blocks(lines))):
             name_index, name = quoted_field(lines, start, end, "name")
