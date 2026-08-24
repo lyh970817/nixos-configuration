@@ -202,7 +202,7 @@ let
       BROWSER_USE_CODEX_APP_BUILD_FLAVOR = "prod";
       BROWSER_USE_CODEX_APP_VERSION = pkgs.chatgpt.unwrapped.version;
       NODE_REPL_TRUSTED_SERVICES = builtins.toJSON {
-        browser = "${codexChromePlugin}/scripts/browser-service.mjs";
+        chrome = "${codexChromePlugin}/scripts/browser-service.mjs";
       };
       CODEX_CLI_PATH = "${chatgptResources}/codex";
     };
