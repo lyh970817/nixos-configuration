@@ -135,6 +135,56 @@ let
     }) codexProfileNames
   );
 
+  # Codex CLI does not ship the Desktop application's browser runtime. Pair
+  # the CLI-facing Chrome plugin and node_repl with the exact ChatGPT payload
+  # installed by this flake, under a non-reserved marketplace name. The
+  # upstream manifest calls itself openai-bundled, which Codex reserves for
+  # application-managed state and cannot safely reuse from the CLI profile.
+  chatgptResources = "${pkgs.chatgpt.unwrapped}/lib/chatgpt/resources";
+  codexChromePlugin = "${chatgptResources}/plugins/openai-bundled/plugins/chrome";
+  codexChromeMarketplaceName = "openai-cli-runtime";
+  codexChromePluginId = "chrome@${codexChromeMarketplaceName}";
+  codexChromeMarketplace =
+    pkgs.runCommand "codex-cli-chrome-marketplace-${pkgs.chatgpt.unwrapped.version}"
+      { nativeBuildInputs = [ pkgs.jq ]; }
+      ''
+        mkdir -p "$out/.agents/plugins" "$out/plugins"
+        jq \
+          '.name = "${codexChromeMarketplaceName}"
+           | .interface.displayName = "OpenAI CLI Runtime"
+           | .plugins = [.plugins[] | select(.name == "chrome")]' \
+          ${chatgptResources}/plugins/openai-bundled/.agents/plugins/marketplace.json \
+          > "$out/.agents/plugins/marketplace.json"
+        ln -s ${codexChromePlugin} "$out/plugins/chrome"
+      '';
+
+  codexNodeReplPolicy = {
+    enabled = true;
+    command = "${chatgptResources}/cua_node/bin/node_repl";
+    args = [ ];
+    startup_timeout_sec = 120;
+    env = {
+      NODE_REPL_NATIVE_PIPE_CONNECT_TIMEOUT_MS = "1000";
+      NODE_REPL_NODE_MODULE_DIRS = "${chatgptResources}/cua_node/lib/node_modules";
+      NODE_REPL_NODE_PATH = "${chatgptResources}/cua_node/bin/node";
+      NODE_REPL_TRUSTED_CODE_PATHS = lib.concatStringsSep ":" [
+        "${config.home.homeDirectory}/.codex"
+        "${chatgptResources}/cua_node/lib/node_modules"
+        codexChromePlugin
+      ];
+      NODE_REPL_TRUSTED_RPC_ENABLED = "1";
+      CODEX_HOME = "${config.home.homeDirectory}/.codex";
+      BROWSER_USE_AVAILABLE_BACKENDS = "chrome";
+      NODE_REPL_INSTRUCTIONS_USE_CASE_CHROME = "Control the Chrome browser in conjunction with the Chrome Plugin. Prefer this method of controlling Chrome over alternatives (such as Computer Use) unless the user explicitly mentions an alternative.";
+      BROWSER_USE_CODEX_APP_BUILD_FLAVOR = "prod";
+      BROWSER_USE_CODEX_APP_VERSION = pkgs.chatgpt.unwrapped.version;
+      NODE_REPL_TRUSTED_SERVICES = builtins.toJSON {
+        browser = "${codexChromePlugin}/scripts/browser-service.mjs";
+      };
+      CODEX_CLI_PATH = "${chatgptResources}/codex";
+    };
+    tools.js.approval_mode = "approve";
+  };
   codexAgentNames = [ "merge" ];
 
   codexAgentFiles = lib.listToAttrs (
@@ -184,13 +234,18 @@ let
     )
     DISABLED_PLUGINS = [
         "browser@openai-bundled",
+        "chrome@openai-bundled",
         "computer-use@openai-bundled",
         "sites@openai-bundled",
         "visualize@openai-bundled",
         "deep-research@openai-bundled",
     ]
     ENABLED_PLUGINS = [
-        "chrome@openai-bundled",
+        "${codexChromePluginId}",
+    ]
+    NODE_REPL_POLICY = ${builtins.toJSON codexNodeReplPolicy}
+    NODE_REPL_OBSOLETE_ENV = [
+        "NODE_REPL_INSTRUCTIONS_USE_CASE_BROWSER",
     ]
     # Curated remote skills remain blocked even if a future CLI release ignores
     # remote_plugin for an already-cached plugin.  These names come from the
@@ -526,6 +581,28 @@ let
             changed = table_key(lines, 'plugins."%s"' % plugin, "enabled", "false") or changed
         for plugin in ENABLED_PLUGINS:
             changed = table_key(lines, 'plugins."%s"' % plugin, "enabled", "true") or changed
+        for key, setting in NODE_REPL_POLICY.items():
+            if key in ("env", "tools"):
+                continue
+            changed = table_key(
+                lines, "mcp_servers.node_repl", key, value(setting)
+            ) or changed
+        for key in NODE_REPL_OBSOLETE_ENV:
+            changed = remove_map_key(
+                lines, "mcp_servers.node_repl.env", key
+            ) or changed
+        for key, setting in NODE_REPL_POLICY["env"].items():
+            changed = table_key(
+                lines, "mcp_servers.node_repl.env", key, value(setting)
+            ) or changed
+        for tool, settings in NODE_REPL_POLICY["tools"].items():
+            for key, setting in settings.items():
+                changed = table_key(
+                    lines,
+                    "mcp_servers.node_repl.tools.%s" % tool,
+                    key,
+                    value(setting),
+                ) or changed
         present = set()
         for start, end in reversed(list(skill_blocks(lines))):
             name_index, name = quoted_field(lines, start, end, "name")
@@ -1041,7 +1118,7 @@ in
     }
 
     codex_marketplace_degraded=0
-    if codex_marketplaces="$(${pkgs.codex}/bin/codex plugin marketplace list 2>&1)"; then
+    if codex_marketplaces="$(${pkgs.codex}/bin/codex plugin marketplace list --json 2>&1)"; then
       :
     else
       codex_status="$?"
@@ -1054,7 +1131,68 @@ in
     fi
     if [ "$codex_marketplace_degraded" -eq 0 ] \
       && ! printf '%s\n' "$codex_marketplaces" \
-        | ${pkgs.gnugrep}/bin/grep -Eq '(^|[[:space:]])last30days-skill([[:space:]]|$)'; then
+        | ${pkgs.jq}/bin/jq -e '.marketplaces | type == "array"' >/dev/null; then
+      echo "error: Codex marketplace list returned invalid JSON: $codex_marketplaces" >&2
+      exit 1
+    fi
+    codex_chrome_marketplace_name=${lib.escapeShellArg codexChromeMarketplaceName}
+    codex_chrome_marketplace=${lib.escapeShellArg "${codexChromeMarketplace}"}
+    codex_chrome_plugin_id=${lib.escapeShellArg codexChromePluginId}
+    codex_chrome_version=${lib.escapeShellArg pkgs.chatgpt.unwrapped.version}
+    if [ "$codex_marketplace_degraded" -eq 0 ]; then
+      if printf '%s\n' "$codex_marketplaces" \
+        | ${pkgs.jq}/bin/jq -e \
+          --arg name "$codex_chrome_marketplace_name" \
+          --arg source "$codex_chrome_marketplace" \
+          '.marketplaces | any(
+            .name == $name
+            and .marketplaceSource.source == $source
+          )' >/dev/null; then
+        :
+      else
+        if printf '%s\n' "$codex_marketplaces" \
+          | ${pkgs.jq}/bin/jq -e \
+            --arg name "$codex_chrome_marketplace_name" \
+            '.marketplaces | any(.name == $name)' >/dev/null; then
+          if codex_chrome_plugins="$(${pkgs.codex}/bin/codex plugin list --json 2>&1)"; then
+            if printf '%s\n' "$codex_chrome_plugins" \
+              | ${pkgs.jq}/bin/jq -e \
+                --arg id "$codex_chrome_plugin_id" \
+                '.installed | any(.pluginId == $id)' >/dev/null; then
+              if codex_chrome_remove="$(${pkgs.codex}/bin/codex plugin remove "$codex_chrome_plugin_id" 2>&1)"; then
+                :
+              else
+                codex_status="$?"
+                codex_handle_failure "$codex_chrome_remove" "$codex_status" || exit "$codex_status"
+              fi
+            fi
+          else
+            codex_status="$?"
+            codex_handle_failure "$codex_chrome_plugins" "$codex_status" || exit "$codex_status"
+          fi
+          if codex_chrome_marketplace_remove="$(${pkgs.codex}/bin/codex plugin marketplace remove "$codex_chrome_marketplace_name" 2>&1)"; then
+            :
+          else
+            codex_status="$?"
+            codex_handle_failure "$codex_chrome_marketplace_remove" "$codex_status" || exit "$codex_status"
+          fi
+        fi
+        if codex_chrome_marketplace_add="$(${pkgs.codex}/bin/codex plugin marketplace add "$codex_chrome_marketplace" 2>&1)"; then
+          :
+        else
+          codex_status="$?"
+          if codex_handle_failure "$codex_chrome_marketplace_add" "$codex_status"; then
+            codex_marketplace_degraded=1
+          else
+            exit "$codex_status"
+          fi
+        fi
+      fi
+    fi
+    if [ "$codex_marketplace_degraded" -eq 0 ] \
+      && ! printf '%s\n' "$codex_marketplaces" \
+        | ${pkgs.jq}/bin/jq -e \
+          '.marketplaces | any(.name == "last30days-skill")' >/dev/null; then
       if codex_marketplace_add="$(${pkgs.codex}/bin/codex plugin marketplace add mvanhorn/last30days-skill 2>&1)"; then
         :
       else
@@ -1087,6 +1225,35 @@ in
         else
           codex_status="$?"
           codex_handle_failure "$codex_plugin_add" "$codex_status" || exit "$codex_status"
+        fi
+      fi
+      if [ "$codex_marketplace_degraded" -eq 0 ] \
+        && ! printf '%s\n' "$codex_plugins" \
+          | ${pkgs.jq}/bin/jq -e \
+            --arg id "$codex_chrome_plugin_id" \
+            --arg version "$codex_chrome_version" \
+            --arg source "$codex_chrome_marketplace" \
+            '.installed | any(
+              .pluginId == $id
+              and .version == $version
+              and .marketplaceSource.source == $source
+            )' >/dev/null; then
+        if printf '%s\n' "$codex_plugins" \
+          | ${pkgs.jq}/bin/jq -e \
+            --arg id "$codex_chrome_plugin_id" \
+            '.installed | any(.pluginId == $id)' >/dev/null; then
+          if codex_chrome_remove="$(${pkgs.codex}/bin/codex plugin remove "$codex_chrome_plugin_id" 2>&1)"; then
+            :
+          else
+            codex_status="$?"
+            codex_handle_failure "$codex_chrome_remove" "$codex_status" || exit "$codex_status"
+          fi
+        fi
+        if codex_chrome_add="$(${pkgs.codex}/bin/codex plugin add "$codex_chrome_plugin_id" 2>&1)"; then
+          :
+        else
+          codex_status="$?"
+          codex_handle_failure "$codex_chrome_add" "$codex_status" || exit "$codex_status"
         fi
       fi
     fi
