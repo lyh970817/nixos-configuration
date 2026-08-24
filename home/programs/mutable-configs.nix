@@ -135,6 +135,17 @@ let
     }) codexProfileNames
   );
 
+  codexAgentNames = [ "merge" ];
+
+  codexAgentFiles = lib.listToAttrs (
+    map (name: {
+      inherit name;
+      value = pkgs.writeText "codex-agent-${name}.toml" (
+        builtins.readFile ../../dotfiles/codex/agents/${name}.toml
+      );
+    }) codexAgentNames
+  );
+
   codexSkillNames = [
     "nix-environment-setup"
     "bro"
@@ -204,6 +215,9 @@ let
         "openai-templates:artifact-template-three-statement-forecast",
     ]
     DISABLED_SKILLS = [
+        "build-iso",
+        "kcl-fetch",
+        "last30days:last30days",
         "imagegen",
         "plugin-creator",
         "control-in-app-browser",
@@ -237,6 +251,9 @@ let
         for skill in ENABLED_SKILLS
     }
     PATH_SKILLS = {
+        "build-iso": "build-iso",
+        "kcl-fetch": "kcl-fetch",
+        "last30days": "last30days:last30days",
         "control-in-app-browser": "control-in-app-browser",
         "sites-hosting": "sites-hosting",
         "sites-building": "sites-building",
@@ -1076,6 +1093,24 @@ in
     '') codexProfileNames}
   '';
 
+  # Codex opens custom-agent definitions through its sensitive-file reader,
+  # which rejects a symlink at the final path component. Keep the tracked
+  # definitions authoritative, but install regular private files atomically.
+  home.activation.codexAgents = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    codex_agents_dir="$HOME/.codex/agents"
+    run ${pkgs.coreutils}/bin/install -d -m 0700 "$codex_agents_dir"
+    ${lib.concatMapStringsSep "\n" (name: ''
+      codex_agent="$codex_agents_dir/${name}.toml"
+      codex_agent_tmp="$(${pkgs.coreutils}/bin/mktemp "$codex_agent.XXXXXX")"
+
+      run ${pkgs.coreutils}/bin/cp \
+        ${lib.escapeShellArg "${codexAgentFiles.${name}}"} \
+        "$codex_agent_tmp"
+      run ${pkgs.coreutils}/bin/chmod 0600 "$codex_agent_tmp"
+      run ${pkgs.coreutils}/bin/mv -f "$codex_agent_tmp" "$codex_agent"
+    '') codexAgentNames}
+  '';
+
   # pi rewrites ~/.pi/agent/settings.json at runtime (settings edits, model
   # switches), so it must be an ordinary mutable file rather than a link.
   # Same materialize-from-tracked-baseline treatment as Claude above.
@@ -1096,7 +1131,6 @@ in
     # Codex CLI authored resources. The base config.toml, profiles, auth,
     # sessions, caches, marketplaces, and installed payloads stay mutable.
     ".codex/AGENTS.md".source = link "dotfiles/codex/AGENTS.md";
-    ".codex/agents/merge.toml".source = link "dotfiles/codex/agents/merge.toml";
     ".codex/hooks.json" = {
       source = link "dotfiles/codex/hooks.json";
       force = true;
