@@ -3,10 +3,13 @@
 # nothing is typed into the agent and its transcript is untouched. Bound to f7
 # in dotfiles/herdr/config.toml. Resolves the pane's Claude session from
 # Herdr, the launcher profile from the silent SessionStart mapping written by
-# dotfiles/claude/hooks/explain-session-register.sh, then opens the explain
-# Neovim workspace in a new Herdr tab, which prompts for the question and
-# calls `explainctl new` itself (see the handshake in the explain Neovim
-# module). A Herdr tab rather than a detached GUI window: the herdr server
+# dotfiles/claude/hooks/explain-session-register.sh. With a remote viewer the
+# flow then leaves this machine entirely: explain-remote-new opens a pending
+# stub note in the laptop's Obsidian and the first submit bootstraps it. With
+# a local viewer it opens the explain Neovim workspace in a new Herdr tab,
+# which prompts for the question and calls `explainctl new` itself (see the
+# handshake in the explain Neovim module). A Herdr tab rather than a detached
+# GUI window: the herdr server
 # may have no display environment (started over SSH), and a window on this
 # machine's monitor is invisible when the user drives from the laptop. The
 # terminal hosting the Herdr client (kitty on both hosts) renders the math
@@ -80,6 +83,30 @@ fi
 # Without a registration record the standard launcher is the safe default.
 [[ -n $launcher ]] || launcher=claude
 [[ -n $origin_cwd ]] || origin_cwd=$pane_cwd
+
+# Remote viewer: no tab and no nvim. explain-remote-new
+# (home/programs/explain-sync.nix) decides remoteness itself (exit 3 means
+# local); when remote it creates a pending stub tree and opens it in the
+# laptop's Obsidian, where the question is typed and submitted. Failures
+# surface through the herdr notification the user is looking at when
+# pressing F7. When the helper is not installed the tab flow below stays
+# the only path.
+if command -v explain-remote-new >/dev/null 2>&1; then
+  remote_rc=0
+  remote_out=$(explain-remote-new --session-id "$session_id" \
+    --cwd "$origin_cwd" --launcher "$launcher" 2>&1) || remote_rc=$?
+  case $remote_rc in
+    0)
+      # The stub note is open on the laptop; the flow continues there.
+      exit 0
+      ;;
+    3) ;; # viewer is local: the nvim tab below is the flow
+    *)
+      notify "Explain failed" "${remote_out:-explain-remote-new exited $remote_rc}"
+      exit 1
+      ;;
+  esac
+fi
 
 # The question is entered in the workspace itself: Neovim sees these
 # variables (set on the tab at creation so its whole process tree inherits
