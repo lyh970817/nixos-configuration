@@ -178,13 +178,13 @@ let
     );
   };
 
-  # Opens the managed vault. The path form of the URI resolves only vaults
-  # already listed in ~/.config/obsidian/obsidian.json — on an unregistered
-  # path Obsidian shows a native error dialog (or silently does nothing)
-  # rather than registering it, so the launcher writes the registry entry
-  # itself first. A running instance receives the URI through Obsidian's
-  # single-instance lock, otherwise this starts one.
-  vaultUri = "obsidian://open?path=${lib.replaceStrings [ "/" ] [ "%2F" ] vaultDir}";
+  # Opens the managed vault, or a specific note in it when given a file
+  # argument. The path form of the URI resolves only vaults already listed in
+  # ~/.config/obsidian/obsidian.json — on an unregistered path Obsidian shows
+  # a native error dialog (or silently does nothing) rather than registering
+  # it, so the launcher writes the registry entry itself first. A running
+  # instance receives the URI through Obsidian's single-instance lock,
+  # otherwise this starts one.
   obsidianExplain = pkgs.writeShellApplication {
     name = "obsidian-explain";
     runtimeInputs = [
@@ -195,6 +195,22 @@ let
     text = ''
       vault=${lib.escapeShellArg vaultDir}
       registry="$HOME/.config/obsidian/obsidian.json"
+
+      # Optional argument: a file to focus. obsidian://open?path=<absolute
+      # file path> resolves the file inside its registered vault and opens
+      # that note; with no argument the URI carries the vault path and only
+      # brings the vault forward. explain-dispatch-new sends the note path
+      # relative to $HOME, so anchor a relative argument there.
+      target="''${1:-}"
+      if [ -n "$target" ]; then
+        case "$target" in
+          /*) ;;
+          *) target="$HOME/$target" ;;
+        esac
+      else
+        target="$vault"
+      fi
+      uri="obsidian://open?path=$(jq -rn --arg path "$target" '$path | @uri')"
 
       # Register the vault if the registry does not know it yet. Only ever add
       # a missing entry, atomically: a running Obsidian rewrites this file for
@@ -238,7 +254,7 @@ let
 
       # Detached, so an SSH caller returning does not take Obsidian with it;
       # a running instance picks the URI up and the child exits on its own.
-      setsid -f ${pkgs.obsidian}/bin/obsidian ${lib.escapeShellArg vaultUri} "$@" \
+      setsid -f ${pkgs.obsidian}/bin/obsidian "$uri" \
         >/dev/null 2>&1 < /dev/null
     '';
   };

@@ -740,6 +740,43 @@ print(json.dumps({"session_id": "boot-42", "result": "done"}))
             locked, _ = core.TreeLock.probe(root)
             self.assertFalse(locked)
 
+    def test_new_pending_reuses_existing_stub_for_same_session(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self._env(tmp, "raise SystemExit('claude must not run')")
+            env["EXPLAINCTL_CLAUDE_BIN"] = str(Path(tmp) / "missing-claude")
+            with patched_env(**env):
+                root, _ = self._pending_root(tmp)
+                # Second F7 press: same origin session, no new tree.
+                again_root, again = self._pending_root(tmp)
+                self.assertEqual(again["status"], "existing")
+                self.assertTrue(again["pending"])
+                self.assertEqual(again_root, root)
+                self.assertEqual(again["focus"], str(root / "explanation.md"))
+                # A different origin session still gets its own stub.
+                code, other, _err = run_cli(
+                    [
+                        "new",
+                        "--pending",
+                        "--session-id",
+                        "origin-888",
+                        "--cwd",
+                        str(Path(tmp) / "the-project"),
+                        "--launcher",
+                        "claude",
+                        "--no-open",
+                    ]
+                )
+                self.assertEqual(code, 0, msg=repr(other))
+                self.assertEqual(other["status"], "created")
+                self.assertNotEqual(other["root"], str(root))
+                # A tree that left "pending" no longer blocks a fresh stub.
+                metadata = core.read_metadata(root)
+                metadata["status"] = "ready"
+                core.write_metadata(root, metadata)
+                third_root, third = self._pending_root(tmp)
+                self.assertEqual(third["status"], "created")
+                self.assertNotEqual(third_root, root)
+
     def test_pending_and_question_are_mutually_exclusive(self):
         code, result, _err = run_cli(
             ["new", "--pending", "--question", "q", "--no-open"]

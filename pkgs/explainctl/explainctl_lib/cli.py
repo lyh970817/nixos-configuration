@@ -269,12 +269,52 @@ def _require_origin(args) -> dict:
     return origin
 
 
+def _existing_pending(store: Path, origin: dict) -> tuple[Path, dict] | None:
+    """The newest tree still pending bootstrap that records the same origin
+    session, if any: a repeated F7 press must reopen the stub the first press
+    minted, not create another one."""
+    candidates = []
+    for entry in sorted(store.iterdir() if store.is_dir() else []):
+        if not entry.is_dir() or not (entry / core.METADATA_NAME).is_file():
+            continue
+        try:
+            metadata = core.read_metadata(entry)
+        except (OSError, ValueError):
+            continue
+        if metadata.get("status") != "pending":
+            continue
+        if (metadata.get("origin") or {}).get("session_id") != origin["session_id"]:
+            continue
+        candidates.append((metadata.get("created_at") or "", entry, metadata))
+    if not candidates:
+        return None
+    _, root, metadata = max(candidates, key=lambda item: item[0])
+    return root, metadata
+
+
 def _create_pending(args) -> int:
     """`new --pending`: record the origin binding and hand back an openable
     stub immediately — no Claude run. The first `submit` on the tree reads
-    the question out of the root document and runs the bootstrap."""
+    the question out of the root document and runs the bootstrap. Idempotent
+    per origin session: an existing pending stub is returned instead of a
+    new one, so the caller just re-dispatches the same note."""
     origin = _require_origin(args)
     store = core.data_dir()
+    existing = _existing_pending(store, origin)
+    if existing is not None:
+        root, metadata = existing
+        result = {
+            "status": "existing",
+            "pending": True,
+            "root": str(root),
+            "focus": str(core.root_document(root, metadata)),
+            "origin_session_id": origin["session_id"],
+            "launcher": origin["launcher"],
+            "opened": False,
+        }
+        return _emit(
+            result, "pending tree %s already exists for this session" % root
+        )
     label = _origin_label(origin)
     root = core.new_root(store, "explain %s" % (label or "explanation"))
     document = root / core.ROOT_DOCUMENT
