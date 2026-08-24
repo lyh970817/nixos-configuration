@@ -135,6 +135,17 @@ let
     }) codexProfileNames
   );
 
+  codexAgentNames = [ "merge" ];
+
+  codexAgentFiles = lib.listToAttrs (
+    map (name: {
+      inherit name;
+      value = pkgs.writeText "codex-agent-${name}.toml" (
+        builtins.readFile ../../dotfiles/codex/agents/${name}.toml
+      );
+    }) codexAgentNames
+  );
+
   codexSkillNames = [
     "nix-environment-setup"
     "bro"
@@ -171,12 +182,15 @@ let
     ASSIGNMENT = re.compile(
         r"^\s*(?:[A-Za-z0-9_-]+|\"(?:[^\"\\]|\\.)*\"|'[^']*')\s*="
     )
-    PLUGINS = [
+    DISABLED_PLUGINS = [
         "browser@openai-bundled",
         "computer-use@openai-bundled",
         "sites@openai-bundled",
         "visualize@openai-bundled",
         "deep-research@openai-bundled",
+    ]
+    ENABLED_PLUGINS = [
+        "chrome@openai-bundled",
     ]
     # Curated remote skills remain blocked even if a future CLI release ignores
     # remote_plugin for an already-cached plugin.  These names come from the
@@ -204,6 +218,9 @@ let
         "openai-templates:artifact-template-three-statement-forecast",
     ]
     DISABLED_SKILLS = [
+        "build-iso",
+        "kcl-fetch",
+        "last30days:last30days",
         "imagegen",
         "plugin-creator",
         "control-in-app-browser",
@@ -221,6 +238,7 @@ let
     # These are explicit enables, rather than relying on Codex's default, so
     # an older mutable config cannot keep a required bundled skill hidden.
     ENABLED_SKILLS = [
+        "control-chrome",
         "openai-docs",
         "skill-creator",
         "skill-installer",
@@ -237,6 +255,10 @@ let
         for skill in ENABLED_SKILLS
     }
     PATH_SKILLS = {
+        "build-iso": "build-iso",
+        "kcl-fetch": "kcl-fetch",
+        "last30days": "last30days:last30days",
+        "control-chrome": "control-chrome",
         "control-in-app-browser": "control-in-app-browser",
         "sites-hosting": "sites-hosting",
         "sites-building": "sites-building",
@@ -500,8 +522,10 @@ let
             "NO_COLOR",
             case_insensitive=True,
         ) or changed
-        for plugin in PLUGINS:
+        for plugin in DISABLED_PLUGINS:
             changed = table_key(lines, 'plugins."%s"' % plugin, "enabled", "false") or changed
+        for plugin in ENABLED_PLUGINS:
+            changed = table_key(lines, 'plugins."%s"' % plugin, "enabled", "true") or changed
         present = set()
         for start, end in reversed(list(skill_blocks(lines))):
             name_index, name = quoted_field(lines, start, end, "name")
@@ -1076,6 +1100,24 @@ in
     '') codexProfileNames}
   '';
 
+  # Codex opens custom-agent definitions through its sensitive-file reader,
+  # which rejects a symlink at the final path component. Keep the tracked
+  # definitions authoritative, but install regular private files atomically.
+  home.activation.codexAgents = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    codex_agents_dir="$HOME/.codex/agents"
+    run ${pkgs.coreutils}/bin/install -d -m 0700 "$codex_agents_dir"
+    ${lib.concatMapStringsSep "\n" (name: ''
+      codex_agent="$codex_agents_dir/${name}.toml"
+      codex_agent_tmp="$(${pkgs.coreutils}/bin/mktemp "$codex_agent.XXXXXX")"
+
+      run ${pkgs.coreutils}/bin/cp \
+        ${lib.escapeShellArg "${codexAgentFiles.${name}}"} \
+        "$codex_agent_tmp"
+      run ${pkgs.coreutils}/bin/chmod 0600 "$codex_agent_tmp"
+      run ${pkgs.coreutils}/bin/mv -f "$codex_agent_tmp" "$codex_agent"
+    '') codexAgentNames}
+  '';
+
   # pi rewrites ~/.pi/agent/settings.json at runtime (settings edits, model
   # switches), so it must be an ordinary mutable file rather than a link.
   # Same materialize-from-tracked-baseline treatment as Claude above.
@@ -1096,7 +1138,6 @@ in
     # Codex CLI authored resources. The base config.toml, profiles, auth,
     # sessions, caches, marketplaces, and installed payloads stay mutable.
     ".codex/AGENTS.md".source = link "dotfiles/codex/AGENTS.md";
-    ".codex/agents/merge.toml".source = link "dotfiles/codex/agents/merge.toml";
     ".codex/hooks.json" = {
       source = link "dotfiles/codex/hooks.json";
       force = true;
