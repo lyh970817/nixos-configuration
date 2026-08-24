@@ -44,7 +44,11 @@ let
   # One Shell Commands entry, schema per newShellCommandConfiguration() in
   # plugin 0.23.0. Fixed ids (allowed alphabet [a-z0-9]): Obsidian addresses
   # the commands as obsidian-shellcommands:shell-command-<id> in hotkeys.json.
-  shellCommand = id: alias: command: stdoutHandler: notifyStart: {
+  # executionNotificationMode: "disabled" | "quick" | "permanent" | "if-long"
+  # (or null = inherit the global default, disabled), per the plugin's
+  # showExecutionNotification(). "permanent" keeps an "Executing: <alias>"
+  # notice up until the process exits, with a terminate button.
+  shellCommand = id: alias: command: stdoutHandler: executionNotificationMode: {
     inherit id alias;
     platform_specific_commands.default = command;
     shells = { };
@@ -68,7 +72,7 @@ let
     };
     output_channel_order = "stdout-first";
     output_handling_mode = "buffered";
-    execution_notification_mode = if notifyStart then "quick" else null;
+    execution_notification_mode = executionNotificationMode;
     events = { };
     debounce = null;
     command_palette_availability = "enabled";
@@ -82,15 +86,16 @@ let
   shellCommandsData = builtins.toJSON {
     settings_version = "0.23.0";
     shell_commands = [
-      # {{file_path:absolute}} is the active note; submit shows start and
-      # stdout/stderr notifications so the round-trip is visible in Obsidian.
+      # {{file_path:absolute}} is the active note. A first-submit bootstrap
+      # runs for minutes, so the "Executing" notice stays up for the whole
+      # run ("permanent"); stdout/stderr notifications then show the result.
       (shellCommand "explainsubmit" "Explain: submit"
         "${profileBin}/explain-sync submit {{file_path:absolute}}"
         "notification"
-        true
+        "permanent"
       )
       # Palette-only; rsync is silent on success, so only signal start/errors.
-      (shellCommand "explainpull" "Explain: pull" "${profileBin}/explain-sync pull" "ignore" true)
+      (shellCommand "explainpull" "Explain: pull" "${profileBin}/explain-sync pull" "ignore" "quick")
     ];
   };
 
