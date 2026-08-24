@@ -1502,6 +1502,7 @@ in
     codex_chrome_runtime_dir="$codex_home/plugins/linux-runtime-cache/${codexChromeMarketplaceName}/chrome"
     codex_chrome_launcher="$codex_chrome_runtime_dir/native-host"
     codex_chromium_manifest="$HOME/${codexChromiumNativeHostManifestRelativePath}"
+    codex_chromium_obsolete_manifest="$HOME/.config/chromium/NativeMessagingHosts/${codexChromeNativeHostName}.json"
     codex_chrome_global_registry="$HOME/.local/state/openai-codex/chrome-native-hosts-v2.json"
     codex_chrome_home_registry="$codex_home/chrome-native-hosts-v2.json"
 
@@ -1534,6 +1535,14 @@ in
       } \
       --registry-path "$codex_chrome_global_registry" \
       --registry-path "$codex_chrome_home_registry"
+
+    if [ ! -L "$codex_chromium_obsolete_manifest" ] \
+      && [ -f "$codex_chromium_obsolete_manifest" ] \
+      && ${pkgs.diffutils}/bin/cmp -s \
+        "$codex_chromium_obsolete_manifest" \
+        "$codex_chromium_manifest"; then
+      run ${pkgs.coreutils}/bin/rm -f -- "$codex_chromium_obsolete_manifest"
+    fi
   '';
 
   # Codex opens custom-agent definitions through its sensitive-file reader,
