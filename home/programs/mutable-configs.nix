@@ -145,6 +145,7 @@ let
   codexChromeMarketplaceName = "openai-cli-runtime";
   codexChromePluginId = "chrome@${codexChromeMarketplaceName}";
   codexChromeNativeHostName = "com.openai.codexextension";
+  codexChromiumNativeHostManifestRelativePath = ".config/chromium-browser/NativeMessagingHosts/${codexChromeNativeHostName}.json";
   codexChromeExtensionIds = [
     "hehggadaopoacecdllhhajmbjkdcmajg"
     "odlomjlbamekndcpllcnffbgeohgkmjh"
@@ -161,7 +162,7 @@ let
     export CODEX_HOME="''${HOME}/.codex"
     export CODEX_CHROMIUM_USER_DATA_DIR="''${HOME}/.config/chromium-browser"
     export CODEX_CHROMIUM_PREFERENCES_PATH="''${HOME}/.config/chromium-browser/Default/Preferences"
-    export CODEX_CHROMIUM_NATIVE_HOST_MANIFEST_PATH="''${HOME}/.config/chromium/NativeMessagingHosts/${codexChromeNativeHostName}.json"
+    export CODEX_CHROMIUM_NATIVE_HOST_MANIFEST_PATH="''${HOME}/${codexChromiumNativeHostManifestRelativePath}"
     exec ${codexChromeExtensionHost} "$@"
   '';
   codexChromeMarketplace =
@@ -196,7 +197,7 @@ let
       CODEX_HOME = "${config.home.homeDirectory}/.codex";
       CODEX_CHROMIUM_USER_DATA_DIR = "${config.home.homeDirectory}/.config/chromium-browser";
       CODEX_CHROMIUM_PREFERENCES_PATH = "${config.home.homeDirectory}/.config/chromium-browser/Default/Preferences";
-      CODEX_CHROMIUM_NATIVE_HOST_MANIFEST_PATH = "${config.home.homeDirectory}/.config/chromium/NativeMessagingHosts/${codexChromeNativeHostName}.json";
+      CODEX_CHROMIUM_NATIVE_HOST_MANIFEST_PATH = "${config.home.homeDirectory}/${codexChromiumNativeHostManifestRelativePath}";
       BROWSER_USE_AVAILABLE_BACKENDS = "chrome";
       NODE_REPL_INSTRUCTIONS_USE_CASE_CHROME = "Control the Chrome browser in conjunction with the Chrome Plugin. Prefer this method of controlling Chrome over alternatives (such as Computer Use) unless the user explicitly mentions an alternative.";
       BROWSER_USE_CODEX_APP_BUILD_FLAVOR = "prod";
@@ -1500,7 +1501,7 @@ in
     codex_home="$HOME/.codex"
     codex_chrome_runtime_dir="$codex_home/plugins/linux-runtime-cache/${codexChromeMarketplaceName}/chrome"
     codex_chrome_launcher="$codex_chrome_runtime_dir/native-host"
-    codex_chromium_manifest="$HOME/.config/chromium/NativeMessagingHosts/${codexChromeNativeHostName}.json"
+    codex_chromium_manifest="$HOME/${codexChromiumNativeHostManifestRelativePath}"
     codex_chrome_global_registry="$HOME/.local/state/openai-codex/chrome-native-hosts-v2.json"
     codex_chrome_home_registry="$codex_home/chrome-native-hosts-v2.json"
 
