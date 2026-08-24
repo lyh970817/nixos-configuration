@@ -1,0 +1,17 @@
+{
+  "editor:open-search": [
+    { "modifiers": ["Mod", "Shift"], "key": "F" }
+  ],
+  "global-search:open": [
+    { "modifiers": ["Mod", "Shift"], "key": "G" }
+  ],
+  "editor:toggle-bold": [
+    { "modifiers": ["Mod", "Shift"], "key": "B" }
+  ],
+  "obsidian-shellcommands:shell-command-explainsubmit": [
+    { "modifiers": ["Mod"], "key": "Enter" }
+  ],
+  "insert-template": [
+    { "modifiers": ["Mod", "Shift"], "key": "Q" }
+  ]
+}

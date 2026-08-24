@@ -9,6 +9,11 @@
 let
   vaultDir = "${config.home.homeDirectory}/Documents/explanations-vault";
 
+  # Stable across generations, same rationale as explain-sync.nix: Obsidian's
+  # environment is whatever launched it, so shell commands use the absolute
+  # per-user profile path rather than trusting PATH.
+  profileBin = "/etc/profiles/per-user/${config.home.username}/bin";
+
   # Everything below reproduces the validated pilot vault
   # (~/Documents/explain-pilot-vault, left untouched) declaratively. Plugin
   # payloads are fixed-output fetches of the exact GitHub release assets the
@@ -34,6 +39,59 @@ let
       url = "https://github.com/RyotaUshio/obsidian-inline-math/releases/download/${version}/${asset}";
       inherit hash;
     };
+  };
+
+  # One Shell Commands entry, schema per newShellCommandConfiguration() in
+  # plugin 0.23.0. Fixed ids (allowed alphabet [a-z0-9]): Obsidian addresses
+  # the commands as obsidian-shellcommands:shell-command-<id> in hotkeys.json.
+  shellCommand = id: alias: command: stdoutHandler: notifyStart: {
+    inherit id alias;
+    platform_specific_commands.default = command;
+    shells = { };
+    icon = null;
+    confirm_execution = false;
+    ignore_error_codes = [ ];
+    input_contents.stdin = null;
+    output_handlers = {
+      stdout = {
+        handler = stdoutHandler;
+        convert_ansi_code = true;
+      };
+      stderr = {
+        handler = "notification";
+        convert_ansi_code = true;
+      };
+    };
+    output_wrappers = {
+      stdout = null;
+      stderr = null;
+    };
+    output_channel_order = "stdout-first";
+    output_handling_mode = "buffered";
+    execution_notification_mode = if notifyStart then "quick" else null;
+    events = { };
+    debounce = null;
+    command_palette_availability = "enabled";
+    preactions = [ ];
+    variable_default_values = { };
+  };
+
+  # Top-level plugin settings, schema per getDefaultSettings(true) in 0.23.0.
+  # settings_version must match the installed release or the plugin refuses
+  # the file; missing fields are filled with defaults on load.
+  shellCommandsData = builtins.toJSON {
+    settings_version = "0.23.0";
+    shell_commands = [
+      # {{file_path:absolute}} is the active note; submit shows start and
+      # stdout/stderr notifications so the round-trip is visible in Obsidian.
+      (shellCommand "explainsubmit" "Explain: submit"
+        "${profileBin}/explain-sync submit {{file_path:absolute}}"
+        "notification"
+        true
+      )
+      # Palette-only; rsync is silent on success, so only signal start/errors.
+      (shellCommand "explainpull" "Explain: pull" "${profileBin}/explain-sync pull" "ignore" true)
+    ];
   };
 
   # Repo files are snapshotted through writeText so the activation script
@@ -89,7 +147,36 @@ let
         }
       );
     }
+    # App hotkeys. Frees the chords Obsidian's defaults steal from
+    # CodeMirror-vim (Ctrl+F search, Ctrl+B bold) and binds the explanation
+    # workflow: Ctrl+Enter submit, Ctrl+Shift+Q insert question. Ctrl+Q would
+    # be swallowed by the Electron menu's quit accelerator on Linux, hence the
+    # Shift. Ctrl+U stays broken for vim: CodeMirror's built-in history keymap
+    # binds Mod-u (undoSelection) below the hotkey layer, where no Obsidian
+    # setting reaches — so Ctrl+D keeps its delete-paragraph default rather
+    # than freeing only half of the half-page pair.
+    {
+      name = "hotkeys.json";
+      value = pkgs.writeText "obsidian-hotkeys.json" (builtins.readFile ./obsidian-explain/hotkeys.json);
+    }
+    {
+      name = "plugins/obsidian-shellcommands/data.json";
+      value = pkgs.writeText "shellcommands-data.json" shellCommandsData;
+    }
+    # Core Templates plugin (enabled in Obsidian's defaults) serves the
+    # question snippet; the folder is excluded from explain-sync push.
+    {
+      name = "templates.json";
+      value = pkgs.writeText "obsidian-templates.json" (builtins.toJSON { folder = "_templates"; });
+    }
   ];
+
+  # Content seeded at the vault root rather than under .obsidian/.
+  vaultFiles = {
+    "_templates/question.md" = pkgs.writeText "obsidian-question-template.md" (
+      builtins.readFile ./obsidian-explain/question-template.md
+    );
+  };
 
   # Opens the managed vault. The path form of the URI resolves only vaults
   # already listed in ~/.config/obsidian/obsidian.json — on an unregistered
@@ -179,6 +266,14 @@ in
               "$obsidian_vault/.obsidian/"${lib.escapeShellArg rel}
           fi
         '') seedFiles
+      )}
+      ${lib.concatStrings (
+        lib.mapAttrsToList (rel: source: ''
+          if [ ! -e "$obsidian_vault/"${lib.escapeShellArg rel} ]; then
+            run ${pkgs.coreutils}/bin/install -D -m 0600 ${lib.escapeShellArg "${source}"} \
+              "$obsidian_vault/"${lib.escapeShellArg rel}
+          fi
+        '') vaultFiles
       )}
     '';
   };

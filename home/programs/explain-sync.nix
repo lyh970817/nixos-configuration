@@ -72,10 +72,14 @@ let
       # vault -> linglong: only Markdown, the single thing the human edits.
       # Hidden entries (vault config, .explain.json, .context.md) never
       # travel this way, and nothing is ever deleted on the peer.
+      # _templates holds Obsidian template snippets (obsidian-explain.nix),
+      # vault furniture that must not land in the canonical store on a
+      # whole-vault push.
       push() {
         local tree="''${1:-}"
         rsync -am -e "ssh ''${SSH_OPTS[*]}" \
-          --exclude '.*' --include '*/' --include '*.md' --exclude '*' \
+          --exclude '.*' --exclude '_templates' \
+          --include '*/' --include '*.md' --exclude '*' \
           "$VAULT/$tree''${tree:+/}" "$PEER:$STORE/$tree''${tree:+/}"
       }
 
