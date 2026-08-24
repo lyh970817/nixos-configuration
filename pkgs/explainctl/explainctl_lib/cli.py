@@ -227,17 +227,85 @@ def _question_digest(questions: list[core.Question], root: Path) -> str:
 # ---------------------------------------------------------------------------
 # Subcommands
 
+# First line of a pending stub's root document body: the remote F7 flow opens
+# the stub in Obsidian and the user replaces this invitation with the actual
+# question, then submits.
+PENDING_INVITE = "<!-- Type your question here, then run the submit command. -->"
 
-def cmd_new(args) -> int:
-    question = args.question.strip()
-    if not question:
-        raise CommandError("--question must not be empty")
+
+def _origin_label(origin: dict) -> str:
+    """Identify the origin project the way the Herdr tab label does
+    (scripts/herdr-explain-current): basename of the origin cwd, truncated."""
+    base = os.path.basename(os.path.normpath(origin.get("cwd") or ""))
+    if base in ("", "/", "."):
+        return ""
+    if len(base) > 24:
+        base = base[:23] + "…"
+    return base
+
+
+def _pending_question(text: str) -> str:
+    """The user's question is the pending root document minus the stub
+    furniture: the invitation comment and the generated `# Explanation:`
+    heading. Everything else they typed is the question, verbatim."""
+    lines = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped == PENDING_INVITE:
+            continue
+        if stripped == "# Explanation" or stripped.startswith("# Explanation:"):
+            continue
+        lines.append(line)
+    return "\n".join(lines).strip()
+
+
+def _require_origin(args) -> dict:
     origin = core.resolve_origin(args.session_id, args.cwd, args.launcher)
     if not origin["session_id"]:
         raise CommandError(
             "no origin session: pass --session-id or run inside a Claude Code "
             "Bash tool where CLAUDE_CODE_SESSION_ID is set"
         )
+    return origin
+
+
+def _create_pending(args) -> int:
+    """`new --pending`: record the origin binding and hand back an openable
+    stub immediately — no Claude run. The first `submit` on the tree reads
+    the question out of the root document and runs the bootstrap."""
+    origin = _require_origin(args)
+    store = core.data_dir()
+    label = _origin_label(origin)
+    root = core.new_root(store, "explain %s" % (label or "explanation"))
+    document = root / core.ROOT_DOCUMENT
+    heading = "# Explanation: %s" % label if label else "# Explanation"
+    document.write_text(
+        "%s\n\n%s\n" % (heading, PENDING_INVITE), encoding="utf-8"
+    )
+    metadata = core.new_metadata(root.name, "", origin)
+    metadata["status"] = "pending"
+    core.write_metadata(root, metadata)
+    result = {
+        "status": "created",
+        "pending": True,
+        "root": str(root),
+        "focus": str(document),
+        "origin_session_id": origin["session_id"],
+        "launcher": origin["launcher"],
+        "opened": False,
+    }
+    return _emit(result, "created pending tree %s; the first submit bootstraps it" % root)
+
+
+def cmd_new(args) -> int:
+    if args.pending and args.question:
+        raise CommandError("--pending and --question are mutually exclusive")
+    if args.pending:
+        return _create_pending(args)
+    question = (args.question or "").strip()
+    if not question:
+        raise CommandError("--question must not be empty")
+    origin = _require_origin(args)
 
     store = core.data_dir()
     root = core.new_root(store, question)
@@ -339,6 +407,8 @@ def cmd_submit(args) -> int:
         return _busy(error, str(submitted))
     with lock:
         metadata = core.read_metadata(root)
+        if metadata.get("status") == "pending":
+            return _bootstrap_submit(root, submitted, metadata)
         if metadata.get("status") != "ready":
             raise CommandError(
                 "explanation is not ready",
@@ -481,6 +551,157 @@ def cmd_submit(args) -> int:
         )
 
 
+def _bootstrap_submit(root: Path, submitted: Path, metadata: dict) -> int:
+    """First submit on a `new --pending` stub (the caller holds the tree
+    lock): the root document's current content is the initial question. Run
+    the bootstrap fork that `new --question` would have run, then commit the
+    generated tree under the same staging/conflict protocol as a normal
+    submit, so the document the user typed into is never clobbered if they
+    kept editing while the bootstrap ran."""
+    origin = metadata.get("origin") or {}
+    if not origin.get("session_id"):
+        raise CommandError(
+            "pending tree records no origin session", root=str(root)
+        )
+    document = core.root_document(root, metadata)
+    question = _pending_question(
+        document.read_text(encoding="utf-8") if document.is_file() else ""
+    )
+    if not question:
+        raise CommandError(
+            "no question yet: type it into the root document and submit again",
+            root=str(root),
+            focus=str(document),
+        )
+
+    before = core.hash_tree(root)
+    staging = core.stage_tree(root)
+    root_document_rel = metadata.get("root_document") or core.ROOT_DOCUMENT
+    prompt = core.render_template(
+        core.load_template("bootstrap.md", origin),
+        {
+            "question": question,
+            "explanation_root": root,
+            "staging_dir": staging,
+            "root_document": staging / root_document_rel,
+            "context_file": staging / core.CONTEXT_NAME,
+            "children_dir": staging / core.CHILDREN_DIR,
+            "origin_cwd": origin.get("cwd", ""),
+        },
+    )
+    try:
+        result = run_claude(
+            origin, prompt, origin["session_id"], staging, fork=True
+        )
+        coordinator = _session_id_from(result)
+        staged_document = staging / root_document_rel
+        if not staged_document.is_file() or not staged_document.stat().st_size:
+            raise CommandError(
+                "bootstrap produced no explanation document",
+                expected=str(staged_document),
+            )
+    except CommandError as error:
+        # Status stays "pending": the question is still in the live document
+        # and the next submit retries. The staged partial result is kept (dot
+        # prefix hides it from tree scans) for inspection.
+        metadata["error"] = str(error)
+        metadata["updated_at"] = core.iso_now()
+        core.write_metadata(root, metadata)
+        raise CommandError(
+            str(error),
+            root=str(root),
+            submitted=str(submitted),
+            staged=str(staging),
+            **error.fields,
+        ) from None
+
+    live_now = core.hash_tree(root)
+    if live_now != before:
+        conflicting = sorted(
+            set(path for path in live_now if before.get(path) != live_now[path])
+            | (set(before) - set(live_now))
+        )
+        return _emit(
+            {
+                "status": "conflict",
+                "root": str(root),
+                "submitted": str(submitted),
+                "staged": str(staging),
+                "conflicting_files": conflicting,
+                "message": "tree changed while the bootstrap ran; "
+                "staged result preserved, live files untouched",
+            },
+            "conflict: %d live file(s) changed during the bootstrap; "
+            "staged result kept at %s" % (len(conflicting), staging),
+            1,
+        )
+
+    # The whole staged tree is fresh agent output, so convert like `new`
+    # does — but region-diffed against the live question document, so math
+    # the user typed themselves is never run through t2l.
+    convert = typst_math.t2l_available()
+    conversion_warnings: list[dict] = []
+    if not convert:
+        conversion_warnings.append(
+            {"detail": "t2l not found on PATH; math left as LaTeX"}
+        )
+    updated, created = [], []
+    for staged in core.staged_targets(staging):
+        relative = staged.relative_to(staging)
+        live = root / relative
+        after_text = staged.read_text(encoding="utf-8")
+        before_text = live.read_text(encoding="utf-8") if live.is_file() else None
+        if before_text == after_text:
+            continue
+        if convert:
+            after_text, segment_warnings = typst_math.convert_changed(
+                before_text, after_text
+            )
+            conversion_warnings.extend(w.as_dict() for w in segment_warnings)
+            staged.write_text(after_text, encoding="utf-8")
+        (created if before_text is None else updated).append(relative)
+    for relative in updated + created:
+        destination = root / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(staging / relative, destination)
+    core.discard_staging(staging)
+
+    metadata["question"] = question
+    metadata["coordinator_session_id"] = coordinator
+    metadata["status"] = "ready"
+    if convert:
+        metadata[typst_math.MATH_SYNTAX_KEY] = typst_math.MATH_SYNTAX_TYPST
+    metadata["updated_at"] = core.iso_now()
+    metadata.pop("error", None)
+    core.write_metadata(root, metadata)
+
+    # Hidden entries (.context.md) are committed above but stay out of the
+    # result lists: the laptop's explain-sync opens every `created` path.
+    def visible(paths):
+        return [
+            str(root / path)
+            for path in sorted(paths)
+            if not any(part.startswith(".") for part in path.parts)
+        ]
+
+    result = {
+        "status": "updated",
+        "bootstrap": True,
+        "root": str(root),
+        "submitted": str(submitted),
+        "updated": visible(updated),
+        "created": visible(created),
+        "focus": str(document),
+        "resolved_question_ids": [],
+        "session_id": coordinator,
+    }
+    if conversion_warnings:
+        result["conversion_warnings"] = conversion_warnings
+    return _emit(
+        result, "bootstrapped %s (coordinator %s)" % (root, coordinator)
+    )
+
+
 def cmd_sync(args) -> int:
     root = _require_root(args.target)
     origin = core.resolve_origin(args.session_id, args.cwd, args.launcher)
@@ -496,6 +717,12 @@ def cmd_sync(args) -> int:
         return _busy(error, None)
     with lock:
         metadata = core.read_metadata(root)
+        if metadata.get("status") == "pending":
+            raise CommandError(
+                "tree is pending bootstrap: submit the root document with "
+                "the question first",
+                root=str(root),
+            )
         previous = metadata.get("coordinator_session_id")
         prompt = core.render_template(
             core.load_template("sync.md", origin),
@@ -780,7 +1007,13 @@ def build_parser() -> argparse.ArgumentParser:
         parents=[compat],
         help="fork the origin session into a new explanation tree",
     )
-    new.add_argument("--question", required=True, help="what needs explaining")
+    new.add_argument("--question", help="what needs explaining")
+    new.add_argument(
+        "--pending",
+        action="store_true",
+        help="create an openable stub without running Claude; the first "
+        "submit reads the question out of the root document and bootstraps",
+    )
     _add_origin_flags(new)
     new.add_argument(
         "--no-open",
