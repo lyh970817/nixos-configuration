@@ -363,6 +363,7 @@ class JsonCompatFlagTest(unittest.TestCase):
             ["submit", "--json", "some.md"],
             ["--json", "submit", "some.md"],
             ["new", "--question", "q", "--json", "--no-open"],
+            ["new", "--pending", "--json", "--no-open"],
             ["status", "--json"],
             ["list", "--json"],
             ["sync", "target", "--json"],
@@ -643,6 +644,209 @@ class CliMigrateTypstTest(unittest.TestCase):
             self.assertEqual(result["status"], "failed")
             self.assertIn("t2l", result["message"])
             self.assertIn("$LATEX$", (root / "explanation.md").read_text())
+
+
+class CliPendingBootstrapTest(unittest.TestCase):
+    """`new --pending` stubs and the bootstrap-on-first-submit routing that
+    backs the remote F7 flow: the stub opens in Obsidian immediately, the
+    user types the question into the root document, and the first submit
+    runs the bootstrap with the recorded origin binding."""
+
+    # Bootstrap agent stub: writes the generated document (keeping the
+    # question text), a child, and context notes into the staging copy
+    # received via --add-dir.
+    BOOTSTRAP_BODY = """
+import json, os, sys
+argv = sys.argv[1:]
+staging = argv[argv.index("--add-dir") + 1]
+assert "--fork-session" in argv
+assert "--resume" in argv
+prompt = argv[argv.index("-p") + 1]
+with open(os.path.join(staging, "explanation.md")) as fh:
+    question_doc = fh.read()
+with open(os.path.join(staging, "explanation.md"), "w") as fh:
+    fh.write("# Real Title\\n\\n" + question_doc + "\\nAnswer: $LATEX$\\n")
+os.makedirs(os.path.join(staging, "children"), exist_ok=True)
+with open(os.path.join(staging, "children", "proof.md"), "w") as fh:
+    fh.write("# Proof\\n\\n$$LATEX$$\\n")
+with open(os.path.join(staging, ".context.md"), "w") as fh:
+    fh.write("context notes\\n")
+print(json.dumps({"session_id": "boot-42", "result": "done"}))
+"""
+
+    # Same, but clobbers the LIVE root document mid-run, the way a laptop
+    # rsync push of continued typing would.
+    CONFLICT_BODY = BOOTSTRAP_BODY.replace(
+        'print(json.dumps({"session_id": "boot-42", "result": "done"}))',
+        """
+root = os.path.dirname(staging)
+with open(os.path.join(root, "explanation.md"), "a") as fh:
+    fh.write("\\nstill typing\\n")
+print(json.dumps({"session_id": "boot-42", "result": "done"}))
+""",
+    )
+
+    def _env(self, tmp, agent_body):
+        templates = Path(tmp) / "templates"
+        templates.mkdir(exist_ok=True)
+        (templates / "bootstrap.md").write_text(
+            "Question: {{question}}\nWrite {{root_document}}\n"
+        )
+        return {
+            "XDG_DATA_HOME": str(Path(tmp) / "data"),
+            "EXPLAINCTL_TEMPLATES": str(templates),
+            "EXPLAINCTL_CLAUDE_BIN": str(
+                make_fake_bin(tmp, "fake-claude", agent_body)
+            ),
+            "EXPLAINCTL_T2L": str(make_fake_bin(tmp, "fake-t2l", FAKE_T2L_BODY)),
+        }
+
+    def _pending_root(self, tmp):
+        origin_cwd = Path(tmp) / "the-project"
+        origin_cwd.mkdir(exist_ok=True)
+        code, result, _err = run_cli(
+            [
+                "new",
+                "--pending",
+                "--session-id",
+                "origin-777",
+                "--cwd",
+                str(origin_cwd),
+                "--launcher",
+                "claude",
+                "--no-open",
+            ]
+        )
+        self.assertEqual(code, 0, msg=repr(result))
+        return Path(result["root"]), result
+
+    def test_new_pending_creates_stub_without_claude(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self._env(tmp, "raise SystemExit('claude must not run')")
+            # Even the fake claude must never be invoked for the stub.
+            env["EXPLAINCTL_CLAUDE_BIN"] = str(Path(tmp) / "missing-claude")
+            with patched_env(**env):
+                root, result = self._pending_root(tmp)
+            self.assertTrue(result["pending"])
+            self.assertEqual(result["origin_session_id"], "origin-777")
+            # Directory slug and H1 both carry the origin project identity.
+            self.assertIn("-explain-the-project", root.name)
+            text = (root / "explanation.md").read_text()
+            self.assertIn("# Explanation: the-project", text)
+            self.assertIn(cli.PENDING_INVITE, text)
+            metadata = core.read_metadata(root)
+            self.assertEqual(metadata["status"], "pending")
+            self.assertEqual(metadata["origin"]["session_id"], "origin-777")
+            locked, _ = core.TreeLock.probe(root)
+            self.assertFalse(locked)
+
+    def test_pending_and_question_are_mutually_exclusive(self):
+        code, result, _err = run_cli(
+            ["new", "--pending", "--question", "q", "--no-open"]
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("mutually exclusive", result["message"])
+
+    def test_submit_without_question_fails_and_stays_pending(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patched_env(**self._env(tmp, self.BOOTSTRAP_BODY)):
+                root, _ = self._pending_root(tmp)
+                document = root / "explanation.md"
+                code, result, _err = run_cli(["submit", str(document)])
+            self.assertEqual(code, 1)
+            self.assertIn("no question yet", result["message"])
+            self.assertEqual(core.read_metadata(root)["status"], "pending")
+
+    def test_submit_bootstraps_pending_tree(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patched_env(**self._env(tmp, self.BOOTSTRAP_BODY)):
+                root, _ = self._pending_root(tmp)
+                document = root / "explanation.md"
+                # The user replaced the invitation with their question; the
+                # heading stays. Their own math is already Typst.
+                document.write_text(
+                    "# Explanation: the-project\n\n"
+                    "Why does $TYPST$ stay untouched here?\n"
+                )
+                code, result, _err = run_cli(["submit", str(document)])
+            self.assertEqual(code, 0, msg=repr(result))
+            self.assertEqual(result["status"], "updated")
+            self.assertTrue(result["bootstrap"])
+            self.assertEqual(result["session_id"], "boot-42")
+            self.assertEqual(result["focus"], str(document))
+            self.assertEqual(result["resolved_question_ids"], [])
+            # .context.md was committed but never reported: the laptop opens
+            # every `created` path.
+            child = root / "children" / "proof.md"
+            self.assertEqual(result["created"], [str(child)])
+            self.assertTrue((root / ".context.md").is_file())
+            text = document.read_text()
+            # The stub furniture became the agent's document; the user's
+            # question survived verbatim (unchanged region, so its math was
+            # not re-run through t2l) while the agent's LaTeX was converted.
+            self.assertIn("# Real Title", text)
+            self.assertIn("Why does $TYPST$ stay untouched here?", text)
+            self.assertIn("Answer: $TYPST$", text)
+            self.assertEqual(child.read_text(), "# Proof\n\n$$TYPST$$\n")
+            metadata = core.read_metadata(root)
+            self.assertEqual(metadata["status"], "ready")
+            self.assertEqual(metadata["coordinator_session_id"], "boot-42")
+            self.assertEqual(metadata["math_syntax"], "typst")
+            self.assertIn("Why does", metadata["question"])
+            self.assertEqual(list(root.glob(".submit-*")), [])
+            locked, _ = core.TreeLock.probe(root)
+            self.assertFalse(locked)
+            # The tree is a normal ready tree now: a second submit with no
+            # open question blocks takes the ordinary path.
+            with patched_env(**self._env(tmp, self.BOOTSTRAP_BODY)):
+                code, result, _err = run_cli(["submit", str(document)])
+            self.assertEqual(code, 0)
+            self.assertEqual(result["status"], "no_questions")
+
+    def test_bootstrap_conflict_preserves_live_document(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patched_env(**self._env(tmp, self.CONFLICT_BODY)):
+                root, _ = self._pending_root(tmp)
+                document = root / "explanation.md"
+                document.write_text("The question\n")
+                code, result, _err = run_cli(["submit", str(document)])
+            self.assertEqual(code, 1)
+            self.assertEqual(result["status"], "conflict")
+            self.assertEqual(result["conflicting_files"], ["explanation.md"])
+            text = document.read_text()
+            self.assertIn("still typing", text)
+            self.assertNotIn("# Real Title", text)
+            self.assertTrue(Path(result["staged"]).is_dir())
+            # Still pending: the next submit retries the bootstrap.
+            self.assertEqual(core.read_metadata(root)["status"], "pending")
+            locked, _ = core.TreeLock.probe(root)
+            self.assertFalse(locked)
+
+    def test_bootstrap_failure_stays_pending_for_retry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patched_env(**self._env(tmp, "import sys\nsys.exit(3)\n")):
+                root, _ = self._pending_root(tmp)
+                document = root / "explanation.md"
+                document.write_text("The question\n")
+                code, result, _err = run_cli(["submit", str(document)])
+            self.assertEqual(code, 1)
+            self.assertEqual(result["status"], "failed")
+            metadata = core.read_metadata(root)
+            self.assertEqual(metadata["status"], "pending")
+            self.assertIn("error", metadata)
+            self.assertEqual(document.read_text(), "The question\n")
+            locked, _ = core.TreeLock.probe(root)
+            self.assertFalse(locked)
+
+    def test_sync_refuses_pending_tree(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patched_env(**self._env(tmp, self.BOOTSTRAP_BODY)):
+                root, _ = self._pending_root(tmp)
+                code, result, _err = run_cli(
+                    ["sync", str(root), "--session-id", "s", "--cwd", tmp]
+                )
+            self.assertEqual(code, 1)
+            self.assertIn("pending bootstrap", result["message"])
 
 
 class CliNewTest(unittest.TestCase):
