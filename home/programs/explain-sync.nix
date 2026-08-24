@@ -133,7 +133,13 @@ let
         case "$status" in
           updated)
             pull "$tree"
+            echo "explain-sync: explanation updated"
             jq -r '.resolved_question_ids[]? | "explain-sync: resolved \(.)"' <<<"$json"
+            # Focus the submitted note itself: a bootstrap classifies the
+            # root as updated, not created, so without this a bootstrap that
+            # creates no children would finish with nothing brought forward.
+            # Re-opening an already-open note is a harmless focus.
+            open_locally "$file"
             local created
             while IFS= read -r created; do
               [ -n "$created" ] || continue
