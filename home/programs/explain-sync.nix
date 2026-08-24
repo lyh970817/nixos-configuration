@@ -16,10 +16,16 @@
 # `explain-sync` (remote role) runs on the laptop; `explain-dispatch-new`
 # (home role) runs on linglong, called by the Neovim explain module after
 # `explainctl new` so a remote viewer gets the fresh tree in the vault
-# without touching the local nvim-tab flow.
+# without touching the local nvim-tab flow. `explain-remote-new` (home role)
+# is the F7 remote path (scripts/herdr-explain-current): it creates a
+# pending stub tree and dispatches it, so the question is typed straight
+# into Obsidian and the first submit runs the bootstrap.
 
 let
   peerHost = osConfig.portable.peerHost;
+
+  tylax = pkgs.callPackage ../../pkgs/tylax { };
+  explainctl = pkgs.callPackage ../../pkgs/explainctl { inherit tylax; };
 
   # Stable across generations; see html-open.nix for why SSH dispatch needs a
   # fixed absolute location for peer-side helpers. Same username on both
@@ -212,9 +218,74 @@ let
       fi
     '';
   };
+  explainRemoteNew = pkgs.writeShellApplication {
+    name = "explain-remote-new";
+    runtimeInputs = [
+      pkgs.jq
+      pkgs.coreutils
+      viewerIsRemote
+      explainctl
+    ];
+    text = ''
+      # F7 remote path (scripts/herdr-explain-current): when the human views
+      # this machine from the laptop, no nvim tab is opened at all. Create a
+      # pending stub tree (fast, no Claude run) and hand it to
+      # explain-dispatch-new, which rsyncs it into the laptop vault and opens
+      # it in Obsidian. The user types the question into the opened note; its
+      # first submit (explain-sync submit on the laptop) runs the bootstrap
+      # against the origin binding recorded here.
+      #
+      # Exit codes: 0 = stub open on the laptop; 3 = viewer is local (the
+      # caller keeps the nvim tab flow); else failure, detail on stderr.
+      PEER=${pkgs.lib.escapeShellArg peerHost}
+
+      usage() {
+        echo "explain-remote-new: usage: --session-id ID --cwd DIR --launcher NAME" >&2
+        exit 2
+      }
+      session_id="" origin_cwd="" launcher=""
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --session-id) session_id=''${2:-} ;;
+          --cwd) origin_cwd=''${2:-} ;;
+          --launcher) launcher=''${2:-} ;;
+          *) usage ;;
+        esac
+        shift 2 || usage
+      done
+      { [ -n "$session_id" ] && [ -n "$origin_cwd" ] && [ -n "$launcher" ]; } || usage
+
+      if [ -z "$PEER" ] || ! viewer-is-remote; then
+        exit 3
+      fi
+
+      if ! out=$(explainctl new --pending --session-id "$session_id" \
+        --cwd "$origin_cwd" --launcher "$launcher" --no-open); then
+        echo "explain-remote-new: explainctl new --pending failed" >&2
+        exit 1
+      fi
+      root=$(jq -r '.root // empty' <<<"$out")
+      if [ -z "$root" ]; then
+        echo "explain-remote-new: explainctl reported no tree root" >&2
+        exit 1
+      fi
+
+      # The dispatch is what makes the note appear on the laptop; its
+      # failure fails the flow (the caller notifies). The stub stays behind
+      # either way and the message names it.
+      if ! ${explainDispatchNew}/bin/explain-dispatch-new "$root"; then
+        echo "explain-remote-new: created $root but could not open it on the laptop" >&2
+        exit 1
+      fi
+      echo "explain-remote-new: $root open on $PEER"
+    '';
+  };
 in
 {
   home.packages =
     lib.optionals (osConfig.portable.role == "remote") [ explainSync ]
-    ++ lib.optionals (osConfig.portable.role == "home") [ explainDispatchNew ];
+    ++ lib.optionals (osConfig.portable.role == "home") [
+      explainDispatchNew
+      explainRemoteNew
+    ];
 }
