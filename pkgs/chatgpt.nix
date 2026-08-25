@@ -9,6 +9,7 @@
   dpkg,
   glibc,
   makeShellWrapper,
+  makeDesktopItem,
   symlinkJoin,
   wrapGAppsHook3,
   writeShellScriptBin,
@@ -41,11 +42,11 @@
 let
   chatgpt-unwrapped = stdenvNoCC.mkDerivation (finalAttrs: {
     pname = "chatgpt";
-    version = "26.814.41957";
+    version = "26.818.61809";
 
     src = fetchurl {
       url = "https://persistent.oaistatic.com/codex-app-prod/linux/deb/latest/chatgpt_amd64.deb";
-      hash = "sha256-R3iyanq9CGRyFNWwXBe9Pr4tlojRRtq/AXwaL6+TrH0=";
+      hash = "sha256-G7piptvS1Jl1xihQ2O3arWBdoZNVexlJgiJeVrGUGJE=";
     };
 
     nativeBuildInputs = [
@@ -107,12 +108,7 @@ let
       cp -a usr/share "$out/share"
 
       makeShellWrapper "$out/lib/chatgpt/ChatGPT" "$out/libexec/chatgpt" \
-        --prefix PATH : ${lib.makeBinPath [ xdg-utils ]} \
-        --run 'export CODEX_HOME="$HOME/.codex-desktop"' \
-        --run 'export XDG_CONFIG_HOME="$HOME/.config/codex-desktop"' \
-        --run 'export XDG_DATA_HOME="$HOME/.local/share/codex-desktop"' \
-        --run 'export XDG_CACHE_HOME="$HOME/.cache/codex-desktop"' \
-        --run 'export CODEX_ELECTRON_USER_DATA_PATH="$HOME/.config/codex-desktop/Codex"'
+        --prefix PATH : ${lib.makeBinPath [ xdg-utils ]}
 
       substituteInPlace "$out/share/applications/chatgpt.desktop" \
         --replace-fail "Exec=chatgpt %U" "Exec=chatgpt --class=chatgpt %U" \
@@ -131,34 +127,72 @@ let
     };
   });
 
-  launcher = writeShellScriptBin "chatgpt" ''
-    runtimeDir="''${XDG_RUNTIME_DIR:-/run/user/$(${lib.getExe' coreutils "id"} -u)}"
+  makeLauncher =
+    {
+      name,
+      stateName,
+      windowClass,
+    }:
+    writeShellScriptBin name ''
+      runtimeDir="''${XDG_RUNTIME_DIR:-/run/user/$(${lib.getExe' coreutils "id"} -u)}"
 
-    bwrapArgs=(
-      --die-with-parent
-      --ro-bind / /
-      --dev-bind /dev /dev
-      --proc /proc
-      --bind "$HOME" "$HOME"
-      --bind /tmp /tmp
-      --tmpfs /usr
-      --dir /usr/bin
-      --ro-bind ${lib.getExe' glibc.bin "ldd"} /usr/bin/ldd
-    )
+      export CODEX_HOME="$HOME/.${stateName}"
+      export XDG_CONFIG_HOME="$HOME/.config/${stateName}"
+      export XDG_DATA_HOME="$HOME/.local/share/${stateName}"
+      export XDG_CACHE_HOME="$HOME/.cache/${stateName}"
+      export CODEX_ELECTRON_USER_DATA_PATH="$XDG_CONFIG_HOME/Codex"
 
-    if [[ -d "$runtimeDir" ]]; then
-      bwrapArgs+=(--bind "$runtimeDir" "$runtimeDir")
-    fi
+      bwrapArgs=(
+        --die-with-parent
+        --ro-bind / /
+        --dev-bind /dev /dev
+        --proc /proc
+        --bind "$HOME" "$HOME"
+        --bind /tmp /tmp
+        --tmpfs /usr
+        --dir /usr/bin
+        --ro-bind ${lib.getExe' glibc.bin "ldd"} /usr/bin/ldd
+      )
 
-    exec ${lib.getExe bubblewrap} "''${bwrapArgs[@]}" \
-      ${chatgpt-unwrapped}/libexec/chatgpt "$@"
-  '';
+      if [[ -d "$runtimeDir" ]]; then
+        bwrapArgs+=(--bind "$runtimeDir" "$runtimeDir")
+      fi
+
+      exec ${lib.getExe bubblewrap} "''${bwrapArgs[@]}" \
+        ${chatgpt-unwrapped}/libexec/chatgpt --class=${windowClass} "$@"
+    '';
+
+  launcher = makeLauncher {
+    name = "chatgpt";
+    stateName = "codex-desktop";
+    windowClass = "chatgpt";
+  };
+
+  orchestratorLauncher = makeLauncher {
+    name = "chatgpt-orchestrator";
+    stateName = "codex-desktop-orchestrator";
+    windowClass = "chatgpt-orchestrator";
+  };
+
+  orchestratorDesktopItem = makeDesktopItem {
+    name = "chatgpt-orchestrator";
+    desktopName = "ChatGPT Orchestrator";
+    comment = "ChatGPT Desktop with the Codex orchestrator configuration";
+    exec = "chatgpt-orchestrator %U";
+    icon = "chatgpt";
+    categories = [ "Development" ];
+    startupNotify = true;
+    startupWMClass = "chatgpt-orchestrator";
+    terminal = false;
+  };
 in
 symlinkJoin {
   name = "chatgpt-${chatgpt-unwrapped.version}";
   paths = [
     chatgpt-unwrapped
     launcher
+    orchestratorLauncher
+    orchestratorDesktopItem
   ];
 
   inherit (chatgpt-unwrapped) meta;
