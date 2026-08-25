@@ -217,13 +217,15 @@ let
       focus="$(jq -r '.root_document // "explanation.md"' "$root/.explain.json")"
       # A bare SSH command carries no Wayland session env; like show-url
       # (html-open.nix), obsidian-explain rediscovers it on the peer and
-      # detaches, so this plain invocation is enough. Loose coupling: the
-      # launcher may not be installed on the peer yet; the sync above already
-      # delivered the document, so failure here only prints where it is.
+      # detaches, so this plain invocation is enough. A failure here fails the
+      # dispatch: the F7 flow exists to put the note on screen, and reporting
+      # success with no window is what made a dead Obsidian look like a no-op.
+      # The sync above already delivered the document, so the message names it.
       if ! ssh -o BatchMode=yes -o ConnectTimeout=10 \
           -o StrictHostKeyChecking=accept-new "$PEER" \
           "$(printf '%q ' ${profileBin}/obsidian-explain "$VAULT/$slug/$focus")"; then
         echo "explain-dispatch-new: synced to $PEER:$VAULT/$slug; could not open Obsidian" >&2
+        exit 1
       fi
     '';
   };
@@ -244,8 +246,10 @@ let
       # first submit (explain-sync submit on the laptop) runs the bootstrap
       # against the origin binding recorded here.
       #
-      # Exit codes: 0 = stub open on the laptop; 3 = viewer is local (the
-      # caller keeps the nvim tab flow); else failure, detail on stderr.
+      # Exit codes: 0 = a fresh stub is open on the laptop; 3 = viewer is
+      # local (the caller keeps the nvim tab flow); 4 = an existing pending
+      # stub for this session was reopened rather than duplicated; else
+      # failure, detail on stderr.
       PEER=${pkgs.lib.escapeShellArg peerHost}
 
       usage() {
@@ -278,6 +282,11 @@ let
         echo "explain-remote-new: explainctl reported no tree root" >&2
         exit 1
       fi
+      # `existing` means a pending stub for this origin session was already
+      # waiting and was handed back instead of a new one being minted.
+      # Reporting that distinctly is the whole point: otherwise a repeat F7
+      # re-dispatches the same note and looks like nothing happened.
+      status=$(jq -r '.status // empty' <<<"$out")
 
       # The dispatch is what makes the note appear on the laptop; its
       # failure fails the flow (the caller notifies). The stub stays behind
@@ -285,6 +294,10 @@ let
       if ! ${explainDispatchNew}/bin/explain-dispatch-new "$root"; then
         echo "explain-remote-new: created $root but could not open it on the laptop" >&2
         exit 1
+      fi
+      if [ "$status" = existing ]; then
+        echo "explain-remote-new: reopened the pending stub $root on $PEER"
+        exit 4
       fi
       echo "explain-remote-new: $root open on $PEER"
     '';

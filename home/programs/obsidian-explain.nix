@@ -196,6 +196,7 @@ let
       pkgs.jq
       pkgs.coreutils
       pkgs.util-linux
+      pkgs.procps
     ];
     text = ''
       vault=${lib.escapeShellArg vaultDir}
@@ -261,6 +262,23 @@ let
       # a running instance picks the URI up and the child exits on its own.
       setsid -f ${pkgs.obsidian}/bin/obsidian "$uri" \
         >/dev/null 2>&1 < /dev/null
+
+      # setsid -f reports only that the fork happened, so on its own this
+      # script exits 0 even when Obsidian never comes up -- which is what made
+      # a dead Obsidian indistinguishable from success in the F7 flow
+      # (explain-dispatch-new). Wait for the app process instead. A running
+      # instance satisfies this on the first poll and a cold start took ~0.5s
+      # when measured, so the budget below is only ever spent on a real
+      # failure. Matching the asar path cannot match this wrapper's own
+      # command line.
+      for _ in $(seq 1 40); do
+        if pgrep -f 'obsidian/app\.asar' > /dev/null 2>&1; then
+          exit 0
+        fi
+        sleep 0.25
+      done
+      echo "obsidian-explain: Obsidian did not start" >&2
+      exit 1
     '';
   };
 in

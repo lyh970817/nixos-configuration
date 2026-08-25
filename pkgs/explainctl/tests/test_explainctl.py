@@ -615,6 +615,10 @@ print(json.dumps({"session_id": "boot-42", "result": "done"}))
             with patched_env(**env):
                 root, result = self._pending_root(tmp)
             self.assertTrue(result["pending"])
+            # explain-remote-new (home/programs/explain-sync.nix) branches on
+            # this exact string to tell a fresh stub from a reopened one, so
+            # it is contract rather than cosmetics.
+            self.assertEqual(result["status"], "created")
             self.assertEqual(result["origin_session_id"], "origin-777")
             # Directory slug and H1 both carry the origin project identity.
             self.assertIn("-explain-the-project", root.name)
