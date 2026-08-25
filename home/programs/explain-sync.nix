@@ -24,8 +24,7 @@
 let
   peerHost = osConfig.portable.peerHost;
 
-  tylax = pkgs.callPackage ../../pkgs/tylax { };
-  explainctl = pkgs.callPackage ../../pkgs/explainctl { inherit tylax; };
+  explainctl = pkgs.callPackage ../../pkgs/explainctl { };
 
   # Stable across generations; see html-open.nix for why SSH dispatch needs a
   # fixed absolute location for peer-side helpers. Same username on both

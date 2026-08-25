@@ -30,7 +30,9 @@ The currently open questions are:
   speaker: everyday vocabulary, short sentences, no needlessly fancy phrasing.
   Keep technical terms; keep the prose around them simple.
 - Use `$...$` inline and `$$...$$` display math delimiters, as in the rest of
-  the tree.
+  the tree. What goes inside is Typst, not LaTeX — the Typst Mate Obsidian
+  plugin renders it. Do not write LaTeX commands or syntax (`\frac`,
+  `\mathrm`, `{}` grouping); they will not render.
 - Write only inside `{{explanation_root}}`; never modify project source files.
 
 ## Marking questions resolved

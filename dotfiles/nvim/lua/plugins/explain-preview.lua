@@ -14,15 +14,15 @@
 -- patch -- its Server:start ends in vim.uv.run(), which wedges the editor's
 -- main loop -- and lazy.nvim cannot fetch a patched tree itself.
 --
--- Activation is deliberate, not ambient: a tab opens only in the dedicated
--- explain Neovim (EXPLAIN_ORIGIN_SESSION_ID set by herdr-explain-current),
--- after :ExplainOpenRoot, or on :ExplainPreview. Once active for a root,
--- every buffer under it gets its own tab, opened once per file per session
--- (the plugin routes updates and scroll messages per file, so children live
--- in tabs of their own; plain buffer switching never spawns duplicates).
--- Typst-canonical trees (`"math_syntax": "typst"` in .explain.json) opt out
--- of the automatic paths entirely -- KaTeX cannot render Typst math -- and
--- open only on an explicit :ExplainPreview.
+-- Activation is deliberate, not ambient: a tab opens only on an explicit
+-- :ExplainPreview. Explanation trees are Typst-canonical and KaTeX cannot
+-- render Typst math, so the automatic paths (the dedicated explain Neovim,
+-- :ExplainOpenRoot) never open one by themselves; :ExplainPreview stays
+-- available for whoever wants the math-less rendering anyway. Once active
+-- for a root, every buffer under it gets its own tab, opened once per file
+-- per session (the plugin routes updates and scroll messages per file, so
+-- children live in tabs of their own; plain buffer switching never spawns
+-- duplicates).
 --
 -- Like plugins/explain.lua this file is not a plugin itself: it registers
 -- autocmds at import time, seeds package.loaded for the cross-file hook in
@@ -40,23 +40,6 @@ local function find_root(file)
   end
   local marker = vim.fs.find(".explain.json", { path = vim.fs.dirname(file), upward = true })[1]
   return marker and vim.fs.dirname(marker) or nil
-end
-
---- Whether the tree's `.explain.json` declares Typst-canonical math. The
---- preview renders with KaTeX, which cannot read Typst, so these trees are
---- excluded from every automatic open below; :ExplainPreview stays available
---- for whoever wants the (math-less) rendering anyway. A plain string probe,
---- not a JSON parse: the marker is machine-written verbatim by explainctl.
----@param root string
----@return boolean
-local function typst_tree(root)
-  local fd = io.open(root .. "/.explain.json", "r")
-  if not fd then
-    return false
-  end
-  local text = fd:read("*a") or ""
-  fd:close()
-  return text:find('"math_syntax"%s*:%s*"typst"') ~= nil
 end
 
 local function buf_file(bufnr)
@@ -171,9 +154,9 @@ function M.preview(bufnr, force)
     return
   end
   -- Ambient/auto callers (attach below, explain.lua's :ExplainOpenRoot hook)
-  -- pass force=false and are skipped for Typst-canonical trees; only the
-  -- explicit :ExplainPreview (force=true) goes through.
-  if not force and typst_tree(root) then
+  -- pass force=false and are skipped: the trees are Typst and KaTeX cannot
+  -- render Typst math. Only the explicit :ExplainPreview (force=true) opens.
+  if not force then
     return
   end
   state.activated[root] = true
