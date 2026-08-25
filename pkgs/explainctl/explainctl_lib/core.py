@@ -19,8 +19,6 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from . import typst_math
-
 METADATA_NAME = ".explain.json"
 LOCK_NAME = ".explain.lock"
 CONTEXT_NAME = ".context.md"
@@ -129,9 +127,6 @@ def new_metadata(slug: str, question: str, origin: dict) -> dict:
         "coordinator_session_id": None,
         "root_document": ROOT_DOCUMENT,
         "last_sync_at": None,
-        # Flipped to "typst" once the deterministic post-agent conversion has
-        # run; migrate-typst does the same for pre-existing trees.
-        typst_math.MATH_SYNTAX_KEY: typst_math.MATH_SYNTAX_LATEX,
     }
 
 
@@ -154,23 +149,6 @@ def write_metadata(root: Path, data: dict) -> None:
 def read_metadata(root: Path) -> dict:
     with open(metadata_path(root), encoding="utf-8") as handle:
         return json.load(handle)
-
-
-def tree_is_typst(metadata: dict) -> bool:
-    return metadata.get(typst_math.MATH_SYNTAX_KEY) == typst_math.MATH_SYNTAX_TYPST
-
-
-def write_text_atomic(path: Path, text: str) -> None:
-    fd, temporary = tempfile.mkstemp(prefix=".%s." % path.name, dir=str(path.parent))
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(text)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, path)
-    finally:
-        if os.path.exists(temporary):
-            os.unlink(temporary)
 
 
 def root_document(root: Path, metadata: dict) -> Path:

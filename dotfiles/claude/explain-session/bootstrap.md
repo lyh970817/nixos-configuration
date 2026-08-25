@@ -33,8 +33,9 @@ be reread, not a chat reply:
   speaker: everyday vocabulary, short sentences, no needlessly fancy phrasing.
   Keep technical terms; keep the prose around them simple.
 - Use `$...$` for inline math and `$$...$$` on their own lines for display
-  math; these are the delimiters the renderer understands. Keep LaTeX
-  self-contained (no custom macros).
+  math. What goes inside is Typst, not LaTeX — the Typst Mate Obsidian plugin
+  renders it. Do not write LaTeX commands or syntax (`\frac`, `\mathrm`, `{}`
+  grouping); they will not render. No custom macros.
 - Create a child document under `{{children_dir}}/` only when a conceptual
   detour genuinely warrants a separate page; give every child a clear title,
   a backlink to the parent section, and enough context to stand alone. Link

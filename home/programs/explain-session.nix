@@ -1,8 +1,7 @@
 { pkgs, ... }:
 
 let
-  tylax = pkgs.callPackage ../../pkgs/tylax { };
-  explainctl = pkgs.callPackage ../../pkgs/explainctl { inherit tylax; };
+  explainctl = pkgs.callPackage ../../pkgs/explainctl { };
 in
 {
   # Controller for forked Claude explanation workspaces (issue #11): forks the
@@ -11,11 +10,7 @@ in
   # explain-session skills, the Herdr trigger (scripts/herdr-explain-current),
   # and the Neovim explanation UI. Prompt templates and skill links are wired
   # in programs/mutable-configs.nix; the Kitty terminal it opens is installed
-  # separately. tylax ships `t2l`, the Typst <-> LaTeX math converter
-  # explainctl drives: agent LaTeX math is converted on the way in, keeping
-  # the trees canonically Typst.
-  home.packages = [
-    explainctl
-    tylax
-  ];
+  # separately. Math in the trees is Typst throughout: the agents write it
+  # directly, so there is no conversion step.
+  home.packages = [ explainctl ];
 }
