@@ -47,14 +47,53 @@ if [[ $agent_kind != claude ]]; then
 fi
 
 # Forking during a partially written turn risks an incomplete snapshot, so
-# only a settled agent may be forked; trigger again once the turn finishes.
+# only a settled *transcript* may be forked. The hazard is the transcript, not
+# the pane being quiet -- and `agent_status` conflates the two. Herdr derives
+# it by screen-scraping, highest-priority matching rule wins (manifest:
+# ~/.local/state/herdr/agent-detection/remote/claude.toml), so a finished turn
+# still reports `working` while the OSC title spinner is up
+# (osc_title_working, priority 1100) or background agents are still running
+# (background_agents_working, 965). Both outrank live_prompt_box (950) -- the
+# rule that actually says the prompt came back and the turn is written out.
+# Gate on that rule, so a fork is refused only when the agent is genuinely
+# mid-turn.
 agent_status=$(jq -r '.result.agent.agent_status // empty' <<<"$agent_json")
-case "$agent_status" in
-  idle | done) ;;
-  *)
-    notify "Claude is still working" \
-      "status: ${agent_status:-unknown}; trigger again after the turn finishes"
+prompt_box=unknown
+if explain_json=$(herdr agent explain "$pane_id" --json 2>/dev/null); then
+  if jq -e 'any(.evaluated_rules[]?;
+      .id == "live_prompt_box" and .matched == true
+      and (.state == "idle" or .state == "done"))' \
+    <<<"$explain_json" >/dev/null 2>&1; then
+    prompt_box=idle
+  elif jq -e 'any(.evaluated_rules[]?; .id == "live_prompt_box")' \
+    <<<"$explain_json" >/dev/null 2>&1; then
+    prompt_box=busy
+  fi
+fi
+
+case "$prompt_box" in
+  idle) ;; # prompt is back: the turn is on disk, forking is safe
+  busy)
+    # Name the rule that is holding the pane working, so a genuine mid-turn
+    # refusal reads differently from the background-agent case that used to
+    # block F7 for hours.
+    blocker=$(jq -r '[.evaluated_rules[]?
+      | select(.matched == true and .state == "working")]
+      | sort_by(-.priority) | .[0].id // empty' <<<"$explain_json")
+    notify "Claude is mid-turn" \
+      "prompt box not back${blocker:+ ($blocker)}; trigger again after the turn finishes"
     exit 1
+    ;;
+  *)
+    # The detector could not be consulted; fall back to the aggregate status.
+    case "$agent_status" in
+      idle | done) ;;
+      *)
+        notify "Claude is still working" \
+          "status: ${agent_status:-unknown}; trigger again after the turn finishes"
+        exit 1
+        ;;
+    esac
     ;;
 esac
 
