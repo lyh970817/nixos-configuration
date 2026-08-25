@@ -139,6 +139,13 @@ if command -v explain-remote-new >/dev/null 2>&1; then
       # The stub note is open on the laptop; the flow continues there.
       exit 0
       ;;
+    4)
+      # A pending stub for this session was already waiting and was reopened
+      # rather than duplicated. Say so, or a repeat press reads as a no-op.
+      notify "Explanation reopened" \
+        "the pending note for this session is open on the laptop"
+      exit 0
+      ;;
     3) ;; # viewer is local: the nvim tab below is the flow
     *)
       notify "Explain failed" "${remote_out:-explain-remote-new exited $remote_rc}"
