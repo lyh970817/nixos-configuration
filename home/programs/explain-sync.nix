@@ -217,13 +217,15 @@ let
       focus="$(jq -r '.root_document // "explanation.md"' "$root/.explain.json")"
       # A bare SSH command carries no Wayland session env; like show-url
       # (html-open.nix), obsidian-explain rediscovers it on the peer and
-      # detaches, so this plain invocation is enough. Loose coupling: the
-      # launcher may not be installed on the peer yet; the sync above already
-      # delivered the document, so failure here only prints where it is.
+      # detaches, so this plain invocation is enough. A failure here fails the
+      # dispatch: the F7 flow exists to put the note on screen, and reporting
+      # success with no window is what made a dead Obsidian look like a no-op.
+      # The sync above already delivered the document, so the message names it.
       if ! ssh -o BatchMode=yes -o ConnectTimeout=10 \
           -o StrictHostKeyChecking=accept-new "$PEER" \
           "$(printf '%q ' ${profileBin}/obsidian-explain "$VAULT/$slug/$focus")"; then
         echo "explain-dispatch-new: synced to $PEER:$VAULT/$slug; could not open Obsidian" >&2
+        exit 1
       fi
     '';
   };
