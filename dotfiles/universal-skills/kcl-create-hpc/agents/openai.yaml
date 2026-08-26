@@ -1,0 +1,4 @@
+interface:
+  display_name: "KCL CREATE HPC"
+  short_description: "Run safe, reproducible work on CREATE HPC"
+  default_prompt: "Use $kcl-create-hpc to prepare and verify this CREATE HPC task."

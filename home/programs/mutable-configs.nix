@@ -432,6 +432,7 @@ let
     "commit-guidelines"
     "domain-context"
     "herdr"
+    "kcl-create-hpc"
     "r-dev-shell"
     "session-handoff"
     "social-bookmarks"
@@ -1629,6 +1630,7 @@ in
     "claude/skills/domain-context".source = link "dotfiles/claude/skills/domain-context";
     "claude/skills/domain-modeling".source = link "dotfiles/claude/skills/domain-modeling";
     "claude/skills/herdr".source = link "dotfiles/claude/skills/herdr";
+    "claude/skills/kcl-create-hpc".source = link "dotfiles/claude/skills/kcl-create-hpc";
     "claude/skills/r-dev-shell".source = link "dotfiles/claude/skills/r-dev-shell";
     "claude/skills/social-bookmarks".source = link "dotfiles/claude/skills/social-bookmarks";
     "claude/skills/tuicr".source = link "dotfiles/claude/skills/tuicr";
@@ -1653,6 +1655,7 @@ in
       link "dotfiles/claude/skills/visual-verification";
     "claude-gpt56/skills/domain-context".source = link "dotfiles/claude/skills/domain-context";
     "claude-gpt56/skills/herdr".source = link "dotfiles/claude/skills/herdr";
+    "claude-gpt56/skills/kcl-create-hpc".source = link "dotfiles/claude/skills/kcl-create-hpc";
     "claude-gpt56/skills/r-dev-shell".source = link "dotfiles/claude/skills/r-dev-shell";
     "claude-gpt56/skills/social-bookmarks".source = link "dotfiles/claude/skills/social-bookmarks";
     "claude-gpt56/skills/tuicr".source = link "dotfiles/claude/skills/tuicr";
