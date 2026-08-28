@@ -257,11 +257,9 @@ in
   systemd.user.timers.codexbar-refresh = {
     Unit = {
       Description = "Refresh CodexBar usage cache periodically";
-      # Requires alone adds no ordering edge. An After= here closes an ordering
-      # cycle (timers.target -> this timer -> codexbar.service -> basic.target
-      # -> timers.target) that made systemd drop timers.target from the initial
-      # user transaction at every login.
-      Requires = [ "codexbar.service" ];
+      # The triggered service owns the dependency on codexbar.service. Keeping
+      # it off the timer prevents a Home Manager restart of CodexBar from
+      # stopping the schedule without starting it again.
     };
 
     Timer = {

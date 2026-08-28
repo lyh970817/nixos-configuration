@@ -500,23 +500,14 @@ let
       mapfile -t codex < <(query codex)
       mapfile -t claude < <(query claude)
 
-      # A window the provider does not report reads as N/A in both of its
-      # columns, so the row keeps its shape instead of leaving a gap.
-      na_if_empty() {
-        if [[ -z "$1" ]]; then
-          printf 'N/A'
-        else
-          printf '%s' "$1"
-        fi
-      }
-      codex_left5=$(na_if_empty "''${codex[1]}")
-      codex_left7=$(na_if_empty "''${codex[2]}")
-      claude_left5=$(na_if_empty "''${claude[1]}")
-      claude_left7=$(na_if_empty "''${claude[2]}")
-      codex_reset5=$(na_if_empty "$(countdown "''${codex[3]}")")
-      codex_reset7=$(na_if_empty "$(countdown "''${codex[4]}")")
-      claude_reset5=$(na_if_empty "$(countdown "''${claude[3]}")")
-      claude_reset7=$(na_if_empty "$(countdown "''${claude[4]}")")
+      codex_left5="''${codex[1]}"
+      codex_left7="''${codex[2]}"
+      claude_left5="''${claude[1]}"
+      claude_left7="''${claude[2]}"
+      codex_reset5=$(countdown "''${codex[3]}")
+      codex_reset7=$(countdown "''${codex[4]}")
+      claude_reset5=$(countdown "''${claude[3]}")
+      claude_reset7=$(countdown "''${claude[4]}")
 
       widest() {
         local result=0 candidate
@@ -528,10 +519,6 @@ let
         printf '%d' "$result"
       }
       name_width=$(widest codex claude)
-      width_left5=$(widest "$codex_left5" "$claude_left5")
-      width_reset5=$(widest "$codex_reset5" "$claude_reset5")
-      width_left7=$(widest "$codex_left7" "$claude_left7")
-
       # The health signal is the remaining quota, so the severity ramp belongs
       # on the figures -- the same ladder Fastfetch applies to every other
       # percentage in the greeting (see display.percent.color below). These are
@@ -553,7 +540,7 @@ let
 
       row() {
         local state="$1" name="$2" left5="$3" reset5="$4" left7="$5" reset7="$6"
-        local bullet rung rung5 rung7
+        local bullet rung separator=
         # Shape alone carries quota available/spent for the coding-agent rows,
         # matching the identical glyph in the Tailnet block above.
         if [[ "$state" == ok ]]; then
@@ -565,14 +552,23 @@ let
           printf '%s%s %-*s \033[94munavailable\033[m\n' "$indent" "$bullet" "$name_width" "$name"
           return
         fi
-        set_rung "$left5"; rung5=$rung
-        set_rung "$left7"; rung7=$rung
-        # The SGR wraps each padded field rather than the text inside it, so
-        # %*s still measures printable characters only and columns hold.
-        printf '%s%s %-*s \033[%sm%*s\033[m %-*s · \033[%sm%*s\033[m %s\n' \
-          "$indent" "$bullet" "$name_width" "$name" \
-          "$rung5" "$width_left5" "$left5" "$width_reset5" "$reset5" \
-          "$rung7" "$width_left7" "$left7" "$reset7"
+        printf '%s%s %-*s ' "$indent" "$bullet" "$name_width" "$name"
+        if [[ -n "$left5" ]]; then
+          set_rung "$left5"
+          printf '5h \033[%sm%s\033[m' "$rung" "$left5"
+          if [[ -n "$reset5" ]]; then
+            printf ' %s' "$reset5"
+          fi
+          separator=' · '
+        fi
+        if [[ -n "$left7" ]]; then
+          set_rung "$left7"
+          printf '%s7d \033[%sm%s\033[m' "$separator" "$rung" "$left7"
+          if [[ -n "$reset7" ]]; then
+            printf ' %s' "$reset7"
+          fi
+        fi
+        printf '\n'
       }
 
       printf '\n'
