@@ -397,11 +397,15 @@ let
             fi
           fi
 
-          # Only the shared-device layout has this exact delimiter. Keep all
-          # other Audio output byte-for-byte apart from its trailing newline.
+          # Keep the balance alert beside the input status in both Audio
+          # layouts: the laptop combines one shared device as "Out | In",
+          # while the desktop renders separate "Output | Input" devices.
           if [[ -n "$qwen_alert" && "$audio" == *' | In '* ]]; then
             printf '%s | In %s %s\n' \
               "''${audio%%' | In '*}" "$qwen_alert" "''${audio#*' | In '}"
+          elif [[ -n "$qwen_alert" && "$audio" == *' | Input: '* ]]; then
+            printf '%s | Input: %s %s\n' \
+              "''${audio%%' | Input: '*}" "$qwen_alert" "''${audio#*' | Input: '}"
           else
             printf '%s\n' "$audio"
           fi
