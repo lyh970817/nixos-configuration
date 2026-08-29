@@ -348,7 +348,7 @@ let
         hidden = {
           # Hidden entries still need to remain comfortably legible; their
           # leading dot already communicates the secondary status.
-          fg = c.secondaryText;
+          fg = c.foreground;
         };
         link = {
           fg = c.accent;
@@ -359,7 +359,7 @@ let
           bg = c.deepSurface;
         };
         empty = {
-          fg = c.secondaryText;
+          fg = c.foreground;
         };
         fallback = {
           fg = c.secondaryText;
@@ -684,7 +684,7 @@ let
           fg = c.gray55;
         };
         hidden = {
-          fg = c.gray60;
+          fg = c.black;
         };
         link = {
           fg = c.gray50;
@@ -695,7 +695,7 @@ let
           bg = c.gray20;
         };
         empty = {
-          fg = c.gray60;
+          fg = c.black;
         };
         fallback = {
           fg = c.gray60;
