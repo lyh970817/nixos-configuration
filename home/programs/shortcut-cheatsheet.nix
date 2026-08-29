@@ -10,6 +10,10 @@ let
   # Sources for shortcut-cheatsheet-data.nix:
   #   Desktop/voice/hardware: dotfiles/hypr/hyprland.lua and the remote
   #     role fragment in home/programs/dotfiles.nix.
+  #   PH60: a 2026-08-30 read-only Studio RPC snapshot of the saved keymap
+  #     (not automatically refreshed), cross-checked against PH Design's
+  #     PH60-SC_V2 keymap at a4bab99f7cca62a4ec0e6fc6a647d9ed4f1ba2fe
+  #     and https://wiki.phdesign.cc/en/PH60/slim_choc_v2/.
   #   Herdr: direct custom bindings in dotfiles/herdr/config.toml.
   #   Explain: the fork binding in dotfiles/herdr/config.toml plus the
   #     buffer-local maps and commands in dotfiles/nvim/lua/plugins/explain.lua

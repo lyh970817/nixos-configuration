@@ -192,7 +192,7 @@
         key = "Fn + F9";
       }
       {
-        description = "Cycle keyboard backlight";
+        description = "Cycle laptop keyboard backlight";
         key = "Fn + Z";
       }
       {
@@ -206,6 +206,114 @@
       {
         description = "Mic volume down / up";
         key = "Ctrl + Shift + d / u";
+      }
+    ];
+  }
+  {
+    name = "PH60 · FUNCTION";
+    bindings = [
+      {
+        description = "Hold for Function layer; tap for Left Arrow";
+        key = "Bottom-row Fn / Left";
+      }
+      {
+        description = "F1–F12";
+        key = "Fn + 1…0 / - / =";
+      }
+      {
+        description = "Backtick / Delete";
+        key = "Fn + Esc / Backspace";
+      }
+      {
+        description = "Print Screen";
+        key = "Fn + P";
+      }
+      {
+        description = "Home / End";
+        key = "Fn + [ / ]";
+      }
+      {
+        description = "Page Up / Page Down";
+        key = "Fn + ; / '";
+      }
+      {
+        description = "Unlock ZMK Studio";
+        key = "Fn + \\";
+      }
+    ];
+  }
+  {
+    name = "PH60 · MOUSE";
+    bindings = [
+      {
+        description = "Move pointer up / left / down / right";
+        key = "Fn + W / A / S / D";
+      }
+      {
+        description = "Scroll up / down";
+        key = "Fn + J / K";
+      }
+      {
+        description = "Primary click";
+        key = "Fn + Z";
+      }
+      {
+        description = "Secondary click";
+        key = "Fn + C";
+      }
+    ];
+  }
+  {
+    name = "PH60 · BLUETOOTH";
+    bindings = [
+      {
+        description = "Select Bluetooth profile 1–5";
+        key = "Fn + B + 1…5";
+      }
+      {
+        description = "Toggle USB / Bluetooth output while wired";
+        key = "Fn + B + Esc / Tab";
+      }
+      {
+        description = "Enter soft-off / deep sleep";
+        key = "Fn + B + Enter";
+      }
+      {
+        description = "Wake keyboard from soft-off";
+        key = "Enter";
+      }
+      {
+        description = "Tap clears selected profile; hold clears all profiles";
+        key = "Fn + B + Backspace";
+      }
+    ];
+  }
+  {
+    name = "PH60 · UNDERGLOW";
+    bindings = [
+      {
+        description = "Toggle RGB underglow";
+        key = "Fn + Space";
+      }
+      {
+        description = "Hue down / up";
+        key = "Fn + X + U / I";
+      }
+      {
+        description = "Saturation down / up";
+        key = "Fn + X + O / P";
+      }
+      {
+        description = "Previous / next effect";
+        key = "Fn + X + [ / ]";
+      }
+      {
+        description = "Brightness down / up";
+        key = "Fn + X + J / K";
+      }
+      {
+        description = "Effect speed down / up";
+        key = "Fn + X + L / ;";
       }
     ];
   }
