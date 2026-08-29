@@ -8,10 +8,6 @@
 
 let
   link = subpath: config.lib.file.mkOutOfStoreSymlink "${osConfig.portable.configDir}/${subpath}";
-  titleCredentialsSource = "${osConfig.portable.configDir}/secrets/herdr-title-credentials.json";
-  titleCredentialsDir = "${config.home.homeDirectory}/.local/share/herdr-title";
-  titleCredentialsRuntime = "${titleCredentialsDir}/credentials";
-
   # Herdr keeps a persistent server behind its short-lived clients. Resolve the
   # mode before that server starts so it is inherited by the server and every
   # pane it later creates, rather than letting a later desktop switch retheme an
@@ -195,18 +191,6 @@ in
     executable = true;
   };
 
-  # Herdr titles own a dedicated one-key credential. Do not couple the service
-  # to dictation credentials or make their broader namespace readable here.
-  home.activation.herdrTitleCredentials = config.lib.dag.entryAfter [ "writeBoundary" ] ''
-    run ${pkgs.coreutils}/bin/install -d -m700 $VERBOSE_ARG -- \
-      ${lib.escapeShellArg titleCredentialsDir}
-    if [ -e ${lib.escapeShellArg titleCredentialsSource} ]; then
-      run ${pkgs.coreutils}/bin/install -m600 $VERBOSE_ARG -- \
-        ${lib.escapeShellArg titleCredentialsSource} \
-        ${lib.escapeShellArg titleCredentialsRuntime}
-    fi
-  '';
-
   # Runs once per boot, before the first terminal exists and therefore before
   # the Herdr server starts and reads the snapshot. Once per boot is the whole
   # requirement, but `WantedBy` alone does not give it: sd-switch restarts this
@@ -262,14 +246,11 @@ in
   systemd.user.services.herdr-title = {
     Unit = {
       Description = "Mirror agent topics into Herdr tab titles";
-      After = [ "network-online.target" ];
-      Wants = [ "network-online.target" ];
     };
 
     Service = {
       Type = "simple";
       ExecStart = "${herdrTitle}/bin/herdr-title daemon";
-      Environment = "HERDR_TITLE_CREDENTIALS=%h/.local/share/herdr-title/credentials";
       Restart = "on-failure";
       RestartSec = "2s";
       UMask = "0077";
@@ -287,11 +268,7 @@ in
       RestrictSUIDSGID = true;
       LockPersonality = true;
       MemoryDenyWriteExecute = true;
-      RestrictAddressFamilies = [
-        "AF_UNIX"
-        "AF_INET"
-        "AF_INET6"
-      ];
+      RestrictAddressFamilies = [ "AF_UNIX" ];
     };
 
     Install.WantedBy = [ "default.target" ];

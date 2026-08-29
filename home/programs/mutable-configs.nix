@@ -798,6 +798,11 @@ let
         # own RGB, so a stray /theme silently strands code blocks and the
         # status line on a scheme that fights the rest of the terminal.
         changed = table_key(lines, "tui", "theme", '"vt220-phosphor"') or changed
+        # Herdr consumes Codex's semantic thread name through the terminal's
+        # OSC title; status and project fields would create unrelated renames.
+        changed = table_key(
+            lines, "tui", "terminal_title", '["thread-title"]'
+        ) or changed
         changed = table_key(
             lines, "tui.keymap.global", "open_transcript", '"ctrl-o"'
         ) or changed

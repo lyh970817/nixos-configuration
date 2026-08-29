@@ -1,51 +1,45 @@
 #!/usr/bin/env python3
-
 from __future__ import annotations
 
 import asyncio
 import collections
 import importlib.util
 import json
-import os
-import socket
-import subprocess
-import sys
 import tempfile
-import threading
 import time
 import unittest
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from unittest import mock
-
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("herdr_title", ROOT / "scripts/herdr-title.py")
 assert SPEC and SPEC.loader
 TITLE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(TITLE)
-HOOK = ROOT / "scripts/herdr-title-hook.c"
 
 
-def pane(pane_id="w1:p1", tab_id="w1:t1", agent="codex", title=None, cwd="/tmp/project"):
+def pane(pane_id="w1:p1", agent="codex", title=None):
     return {
-        "pane_id": pane_id, "tab_id": tab_id, "workspace_id": "w1", "terminal_id": pane_id,
-        "agent": agent, "display_agent": agent, "terminal_title_stripped": title,
-        "cwd": cwd, "agent_status": "working", "focused": True, "revision": 1,
+        "pane_id": pane_id, "tab_id": "w1:t1", "workspace_id": "w1",
+        "terminal_id": pane_id, "agent": agent, "display_agent": agent,
+        "terminal_title_stripped": title, "cwd": "/tmp/project",
+        "agent_status": "working", "focused": True, "revision": 1,
     }
 
 
-def tab(tab_id="w1:t1", label="1", count=1, number=1):
-    return {"tab_id": tab_id, "workspace_id": "w1", "number": number, "label": label, "focused": True, "pane_count": count, "agent_status": "working"}
+def tab(label="1", count=1):
+    return {
+        "tab_id": "w1:t1", "workspace_id": "w1", "number": 1,
+        "label": label, "focused": True, "pane_count": count,
+        "agent_status": "working",
+    }
 
 
 class FakeConnection:
-    def __init__(self, coordinator, socket_path, panes, tabs=None):
+    def __init__(self, coordinator, panes, tabs=None, socket_path="/fake/herdr.sock"):
         self.coordinator = coordinator
         self.socket_path = socket_path
         self.snapshot = {"panes": panes, "tabs": tabs or [tab()]}
         self.refreshed_panes = None
-        self.refresh_count = 0
         self.renames = []
         self.expected_renames = collections.Counter()
         self.identity = [1, 100, 1000]
@@ -58,9 +52,11 @@ class FakeConnection:
         if not state.get("pinned"):
             self.renames.append((tab_id, title))
             state["title"] = title
+            for item in self.snapshot["tabs"]:
+                if item["tab_id"] == tab_id:
+                    item["label"] = title
 
     async def refresh_snapshot(self):
-        self.refresh_count += 1
         if self.refreshed_panes is not None:
             self.snapshot["panes"] = self.refreshed_panes
             self.refreshed_panes = None
@@ -71,293 +67,73 @@ class HerdrTitleTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         root = Path(self.tmp.name)
-        self.coordinator = TITLE.Coordinator(root / "config", root / "runtime", root / "state", root / "credentials")
+        self.coordinator = TITLE.Coordinator(root / "config", root / "runtime", root / "state")
 
     async def asyncTearDown(self):
-        for task in self.coordinator.generations.values():
-            task.cancel()
         self.tmp.cleanup()
 
-    async def test_claude_title_mirrors_exact_sanitized_value(self):
-        connection = FakeConnection(self.coordinator, "/fake/herdr.sock", [pane(agent="claude", title="  Fix\n\x1bTabs  ")])
-        await self.coordinator.reconcile(connection)
-        self.assertEqual(connection.renames, [("w1:t1", "Fix Tabs")])
+    async def test_agent_titles_mirror_exact_sanitized_value(self):
+        for agent in ("claude", "codex"):
+            connection = FakeConnection(self.coordinator, [pane(agent=agent, title="  Native\n\x1bTopic  ")], socket_path=f"/fake/{agent}.sock")
+            await self.coordinator.reconcile(connection)
+            self.assertEqual(connection.renames, [("w1:t1", "Native Topic")])
 
-    async def test_claude_title_is_not_limited_to_qwen_length(self):
-        title = "A" * 80
-        connection = FakeConnection(self.coordinator, "/fake/herdr.sock", [pane(agent="claude", title=title)])
+    async def test_codex_title_is_not_limited_to_old_qwen_length(self):
+        value = "A" * 80
+        connection = FakeConnection(self.coordinator, [pane(title=value)])
         await self.coordinator.reconcile(connection)
-        self.assertEqual(connection.renames, [("w1:t1", title)])
+        self.assertEqual(connection.renames, [("w1:t1", value)])
 
-    async def test_initial_claude_custom_label_is_pinned(self):
-        connection = FakeConnection(
-            self.coordinator, "/fake/herdr.sock",
-            [pane(agent="claude", title="Claude Automatic Topic")],
-            [tab(label="Existing Manual Topic")],
-        )
+    async def test_empty_codex_title_does_not_rename(self):
+        connection = FakeConnection(self.coordinator, [pane()])
         await self.coordinator.reconcile(connection)
-        state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
-        self.assertTrue(state["pinned"])
-        self.assertEqual(state["title"], "Existing Manual Topic")
         self.assertEqual(connection.renames, [])
 
-    async def test_initial_codex_custom_label_blocks_session_fallback(self):
-        connection = FakeConnection(
-            self.coordinator, "/fake/herdr.sock", [pane(agent="codex")],
-            [tab(label="Existing Manual Topic")],
-        )
-        self.coordinator.connections[connection.socket_path] = connection
+    async def test_initial_manual_label_blocks_native_title(self):
+        connection = FakeConnection(self.coordinator, [pane(title="Native Topic")], [tab("Manual Topic")])
         await self.coordinator.reconcile(connection)
-        event = {
-            "version": 1, "type": "codex_session", "socket": connection.socket_path,
-            "pane_id": "w1:p1", "tab_id": "w1:t1", "session_id": "s1", "cwd": "/tmp/project",
-        }
-        await self.coordinator.handle_datagram(json.dumps(event).encode())
-        state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
-        self.assertTrue(state["pinned"])
-        self.assertEqual(state["title"], "Existing Manual Topic")
+        self.assertTrue(self.coordinator.state.tab(connection.socket_path, "w1:t1")["pinned"])
         self.assertEqual(connection.renames, [])
 
-    async def test_initial_codex_positional_label_can_fallback_then_generate(self):
-        connection = FakeConnection(
-            self.coordinator, "/fake/herdr.sock", [pane(agent="codex")],
-            [tab(label="5", number=32)],
-        )
-        self.coordinator.connections[connection.socket_path] = connection
-        await self.coordinator.reconcile(connection)
+    async def test_numeric_pin_recovers_to_native_title(self):
+        connection = FakeConnection(self.coordinator, [pane(title="Native Topic")])
         state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
+        state.update({"pinned": True, "title": "1", "owner_pane": "w1:p1", "owner_kind": "codex"})
+        await self.coordinator.reconcile(connection)
         self.assertFalse(state.get("pinned", False))
-        self.assertEqual(state["title"], "5")
+        self.assertEqual(connection.renames, [("w1:t1", "Native Topic")])
 
-        common = {
-            "version": 1, "socket": connection.socket_path,
-            "pane_id": "w1:p1", "tab_id": "w1:t1", "session_id": "s1",
-            "cwd": "/tmp/project",
-        }
-        await self.coordinator.handle_datagram(json.dumps(common | {"type": "codex_session"}).encode())
-        self.assertEqual(connection.renames[-1], ("w1:t1", "Codex — project"))
-
-        calls = 0
-
-        async def generated(*_args):
-            nonlocal calls
-            calls += 1
-            return "Generated Numeric Tab Topic"
-
-        self.coordinator.qwen_title = generated
-        await self.coordinator.handle_datagram(json.dumps(common | {
-            "type": "codex_prompt",
-            "prompt": "Implement a substantial numeric tab title regression",
-        }).encode())
-        key = self.coordinator.generation_key(connection.socket_path, "w1:t1")
-        await asyncio.wait_for(self.coordinator.generations[key], 1)
-        self.assertEqual(calls, 1)
-        self.assertEqual(connection.renames[-1], ("w1:t1", "Generated Numeric Tab Topic"))
-
-    async def test_persisted_numeric_pin_recovers_to_codex_project_title(self):
-        connection = FakeConnection(
-            self.coordinator, "/fake/herdr.sock",
-            [pane(agent="codex", title="gwas", cwd="/tmp/gwas")],
-            [tab(label="1")],
-        )
+    async def test_semantic_pin_remains_manual(self):
+        connection = FakeConnection(self.coordinator, [pane(title="Native Topic")], [tab("Manual Topic")])
         state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
-        state.update({
-            "pinned": True, "title": "1", "owner_pane": "w1:p1",
-            "owner_kind": "codex", "session_id": "s1", "epoch": 4,
-        })
-
+        state.update({"pinned": True, "title": "Manual Topic", "owner_pane": "w1:p1", "owner_kind": "codex"})
         await self.coordinator.reconcile(connection)
-
-        self.assertFalse(state.get("pinned", False))
-        self.assertEqual(connection.renames, [("w1:t1", "gwas")])
-        self.assertEqual(state["title"], "gwas")
-        self.assertEqual(state["session_id"], "s1")
-
-    async def test_persisted_semantic_pin_remains_manual(self):
-        connection = FakeConnection(
-            self.coordinator, "/fake/herdr.sock",
-            [pane(agent="codex", title="gwas", cwd="/tmp/gwas")],
-            [tab(label="Manual Topic")],
-        )
-        state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
-        state.update({
-            "pinned": True, "title": "Manual Topic", "owner_pane": "w1:p1",
-            "owner_kind": "codex", "session_id": "s1", "epoch": 4,
-        })
-
-        await self.coordinator.reconcile(connection)
-
         self.assertTrue(state["pinned"])
         self.assertEqual(connection.renames, [])
-        self.assertEqual(state["title"], "Manual Topic")
 
-    async def test_auxiliary_cwd_cannot_replace_live_pane_session(self):
-        connection = FakeConnection(self.coordinator, "/fake/herdr.sock", [pane(cwd="/tmp/project")])
+    async def test_only_ascii_numeric_initial_labels_are_automatic(self):
+        for index, (label, pinned) in enumerate([("", False), ("9", False), ("09", False), ("９", True), ("Topic", True)]):
+            connection = FakeConnection(self.coordinator, [pane(title="Native Topic")], [tab(label)], f"/fake/{index}.sock")
+            await self.coordinator.reconcile(connection)
+            state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
+            self.assertEqual(bool(state.get("pinned")), pinned)
+
+    async def test_pane_updated_refreshes_generated_title(self):
+        connection = FakeConnection(self.coordinator, [pane(title="First Topic")])
         self.coordinator.connections[connection.socket_path] = connection
         await self.coordinator.reconcile(connection)
-        common = {
-            "version": 1, "type": "codex_session", "socket": connection.socket_path,
-            "pane_id": "w1:p1", "tab_id": "w1:t1",
-        }
-        await self.coordinator.handle_datagram(json.dumps(common | {
-            "session_id": "main", "cwd": "/tmp/project",
-        }).encode())
-        connection.snapshot["tabs"][0]["label"] = "Codex — project"
-        await self.coordinator.handle_datagram(json.dumps(common | {
-            "session_id": "memory-helper", "cwd": "/tmp/memories",
-        }).encode())
+        connection.refreshed_panes = [pane(title="Generated Topic")]
+        await self.coordinator.handle_herdr_event(connection, {"event": "pane.updated", "data": {}})
+        self.assertEqual(connection.renames[-1], ("w1:t1", "Generated Topic"))
 
-        state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
-        self.assertEqual(state["session_id"], "main")
-        self.assertEqual(state["title"], "Codex — project")
-        self.assertEqual(connection.renames, [("w1:t1", "Codex — project")])
-        self.assertEqual(connection.refresh_count, 1)
-
-    async def test_missing_cached_cwd_refreshes_and_accepts_live_match(self):
-        cached = pane(cwd="/tmp/project")
-        cached.pop("cwd")
-        connection = FakeConnection(self.coordinator, "/fake/missing-match.sock", [cached])
-        connection.refreshed_panes = [pane(cwd="/tmp/project")]
-        self.coordinator.connections[connection.socket_path] = connection
-        await self.coordinator.reconcile(connection)
-        event = {
-            "version": 1, "type": "codex_session", "socket": connection.socket_path,
-            "pane_id": "w1:p1", "tab_id": "w1:t1", "session_id": "main",
-            "cwd": "/tmp/project",
-        }
-        await self.coordinator.handle_datagram(json.dumps(event).encode())
-
-        state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
-        self.assertEqual(connection.refresh_count, 1)
-        self.assertEqual(state["session_id"], "main")
-        self.assertEqual(state["title"], "Codex — project")
-        self.assertEqual(connection.renames, [("w1:t1", "Codex — project")])
-
-    async def test_missing_cached_cwd_refresh_rejects_unavailable_or_mismatch(self):
-        still_missing = pane(cwd="/tmp/project")
-        still_missing.pop("cwd")
-        for suffix, refreshed in (
-            ("missing", still_missing),
-            ("mismatch", pane(cwd="/tmp/project")),
-        ):
-            with self.subTest(refreshed=suffix):
-                connection = FakeConnection(self.coordinator, f"/fake/{suffix}.sock", [pane(cwd="/tmp/project")])
-                self.coordinator.connections[connection.socket_path] = connection
-                await self.coordinator.reconcile(connection)
-                common = {
-                    "version": 1, "type": "codex_session", "socket": connection.socket_path,
-                    "pane_id": "w1:p1", "tab_id": "w1:t1",
-                }
-                await self.coordinator.handle_datagram(json.dumps(common | {
-                    "session_id": "main", "cwd": "/tmp/project",
-                }).encode())
-                connection.snapshot["tabs"][0]["label"] = "Codex — project"
-                connection.snapshot["panes"][0].pop("cwd")
-                connection.refreshed_panes = [refreshed]
-                await self.coordinator.handle_datagram(json.dumps(common | {
-                    "session_id": "memory-helper", "cwd": "/tmp/memories",
-                }).encode())
-
-                state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
-                self.assertEqual(connection.refresh_count, 1)
-                self.assertEqual(state["session_id"], "main")
-                self.assertEqual(state["title"], "Codex — project")
-                self.assertEqual(connection.renames, [("w1:t1", "Codex — project")])
-
-    async def test_real_cwd_transition_refreshes_and_accepts_new_cwd(self):
-        connection = FakeConnection(self.coordinator, "/fake/cwd-transition.sock", [pane(cwd="/tmp/project")])
-        self.coordinator.connections[connection.socket_path] = connection
-        await self.coordinator.reconcile(connection)
-        common = {
-            "version": 1, "type": "codex_session", "socket": connection.socket_path,
-            "pane_id": "w1:p1", "tab_id": "w1:t1",
-        }
-        await self.coordinator.handle_datagram(json.dumps(common | {
-            "session_id": "old", "cwd": "/tmp/project",
-        }).encode())
-        connection.snapshot["tabs"][0]["label"] = "Codex — project"
-        connection.refreshed_panes = [pane(cwd="/tmp/new-project")]
-        await self.coordinator.handle_datagram(json.dumps(common | {
-            "session_id": "new", "cwd": "/tmp/new-project",
-        }).encode())
-
-        state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
-        self.assertEqual(connection.refresh_count, 1)
-        self.assertEqual(state["session_id"], "new")
-        self.assertEqual(state["title"], "Codex — new-project")
-        self.assertEqual(connection.renames, [
-            ("w1:t1", "Codex — project"),
-            ("w1:t1", "Codex — new-project"),
-        ])
-
-    async def test_initial_labels_adopt_only_empty_or_ascii_numeric_values(self):
-        cases = [
-            ("empty", "", False),
-            ("ascii", "005", False),
-            ("arabic_indic", "٥", True),
-            ("fullwidth", "５", True),
-        ]
-        for suffix, label, pinned in cases:
-            with self.subTest(label=label):
-                socket_path = f"/fake/{suffix}.sock"
-                connection = FakeConnection(
-                    self.coordinator, socket_path, [pane(agent="codex")],
-                    [tab(label=label, number=32)],
-                )
-                await self.coordinator.reconcile(connection)
-                state = self.coordinator.state.tab(socket_path, "w1:t1")
-                self.assertEqual(state.get("pinned", False), pinned)
-
-    async def test_pinned_codex_prompt_stays_local_until_auto(self):
-        connection = FakeConnection(
-            self.coordinator, "/fake/herdr.sock", [pane(agent="codex")],
-            [tab(label="Existing Manual Topic")],
-        )
-        self.coordinator.connections[connection.socket_path] = connection
-        await self.coordinator.reconcile(connection)
-        calls = 0
-
-        async def generated(*_args):
-            nonlocal calls
-            calls += 1
-            return "Generated After Auto"
-
-        self.coordinator.qwen_title = generated
-        event = {
-            "version": 1, "type": "codex_prompt", "socket": connection.socket_path,
-            "pane_id": "w1:p1", "tab_id": "w1:t1", "session_id": "s1",
-            "cwd": "/tmp/project", "prompt": "Implement a substantial pinned privacy regression",
-        }
-        await self.coordinator.handle_datagram(json.dumps(event).encode())
-        key = self.coordinator.generation_key(connection.socket_path, "w1:t1")
-        await asyncio.sleep(0.3)
-        self.assertEqual(calls, 0)
-        self.assertNotIn(key, self.coordinator.generation_pending)
-        self.assertNotIn(key, self.coordinator.generations)
-        self.assertEqual(connection.renames, [])
-
-        await self.coordinator.handle_control({
-            "type": "auto", "socket": connection.socket_path,
-            "pane_id": "w1:p1", "tab_id": "w1:t1",
-        })
-        await self.coordinator.handle_datagram(json.dumps(event | {
-            "prompt": "Implement generation after automatic titles resume",
-        }).encode())
-        await asyncio.wait_for(self.coordinator.generations[key], 1)
-        self.assertEqual(calls, 1)
-        self.assertEqual(connection.renames[-1], ("w1:t1", "Generated After Auto"))
-
-    async def test_raw_fake_socket_snapshot_and_rename(self):
+    async def test_fake_socket_snapshot_and_rename(self):
         socket_path = Path(self.tmp.name) / "herdr.sock"
         requests = []
         snapshot = {"version": "0.8.0", "protocol": 16, "workspaces": [], "tabs": [tab()], "panes": [pane()], "layouts": [], "agents": []}
         async def serve(reader, writer):
             request = json.loads(await reader.readline())
             requests.append(request)
-            if request["method"] == "session.snapshot":
-                result = {"type": "session_snapshot", "snapshot": snapshot}
-            else:
-                result = {"type": "ok"}
+            result = {"type": "session_snapshot", "snapshot": snapshot} if request["method"] == "session.snapshot" else {"type": "ok"}
             writer.write(json.dumps({"id": request["id"], "result": result}).encode() + b"\n")
             await writer.drain()
             writer.close()
@@ -366,13 +142,12 @@ class HerdrTitleTests(unittest.IsolatedAsyncioTestCase):
         connection = TITLE.HerdrConnection(self.coordinator, socket_path)
         async with server:
             await connection.refresh_snapshot()
-            await connection.rename("w1:t1", "Generated Topic")
+            await connection.rename("w1:t1", "Native Topic")
         self.assertEqual([item["method"] for item in requests], ["session.snapshot", "tab.rename"])
-        self.assertEqual(requests[1]["params"], {"tab_id": "w1:t1", "label": "Generated Topic"})
 
-    async def test_multi_pane_first_owner_is_stable(self):
-        panes = [pane("w1:p1", agent="claude", title="Claude Topic"), pane("w1:p2", agent="codex")]
-        connection = FakeConnection(self.coordinator, "/fake/herdr.sock", panes, [tab(count=2)])
+    async def test_first_owner_remains_stable(self):
+        panes = [pane("w1:p1", "claude", "Claude Topic"), pane("w1:p2", "codex", "Codex Topic")]
+        connection = FakeConnection(self.coordinator, panes, [tab(count=2)])
         await self.coordinator.reconcile(connection)
         state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
         self.assertEqual(state["owner_pane"], "w1:p1")
@@ -380,324 +155,70 @@ class HerdrTitleTests(unittest.IsolatedAsyncioTestCase):
         await self.coordinator.reconcile(connection)
         self.assertEqual(state["owner_pane"], "w1:p1")
 
-    async def test_owner_restart_grace_then_deterministic_re_election(self):
-        panes = [pane("w1:p1", agent=None), pane("w1:p2", agent="codex")]
-        connection = FakeConnection(self.coordinator, "/fake/herdr.sock", panes, [tab(count=2)])
+    async def test_restart_grace_then_re_election(self):
+        connection = FakeConnection(self.coordinator, [pane("w1:p1", None), pane("w1:p2", "codex", "Codex Topic")], [tab(count=2)])
         state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
-        state.update({
-            "owner_pane": "w1:p1", "owner_kind": "claude", "session_id": "old",
-            "epoch": 1, "title": "1",
-        })
+        state.update({"owner_pane": "w1:p1", "owner_kind": "claude", "epoch": 1, "title": "1"})
         await self.coordinator.reconcile(connection)
         self.assertEqual(state["owner_pane"], "w1:p1")
-        self.assertEqual(state["session_id"], "old")
-
         state["owner_ineligible_since"] = time.time() - TITLE.OWNER_RESTART_GRACE - 1
         await self.coordinator.reconcile(connection)
         self.assertEqual(state["owner_pane"], "w1:p2")
-        self.assertEqual(state["owner_kind"], "codex")
-        self.assertNotIn("session_id", state)
-        self.assertGreaterEqual(state["epoch"], 3)
+        self.assertEqual(connection.renames[-1], ("w1:t1", "Codex Topic"))
 
-    async def test_manual_rename_pins_and_cancels(self):
-        connection = FakeConnection(self.coordinator, "/fake/herdr.sock", [pane()])
-        self.coordinator.connections[connection.socket_path] = connection
+    async def test_manual_rename_pins(self):
+        connection = FakeConnection(self.coordinator, [pane(title="Native Topic")])
         await self.coordinator.reconcile(connection)
-        pending = asyncio.create_task(asyncio.sleep(30))
-        key = self.coordinator.generation_key(connection.socket_path, "w1:t1")
-        self.coordinator.generations[key] = pending
-        await self.coordinator.handle_herdr_event(connection, {"event": "tab.renamed", "data": {"tab_id": "w1:t1", "label": "Pinned by user"}})
-        state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
-        self.assertTrue(state["pinned"])
-        self.assertNotIn(key, self.coordinator.generation_pending)
-        # An already-running HTTP thread cannot be force-cancelled safely; its
-        # sequence is invalidated and its eventual result is discarded.
-        self.assertGreater(self.coordinator.prompt_seq[key], 0)
-
-    async def test_reconnect_snapshot_preserves_missed_manual_rename(self):
-        connection = FakeConnection(self.coordinator, "/fake/herdr.sock", [pane(agent="claude", title="Automatic Topic")], [tab(label="Automatic Topic")])
-        state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
-        state.update({"owner_pane": "w1:p1", "owner_kind": "claude", "title": "Automatic Topic", "pinned": False})
-        connection.snapshot["tabs"][0]["label"] = "Manual While Offline"
-        await self.coordinator.reconcile(connection)
-        self.assertTrue(state["pinned"])
-        self.assertEqual(state["title"], "Manual While Offline")
-        self.assertEqual(connection.renames, [])
-
-    async def test_reconnect_does_not_pin_expected_coordinator_rename(self):
-        connection = FakeConnection(
-            self.coordinator, "/fake/herdr.sock",
-            [pane(agent="claude", title="New Automatic Topic")],
-            [tab(label="New Automatic Topic")],
-        )
-        state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
-        state.update({"owner_pane": "w1:p1", "owner_kind": "claude", "title": "Old Automatic Topic", "pinned": False})
-        connection.expected_renames[("w1:t1", "New Automatic Topic")] = 1
-        await self.coordinator.reconcile(connection)
-        self.assertFalse(state.get("pinned", False))
-        self.assertEqual(state["title"], "New Automatic Topic")
-
-    async def test_expected_event_before_rename_response_advances_baseline(self):
-        connection = FakeConnection(
-            self.coordinator, "/fake/herdr.sock",
-            [pane(agent="claude", title="New Automatic Topic")],
-            [tab(label="New Automatic Topic")],
-        )
-        state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
-        state.update({"owner_pane": "w1:p1", "owner_kind": "claude", "title": "Old Automatic Topic", "pinned": False})
-        connection.expected_renames[("w1:t1", "New Automatic Topic")] = 1
-        await self.coordinator.handle_herdr_event(connection, {
-            "event": "tab.renamed",
-            "data": {"tab_id": "w1:t1", "label": "New Automatic Topic"},
-        })
-        self.assertEqual(state["title"], "New Automatic Topic")
-        await self.coordinator.reconcile(connection)
-        self.assertFalse(state.get("pinned", False))
-
-    async def test_server_incarnation_change_clears_reused_tab_identity(self):
-        connection = FakeConnection(self.coordinator, "/fake/herdr.sock", [pane(agent="claude", title="Fresh Claude Topic")])
-        self.coordinator.confirm_incarnation(connection)
-        old = self.coordinator.state.tab(connection.socket_path, "w1:t1")
-        old.update({"pinned": True, "title": "Old Manual Topic", "session_id": "old-session", "owner_pane": "w1:p1"})
-        self.coordinator.state.save()
-
-        # A reconnect to the same live socket preserves manual state.
-        self.coordinator.confirm_incarnation(connection)
+        await self.coordinator.handle_herdr_event(connection, {"event": "tab.renamed", "data": {"tab_id": "w1:t1", "label": "Pinned"}})
         self.assertTrue(self.coordinator.state.tab(connection.socket_path, "w1:t1")["pinned"])
 
-        # A recreated socket can reuse opaque IDs, but is a fresh namespace.
+    async def test_offline_manual_rename_is_preserved(self):
+        connection = FakeConnection(self.coordinator, [pane(title="Automatic")], [tab("Automatic")])
+        state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
+        state.update({"owner_pane": "w1:p1", "owner_kind": "codex", "title": "Automatic", "pinned": False})
+        connection.snapshot["tabs"][0]["label"] = "Manual Offline"
+        await self.coordinator.reconcile(connection)
+        self.assertTrue(state["pinned"])
+
+    async def test_expected_rename_is_not_pinned(self):
+        connection = FakeConnection(self.coordinator, [pane(title="New")], [tab("New")])
+        state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
+        state.update({"owner_pane": "w1:p1", "owner_kind": "codex", "title": "Old", "pinned": False})
+        connection.expected_renames[("w1:t1", "New")] = 1
+        await self.coordinator.handle_herdr_event(connection, {"event": "tab.renamed", "data": {"tab_id": "w1:t1", "label": "New"}})
+        await self.coordinator.reconcile(connection)
+        self.assertFalse(state.get("pinned", False))
+
+    async def test_new_server_incarnation_clears_old_pin(self):
+        connection = FakeConnection(self.coordinator, [pane(title="Fresh")])
+        self.coordinator.confirm_incarnation(connection)
+        self.coordinator.state.tab(connection.socket_path, "w1:t1").update({"pinned": True, "title": "Old"})
         connection.identity = [1, 200, 2000]
         self.coordinator.confirm_incarnation(connection)
-        self.assertNotIn(f"{connection.socket_path}\0w1:t1", self.coordinator.state.data["tabs"])
         await self.coordinator.reconcile(connection)
-        fresh = self.coordinator.state.tab(connection.socket_path, "w1:t1")
-        self.assertFalse(fresh.get("pinned", False))
-        self.assertNotIn("session_id", fresh)
-        self.assertEqual(connection.renames[-1], ("w1:t1", "Fresh Claude Topic"))
+        self.assertEqual(connection.renames[-1], ("w1:t1", "Fresh"))
 
-    async def test_server_removal_cancels_pending_generation(self):
-        connection = FakeConnection(self.coordinator, "/fake/herdr.sock", [pane()])
-        key = self.coordinator.generation_key(connection.socket_path, "w1:t1")
-        self.coordinator.generation_pending[key] = (connection, "w1:t1", "w1:p1", "s1", 1, 1, "prompt", "/tmp")
-        task = asyncio.create_task(asyncio.sleep(30))
-        self.coordinator.generations[key] = task
-        self.coordinator.cancel_socket_generations(connection.socket_path)
-        self.assertNotIn(key, self.coordinator.generation_pending)
-        self.assertNotIn(key, self.coordinator.generations)
-        self.assertTrue(task.cancelling())
-
-    async def test_session_replacement_invalidates_stale_generation(self):
-        connection = FakeConnection(self.coordinator, "/fake/herdr.sock", [pane()])
+    async def test_auto_control_unpins_and_refreshes(self):
+        connection = FakeConnection(self.coordinator, [pane(title="Native")], [tab("Manual")])
         self.coordinator.connections[connection.socket_path] = connection
-        await self.coordinator.reconcile(connection)
-        common = {"version": 1, "socket": connection.socket_path, "pane_id": "w1:p1", "tab_id": "w1:t1", "cwd": "/tmp/project"}
-        await self.coordinator.handle_datagram(json.dumps(common | {"type": "codex_session", "session_id": "old"}).encode())
-        async def slow(*_args):
-            await asyncio.sleep(0.5)
-            return "Stale Generated Title"
-        self.coordinator.qwen_title = slow
-        await self.coordinator.handle_datagram(json.dumps(common | {"type": "codex_prompt", "session_id": "old", "prompt": "Implement the old complicated feature"}).encode())
-        await self.coordinator.handle_datagram(json.dumps(common | {"type": "codex_session", "session_id": "new"}).encode())
-        await asyncio.sleep(0.35)
-        self.assertNotIn(("w1:t1", "Stale Generated Title"), connection.renames)
-        self.assertEqual(self.coordinator.state.tab(connection.socket_path, "w1:t1")["session_id"], "new")
-
-    async def test_dynamic_refresh_serializes_and_uses_newest_prompt(self):
-        connection = FakeConnection(self.coordinator, "/fake/herdr.sock", [pane()])
-        self.coordinator.connections[connection.socket_path] = connection
-        await self.coordinator.reconcile(connection)
-        common = {"version": 1, "type": "codex_prompt", "socket": connection.socket_path, "pane_id": "w1:p1", "tab_id": "w1:t1", "session_id": "s1", "cwd": "/tmp/project"}
-        active = maximum = 0
-        async def generated(prompt, *_args):
-            nonlocal active, maximum
-            active += 1
-            maximum = max(maximum, active)
-            await asyncio.sleep(0.1)
-            active -= 1
-            return "Newest Prompt Topic" if "newest" in prompt else "Older Prompt Topic"
-        self.coordinator.qwen_title = generated
-        await self.coordinator.handle_datagram(json.dumps(common | {"prompt": "Investigate the older substantial task"}).encode())
-        await asyncio.sleep(0.28)
-        await self.coordinator.handle_datagram(json.dumps(common | {"prompt": "Implement the newest substantial task"}).encode())
-        await asyncio.sleep(0.5)
-        self.assertEqual(maximum, 1)
-        self.assertEqual(connection.renames[-1], ("w1:t1", "Newest Prompt Topic"))
-
-    async def test_owner_close_during_generation_consumes_stale_request(self):
-        connection = FakeConnection(self.coordinator, "/fake/herdr.sock", [pane()])
-        self.coordinator.connections[connection.socket_path] = connection
-        await self.coordinator.reconcile(connection)
-        calls = 0
-        started = asyncio.Event()
-        release = asyncio.Event()
-
-        async def generated(*_args):
-            nonlocal calls
-            calls += 1
-            started.set()
-            await release.wait()
-            return "Closed Pane Topic"
-
-        self.coordinator.qwen_title = generated
-        event = {
-            "version": 1, "type": "codex_prompt", "socket": connection.socket_path,
-            "pane_id": "w1:p1", "tab_id": "w1:t1", "session_id": "s1",
-            "cwd": "/tmp/project", "prompt": "Implement a substantial closing pane regression",
-        }
+        state = self.coordinator.state.tab(connection.socket_path, "w1:t1")
+        state.update({"pinned": True, "title": "Manual"})
+        event = {"version": 1, "type": "auto", "socket": connection.socket_path, "tab_id": "w1:t1", "pane_id": "w1:p1"}
         await self.coordinator.handle_datagram(json.dumps(event).encode())
-        await asyncio.wait_for(started.wait(), 1)
-        connection.snapshot["panes"] = []
-        release.set()
-        key = self.coordinator.generation_key(connection.socket_path, "w1:t1")
-        await asyncio.wait_for(self.coordinator.generations[key], 1)
-        self.assertEqual(calls, 1)
-        self.assertNotIn(key, self.coordinator.generation_pending)
-        self.assertNotIn(key, self.coordinator.generations)
-        self.assertNotIn(("w1:t1", "Closed Pane Topic"), connection.renames)
-
-    async def test_secret_skips_qwen_and_uses_fallback(self):
-        connection = FakeConnection(self.coordinator, "/fake/herdr.sock", [pane()])
-        self.coordinator.connections[connection.socket_path] = connection
-        await self.coordinator.reconcile(connection)
-        called = False
-        async def forbidden(*_args):
-            nonlocal called
-            called = True
-            return "Should Not Happen"
-        self.coordinator.qwen_title = forbidden
-        event = {"version": 1, "type": "codex_prompt", "socket": connection.socket_path, "pane_id": "w1:p1", "tab_id": "w1:t1", "session_id": "s1", "cwd": "/tmp/project", "prompt": "Use api_key=abcdefghijklmnopqrstuv for this task"}
-        await self.coordinator.handle_datagram(json.dumps(event).encode())
-        await asyncio.sleep(0.3)
-        self.assertFalse(called)
-        self.assertEqual(connection.renames[-1], ("w1:t1", "Codex — project"))
-
-    def test_compound_and_vendor_secrets_are_detected(self):
-        samples = [
-            "GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz123456",
-            "client_secret=abcdefghijklmnopqrstuvwxyz123456",
-            "Use github_pat_abcdefghijklmnopqrstuvwxyz1234567890",
-            "Authorization: Bearer abcdefghijklmnopqrstuvwxyz",
-            "BUILD_VALUE=aB3dE5fG7hJ9kL2mN4pQ6rS8tU",
-            "Use hf_abcdefghijklmnopqrstuvwxyz1234567890",
-            "Use eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzZWNyZXQifQ.abcdefghijklmnopqrstuv",
-        ]
-        for sample in samples:
-            with self.subTest(sample=sample):
-                self.assertTrue(TITLE.contains_secret(sample))
-
-    async def test_generation_failure_is_cosmetic(self):
-        with mock.patch.object(self.coordinator, "qwen_title_sync", side_effect=OSError("offline")):
-            title = await self.coordinator.qwen_title("Investigate a substantial offline failure", "Old title", "/tmp/project")
-        self.assertEqual(title, "Investigate a substantial offline failure")
-
-    def test_title_output_validation(self):
-        class Response:
-            def __enter__(self): return self
-            def __exit__(self, *_args): return None
-            def read(self, *_args): return b''
-        self.coordinator.read_key = lambda: "not-a-real-key"
-        for invalid in ["One", "too many words in this generated title for the tab now", "Good title\nBad line"]:
-            response = {"choices": [{"message": {"content": invalid}}]}
-            with mock.patch("urllib.request.urlopen", return_value=mock.MagicMock(__enter__=lambda s: mock.MagicMock(read=lambda: json.dumps(response).encode()), __exit__=lambda *a: None)):
-                with self.assertRaises(ValueError):
-                    self.coordinator.qwen_title_sync("prompt", "prior")
-
-    def test_fake_http_receives_bounded_nonthinking_request(self):
-        recorded = {}
-        class Handler(BaseHTTPRequestHandler):
-            def do_POST(self):
-                length = int(self.headers["Content-Length"])
-                recorded["body"] = json.loads(self.rfile.read(length))
-                response = json.dumps({"choices": [{"message": {"content": "Build Semantic Titles"}}]}).encode()
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(response)))
-                self.end_headers()
-                self.wfile.write(response)
-            def log_message(self, *_args):
-                pass
-        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
-        self.coordinator.read_key = lambda: "not-a-real-key"
-        endpoint = f"http://127.0.0.1:{server.server_port}/chat/completions"
-        try:
-            with mock.patch.dict(os.environ, {"HERDR_TITLE_QWEN_ENDPOINT": endpoint}):
-                title = self.coordinator.qwen_title_sync("x" * 2000, "Prior")
-        finally:
-            server.shutdown()
-            server.server_close()
-        self.assertEqual(title, "Build Semantic Titles")
-        self.assertEqual(recorded["body"]["model"], "qwen3.6-flash")
-        self.assertFalse(recorded["body"]["enable_thinking"])
-        self.assertEqual(recorded["body"]["max_completion_tokens"], 16)
-        self.assertLessEqual(len(recorded["body"]["messages"][1]["content"]), 1100)
+        self.assertFalse(state["pinned"])
+        self.assertEqual(connection.renames[-1], ("w1:t1", "Native"))
 
 
-class HookTests(unittest.TestCase):
-    def setUp(self):
-        self._hook_dir = tempfile.TemporaryDirectory()
-        self._rendered_hook = str(Path(self._hook_dir.name) / "herdr-title-hook")
-        subprocess.run(["cc", "-O2", "-Wall", "-Wextra", "-Werror", str(HOOK), "-o", self._rendered_hook], check=True)
+class SourcePolicyTests(unittest.TestCase):
+    def test_config_owns_only_thread_title(self):
+        source = (ROOT / "home/programs/mutable-configs.nix").read_text()
+        self.assertIn('lines, "tui", "terminal_title", \'["thread-title"]\'', source)
 
-    def tearDown(self):
-        self._hook_dir.cleanup()
-
-    def run_hook(self, runtime: Path, payload: dict):
-        env = os.environ | {"XDG_RUNTIME_DIR": str(runtime), "HERDR_SOCKET_PATH": "/fake/herdr.sock", "HERDR_PANE_ID": "w1:p1", "HERDR_TAB_ID": "w1:t1"}
-        start = time.perf_counter()
-        result = subprocess.run([self._rendered_hook], input=json.dumps(payload).encode(), env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=1)
-        return result, time.perf_counter() - start
-
-    def test_hook_enqueue_is_fail_open_and_nonblocking(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            runtime = Path(tmp)
-            directory = runtime / "herdr-title"
-            directory.mkdir()
-            server = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-            server.bind(str(directory / "events.sock"))
-            payload = {"hook_event_name": "UserPromptSubmit", "session_id": "session-1", "turn_id": "turn-1", "cwd": "/tmp/project", "prompt": "Implement browser style semantic titles"}
-            result, elapsed = self.run_hook(runtime, payload)
-            event = TITLE.Coordinator.decode_datagram(server.recv(32768))
-            server.close()
-            self.assertEqual(result.returncode, 0)
-            self.assertLess(elapsed, 0.1)
-            self.assertEqual(event["session_id"], "session-1")
-            self.assertEqual(event["prompt"], payload["prompt"])
-
-    def test_hook_unavailable_coordinator_is_fail_open(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            result, elapsed = self.run_hook(Path(tmp), {"hook_event_name": "SessionStart", "session_id": "session-2", "cwd": "/tmp/project", "source": "startup"})
-            self.assertEqual(result.returncode, 0)
-            self.assertEqual(result.stdout, b"")
-            self.assertEqual(result.stderr, b"")
-            self.assertLess(elapsed, 0.1)
-
-    def test_subagent_is_ignored(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            result, _ = self.run_hook(Path(tmp), {"hook_event_name": "UserPromptSubmit", "session_id": "child", "agent_id": "child-1", "agent_type": "worker", "prompt": "rename parent"})
-            self.assertEqual(result.returncode, 0)
-
-
-class CredentialIsolationTests(unittest.TestCase):
-    def test_title_service_uses_only_dedicated_credential_namespace(self):
-        module = (ROOT / "home/programs/herdr.nix").read_text()
-        coordinator = (ROOT / "scripts/herdr-title.py").read_text()
-        combined = module + coordinator
-        self.assertIn("secrets/herdr-title-credentials.json", module)
-        self.assertIn(".local/share/herdr-title/credentials", combined)
-        self.assertNotIn("hyprwhspr/credentials", combined)
-        self.assertIn("install -d -m700", module)
-        self.assertIn("install -m600", module)
-
-    def test_dedicated_secret_is_gitignored_and_peer_allowlisted(self):
-        result = subprocess.run(
-            ["git", "check-ignore", "-q", "secrets/herdr-title-credentials.json"],
-            cwd=ROOT,
-        )
-        self.assertEqual(result.returncode, 0)
-        peer_skill = (ROOT / ".agents/skills/work-on-peer-device/SKILL.md").read_text()
-        self.assertIn("secrets/herdr-title-credentials.json", peer_skill)
+    def test_obsolete_title_paths_are_absent(self):
+        combined = "\n".join((ROOT / path).read_text() for path in ["scripts/herdr-title.py", "modules/programs/codex.nix", "home/programs/herdr.nix"])
+        for obsolete in ["herdr-title-hook", "qwen_title", "HERDR_TITLE_CREDENTIALS", "herdr-title-credentials.json", "dashscope.aliyuncs.com"]:
+            self.assertNotIn(obsolete, combined)
+        self.assertFalse((ROOT / "scripts/herdr-title-hook.c").exists())
 
 
 if __name__ == "__main__":
