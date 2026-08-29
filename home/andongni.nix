@@ -84,9 +84,12 @@
     JAVA_HOME = "${pkgs.jdk17}/lib/openjdk";
     SSH_AUTH_SOCK = "$HOME/.bitwarden-ssh-agent.sock";
     NPM_CONFIG_PREFIX = "$HOME/.npm-global";
-    # Keep Go's module and build caches out of the home-directory root.
+    # Keep language-managed data and caches out of the home-directory root.
+    GOPATH = "${config.xdg.dataHome}/go";
+    GOBIN = "$HOME/.local/bin";
     GOMODCACHE = "$HOME/.cache/go/mod";
     GOCACHE = "$HOME/.cache/go/build";
+    R_LIBS_USER = "${config.xdg.dataHome}/R/library/%v";
     SCRATCH_DIR = "$HOME/.scratch";
     PI_NO_PTY = "1";
   };
@@ -99,6 +102,8 @@
   # Apply the same locations to Go invocations that do not inherit the shell
   # environment, such as installer subprocesses started by desktop apps.
   xdg.configFile."go/env".text = ''
+    GOPATH=${config.xdg.dataHome}/go
+    GOBIN=${config.home.homeDirectory}/.local/bin
     GOCACHE=${config.home.homeDirectory}/.cache/go/build
     GOMODCACHE=${config.home.homeDirectory}/.cache/go/mod
   '';

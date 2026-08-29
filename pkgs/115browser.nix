@@ -236,12 +236,13 @@ let
     mkdir -p "$HOME/.cache/115browser-tmp/.X11-unix"
     mkdir -p "$HOME/.cache/115browser-run"
     mkdir -p "$HOME/Downloads"
-    mkdir -p "$HOME/115"
+    mkdir -p "''${XDG_DOWNLOAD_DIR:-$HOME/Downloads}/115"
 
     ARGS=()
     ARGS+=(--bind "$HOME/.cache/115browser-tmp" "/tmp")
     ARGS+=(--bind "$HOME/.cache/115browser-tmp" "/var/tmp")
     ARGS+=(--ro-bind "/tmp/.X11-unix" "/tmp/.X11-unix")
+    ARGS+=(--bind "''${XDG_DOWNLOAD_DIR:-$HOME/Downloads}/115" "$HOME/115")
 
     if [ -d "/dev/shm" ]; then ARGS+=(--bind "/dev/shm" "/dev/shm"); fi
     if [ -d "/mnt" ]; then ARGS+=(--bind "/mnt" "/mnt"); fi
