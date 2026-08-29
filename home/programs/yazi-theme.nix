@@ -359,7 +359,7 @@ let
           bg = c.deepSurface;
         };
         empty = {
-          fg = c.subtleBorder;
+          fg = c.secondaryText;
         };
         fallback = {
           fg = c.secondaryText;
@@ -695,7 +695,7 @@ let
           bg = c.gray20;
         };
         empty = {
-          fg = c.gray30;
+          fg = c.gray60;
         };
         fallback = {
           fg = c.gray60;
