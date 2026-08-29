@@ -346,7 +346,9 @@ let
           fg = c.secondaryText;
         };
         hidden = {
-          fg = c.mutedText;
+          # Hidden entries still need to remain comfortably legible; their
+          # leading dot already communicates the secondary status.
+          fg = c.secondaryText;
         };
         link = {
           fg = c.accent;
@@ -682,7 +684,7 @@ let
           fg = c.gray55;
         };
         hidden = {
-          fg = c.gray40;
+          fg = c.gray60;
         };
         link = {
           fg = c.gray50;
