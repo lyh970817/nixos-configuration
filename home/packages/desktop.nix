@@ -19,6 +19,7 @@
     zoom-us
     wemeet
     teams-for-linux
+    zmks-studio
     pkgs."115browser"
     nur.repos.xddxdd.baidunetdisk
     mpv

@@ -116,6 +116,7 @@
         yadisk = final.python3Packages.callPackage ./pkgs/yadisk.nix { };
         yandex-trash = final.callPackage ./pkgs/yandex-trash.nix { };
         zeno-zsh = final.callPackage ./pkgs/zeno-zsh.nix { };
+        zmks-studio = final.callPackage ./pkgs/zmks-studio.nix { };
         # DECSCUSR cursor-shape support (unmerged upstream PR #1355) — needed on
         # both roles: mosh-server parses the escape, mosh-client renders it.
         mosh = prev.mosh.overrideAttrs (old: {

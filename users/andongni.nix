@@ -16,6 +16,8 @@
     extraGroups = [
       "networkmanager"
       "wheel"
+      # ZMK Studio communicates with keyboards over USB CDC ACM serial ports.
+      "dialout"
       "docker"
       "input"
       "uinput"
