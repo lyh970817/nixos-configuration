@@ -131,11 +131,11 @@
       }
       {
         description = "Full screenshot";
-        key = "Print";
+        key = "Print / Super + c";
       }
       {
         description = "Region screenshot";
-        key = "Super + Shift + s";
+        key = "Super + Shift + s / Super + Ctrl + c";
       }
       {
         description = "Turn display on";
