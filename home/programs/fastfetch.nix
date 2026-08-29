@@ -397,15 +397,17 @@ let
             fi
           fi
 
-          # Keep the balance alert beside the input status in both Audio
-          # layouts: the laptop combines one shared device as "Out | In",
-          # while the desktop renders separate "Output | Input" devices.
+          # Keep the balance alert beside the input status in both split Audio
+          # layouts. When one shared device has identical input/output details,
+          # there is no delimiter, so append the alert instead of hiding it.
           if [[ -n "$qwen_alert" && "$audio" == *' | In '* ]]; then
             printf '%s | In %s %s\n' \
               "''${audio%%' | In '*}" "$qwen_alert" "''${audio#*' | In '}"
           elif [[ -n "$qwen_alert" && "$audio" == *' | Input: '* ]]; then
             printf '%s | Input: %s %s\n' \
               "''${audio%%' | Input: '*}" "$qwen_alert" "''${audio#*' | Input: '}"
+          elif [[ -n "$qwen_alert" ]]; then
+            printf '%s %s\n' "$audio" "$qwen_alert"
           else
             printf '%s\n' "$audio"
           fi
