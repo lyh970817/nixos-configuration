@@ -213,7 +213,7 @@
     name = "PH60 · FUNCTION";
     bindings = [
       {
-        description = "Hold for Function layer; tap for Left Arrow";
+        description = "Hold: Function; tap: Left Arrow";
         key = "Bottom-row Fn / Left";
       }
       {
@@ -283,7 +283,7 @@
         key = "Enter";
       }
       {
-        description = "Tap clears selected profile; hold clears all profiles";
+        description = "Tap: clear profile; hold: clear all";
         key = "Fn + B + Backspace";
       }
     ];
