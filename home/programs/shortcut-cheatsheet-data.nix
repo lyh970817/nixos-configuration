@@ -118,6 +118,18 @@
         key = "Super + n";
       }
       {
+        description = "Lower / raise output volume";
+        key = "Super + - / =";
+      }
+      {
+        description = "Toggle output mute";
+        key = "Super + Backspace";
+      }
+      {
+        description = "Lower / raise display brightness";
+        key = "Super + [ / ]";
+      }
+      {
         description = "Full screenshot";
         key = "Print";
       }
