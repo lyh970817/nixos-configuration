@@ -196,6 +196,15 @@ def _fetch(args, cfg: config_mod.Config, screen: display_mod.Display) -> int:
                     except PublisherBlocked as blocked:
                         print(f"kcl-fetch: {blocked.advice()}", file=sys.stderr)
                     return 4
+                except driver_mod.BotChallenge as challenge:
+                    # Charged (the request reached the publisher), but the
+                    # routing table learns nothing: a captcha is not a verdict
+                    # on the access template, and recording it as one would
+                    # flip the host to EZproxy over Cloudflare's opinion of
+                    # this machine.
+                    attempt.challenged(str(challenge))
+                    _report_challenge(template, doi, challenge)
+                    return 6
                 except driver_mod.LoginRequired as needed:
                     # Not a miss: nothing was fetched and no publisher was
                     # asked, so this costs no budget (see `gate.login_wall`).
@@ -227,6 +236,39 @@ def _fetch(args, cfg: config_mod.Config, screen: display_mod.Display) -> int:
         return 1
     finally:
         gate.close()
+
+
+def _report_challenge(
+    template: str, doi: str, challenge: driver_mod.BotChallenge
+) -> None:
+    """Say "a captcha", never "KCL does not hold this".
+
+    The third verdict, and the one the first two used to swallow. A captcha
+    served at the article URL leaves `page.url` pointing at the article and the
+    host reading as the publisher, so the old code called it an empty article
+    page and blamed the subscription.
+
+    The remedy is a person, once. `get` runs on a private X server, so the
+    window it would hand over does not exist -- `--show` is what puts it on a
+    screen, and the clearance cookie it earns lands in the same profile every
+    later fetch reuses.
+    """
+    print(
+        f"kcl-fetch: {template} route {challenge}\n"
+        "  A captcha is not a subscription gap -- do not ask the library "
+        "about it.\n"
+        "  It is a question for a human, and this tool will not answer one. "
+        "Answer it yourself once, on the machine holding the session:\n"
+        f"    kcl-fetch get {doi} --show\n"
+        "  and complete the challenge in the window; the clearance cookie is "
+        "kept in the profile.\n"
+        "  If this machine's traffic leaves through a VPN or proxy, the exit "
+        "address is a large part of what triggered this.\n"
+        "  The other access route is not tried: a publisher that has just "
+        "asked whether we are a robot is the last one to send a second "
+        "request to.",
+        file=sys.stderr,
+    )
 
 
 def _report_login_wall(template: str, needed: driver_mod.LoginRequired) -> None:

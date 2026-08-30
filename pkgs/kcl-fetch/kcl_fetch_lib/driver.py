@@ -30,6 +30,7 @@ import os
 import re
 import socket
 import time
+import urllib.parse
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -71,6 +72,57 @@ PDF_SELECTORS = (
     "button:has-text('Download PDF')",
 )
 
+#: Path shapes that *are* the PDF although the path does not end in `.pdf`.
+#: ScienceDirect is the standing example: its "Download PDF" control points at
+#: `/science/article/pii/<PII>/pdfft?isDTMRedir=true&download=true`, an
+#: intermediate that redirects to the file on `pdf.sciencedirectassets.com`.
+#: Wiley (`/doi/epdf/`, `/doi/pdfdirect/`) and the OUP/Silverchair family
+#: (`/article-pdf/`) are the same idea with different spellings.
+PDF_URL_MARKERS = (
+    "/pdfft",
+    "/epdf/",
+    "/pdfdirect",
+    "/doi/pdf",
+    "/article-pdf",
+    "/content/pdf",
+)
+
+#: Markup that only ever belongs to a bot-defence interstitial. Elsevier serves
+#: Cloudflare Turnstile *at the article URL*, wrapped in ScienceDirect's own
+#: header and footer -- so the URL, the host and the chrome all still say
+#: "article page" while the content is a captcha.
+CHALLENGE_SELECTORS = (
+    "script[src*='challenges.cloudflare.com']",
+    "iframe[src*='challenges.cloudflare.com']",
+    "input[name='cf-turnstile-response']",
+    "[id^='cf-chl-widget']",
+    "#cf-challenge-running",
+    "form#challenge-form",
+    "#captcha-box",
+    "#px-captcha",
+    "iframe[src*='hcaptcha.com']",
+    "iframe[src*='recaptcha']",
+)
+
+_CHALLENGE_TITLE_RE = re.compile(
+    r"(?i)^\s*(just a moment|attention required|one moment,? please|"
+    r"access denied|security check|verifying you are human)"
+)
+
+_CHALLENGE_TEXT_RE = re.compile(
+    r"(?i)(are you a robot|confirm you are a human|verify (that )?you are "
+    r"(a )?human|checking your browser before|enable javascript and cookies "
+    r"to continue|complete the security check|unusual traffic from your)"
+)
+
+#: Text that means the publisher is *offering to sell* the article -- the one
+#: page state that really is an answer about KCL's entitlement.
+_PAYWALL_TEXT_RE = re.compile(
+    r"(?i)(get access\b|purchase pdf|purchase access|purchase this (article|chapter)"
+    r"|buy (this )?article|rent this article|subscribe to (this )?journal"
+    r"|access through your (institution|organisation|organization))"
+)
+
 
 class DriverError(RuntimeError):
     pass
@@ -103,6 +155,34 @@ class AccessForbidden(DriverError):
         super().__init__(f"{host_of(url)} answered {status}")
         self.url = url
         self.status = status
+
+
+class BotChallenge(DriverError):
+    """The publisher answered with "are you a robot", not with the article.
+
+    A third thing, distinct from both `LoginRequired` and `NoFullText`, and the
+    one that is easiest to misfile as either. Elsevier serves a Cloudflare
+    Turnstile captcha *at the article URL*, inside ScienceDirect's own header
+    and footer: `page.url` is the article, `host_of(page.url)` is the
+    publisher, and there is no PDF anywhere on it. Read as an entitlement
+    verdict that is "KCL may not hold this article" -- about an article whose
+    page we never actually saw.
+
+    Nothing here solves it. A captcha exists to be answered by a human, and
+    answering one programmatically is precisely the behaviour it is asking
+    about; the honest move is to say what happened and hand the window over.
+    """
+
+    def __init__(self, url: str, signature: str = ""):
+        self.url = url
+        self.host = host_of(url) or url
+        self.signature = signature
+        detail = f" ({signature})" if signature else ""
+        super().__init__(
+            f"reached {self.host} and was served a human-verification "
+            f"challenge{detail} instead of the article, on {url} -- this is "
+            "bot defence, and says nothing about KCL's entitlement."
+        )
 
 
 class NoFullText(DriverError):
@@ -190,6 +270,33 @@ class Fetched:
     provenance: dict = field(default_factory=dict)
 
 
+@dataclass
+class Capture:
+    """The PDF in hand, however we came by it.
+
+    Two ways in, because publishers use both. A `download` is Playwright's own
+    object, from a response Chromium treated as an attachment. `data` is the
+    bytes read back through the context's cookie jar, which is what is left
+    when Chromium decides to *render* the PDF in its built-in viewer instead:
+    an inline render fires no download event, so `expect_download` waits out
+    its timeout over a PDF that is already on screen.
+    """
+
+    download: object | None = None
+    data: bytes | None = None
+    source_url: str = ""
+
+    @classmethod
+    def of(cls, value) -> "Capture":
+        return value if isinstance(value, cls) else cls(download=value)
+
+    def save_as(self, target: Path) -> None:
+        if self.download is not None:
+            self.download.save_as(str(target))
+        else:
+            Path(target).write_bytes(self.data or b"")
+
+
 def is_login_host(url: str) -> bool:
     """True when this URL is an authentication host, subdomains included.
 
@@ -211,6 +318,77 @@ def _looks_like_login(page) -> bool:
     except Exception:
         return False
     return bool(_LOGIN_TEXT_RE.search(body))
+
+
+def looks_like_pdf_url(url: str) -> bool:
+    """Is this URL the file itself rather than a page about it?
+
+    The `.pdf` suffix alone is not the test. Every large publisher now serves
+    the file from a path that carries no extension -- `pdfft`, `epdf`,
+    `pdfdirect`, `article-pdf` -- and a suffix-only check walks straight past
+    all of them.
+    """
+    path = urllib.parse.urlsplit(url).path.casefold()
+    return path.endswith(".pdf") or any(m in path for m in PDF_URL_MARKERS)
+
+
+def challenge_signature(page) -> str | None:
+    """A short name for the interstitial on this page, or None.
+
+    Two independent lines of evidence, because either alone is thin: the
+    widget markup a challenge provider has to put in the DOM, and the sentence
+    the page shows a human. Both are read out of the page we already loaded --
+    no extra request is made to decide this.
+    """
+    for selector in CHALLENGE_SELECTORS:
+        try:
+            if page.locator(selector).count() > 0:
+                return f"{selector} present"
+        except Exception:
+            continue
+    try:
+        title = page.title()
+    except Exception:
+        title = ""
+    if title and _CHALLENGE_TITLE_RE.search(title):
+        return f"page title {title.strip()!r}"
+    try:
+        body = page.inner_text("body", timeout=2000)
+    except Exception:
+        return None
+    found = _CHALLENGE_TEXT_RE.search(body)
+    return f"page says {found.group(0)!r}" if found else None
+
+
+def has_pdf_control(page) -> bool:
+    """Does anything on this page look like a way to the full text?
+
+    Used only to keep the challenge check honest: a page carrying a real PDF
+    control is a page we should try to capture from, whatever else is embedded
+    in it. Pure DOM inspection, no clicks.
+    """
+    for selector in PDF_SELECTORS:
+        try:
+            if page.locator(selector).count() > 0:
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def offers_purchase(page) -> bool:
+    """Is the publisher offering to sell us this article?
+
+    The only page state that is genuinely an answer about entitlement. Absence
+    of a PDF is not: a page can lack one because it is still rendering,
+    because the control has a shape we do not recognise, or because we were
+    never shown the article at all.
+    """
+    try:
+        body = page.inner_text("body", timeout=2000)
+    except Exception:
+        return False
+    return bool(_PAYWALL_TEXT_RE.search(body))
 
 
 class Browser:
@@ -361,9 +539,17 @@ class Browser:
         self._settle(page)
         if _looks_like_login(page):
             raise LoginRequired(page.url)
+        # Before any clicking. A captcha page is the last place to start
+        # clicking things, and the guard against a false positive is not
+        # subtlety in the detector but the PDF control itself: a page that
+        # offers the full text is a page to capture from, whatever is embedded
+        # alongside it.
+        signature = challenge_signature(page)
+        if signature and not has_pdf_control(page):
+            raise BotChallenge(page.url, signature)
 
-        download = self._trigger_download(page)
-        if download is None:
+        capture = self._trigger_download(page)
+        if capture is None:
             # Checked again, and this is the check that actually fires in
             # practice. An SSO hop is a JS auto-POST, not an HTTP redirect, so
             # `domcontentloaded` returns on the *form*, several hops before
@@ -373,18 +559,38 @@ class Browser:
             # never reached the publisher.
             if _looks_like_login(page):
                 raise LoginRequired(page.url)
+            # Same reasoning one step later: a challenge can also arrive on the
+            # navigation a click caused, after the first page looked ordinary.
+            late = challenge_signature(page)
+            if late:
+                raise BotChallenge(page.url, late)
+            # The old message said "KCL may not hold this article" for every
+            # empty page, which is a verdict about a subscription drawn from
+            # the absence of a link. Only a purchase offer is evidence of that;
+            # everything else is us not finding the control, and the two send
+            # the user to completely different places.
+            if offers_purchase(page):
+                raise NoFullText(
+                    f"reached {host_of(page.url)} and the page offers a "
+                    f"purchase or access option rather than the full text on "
+                    f"{page.url} -- KCL's subscription does not appear to "
+                    "cover this article"
+                )
             raise NoFullText(
-                f"reached {host_of(page.url)} and found no downloadable PDF on "
-                f"{page.url} -- KCL may not hold this article, or the link is "
-                "behind a purchase option"
+                f"reached {host_of(page.url)} and found neither a PDF control "
+                f"nor a purchase option on {page.url} -- so this is a capture "
+                "failure, not an entitlement verdict: the page may not have "
+                "finished rendering, or its full-text control is one this tool "
+                "does not recognise"
             )
 
         # The output directory is the user's, chosen with `-o`, so its mode is
         # left alone. The two files written into it are ours, and are not.
+        capture = Capture.of(capture)
         out_dir = Path(out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         target = out_dir / f"{stem}.pdf"
-        download.save_as(str(target))
+        capture.save_as(target)
         paths.secure_file(target)
         facts = validate(target, min_bytes=min_bytes)
 
@@ -393,6 +599,7 @@ class Browser:
             "access_template": template,
             "access_url": access_url,
             "final_url": page.url,
+            "pdf_url": capture.source_url or page.url,
             "publisher_host": host_of(page.url),
             "idp_entity_id": KCL_IDP_ENTITY_ID,
             "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
@@ -427,9 +634,10 @@ class Browser:
         article, which is exactly the traffic shape the gate exists to prevent
         -- and the gate cannot see clicks inside a page it already admitted.
         """
-        download = self._download_current_pdf(page)
-        if download is not None:
-            return download
+        article_url = page.url
+        capture = self._capture_pdf_page(page)
+        if capture is not None:
+            return capture
 
         for selector in PDF_SELECTORS:
             locator = page.locator(selector).first
@@ -439,23 +647,87 @@ class Browser:
             except Exception:
                 continue
             try:
+                href = locator.get_attribute("href", timeout=5000)
+            except Exception:
+                href = None
+            try:
                 with page.expect_download(timeout=60000) as info:
                     locator.click(timeout=15000)
-                return info.value
+                return Capture(download=info.value, source_url=page.url)
             except Exception:
-                # The click may have navigated to an inline PDF viewer instead
-                # of downloading. That is the same one request, so reading it
-                # out costs nothing more.
-                return self._download_current_pdf(page)
+                return self._capture_after_click(page, article_url, href)
         return None
 
-    @staticmethod
-    def _download_current_pdf(page):
-        if not page.url.lower().split("?")[0].endswith(".pdf"):
+    def _capture_pdf_page(self, page):
+        """We are standing on the file. Get it off the screen and onto disk."""
+        if not looks_like_pdf_url(page.url):
             return None
         try:
             with page.expect_download(timeout=60000) as info:
                 page.reload()
-            return info.value
+            return Capture(download=info.value, source_url=page.url)
+        except Exception:
+            # Served inline rather than as an attachment, so no download event
+            # ever fires. The bytes are still ours to ask for.
+            return self._fetch_bytes(page, page.url)
+
+    def _capture_after_click(self, page, article_url: str, href: str | None):
+        """The click did something other than start a download. What?
+
+        Three shapes, all of them ordinary and none of them a download event:
+        the tab navigated to the file and Chromium rendered it inline, the
+        control opened the file in a new tab, or the control was an anchor we
+        can simply follow ourselves. Each candidate costs one request at most
+        and the first PDF wins, so a click can never fan out into a burst.
+        """
+        seen: set[str] = set()
+        for url in self._pdf_candidates(page, href):
+            if url in seen:
+                continue
+            seen.add(url)
+            capture = self._fetch_bytes(page, url, referer=article_url)
+            if capture is not None:
+                return capture
+        return None
+
+    @staticmethod
+    def _pdf_candidates(page, href: str | None):
+        if looks_like_pdf_url(page.url):
+            yield page.url
+        try:
+            others = list(page.context.pages)
+        except Exception:
+            others = []
+        for other in others:
+            try:
+                url = other.url
+            except Exception:
+                continue
+            if url != page.url and looks_like_pdf_url(url):
+                yield url
+        if href:
+            resolved = urllib.parse.urljoin(page.url, href)
+            if looks_like_pdf_url(resolved):
+                yield resolved
+
+    @staticmethod
+    def _fetch_bytes(page, url: str, *, referer: str | None = None):
+        """Read a PDF through the browser context's own cookie jar.
+
+        `context.request` carries the session -- the publisher SP cookie the
+        whole OpenAthens hop exists to obtain -- so this is the same
+        authenticated identity the tab has, not a second anonymous client. The
+        `%PDF-` check here is a guard against saving an HTML error page under a
+        `.pdf` name; the real validation still runs on the file (`pdfcheck`).
+        """
+        headers = {"Referer": referer} if referer else None
+        try:
+            response = page.context.request.get(url, headers=headers, timeout=60000)
+            if not response.ok:
+                return None
+            body = response.body()
         except Exception:
             return None
+        if not body.startswith(b"%PDF-"):
+            return None
+        return Capture(data=body, source_url=url)

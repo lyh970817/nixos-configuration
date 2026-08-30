@@ -146,14 +146,19 @@ class TestTheReproducedBug(unittest.TestCase):
             fetch(browser_over(page))
         self.assertEqual(page.settled, 1)
 
-    def test_reaching_the_publisher_with_no_pdf_is_still_a_holdings_answer(self):
-        """The distinction has to cut both ways or it is just a louder message."""
-        page = FakePage(PUBLISHER)
+    def test_reaching_the_publisher_with_a_purchase_offer_is_a_holdings_answer(self):
+        """The distinction has to cut both ways or it is just a louder message.
+
+        What counts as the other way has since been narrowed: the offer to
+        sell us the article, not merely the absence of a link (see
+        `test_bot_challenge.TestTheEntitlementVerdictIsNarrowed`).
+        """
+        page = FakePage(PUBLISHER, body="Get Access to the full text")
         with self.assertRaises(driver_mod.NoFullText) as caught:
             fetch(browser_over(page))
         message = str(caught.exception)
         self.assertIn("sciencedirect.com", message)
-        self.assertIn("may not hold", message)
+        self.assertIn("does not appear to cover", message)
         self.assertNotIn("sign-in wall", message)
 
     def test_an_immediate_wall_is_still_caught_before_any_clicking(self):
