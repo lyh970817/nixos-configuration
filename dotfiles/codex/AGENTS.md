@@ -8,5 +8,7 @@ third-party programme that the user or team did not write. Pipeline and
 orchestration changes, and programmes written by the user or team, need no
 such approval.
 
+Do not programme defensively. Implement the intended contract directly and let invalid states fail at the boundary that owns them.
+
 Use your own judgement to carefully choose a model family and reasoning effort
 that match the difficulty of each subagent task.
