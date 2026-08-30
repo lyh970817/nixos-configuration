@@ -1,9 +1,9 @@
 -- Hyprland configuration, Lua format.
 --
 -- The .conf format is deprecated and support for it is removed in Hyprland
--- 0.57. There is no incremental path: the moment this file exists it replaces
--- hyprland.conf wholesale, and there is no `source`/`keyword` helper in the Lua
--- API. See share/hypr/hyprland.lua and share/hypr/stubs/hl.meta.lua in the
+-- 0.57. This file is the entire configuration: the Lua API has no
+-- `source`/`keyword` helper, so nothing can be split out into an included
+-- fragment. See share/hypr/hyprland.lua and share/hypr/stubs/hl.meta.lua in the
 -- hyprland package for the reference config and the typed API stub.
 --
 -- Validate any edit before it goes live -- ~/.config/hypr is an out-of-store
