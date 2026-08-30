@@ -4,6 +4,7 @@
   makeWrapper,
   python3,
   chromium,
+  xorg,
   # Tailscale/MagicDNS name of the other machine in the pair, from
   # `portable.peerHost`. Baked in so `kcl-fetch login --on` (no value) knows
   # which host to hop to; empty means `--on` needs an explicit host.
@@ -16,6 +17,10 @@ let
   # the driver never tries to fetch itself. The *browser* is still ours to
   # supply -- upstream's browser downloads are prebuilt glibc binaries that do
   # not run on NixOS -- hence the pinned `chromium` below.
+  #
+  # `xorg.xvfb` is the other half of `get`: the browser stays headed, because
+  # headless is what a publisher SP fingerprints, and the screen it paints on
+  # is a private X server nobody is looking at.
   pythonEnv = python3.withPackages (ps: with ps; [ playwright ]);
 in
 stdenvNoCC.mkDerivation {
@@ -44,6 +49,7 @@ stdenvNoCC.mkDerivation {
       --add-flags "$out/libexec/kcl-fetch/kcl_fetch.py" \
       --set PYTHONPATH "$out/libexec/kcl-fetch" \
       --set KCL_FETCH_CHROMIUM "${lib.getBin chromium}/bin/chromium" \
+      --set KCL_FETCH_XVFB "${lib.getBin xorg.xvfb}/bin/Xvfb" \
       ${lib.optionalString (peerHost != "") ''--set-default KCL_FETCH_PEER_HOST "${peerHost}"''}
     runHook postInstall
   '';

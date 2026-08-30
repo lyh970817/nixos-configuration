@@ -41,6 +41,9 @@ _X_SOCKET_RE = re.compile(r"^X(\d+)$")
 
 _WAYLAND_PREFIX = "wayland-"
 
+#: The one variable a virtual X display has to withdraw. See `virtual_x11`.
+WAYLAND_VAR = "WAYLAND_DISPLAY"
+
 
 class NoDisplay(RuntimeError):
     """No graphical session to attach to. A user-environment problem."""
@@ -57,9 +60,24 @@ class Display:
     env: dict[str, str] = field(default_factory=dict)
     #: One line, for `--verbose`. Says what was probed, not what was assumed.
     detail: str = ""
+    #: Variables to *remove* from the browser's environment. Setting `DISPLAY`
+    #: is not enough on a Wayland desktop: the session's `WAYLAND_DISPLAY` is
+    #: inherited too, and leaving it in place is the one way a launch aimed at
+    #: a private X server can still find its way onto the user's screen.
+    unset: tuple[str, ...] = ()
 
     def ozone_args(self) -> tuple[str, ...]:
         return (f"--ozone-platform={self.platform}",)
+
+
+def virtual_x11(number: int, detail: str) -> Display:
+    """The display for an X server this process started itself (`xvfb.py`).
+
+    Not probed, because there is nothing to probe: we know the number, we know
+    it is X, and we know the session's Wayland socket must not be reachable
+    from it.
+    """
+    return Display("x11", {"DISPLAY": f":{number}"}, detail, unset=(WAYLAND_VAR,))
 
 
 def _is_socket(path: Path) -> bool:

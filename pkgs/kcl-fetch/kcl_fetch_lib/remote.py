@@ -144,6 +144,19 @@ def ssh_client(environ=None) -> str | None:
     return fields[0] if fields else None
 
 
+def login_command(environ=None) -> str:
+    """The exact `kcl-fetch login` to suggest from where we are standing.
+
+    Same reasoning as `ssh_hint`, compressed into the one line that fits in a
+    failure message: over SSH the window would open on the far host, so the
+    suggestion has to carry `--on`.
+    """
+    if not ssh_client(environ):
+        return "kcl-fetch login"
+    peer = peer_host(environ)
+    return f"kcl-fetch login --on {peer}" if peer else "kcl-fetch login --on HOST"
+
+
 def ssh_hint(environ=None, hostname: str | None = None) -> str | None:
     """One note when the window would open on the far end of the SSH session.
 
