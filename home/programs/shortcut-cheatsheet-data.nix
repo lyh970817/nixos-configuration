@@ -139,7 +139,7 @@
       }
       {
         description = "Toggle full recording";
-        key = "Super + Ctrl + o";
+        key = "Super + Shift + o";
       }
       {
         description = "Toggle region recording";
