@@ -191,7 +191,15 @@ CREATE TABLE IF NOT EXISTS blocks (
 #: to retry.
 LOGIN_WALL_OUTCOME = "login-wall"
 
-SPENDING_OUTCOMES = ("pending", "ok", "miss", "blocked", "error")
+#: A bot-defence interstitial. The opposite accounting decision from the login
+#: wall above, and for the opposite reason: this request did leave the machine,
+#: did reach the publisher, and came back carrying the institution's identity.
+#: It spends budget, and the host cooldown it starts is the point -- a client
+#: that has just been asked "are you a robot" and answers with another request
+#: is describing itself.
+CHALLENGE_OUTCOME = "challenge"
+
+SPENDING_OUTCOMES = ("pending", "ok", "miss", "blocked", "error", CHALLENGE_OUTCOME)
 
 
 class Gate:
@@ -469,6 +477,10 @@ class Attempt:
 
     def error(self, detail: str | None = None) -> None:
         self._finish("error", detail)
+
+    def challenged(self, detail: str | None = None) -> None:
+        """Served a captcha by the publisher. Charged, because it was traffic."""
+        self._finish(CHALLENGE_OUTCOME, detail)
 
     def login_wall(self, detail: str | None = None) -> None:
         """Ended at the IdP. Recorded in full, charged to nobody."""
