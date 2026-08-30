@@ -157,6 +157,37 @@ def login_command(environ=None) -> str:
     return f"kcl-fetch login --on {peer}" if peer else "kcl-fetch login --on HOST"
 
 
+def window_screen(hostname: str | None = None) -> str:
+    """One clause naming the screen a browser window will appear on.
+
+    The host is named unconditionally, not only over SSH: these two machines
+    are a pair, the terminal is routinely watched from the other one, and
+    "complete the challenge in the window" is useless to someone whose window
+    is on the machine in the next room.
+    """
+    here = socket.gethostname() if hostname is None else hostname
+    return f"on {here}'s screen"
+
+
+def window_note(environ=None) -> str | None:
+    """The SSH caveat about that screen, as its own sentence, or None.
+
+    Written to follow `window_screen`, which has already named the host. Same
+    fact `login_command` and `ssh_hint` are built on, said for `get`: the
+    window opens on the host the *browser* runs on, which over SSH is not the
+    machine the command was typed on. Unlike `login` there is no `--on` to
+    suggest -- a clearance cookie has to land in the profile of the host doing
+    the fetching -- so this names the situation and stops.
+    """
+    client = ssh_client(environ)
+    if not client:
+        return None
+    return (
+        "That is not the machine you are typing on -- this is an SSH session "
+        f"from {client}."
+    )
+
+
 def ssh_hint(environ=None, hostname: str | None = None) -> str | None:
     """One note when the window would open on the far end of the SSH session.
 
