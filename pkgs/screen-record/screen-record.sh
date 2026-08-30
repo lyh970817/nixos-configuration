@@ -115,11 +115,11 @@ start() {
   esac
 
   : > "$log_file"
-  # wl-screenrec defaults to VA-API hardware encoding. The home desktop's
-  # amdgpu has mesa's radeonsi VA-API driver, but the shared mesa build ships
-  # no Intel VA-API driver, so the laptop may have no usable hardware encoder.
-  # Fall back to the CPU encoder rather than leaving a zero-byte file and no
-  # indication that anything went wrong.
+  # wl-screenrec defaults to VA-API hardware encoding: mesa's radeonsi covers
+  # the home desktop's amdgpu and intel-media-driver the laptop's Intel iGPU,
+  # both via hardware.graphics (modules/hardware/video.nix). The fallback stays
+  # regardless -- an encoder can still fail to open -- so that turns into a CPU
+  # encode rather than a zero-byte file and no indication anything went wrong.
   if launch "${args[@]}"; then
     encoder="hardware"
   elif launch "${args[@]}" --no-hw; then
