@@ -138,6 +138,14 @@
         key = "Super + Shift + s / Super + Ctrl + c";
       }
       {
+        description = "Toggle full recording";
+        key = "Super + Ctrl + o";
+      }
+      {
+        description = "Toggle region recording";
+        key = "Super + Alt + o";
+      }
+      {
         description = "Turn display on";
         key = "Fn + F12";
       }

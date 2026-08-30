@@ -47,6 +47,7 @@
     ./programs/omp.nix
     ./programs/hyprwhspr.nix
     ./programs/quicktui.nix
+    ./programs/screen-record.nix
     ./programs/launchers.nix
     ./programs/image-open.nix
     ./programs/iso-open.nix
