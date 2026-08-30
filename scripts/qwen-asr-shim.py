@@ -97,14 +97,9 @@ QWEN_CLEANUP_PROMPT = _env("QWEN_CLEANUP_PROMPT", DEFAULT_TIDY_CLEANUP_PROMPT)
 QWEN_WARM_TIMEOUT = float(_env("QWEN_WARM_TIMEOUT", "8"))
 QWEN_COMMIT_TIMEOUT = float(_env("QWEN_COMMIT_TIMEOUT", "8"))
 
-# Per-dictation record ring ({raw, cleaned, pasted, timings}) and the loopback
-# UDP port on which the patched hyprwhspr (pkgs/hyprwhspr-paste-notify.patch)
-# announces paste completion. hyprwhspr-raw-revert consumes the ring.
-QWEN_SHORT_DIR = os.path.expanduser(
-    _env("QWEN_SHORT_DIR", "~/.local/share/hyprwhspr/short")
-)
-QWEN_DICTATION_RING_PATH = os.path.join(QWEN_SHORT_DIR, "dictations.jsonl")
-QWEN_DICTATION_RING_SIZE = int(_env("QWEN_DICTATION_RING_SIZE", "50"))
+# Loopback UDP port on which the patched hyprwhspr
+# (pkgs/hyprwhspr-paste-notify.patch) announces paste completion; it supplies
+# the paste timestamp that closes each dictation's latency record.
 QWEN_PASTE_NOTIFY_PORT = int(_env("QWEN_PASTE_NOTIFY_PORT", "8773"))
 QWEN_PASTE_WAIT_TIMEOUT = float(_env("QWEN_PASTE_WAIT_TIMEOUT", "10"))
 
@@ -196,46 +191,24 @@ def cleanup_suspect(raw, cleaned):
 
 
 # --------------------------------------------------------------------------
-# Per-dictation records: latency instrumentation + raw-transcript preservation
+# Per-dictation records: latency instrumentation
 #
 # Every completed (non-empty) dictation produces one record with four
 # timestamps -- key release (the client's final audio commit), first output
 # delta, response done, paste complete -- plus warm/cold connection and
-# model/profile labels. Timings are logged to the journal as one JSON line
-# per dictation ("latency {...}"), content-free so the journal never carries
-# dictation text; distributions:
+# model/profile labels. The record stays in memory; only its timings are
+# logged, to the journal as one JSON line per dictation ("latency {...}"),
+# content-free (transcripts are reduced to character counts) so the journal
+# never carries dictation text; distributions:
 #
 #   journalctl --user -u qwen-asr-shim.service -o cat \
 #     | sed -n 's/.*latency //p' | jq -s 'map(.done_ms)'
 #
-# The full record (raw ASR, cleaned text, exact pasted text) goes to a small
-# JSONL ring at QWEN_DICTATION_RING_PATH for hyprwhspr-raw-revert. The paste
-# timestamp and pasted text arrive over loopback UDP from the patched
-# hyprwhspr (pkgs/hyprwhspr-paste-notify.patch); if no paste happens within
+# The paste timestamp arrives over loopback UDP from the patched hyprwhspr
+# (pkgs/hyprwhspr-paste-notify.patch); if no paste happens within
 # QWEN_PASTE_WAIT_TIMEOUT (empty text, capture mode, injection failure), the
 # record is finalized with paste fields null.
 # --------------------------------------------------------------------------
-
-
-def _append_dictation_record(record):
-    """Append one record to the JSONL ring, keeping the newest N entries."""
-    try:
-        os.makedirs(QWEN_SHORT_DIR, exist_ok=True)
-        lines = []
-        try:
-            with open(QWEN_DICTATION_RING_PATH, "r", encoding="utf-8") as f:
-                lines = [line for line in f.read().splitlines() if line.strip()]
-        except FileNotFoundError:
-            pass
-        lines.append(json.dumps(record, ensure_ascii=False))
-        lines = lines[-QWEN_DICTATION_RING_SIZE:]
-        tmp_path = QWEN_DICTATION_RING_PATH + ".tmp"
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(lines) + "\n")
-        os.chmod(tmp_path, 0o600)
-        os.replace(tmp_path, QWEN_DICTATION_RING_PATH)
-    except Exception as e:
-        log(f"dictation ring write failed: {e}")
 
 
 class _PendingDictation:
@@ -264,7 +237,6 @@ def _finalize_dictation(pending, paste_msg=None):
         record["paste_ms"] = round(
             (time.perf_counter() - pending.commit_perf) * 1000
         )
-        record["pasted"] = paste_msg.get("text")
         record["audio_ts"] = paste_msg.get("audio_ts")
     timing = {
         key: record.get(key)
@@ -284,7 +256,6 @@ def _finalize_dictation(pending, paste_msg=None):
     timing["raw_chars"] = len(record.get("raw") or "")
     timing["cleaned_chars"] = len(record.get("cleaned") or "")
     log("latency " + json.dumps(timing, ensure_ascii=False))
-    _append_dictation_record(record)
 
 
 def _register_pending_dictation(record, commit_perf):
@@ -1057,9 +1028,7 @@ class RealtimeTranslator:
                                     "raw": state["raw_asr"].text,
                                     "raw_partial": state.get("raw_partial", False),
                                     "cleaned": state.get("final_text"),
-                                    "pasted": None,
                                     "fallback": state.get("fallback"),
-                                    "reverted": False,
                                 }
                                 _register_pending_dictation(record, commit_t)
                             delete_ids = tuple(dict.fromkeys(

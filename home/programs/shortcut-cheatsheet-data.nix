@@ -159,10 +159,6 @@
         key = "Super + o";
       }
       {
-        description = "Revert dictation to raw transcript";
-        key = "Super + Shift + o";
-      }
-      {
         description = "Toggle long dictation";
         key = "Ctrl + Shift + l";
       }

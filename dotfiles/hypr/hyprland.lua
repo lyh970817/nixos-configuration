@@ -260,7 +260,6 @@ hl.bind(mainMod .. " + CTRL + C", hl.dsp.exec_cmd(scripts .. "/screenshot.sh reg
 hl.bind(mainMod .. " + CTRL + O", hl.dsp.exec_cmd("screen-record screen"), { description = "Toggle full recording" })
 hl.bind(mainMod .. " + ALT + O", hl.dsp.exec_cmd("screen-record region"), { description = "Toggle region recording" })
 hl.bind("SUPER + O", hl.dsp.exec_cmd("hyprwhispr-record toggle"), { description = "Speech-to-text" })
-hl.bind("SUPER + SHIFT + O", hl.dsp.exec_cmd("hyprwhspr-raw-revert"), { description = "Revert dictation to raw transcript" })
 hl.bind("CTRL + SHIFT + L", hl.dsp.exec_cmd("hyprwhspr-longform toggle"), { description = "Long-form dictation" })
 hl.bind("CTRL + SHIFT + P", hl.dsp.exec_cmd("hyprwhispr-profile toggle"), { description = "Toggle dictation profile" })
 hl.bind("SUPER + ESCAPE", hl.dsp.exec_cmd("hyprwhspr-longform cancel"))
