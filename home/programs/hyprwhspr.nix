@@ -24,7 +24,12 @@ let
   recorderTranscriptDir = "${longformArchiveDir}/recorder";
 
   shortArchiveDir = "${homeDir}/.local/share/hyprwhspr/short";
-  shortArchiveRetentionDays = "30d";
+  # tmpfiles age spec. The `m:` prefix restricts ageing to modification time.
+  # Without it systemd defaults to age-by `abcmABM`, which keeps a file when
+  # *any* of atime/btime/ctime/mtime is recent -- and the restic backup
+  # (modules/services/restic-backup.nix backs up all of $HOME) reads every
+  # .wav on each run, refreshing atime and making the archive immortal.
+  shortArchiveRetention = "m:30d";
 
   terminalPasteKeys = {
     kitty = "ctrl+shift+v";
@@ -619,9 +624,11 @@ in
   '';
 
   # Short-dictation mic audio is archived by the realtime-ws audio patch
-  # (pkgs/hyprwhspr.nix); age it out after 30 days.
+  # (pkgs/hyprwhspr.nix); age it out 30 days after last write. Reaped by the
+  # user systemd-tmpfiles-clean.timer (daily); see shortArchiveRetention above
+  # for why the age spec must be mtime-only.
   systemd.user.tmpfiles.rules = [
-    "d ${shortArchiveDir}/audio 0700 - - ${shortArchiveRetentionDays}"
+    "d ${shortArchiveDir}/audio 0700 - - ${shortArchiveRetention}"
   ];
 
   xdg.configFile = {
@@ -669,8 +676,11 @@ in
       selection under `$XDG_RUNTIME_DIR/hyprwhspr-config`, separate from the
       `$XDG_RUNTIME_DIR/hyprwhspr` IPC directory used by the control FIFO.
       Each short dictation archives its mic audio under
-      `~/.local/share/hyprwhspr/short/audio/`, aged out after 30 days by a
-      user tmpfiles rule.
+      `~/.local/share/hyprwhspr/short/audio/`, aged out 30 days after last
+      write by a user tmpfiles rule, swept daily by
+      `systemd-tmpfiles-clean.timer` in the user manager. The rule ages by
+      modification time only (`m:30d`); the default also considers access
+      time, which the whole-`$HOME` restic backup refreshes on every run.
 
       qwen-asr-shim records per-dictation latency lines (key release ->
       first delta -> done -> paste, warm/cold, model) in the journal as
