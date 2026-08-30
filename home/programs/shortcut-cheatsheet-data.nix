@@ -146,6 +146,10 @@
         key = "Super + Alt + o";
       }
       {
+        description = "Cancel recording (discard)";
+        key = "Super + Shift + Escape";
+      }
+      {
         description = "Turn display on";
         key = "Fn + F12";
       }

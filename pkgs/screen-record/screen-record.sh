@@ -4,10 +4,14 @@
 #
 # The rofi launcher and a Hyprland bind both fire one command and exit, so a
 # stateful recorder has to be a toggle: the first invocation starts a
-# recording, the next one stops it. Two modes, matching screenshot.sh:
+# recording, the next one stops it. Two recording modes, matching
+# screenshot.sh:
 #   screen - the focused monitor (default)
 #   region - an interactively selected area (via slurp)
 # Stopping takes no argument; whichever mode is running is what stops.
+#
+# A third mode, `cancel`, is the deliberate opposite of that stop: it ends the
+# recording and throws the file away instead of keeping it.
 
 set -euo pipefail
 
@@ -90,12 +94,11 @@ start() {
   case "$mode" in
     screen)
       # wl-screenrec records one output at a time; pick the focused monitor so
-      # "screen" means the one under the cursor on a multi-head desktop. This
-      # is a read-only query, so it needs no hypr-ipc dialect handling -- but it
-      # must not be fatal: outside a Hyprland session hyprctl exits non-zero,
-      # and under `set -o pipefail` that would abort here and leave no
-      # recording and no notification. Fall back to wl-screenrec's own default
-      # of the sole display instead.
+      # "screen" means the one under the cursor on a multi-head desktop. The
+      # query must not be fatal: outside a Hyprland session hyprctl exits
+      # non-zero, and under `set -o pipefail` that would abort here and leave
+      # no recording and no notification. Fall back to wl-screenrec's own
+      # default of the sole display instead.
       output="$(hyprctl -j monitors 2> /dev/null | jq -r '.[] | select(.focused) | .name' 2> /dev/null)" || output=""
       if [ -n "$output" ]; then
         args+=(-o "$output")
@@ -154,17 +157,95 @@ stop() {
   fi
 }
 
+# Move one recording this script made to the desktop trash.
+#
+# Deliberately not `rm`: `gio trash` is reversible (`gio trash --restore`), so
+# a mis-fired cancel costs a trip to the wastebasket rather than the
+# recording. $path is not free-form input -- start() wrote it and is_recorder()
+# has just confirmed it in the live recorder's own argv -- but it is re-checked
+# here, immediately before the move, so a stale or hand-edited state file
+# cannot aim this at anything else.
+discard() {
+  local path="$1" base dir
+  dir="${XDG_VIDEOS_DIR:-$HOME/Videos}/Recordings"
+  base="${path##*/}"
+  # Rejects an empty path, any directory but the recordings directory, and any
+  # `..` component: $base can contain no slash, so a path that still equals
+  # "$dir/$base" is a direct child of $dir under that literal name.
+  if [ -z "$base" ] || [ "$path" != "$dir/$base" ]; then
+    notify "Refusing to discard unexpected path: $path"
+    exit 1
+  fi
+  case "$base" in
+    screenrecord_*.mp4) ;;
+    *)
+      notify "Refusing to discard unexpected file: $base"
+      exit 1
+      ;;
+  esac
+  if [ -L "$path" ] || [ ! -f "$path" ]; then
+    # Never follow a symlink, and a recording that was never written has
+    # nothing to throw away.
+    notify "Recording discarded (nothing had been written)"
+    return 0
+  fi
+  if gio trash -- "$path"; then
+    notify "Recording discarded — $base moved to the trash"
+  else
+    notify "Discard failed — $path kept"
+    exit 1
+  fi
+}
+
+# Stop the running recording and throw its file away.
+#
+# Unlike stop(), the container never has to end up valid, so this does not wait
+# out a long index flush: SIGINT first, so wl-screenrec still releases the
+# encoder tidily, then SIGKILL once a short grace has passed. The
+# `env --default-signal=INT` in launch() is what makes that first SIGINT
+# deliverable at all.
+cancel() {
+  local i
+  kill -INT "$rec_pid" 2> /dev/null || true
+  for i in $(seq 1 20); do
+    is_recorder "$rec_pid" "$rec_file" || break
+    sleep 0.1
+  done
+  if is_recorder "$rec_pid" "$rec_file"; then
+    kill -KILL "$rec_pid" 2> /dev/null || true
+    for i in $(seq 1 20); do
+      is_recorder "$rec_pid" "$rec_file" || break
+      sleep 0.1
+    done
+  fi
+  if is_recorder "$rec_pid" "$rec_file"; then
+    # Still running: keep both the file and the state rather than trash a file
+    # another process still holds open.
+    notify "Could not stop the recorder — $rec_file kept"
+    exit 1
+  fi
+  : > "$state_file"
+  discard "$rec_file"
+}
+
 mode="${1:-screen}"
 case "$mode" in
-  screen | region) ;;
+  screen | region | cancel) ;;
   *)
-    echo "Usage: screen-record {screen|region}" >&2
+    echo "Usage: screen-record {screen|region|cancel}" >&2
     exit 1
     ;;
 esac
 
 if load_state; then
-  stop
+  if [ "$mode" = "cancel" ]; then
+    cancel
+  else
+    stop
+  fi
+elif [ "$mode" = "cancel" ]; then
+  # Cancelling with nothing running is harmless, not an error.
+  notify "Nothing to cancel — no recording in progress"
 else
   start "$mode"
 fi

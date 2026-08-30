@@ -3,6 +3,9 @@
   stdenvNoCC,
   makeWrapper,
   coreutils,
+  # glib provides `gio`, used by the cancel mode to trash a discarded
+  # recording instead of unlinking it.
+  glib,
   hyprland,
   jq,
   libnotify,
@@ -25,6 +28,7 @@ stdenvNoCC.mkDerivation {
       --prefix PATH : ${
         lib.makeBinPath [
           coreutils
+          glib
           hyprland
           jq
           libnotify
