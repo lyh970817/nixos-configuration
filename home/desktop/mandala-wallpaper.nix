@@ -151,21 +151,4 @@ in
       no_focus = true,
     })
   '';
-
-  # TRANSITIONAL twin of the rule above in the legacy hyprlang format, sourced
-  # by dotfiles/hypr/hyprland.conf, for a compositor that started before the
-  # migration and therefore cannot load Lua. See the header of that file for
-  # why a frozen legacy set cannot drift, and for when this gets deleted.
-  # Both are generated from the same `wallpaperClass`, so the match pattern
-  # cannot disagree between the two dialects.
-  xdg.configFile."hypr/wallpaper.conf".text = ''
-    windowrule {
-        name = mandala-wallpaper
-        match:class = ^(${wallpaperClass})$
-        opacity = 1.0 override
-        border_size = 0
-        rounding = 0
-        no_focus = true
-    }
-  '';
 }

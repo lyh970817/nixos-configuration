@@ -3,7 +3,6 @@
   coreutils,
   gnugrep,
   gnused,
-  hypr-ipc,
   hyprland,
   jq,
   libnotify,
@@ -16,7 +15,6 @@ writeShellApplication {
     coreutils
     gnugrep
     gnused
-    hypr-ipc
     hyprland
     jq
     libnotify
@@ -238,18 +236,14 @@ writeShellApplication {
     # double-quoted Lua literal; a long-bracket literal is not an option here
     # because the sentinel is itself `[[EMPTY]]`.
     #
-    # Sent through hypr-ipc rather than hyprctl directly because the config
-    # manager belongs to the *running* compositor, not to the config files a
-    # rebuild just installed. `watch` retries every 2s forever, so under the
-    # wrong dialect this is not one failure but a permanent notify loop -- the
-    # symptom that made the migration visible on the laptop. The legacy argv
-    # after `--` is TRANSITIONAL (see pkgs/hypr-ipc.nix).
+    # hyprctl exits 0 even when the compositor refuses the call, so the caller
+    # reads the option back rather than trusting this status.
     set_live_shader() {
       local desired="$1" escaped
       escaped="''${desired//\\/\\\\}"
       escaped="''${escaped//\"/\\\"}"
-      hypr-ipc keyword "hl.config({ decoration = { screen_shader = \"$escaped\" } })" \
-        -- decoration:screen_shader "$desired" > /dev/null 2>&1
+      hyprctl eval "hl.config({ decoration = { screen_shader = \"$escaped\" } })" \
+        > /dev/null 2>&1
     }
 
     reconcile_locked() {

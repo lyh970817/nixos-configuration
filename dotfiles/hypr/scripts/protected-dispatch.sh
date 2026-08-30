@@ -17,17 +17,10 @@ fi
 # binds still speak the legacy vocabulary (it reads better in hyprland.lua and
 # keeps the guards above working on plain words), so translate here.
 #
-# Both forms are handed to hypr-ipc, which sends whichever the *running*
-# compositor understands: a rebuild cannot switch a live compositor's config
-# manager, so during the migration window these binds have to work against
-# hyprlang. TRANSITIONAL -- drop the legacy argv after `--` together with
-# pkgs/hypr-ipc.nix; see the note there.
-#
 # Unknown verbs are a hard error rather than a pass-through: a dispatcher that
 # silently does nothing is the exact failure this file exists to make loud.
 verb=${1:-}
 shift || true
-legacy=("$verb" "$@")
 
 case "$verb" in
 killactive) expr='hl.dsp.window.close()' ;;
@@ -62,4 +55,4 @@ movetoworkspace) expr="hl.dsp.window.move({ workspace = ${1:-1} })" ;;
     ;;
 esac
 
-exec hypr-ipc dispatch "$expr" -- "${legacy[@]}"
+exec hyprctl dispatch "$expr"

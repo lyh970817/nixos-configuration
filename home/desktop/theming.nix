@@ -24,14 +24,6 @@ let
   # *light.lua. See dotfiles/hypr/hyprland.lua.
   hyprCurrentTheme = "$HOME/.local/state/hypr/current-theme.lua";
 
-  # TRANSITIONAL twin of the marker above. hyprland.conf sources this path, so
-  # a compositor that started before the migration reads its mode from here
-  # while everything else reads the .lua marker. Every writer below sets both,
-  # so a dark/light switch made under a hyprlang session is still correct after
-  # the user relogs into Lua, and vice versa. Delete with the rest of the
-  # legacy set; see the header of ../../dotfiles/hypr/hyprland.conf.
-  hyprCurrentThemeLegacy = "$HOME/.local/state/hypr/current-theme.conf";
-
   # Dark-mode cursor. Bibata Original rebuilt in a utilitarian grey with a
   # near-black outline and phosphor green only in the loading spinner, so the
   # pointer reads as an ordinary pointer on a modern laptop rather than as part
@@ -92,7 +84,6 @@ let
 
     # Make the mode authoritative before reconciling the output-aware shader.
     ln -sf "$HOME/.config/hypr/themes/dark.lua" "${hyprCurrentTheme}"
-    ln -sf "$HOME/.config/hypr/themes/dark.conf" "${hyprCurrentThemeLegacy}"
     ${pkgs.screen-shader-controller}/bin/screen-shader reconcile --mode dark
 
     # 1. WALLPAPER (Kill old, start new)
@@ -102,29 +93,10 @@ let
 
     # 2/3. HYPRLAND BACKGROUND COLOR + LIVE THEME SETTINGS
     #
-    # The Lua manager reloads the complete mode fragment; the legacy manager
-    # still needs individual keyword writes. TRANSITIONAL -- delete the legacy
-    # arm with pkgs/hypr-ipc.nix.
-    if [ "$(${pkgs.hypr-ipc}/bin/hypr-ipc manager)" = legacy ]; then
-      ${pkgs.hyprland}/bin/hyprctl keyword misc:background_color 0x${p.background}
-      ${pkgs.hyprland}/bin/hyprctl keyword general:gaps_in 8
-      ${pkgs.hyprland}/bin/hyprctl keyword general:gaps_out 12
-      ${pkgs.hyprland}/bin/hyprctl keyword general:border_size 1
-      ${pkgs.hyprland}/bin/hyprctl keyword general:col.active_border "rgba(3D8E48ff)"
-      ${pkgs.hyprland}/bin/hyprctl keyword general:col.inactive_border "rgba(15261Aff)"
-      ${pkgs.hyprland}/bin/hyprctl keyword decoration:rounding 4
-      ${pkgs.hyprland}/bin/hyprctl keyword decoration:active_opacity 1
-      ${pkgs.hyprland}/bin/hyprctl keyword decoration:inactive_opacity 1
-      # The legacy manager cannot express reload-safe rule handles, so retain
-      # the ordinary dark window treatment instead of leaking the app shadow
-      # to every window.
-      ${pkgs.hyprland}/bin/hyprctl keyword decoration:shadow:enabled false
-    else
-      # The marker now points at the complete mode-specific Lua config. Reload
-      # once so its settings and named-rule state change together; Hyprland's
-      # startup handlers do not rerun on config reload.
-      ${pkgs.hyprland}/bin/hyprctl reload
-    fi
+    # The marker now points at the complete mode-specific Lua config. Reload
+    # once so its settings and named-rule state change together; Hyprland's
+    # startup handlers do not rerun on config reload.
+    ${pkgs.hyprland}/bin/hyprctl reload
 
     ln -sf $HOME/.config/rofi/themes/dark.rasi $HOME/.config/rofi/current.rasi
 
@@ -163,18 +135,11 @@ let
     # running keep the cursor they started with until they restart; nothing can
     # reach into their environment after the fact.
     ${pkgs.hyprland}/bin/hyprctl setcursor ${darkCursorTheme} ${toString darkCursorSize}
-    if [ "$(${pkgs.hypr-ipc}/bin/hypr-ipc manager)" = legacy ]; then
-      ${pkgs.hyprland}/bin/hyprctl keyword env XCURSOR_THEME,${darkCursorTheme}
-      ${pkgs.hyprland}/bin/hyprctl keyword env HYPRCURSOR_THEME,${darkCursorTheme}
-      ${pkgs.hyprland}/bin/hyprctl keyword env XCURSOR_SIZE,${toString darkCursorSize}
-    else
-      ${pkgs.hyprland}/bin/hyprctl eval '
-        hl.env("XCURSOR_THEME", "${darkCursorTheme}")
-        hl.env("HYPRCURSOR_THEME", "${darkCursorTheme}")
-        hl.env("XCURSOR_SIZE", "${toString darkCursorSize}")
-      '
-    fi
-
+    ${pkgs.hyprland}/bin/hyprctl eval '
+      hl.env("XCURSOR_THEME", "${darkCursorTheme}")
+      hl.env("HYPRCURSOR_THEME", "${darkCursorTheme}")
+      hl.env("XCURSOR_SIZE", "${toString darkCursorSize}")
+    '
   '';
 
   # Light Mode Script
@@ -184,7 +149,6 @@ let
 
     # Make the mode authoritative before reconciling the output-aware shader.
     ln -sf "$HOME/.config/hypr/themes/light.lua" "${hyprCurrentTheme}"
-    ln -sf "$HOME/.config/hypr/themes/light.conf" "${hyprCurrentThemeLegacy}"
     ${pkgs.screen-shader-controller}/bin/screen-shader reconcile --mode light
 
     # WALLPAPER
@@ -192,24 +156,10 @@ let
     pkill swaybg || true
     ${pkgs.util-linux}/bin/setsid -f ${pkgs.swaybg}/bin/swaybg -i "${lightWallpaper}" -m fit -c ffffff >/dev/null 2>&1
 
-    # 2. HYPRLAND BACKGROUND COLOR + live theme settings. See the dark hook for
-    # why the legacy arm exists.
-    if [ "$(${pkgs.hypr-ipc}/bin/hypr-ipc manager)" = legacy ]; then
-      ${pkgs.hyprland}/bin/hyprctl keyword misc:background_color 0xffffff
-      ${pkgs.hyprland}/bin/hyprctl keyword general:gaps_in 4
-      ${pkgs.hyprland}/bin/hyprctl keyword general:gaps_out 15
-      ${pkgs.hyprland}/bin/hyprctl keyword general:border_size 2
-      ${pkgs.hyprland}/bin/hyprctl keyword general:col.active_border "rgba(000000ff)"
-      ${pkgs.hyprland}/bin/hyprctl keyword general:col.inactive_border "rgba(00000000)"
-      ${pkgs.hyprland}/bin/hyprctl keyword decoration:rounding 4
-      ${pkgs.hyprland}/bin/hyprctl keyword decoration:active_opacity 1
-      ${pkgs.hyprland}/bin/hyprctl keyword decoration:inactive_opacity 0.7
-      ${pkgs.hyprland}/bin/hyprctl keyword decoration:shadow:enabled false
-    else
-      # See the dark hook: the light theme owns the same complete setting set,
-      # so one reload applies it without an intermediate visual state.
-      ${pkgs.hyprland}/bin/hyprctl reload
-    fi
+    # 2. HYPRLAND BACKGROUND COLOR + live theme settings. See the dark hook: the
+    # light theme owns the same complete setting set, so one reload applies it
+    # without an intermediate visual state.
+    ${pkgs.hyprland}/bin/hyprctl reload
 
     ln -sf $HOME/.config/rofi/themes/light.rasi $HOME/.config/rofi/current.rasi
 
@@ -240,17 +190,11 @@ let
 
     # See the dark hook for why the environment is rewritten alongside setcursor.
     ${pkgs.hyprland}/bin/hyprctl setcursor ${lightCursorTheme} ${toString lightCursorSize}
-    if [ "$(${pkgs.hypr-ipc}/bin/hypr-ipc manager)" = legacy ]; then
-      ${pkgs.hyprland}/bin/hyprctl keyword env XCURSOR_THEME,${lightCursorTheme}
-      ${pkgs.hyprland}/bin/hyprctl keyword env HYPRCURSOR_THEME,${lightCursorTheme}
-      ${pkgs.hyprland}/bin/hyprctl keyword env XCURSOR_SIZE,${toString lightCursorSize}
-    else
-      ${pkgs.hyprland}/bin/hyprctl eval '
-        hl.env("XCURSOR_THEME", "${lightCursorTheme}")
-        hl.env("HYPRCURSOR_THEME", "${lightCursorTheme}")
-        hl.env("XCURSOR_SIZE", "${toString lightCursorSize}")
-      '
-    fi
+    ${pkgs.hyprland}/bin/hyprctl eval '
+      hl.env("XCURSOR_THEME", "${lightCursorTheme}")
+      hl.env("HYPRCURSOR_THEME", "${lightCursorTheme}")
+      hl.env("XCURSOR_SIZE", "${toString lightCursorSize}")
+    '
   '';
 
   # Peer machine to notify on theme edges, baked from the host config. Empty
@@ -411,58 +355,9 @@ in
   systemd.user.tmpfiles.rules = [
     "d %h/.local/state/hypr 0755 - - -"
     "L %h/.local/state/hypr/current-theme.lua - - - - %h/.config/hypr/themes/dark.lua"
-    # TRANSITIONAL twin; see hyprCurrentThemeLegacy above.
-    "L %h/.local/state/hypr/current-theme.conf - - - - %h/.config/hypr/themes/dark.conf"
     "L+ %h/.local/share/dark-mode.d/10-nixos-hook.sh - - - - ${darkModeHook}"
     "L+ %h/.local/share/light-mode.d/10-nixos-hook.sh - - - - ${lightModeHook}"
   ];
-
-  # TRANSITIONAL: keep the two mode markers in step, in whichever direction
-  # they disagree, on every activation.
-  #
-  # Both directions are needed and both were live during this migration. A
-  # machine coming from the .conf era has only the legacy marker, and it may
-  # say light -- the tmpfiles `L` rules above only fill a *missing* path and
-  # both name dark, so without this the .lua marker is born saying "dark" and
-  # flips the desktop at the next rebuild. Going the other way, a machine that
-  # has already relogged into Lua switches modes through the .lua marker only
-  # while its .conf marker sits at whatever it last was; if that machine is
-  # ever rolled back (which is exactly what happened here), the stale legacy
-  # marker would put the desktop in the wrong mode.
-  #
-  # The .lua marker is the source of truth wherever both exist -- it is the one
-  # theme-mode, theme-toggle and screen-shader read. Runs on every activation
-  # rather than once, so neither marker can be left behind by a rollback, and
-  # is self-sufficient rather than ordered against tmpfiles.
-  home.activation.hyprThemeMarkerSync = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
-    themes="$HOME/.config/hypr/themes"
-    lua="${hyprCurrentTheme}"
-    conf="${hyprCurrentThemeLegacy}"
-
-    run mkdir -p "$HOME/.local/state/hypr"
-
-    if [ -L "$lua" ] || [ -e "$lua" ]; then
-      # .lua wins: mirror it into the legacy marker.
-      case "$(readlink "$lua" 2>/dev/null || true)" in
-      *light.lua) mode=light ;;
-      *) mode=dark ;;
-      esac
-    elif [ -L "$conf" ] || [ -e "$conf" ]; then
-      # First activation after the migration on a machine that only has the
-      # legacy marker: adopt whatever mode it is actually in.
-      case "$(readlink "$conf" 2>/dev/null || true)" in
-      *light.conf) mode=light ;;
-      *) mode=dark ;;
-      esac
-    else
-      mode=dark
-    fi
-
-    [ "$(readlink "$lua" 2>/dev/null || true)" = "$themes/$mode.lua" ] \
-      || run ln -sfn "$themes/$mode.lua" "$lua"
-    [ "$(readlink "$conf" 2>/dev/null || true)" = "$themes/$mode.conf" ] \
-      || run ln -sfn "$themes/$mode.conf" "$conf"
-  '';
 
   # Foot reads its palette from ~/.config/foot/foot.ini once, when the window
   # opens, so that symlink has to exist before the first mode switch of a
@@ -478,7 +373,7 @@ in
   # reads, and on every activation rather than only when missing, so a rebuild
   # cannot leave the terminal disagreeing with the desktop. Dark mode keeps
   # whichever dark-*.ini is linked so an active `phosphor` selection survives.
-  home.activation.footThemeLink = lib.hm.dag.entryAfter [ "hyprThemeMarkerSync" ] ''
+  home.activation.footThemeLink = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
     themes="$HOME/.config/foot/themes"
     link="$HOME/.config/foot/foot.ini"
     current="$(readlink "$link" 2>/dev/null || true)"
