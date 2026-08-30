@@ -299,7 +299,7 @@ class RealtimeTranslatorTests(unittest.IsolatedAsyncioTestCase):
             {"type": "response.create", "response": {}},
         ])
         translator = shim.RealtimeTranslator(
-            "test", "wss://invalid.example", 0, max_segment_bytes=8
+            "test", "wss://invalid.example", 0, "test-model", max_segment_bytes=8
         )
 
         async def open_upstream():
@@ -344,7 +344,7 @@ class RealtimeTranslatorTests(unittest.IsolatedAsyncioTestCase):
             {"type": "response.create", "response": {}},
         ])
         translator = shim.RealtimeTranslator(
-            "test", "wss://invalid.example", 0, max_segment_bytes=8
+            "test", "wss://invalid.example", 0, "test-model", max_segment_bytes=8
         )
 
         upstreams = iter([old_upstream, new_upstream])
@@ -415,7 +415,7 @@ class RealtimeTranslatorTests(unittest.IsolatedAsyncioTestCase):
             },
         ])
         translator = shim.RealtimeTranslator(
-            "test", "wss://invalid.example", 0, max_segment_bytes=8
+            "test", "wss://invalid.example", 0, "test-model", max_segment_bytes=8
         )
 
         async def open_upstream():
@@ -473,7 +473,7 @@ class RealtimeTranslatorTests(unittest.IsolatedAsyncioTestCase):
             {"type": "response.create", "response": {}},
         ])
         translator = shim.RealtimeTranslator(
-            "test", "wss://invalid.example", 0, max_segment_bytes=8
+            "test", "wss://invalid.example", 0, "test-model", max_segment_bytes=8
         )
 
         async def open_upstream():
@@ -508,7 +508,7 @@ class RealtimeTranslatorTests(unittest.IsolatedAsyncioTestCase):
             },
         )
         translator = shim.RealtimeTranslator(
-            "test", "wss://invalid.example", 0, max_segment_bytes=8
+            "test", "wss://invalid.example", 0, "test-model", max_segment_bytes=8
         )
 
         async def open_upstream():

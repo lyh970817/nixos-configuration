@@ -89,7 +89,7 @@ stdenvNoCC.mkDerivation rec {
   # hyprwhspr-paste-notify.patch: after a successful text injection, send a
   # best-effort loopback UDP datagram (port 8773) carrying the paste
   # timestamp and the exact injected text; qwen-asr-shim uses it for
-  # paste-complete latency and for the raw-revert record.
+  # paste-complete latency.
   # hyprwhspr-filler-punctuation.patch: upstream's filler-word filter strips
   # only the letters, so an ASR backend that punctuates transcripts turns
   # "Fair enough. Um. Uh, what" into "Fair enough. . , what". Remove a

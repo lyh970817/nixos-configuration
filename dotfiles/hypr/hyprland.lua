@@ -254,13 +254,16 @@ hl.bind(mainMod .. " + C", hl.dsp.exec_cmd(scripts .. "/screenshot.sh full"))
 hl.bind(mainMod .. " + SHIFT + S", hl.dsp.exec_cmd(scripts .. "/screenshot.sh region"))
 hl.bind(mainMod .. " + CTRL + C", hl.dsp.exec_cmd(scripts .. "/screenshot.sh region"))
 -- Screen recording: toggles into ~/Videos/Recordings, same key press to stop.
--- Super+Shift+O is already the dictation raw-transcript revert below, so these
--- take the free CTRL/ALT variants of O. Super+Alt is invariant under the SANWA
--- keyboard's keyd Alt/Super swap (modules/services/keyd.nix), so it survives it.
-hl.bind(mainMod .. " + CTRL + O", hl.dsp.exec_cmd("screen-record screen"), { description = "Toggle full recording" })
+-- Region deliberately takes the ALT variant rather than a second SHIFT one:
+-- Super+Alt is invariant under the SANWA keyboard's keyd Alt/Super swap
+-- (modules/services/keyd.nix), so it survives it.
+hl.bind(mainMod .. " + SHIFT + O", hl.dsp.exec_cmd("screen-record screen"), { description = "Toggle full recording" })
 hl.bind(mainMod .. " + ALT + O", hl.dsp.exec_cmd("screen-record region"), { description = "Toggle region recording" })
+-- Stop recording and throw the file away, as opposed to the toggles above,
+-- which stop and keep it. Super+Escape is long-form dictation cancel; this is
+-- the free SHIFT variant of the same "cancel what is running" idea.
+hl.bind(mainMod .. " + SHIFT + ESCAPE", hl.dsp.exec_cmd("screen-record cancel"), { description = "Cancel recording (discard)" })
 hl.bind("SUPER + O", hl.dsp.exec_cmd("hyprwhispr-record toggle"), { description = "Speech-to-text" })
-hl.bind("SUPER + SHIFT + O", hl.dsp.exec_cmd("hyprwhspr-raw-revert"), { description = "Revert dictation to raw transcript" })
 hl.bind("CTRL + SHIFT + L", hl.dsp.exec_cmd("hyprwhspr-longform toggle"), { description = "Long-form dictation" })
 hl.bind("CTRL + SHIFT + P", hl.dsp.exec_cmd("hyprwhispr-profile toggle"), { description = "Toggle dictation profile" })
 hl.bind("SUPER + ESCAPE", hl.dsp.exec_cmd("hyprwhspr-longform cancel"))

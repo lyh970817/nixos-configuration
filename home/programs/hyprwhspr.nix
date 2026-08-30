@@ -561,23 +561,6 @@ let
     text = builtins.readFile ../../scripts/hyprwhispr-record;
   };
 
-  # Replace the last pasted short dictation with its raw ASR transcript
-  # (Super+Shift+O). Reads the per-dictation ring maintained by
-  # qwen-asr-shim; see scripts/hyprwhspr-raw-revert.py.
-  hyprwhsprRawRevert = pkgs.writeShellApplication {
-    name = "hyprwhspr-raw-revert";
-    runtimeInputs = [
-      pkgs.hyprland
-      pkgs.libnotify
-      pkgs.wl-clipboard
-      pkgs.wtype
-    ];
-    text = ''
-      export HYPRWHSPR_REVERT_PASTE_KEYS=${lib.escapeShellArg (builtins.toJSON terminalPasteKeys)}
-      exec ${pkgs.python3}/bin/python3 ${../../scripts/hyprwhspr-raw-revert.py} "$@"
-    '';
-  };
-
   # Best-effort dismissal of stale "hyprwhspr" notifications (e.g. an
   # orphaned "transcribing" status bubble left behind when the daemon exits
   # uncleanly or is restarted by a profile switch). Wired as an
@@ -622,7 +605,6 @@ in
     hyprwhisprProfileEnsure
     hyprwhisprRecord
     hyprwhsprLongform
-    hyprwhsprRawRevert
     hyprwhsprDismissNotifications
   ];
 
@@ -690,14 +672,10 @@ in
       `~/.local/share/hyprwhspr/short/audio/`, aged out after 30 days by a
       user tmpfiles rule.
 
-      qwen-asr-shim also keeps the newest short dictations (raw ASR, cleaned
-      text, exact pasted text, per-stage latencies) in a small ring at
-      `~/.local/share/hyprwhspr/short/dictations.jsonl`. `Super+Shift+O`
-      (`hyprwhspr-raw-revert`) replaces the last pasted dictation with its raw
-      transcript; it is skipped with a warning when raw coverage was partial
-      (Audio3 multi-commit dictations). Per-dictation latency lines
-      (key release -> first delta -> done -> paste, warm/cold, model) land in
-      the journal as `latency {json}`:
+      qwen-asr-shim records per-dictation latency lines (key release ->
+      first delta -> done -> paste, warm/cold, model) in the journal as
+      `latency {json}`. They are content-free: transcripts appear only as
+      character counts, never as text.
 
       ```sh
       journalctl --user -u qwen-asr-shim.service -o cat \

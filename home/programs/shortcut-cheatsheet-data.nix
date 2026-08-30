@@ -139,11 +139,15 @@
       }
       {
         description = "Toggle full recording";
-        key = "Super + Ctrl + o";
+        key = "Super + Shift + o";
       }
       {
         description = "Toggle region recording";
         key = "Super + Alt + o";
+      }
+      {
+        description = "Cancel recording (discard)";
+        key = "Super + Shift + Escape";
       }
       {
         description = "Turn display on";
@@ -157,10 +161,6 @@
       {
         description = "Toggle short dictation";
         key = "Super + o";
-      }
-      {
-        description = "Revert dictation to raw transcript";
-        key = "Super + Shift + o";
       }
       {
         description = "Toggle long dictation";
