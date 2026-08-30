@@ -2,8 +2,7 @@
 # refresh the greeting's audio cache at the same moment.
 #
 # The mute keybinds are deliberately not hooked: muting from pavucontrol, an
-# application, or a headset button has to notify too, and the Hyprland config is
-# mid-migration between hyprland.conf and hyprland.lua. Subscribing to the sound
+# application, or a headset button has to notify too. Subscribing to the sound
 # server covers every path with one implementation.
 { pkgs, ... }:
 

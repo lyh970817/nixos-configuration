@@ -100,7 +100,6 @@
         # Upstream flake ships the package directly; take it from the pinned
         # input.
         herdr = herdr.packages.${system}.default;
-        hypr-ipc = final.callPackage ./pkgs/hypr-ipc.nix { };
         hyprwhspr = final.callPackage ./pkgs/hyprwhspr.nix { };
         # 1.13.7 release tarball over the nixpkgs packaging; the explanation
         # vault needs its callout inline-math fix (see pkgs/obsidian.nix).
