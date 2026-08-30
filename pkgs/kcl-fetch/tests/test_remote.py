@@ -156,6 +156,34 @@ class TestSshHint(unittest.TestCase):
         self.assertIsNone(remote.ssh_hint({"SSH_CONNECTION": "   "}))
 
 
+class TestWindowLocation(unittest.TestCase):
+    """`get --show` waits for a human, so it has to say which screen to go to.
+
+    The terminal and the window are routinely on different machines here, and
+    "complete the challenge in the window" is useless to someone whose window
+    is elsewhere.
+    """
+
+    def test_it_names_the_host_even_when_that_is_the_local_one(self):
+        self.assertEqual(remote.window_screen("linglong"), "on linglong's screen")
+
+    def test_there_is_no_caveat_outside_an_ssh_session(self):
+        self.assertIsNone(remote.window_note({}))
+
+    def test_over_ssh_it_says_that_is_not_where_you_are_typing(self):
+        said = remote.window_note({"SSH_CONNECTION": "100.64.0.2 51234 100.64.0.1 22"})
+        self.assertIn("100.64.0.2", said)
+        self.assertIn("not the machine you are typing on", said)
+
+    def test_it_suggests_no_hop_because_get_has_none(self):
+        """`login --on` moves the sign-in; a clearance cookie cannot move."""
+        said = remote.window_note(
+            {"SSH_CONNECTION": "100.64.0.2 51234 100.64.0.1 22",
+             remote.PEER_HOST_ENV: "dynabook"}
+        )
+        self.assertNotIn("--on", said)
+
+
 class _Capture:
     def __init__(self) -> None:
         self.text = ""

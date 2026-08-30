@@ -38,6 +38,11 @@ from kcl_fetch_lib.pdfcheck import NotAPdf
 #: from a checkout without pretending it found a browser it did not.
 CHROMIUM_ENV = "KCL_FETCH_CHROMIUM"
 
+#: How long a window waits for the human it needs. Shared by `login` (finish
+#: SSO) and `get --show` (answer a bot challenge), because it is the same
+#: quantity: how long it takes a person to notice and walk to the machine.
+INTERACTIVE_TIMEOUT = 900.0
+
 
 def _resolve_chromium(configured: str | None) -> str:
     for candidate in (configured, os.environ.get(CHROMIUM_ENV)):
@@ -77,6 +82,10 @@ def _get_screen(args, stack: contextlib.ExitStack) -> display_mod.Display:
     publisher SP looks for, so the window is not suppressed -- it is put on an
     Xvfb server nobody is looking at. `login` never comes here: MFA needs a
     human in front of the window.
+
+    Which is also why `--show` decides whether a bot challenge can be waited
+    out (`driver.await_challenge`): a window only exists to hand over when it
+    is on a screen someone can reach.
 
     The server is entered on the caller's `ExitStack`, so it is reaped on the
     normal path, on any exception, and on the `KeyboardInterrupt` a SIGINT
@@ -189,6 +198,15 @@ def _fetch(args, cfg: config_mod.Config, screen: display_mod.Display) -> int:
                             out_dir=out_dir,
                             stem=_doi_stem(doi),
                             min_bytes=cfg.limits.min_pdf_bytes,
+                            # Only `--show` puts the window on a screen, so
+                            # only `--show` can offer a challenge to a human.
+                            # On the Xvfb display the wait is zero and the
+                            # challenge is reported at once, as before: there
+                            # is nobody there to answer it.
+                            challenge_wait=args.timeout if args.show else 0.0,
+                            on_challenge=lambda signature: _announce_challenge(
+                                signature, args.timeout
+                            ),
                         )
                 except driver_mod.AccessForbidden as forbidden:
                     try:
@@ -238,6 +256,32 @@ def _fetch(args, cfg: config_mod.Config, screen: display_mod.Display) -> int:
         gate.close()
 
 
+def _ssh_caveat() -> str:
+    """The "that window is on the other machine" line, or nothing."""
+    note = remote.window_note()
+    return f"\n  {note}" if note else ""
+
+
+def _announce_challenge(signature: str, seconds: float) -> None:
+    """Said to the terminal the moment the window starts waiting.
+
+    The terminal and the window are routinely on different machines -- this is
+    a two-machine setup and `get` is often typed over SSH -- so the one thing
+    this has to carry is *which* screen the challenge is sitting on. Without
+    that it is an instruction to look at a window the reader cannot see.
+    """
+    print(
+        f"kcl-fetch: a human-verification challenge ({signature}) is on the "
+        "screen, and the fetch is now waiting for you to answer it.\n"
+        f"  The window is open {remote.window_screen()}."
+        f"{_ssh_caveat()}\n"
+        f"  Complete the challenge there and the fetch carries on by itself. "
+        f"Waiting up to {seconds:g}s (--timeout SECONDS); nothing is answered "
+        "automatically.",
+        file=sys.stderr,
+    )
+
+
 def _report_challenge(
     template: str, doi: str, challenge: driver_mod.BotChallenge
 ) -> None:
@@ -248,20 +292,39 @@ def _report_challenge(
     host reading as the publisher, so the old code called it an empty article
     page and blamed the subscription.
 
-    The remedy is a person, once. `get` runs on a private X server, so the
-    window it would hand over does not exist -- `--show` is what puts it on a
-    screen, and the clearance cookie it earns lands in the same profile every
-    later fetch reuses.
+    The remedy is a person, once. Which means the advice has to be an
+    instruction that actually works: the older wording told the user to rerun
+    with `--show` and answer the challenge, while `--show` was a spectator flag
+    that detected the challenge and exited, closing the window in the user's
+    face. `challenge.waited` distinguishes the two cases -- no screen to offer
+    it on, or offered and not taken -- because they need opposite advice.
     """
+    if challenge.waited is not None:
+        print(
+            f"kcl-fetch: {template} route {challenge}\n"
+            "  A captcha is not a subscription gap -- do not ask the library "
+            "about it.\n"
+            f"  The window was open {remote.window_screen()} and the challenge "
+            "was not completed, so nothing was retrieved. Retry when you can "
+            "be at that machine, with a longer --timeout if you need one.\n"
+            "  If this machine's traffic leaves through a VPN or proxy, the "
+            "exit address is a large part of what triggered this.",
+            file=sys.stderr,
+        )
+        return
     print(
         f"kcl-fetch: {template} route {challenge}\n"
         "  A captcha is not a subscription gap -- do not ask the library "
         "about it.\n"
         "  It is a question for a human, and this tool will not answer one. "
-        "Answer it yourself once, on the machine holding the session:\n"
+        "Nothing was waiting on a screen for you to answer it either -- a "
+        "plain `get` paints on a private display nobody is looking at. Run it "
+        "again on your own screen:\n"
         f"    kcl-fetch get {doi} --show\n"
-        "  and complete the challenge in the window; the clearance cookie is "
-        "kept in the profile.\n"
+        f"  That opens the window {remote.window_screen()} and holds it there, "
+        f"waiting up to {INTERACTIVE_TIMEOUT:g}s (--timeout SECONDS) for you "
+        "to complete the challenge; the fetch then carries on by itself and "
+        f"the clearance cookie is kept in the profile.{_ssh_caveat()}\n"
         "  If this machine's traffic leaves through a VPN or proxy, the exit "
         "address is a large part of what triggered this.\n"
         "  The other access route is not tried: a publisher that has just "
@@ -459,8 +522,23 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "open the browser on your own screen instead of on a private Xvfb "
-            "display. For watching a fetch go wrong; the browser is headed "
-            "either way, so this changes nothing a publisher can see."
+            "display. Needed to answer a bot challenge: with --show the window "
+            "stays open and waits for you to complete one, then finishes the "
+            "fetch (see --timeout). Also useful for watching a fetch go wrong. "
+            "The browser is headed either way, so this changes nothing a "
+            "publisher can see."
+        ),
+    )
+    get.add_argument(
+        "--timeout",
+        type=float,
+        default=INTERACTIVE_TIMEOUT,
+        metavar="SECONDS",
+        help=(
+            "how long the window waits for you to answer a bot challenge, "
+            f"with --show. Default: {INTERACTIVE_TIMEOUT:g}. Without --show "
+            "the fetch runs on a display nobody is looking at, so a challenge "
+            "is reported immediately and this is not used."
         ),
     )
     get.set_defaults(func=cmd_get, show=False)
@@ -470,7 +548,9 @@ def build_parser() -> argparse.ArgumentParser:
         parents=[browser_opts],
         help="one-time manual SSO in a visible window",
     )
-    login.add_argument("--timeout", type=float, default=900.0, metavar="SECONDS")
+    login.add_argument(
+        "--timeout", type=float, default=INTERACTIVE_TIMEOUT, metavar="SECONDS"
+    )
     peer = remote.peer_host()
     login.add_argument(
         "--on",

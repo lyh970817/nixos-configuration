@@ -28,14 +28,21 @@ along.
 
 from __future__ import annotations
 
+import argparse
+import os
+import socket
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
 import kcl_fetch
+from kcl_fetch_lib import config as config_mod
+from kcl_fetch_lib import display as display_mod
 from kcl_fetch_lib import driver as driver_mod
 from kcl_fetch_lib import gate as gate_mod
+from kcl_fetch_lib import metadata
 from kcl_fetch_lib.pdfcheck import NotAPdf
 from support import GateFixture
 
@@ -218,7 +225,8 @@ def browser_over(page: FakePage) -> driver_mod.Browser:
     return browser
 
 
-def fetch(page: FakePage, *, out_dir: Path | None = None, min_bytes: int = 1024):
+def fetch(page: FakePage, *, out_dir: Path | None = None, min_bytes: int = 1024,
+          **kwargs):
     return browser_over(page).fetch_pdf(
         "https://go.openathens.net/redirector/kcl.ac.uk?url=x",
         doi=DOI,
@@ -226,6 +234,7 @@ def fetch(page: FakePage, *, out_dir: Path | None = None, min_bytes: int = 1024)
         out_dir=out_dir or Path(tempfile.mkdtemp()),
         stem="10.1016_j.jad.2024.01.106",
         min_bytes=min_bytes,
+        **kwargs,
     )
 
 
@@ -514,12 +523,394 @@ class TestGateAccounting(unittest.TestCase):
         self.assertNotEqual(gate_mod.CHALLENGE_OUTCOME, "miss")
 
 
+# ---------------------------------------------------------------------------
+# Answering it, which is what --show is for
+#
+# The message above told the user to rerun with `--show` and complete the
+# challenge in the window. Reproduced on the laptop, that command opened a
+# window on the real display, detected the challenge, and exited -- the window
+# vanished before anyone could click anything. The advice was impossible to
+# follow with the tool that printed it.
+
+
+class FakeTime:
+    """`time.monotonic` under test control; the page's waits move it.
+
+    Nothing sleeps: a fifteen-minute window is walked through in whatever a
+    poll loop costs in Python. Anything else `driver` asks the real `time`
+    module for (`strftime`, in the provenance sidecar) is delegated.
+    """
+
+    def __init__(self, start: float = 1000.0):
+        self.t = start
+
+    def monotonic(self) -> float:
+        return self.t
+
+    def advance(self, seconds: float) -> None:
+        self.t += seconds
+
+    def __getattr__(self, name):
+        import time as real_time
+
+        return getattr(real_time, name)
+
+
+ARTICLE_TITLE = "Sleep and depression - ScienceDirect"
+ARTICLE_BODY = "Abstract\nHighlights\nGet rights and content"
+PDF_CONTROL = "a[href*='/pdf']"
+INTERSTITIAL = "https://www.sciencedirect.com/science/article/pii/S0165032724001174"
+
+
+class _WatchedLocator(FakeLocator):
+    """Records whether a click happened while the challenge was still up."""
+
+    def click(self, timeout=None) -> None:
+        if not self.page.cleared:
+            self.page.clicks_while_challenged += 1
+        super().click(timeout=timeout)
+
+
+class ChallengedPage(FakePage):
+    """The Turnstile page, with a human on the other side of the screen.
+
+    `_settle` is the poll, so `wait_for_load_state` counts them and
+    `clears_after` is how many a person takes to click the checkbox. Clearing
+    does what a real clearance does: the widget leaves the DOM, the title and
+    the body become the article's, and the PDF control that was never served
+    finally appears.
+    """
+
+    def __init__(self, clock: FakeTime, *, clears_after: int | None = None,
+                 urls_after_clearing: tuple[str, ...] = (), **kwargs):
+        super().__init__(
+            ARTICLE,
+            title="Just a moment...",
+            body=CHALLENGE_BODY,
+            markup=TURNSTILE,
+            **kwargs,
+        )
+        self.clock = clock
+        self.clears_after = clears_after
+        self.urls_after_clearing = list(urls_after_clearing)
+        self.polls = 0
+        self.waited = 0
+        self.clicks_while_challenged = 0
+
+    @property
+    def cleared(self) -> bool:
+        return not self.markup
+
+    def wait_for_load_state(self, _state, timeout=None) -> None:
+        self.polls += 1
+        if self.clears_after is not None and self.polls > self.clears_after:
+            self.clear()
+
+    def wait_for_timeout(self, ms) -> None:
+        self.waited += 1
+        self.clock.advance(ms / 1000.0)
+
+    def clear(self) -> None:
+        self.markup = set()
+        self._title = ARTICLE_TITLE
+        self.body = ARTICLE_BODY
+        self.controls = {PDF_CONTROL}
+        self.download = FakeDownload()
+        if self.urls_after_clearing:
+            self.url = self.urls_after_clearing.pop(0)
+
+    def rechallenge(self) -> None:
+        self.markup = set(TURNSTILE)
+        self._title = "Just a moment..."
+        self.body = CHALLENGE_BODY
+        self.controls = set()
+        self.download = None
+
+    def locator(self, selector: str) -> FakeLocator:
+        return _WatchedLocator(
+            self, selector in self.markup or selector in self.controls
+        )
+
+
+class FlickeringPage(ChallengedPage):
+    """Clearance is a navigation, and mid-navigation reads clear.
+
+    One poll of "no widget" is not evidence that the challenge is over: between
+    the widget leaving the DOM and the real page arriving there is a moment
+    that looks exactly like success and is not.
+    """
+
+    rechallenges = 0
+
+    def wait_for_load_state(self, _state, timeout=None) -> None:
+        self.polls += 1
+        if self.polls == 3:
+            self.clear()
+        elif self.polls == 4:
+            self.rechallenge()
+            self.rechallenges += 1
+        elif self.polls >= 6:
+            self.clear()
+
+
+class LateChallengePage(ChallengedPage):
+    """An ordinary article page; the click walks into the interstitial."""
+
+    def __init__(self, clock: FakeTime, **kwargs):
+        super().__init__(clock, **kwargs)
+        self.clear()
+        self.url = ARTICLE
+
+    def locator(self, selector: str) -> FakeLocator:
+        return _ClickIntoChallenge(
+            self, selector in self.markup or selector in self.controls
+        )
+
+
+class _ClickIntoChallenge(_WatchedLocator):
+    """The first click is met by the interstitial; the retry after it is not."""
+
+    def click(self, timeout=None) -> None:
+        super().click(timeout=timeout)
+        if self.page.clicks == 1:
+            self.page.rechallenge()
+
+
+class TestTheWindowWaitsForTheHuman(unittest.TestCase):
+    """`--show` says a person is looking at this window. So let them answer."""
+
+    def setUp(self) -> None:
+        self.clock = FakeTime()
+        self.announced: list[str] = []
+        patcher = mock.patch.object(driver_mod, "time", self.clock)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def fetch(self, page: FakePage, wait: float = 900.0):
+        return fetch(
+            page, challenge_wait=wait, on_challenge=self.announced.append
+        )
+
+    def test_the_fetch_carries_on_once_the_challenge_is_answered(self):
+        page = ChallengedPage(self.clock, clears_after=2)
+        result = self.fetch(page)
+        self.assertEqual(result.facts.pages, 14)
+        self.assertGreaterEqual(page.waited, 1)
+
+    def test_it_is_the_page_already_loaded_that_is_captured_from(self):
+        """No second navigation: the cleared page is the article, so use it."""
+        page = ChallengedPage(self.clock, clears_after=2)
+        self.fetch(page)
+        self.assertEqual(page.clicks, 1)
+        self.assertEqual(page.requested, [])
+
+    def test_nothing_is_clicked_while_the_challenge_is_still_up(self):
+        page = ChallengedPage(self.clock, clears_after=2)
+        self.fetch(page)
+        self.assertEqual(page.clicks_while_challenged, 0)
+
+    def test_the_terminal_is_told_before_the_waiting_starts(self):
+        page = ChallengedPage(self.clock, clears_after=2)
+        self.fetch(page)
+        self.assertEqual(len(self.announced), 1)
+        self.assertIn("challenges.cloudflare.com", self.announced[0])
+
+    def test_one_clear_poll_is_not_enough(self):
+        page = FlickeringPage(self.clock)
+        result = self.fetch(page)
+        self.assertEqual(result.facts.pages, 14)
+        self.assertEqual(page.rechallenges, 1)
+        # A single-poll rule would have finished at poll 3, in the gap.
+        self.assertGreaterEqual(page.polls, 6)
+        self.assertEqual(page.clicks_while_challenged, 0)
+
+    def test_it_waits_for_the_url_to_hold_still(self):
+        """Clearance usually redirects, and the redirect target is the article."""
+        page = ChallengedPage(
+            self.clock, clears_after=1, urls_after_clearing=(INTERSTITIAL, ARTICLE)
+        )
+        result = self.fetch(page)
+        self.assertEqual(result.final_url, ARTICLE)
+
+    def test_a_challenge_that_arrives_after_the_click_is_handed_over_too(self):
+        page = LateChallengePage(self.clock, clears_after=2)
+        result = self.fetch(page)
+        self.assertEqual(result.facts.pages, 14)
+        self.assertEqual(page.clicks_while_challenged, 0)
+        self.assertEqual(len(self.announced), 1)
+
+    def test_an_unanswered_challenge_times_out_and_is_still_a_challenge(self):
+        page = ChallengedPage(self.clock)
+        with self.assertRaises(driver_mod.BotChallenge) as caught:
+            self.fetch(page, wait=120.0)
+        self.assertEqual(caught.exception.waited, 120.0)
+        self.assertIn("not completed", str(caught.exception))
+
+    def test_the_timeout_is_the_one_asked_for(self):
+        page = ChallengedPage(self.clock)
+        started = self.clock.t
+        with self.assertRaises(driver_mod.BotChallenge):
+            self.fetch(page, wait=120.0)
+        self.assertGreaterEqual(self.clock.t - started, 120.0)
+        self.assertLess(self.clock.t - started, 130.0)
+
+    def test_a_timed_out_challenge_still_touches_nothing(self):
+        page = ChallengedPage(self.clock)
+        with self.assertRaises(driver_mod.BotChallenge):
+            self.fetch(page, wait=10.0)
+        self.assertEqual(page.clicks, 0)
+        self.assertEqual(page.requested, [])
+
+
+class TestWithoutAScreenNothingWaits(unittest.TestCase):
+    """The Xvfb default is correct as it stands: nobody is looking at it.
+
+    Waiting fifteen minutes for a human to answer a challenge on a display that
+    exists only inside the process would be a fifteen-minute pause for nothing,
+    with the gate lock held.
+    """
+
+    def setUp(self) -> None:
+        self.clock = FakeTime()
+        patcher = mock.patch.object(driver_mod, "time", self.clock)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_the_challenge_is_reported_at_once(self):
+        page = ChallengedPage(self.clock, clears_after=2)
+        with self.assertRaises(driver_mod.BotChallenge) as caught:
+            fetch(page)
+        self.assertIsNone(caught.exception.waited)
+
+    def test_not_a_single_poll_is_spent(self):
+        page = ChallengedPage(self.clock, clears_after=2)
+        with self.assertRaises(driver_mod.BotChallenge):
+            fetch(page)
+        self.assertEqual(page.waited, 0)
+        self.assertEqual(self.clock.t, 1000.0)
+
+    def test_a_zero_timeout_is_the_same_as_no_screen(self):
+        page = ChallengedPage(self.clock, clears_after=2)
+        with self.assertRaises(driver_mod.BotChallenge):
+            fetch(page, challenge_wait=0.0)
+        self.assertEqual(page.waited, 0)
+
+
+class TestTheCliSeam(unittest.TestCase):
+    """Only `--show` puts the window somewhere a human can reach it."""
+
+    def _fetch(self, *, show: bool, timeout: float = 900.0) -> dict:
+        recorded: dict = {}
+
+        class RecordingBrowser:
+            def __init__(self, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def fetch_pdf(self, _url, **kwargs):
+                recorded.update(kwargs)
+                raise driver_mod.BotChallenge(ARTICLE, "#captcha-box present")
+
+        root = Path(tempfile.mkdtemp())
+        args = argparse.Namespace(
+            doi=DOI,
+            output=str(root / "out"),
+            show=show,
+            timeout=timeout,
+            ozone_platform=None,
+            verbose=False,
+        )
+        env = {
+            "XDG_STATE_HOME": str(root / "state"),
+            "XDG_DATA_HOME": str(root / "data"),
+            "XDG_CONFIG_HOME": str(root / "config"),
+            "HOME": str(root),
+            "PATH": os.environ.get("PATH", ""),
+        }
+        with mock.patch.dict("os.environ", env, clear=True):
+            with mock.patch.object(kcl_fetch.libkey, "precheck", return_value=None):
+                with mock.patch.object(
+                    kcl_fetch.metadata,
+                    "lookup",
+                    return_value=metadata.Record(landing_url=ARTICLE),
+                ):
+                    with mock.patch.object(driver_mod, "Browser", RecordingBrowser):
+                        with mock.patch("sys.stderr", new_callable=_Capture):
+                            code = kcl_fetch._fetch(
+                                args,
+                                config_mod.Config(chromium=sys.executable),
+                                display_mod.Display("x11", {}, "test"),
+                            )
+        self.assertEqual(code, 6)
+        return recorded
+
+    def test_show_hands_the_timeout_down_to_the_fetch(self):
+        self.assertEqual(self._fetch(show=True, timeout=600.0)["challenge_wait"], 600.0)
+
+    def test_without_show_the_wait_is_zero(self):
+        self.assertEqual(self._fetch(show=False)["challenge_wait"], 0.0)
+
+
+class TestTheAnnouncement(unittest.TestCase):
+    """Said to a terminal that is often not on the machine with the window."""
+
+    def announce(self) -> str:
+        with mock.patch("sys.stderr", new_callable=_Capture) as err:
+            kcl_fetch._announce_challenge("#captcha-box present", 900.0)
+        return err.text
+
+    def test_it_names_the_machine_the_window_is_on(self):
+        self.assertIn(socket.gethostname(), self.announce())
+
+    def test_it_says_it_is_waiting_and_for_how_long(self):
+        text = self.announce()
+        self.assertIn("waiting", text)
+        self.assertIn("900", text)
+
+    def test_it_names_the_challenge_it_is_waiting_on(self):
+        self.assertIn("captcha-box", self.announce())
+
+
 class TestTheMessage(unittest.TestCase):
     def report(self) -> str:
         challenge = driver_mod.BotChallenge(ARTICLE, "#captcha-box present")
         with mock.patch("sys.stderr", new_callable=_Capture) as err:
             kcl_fetch._report_challenge("openathens", DOI, challenge)
         return err.text
+
+    def unanswered(self) -> str:
+        challenge = driver_mod.BotChallenge(
+            ARTICLE, "#captcha-box present", waited=900.0
+        )
+        with mock.patch("sys.stderr", new_callable=_Capture) as err:
+            kcl_fetch._report_challenge("openathens", DOI, challenge)
+        return err.text
+
+    def test_the_advice_promises_a_window_that_waits(self):
+        """The advice has to be an instruction that actually works."""
+        text = self.report()
+        self.assertIn(f"kcl-fetch get {DOI} --show", text)
+        self.assertIn("waiting up to", text)
+        self.assertIn("--timeout", text)
+
+    def test_the_advice_names_the_screen_the_window_opens_on(self):
+        self.assertIn(socket.gethostname(), self.report())
+
+    def test_an_unanswered_challenge_is_reported_as_that_and_not_as_advice(self):
+        text = self.unanswered()
+        self.assertIn("not completed", text)
+        self.assertIn("--timeout", text)
+        self.assertNotIn("kcl-fetch get", text)
+
+    def test_an_unanswered_challenge_is_still_not_a_subscription_gap(self):
+        text = self.unanswered()
+        self.assertIn("not a subscription gap", text)
+        self.assertNotIn("may not hold", text)
 
     def test_it_names_the_publisher_and_the_challenge(self):
         text = self.report()

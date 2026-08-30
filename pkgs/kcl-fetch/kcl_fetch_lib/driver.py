@@ -104,6 +104,11 @@ CHALLENGE_SELECTORS = (
     "iframe[src*='recaptcha']",
 )
 
+#: How often to look at a page a human is working on -- signing in, or
+#: answering a challenge. Reading the DOM costs no request, and neither a
+#: person typing a password nor one clicking a checkbox is in a hurry.
+HUMAN_POLL_MS = 2000
+
 _CHALLENGE_TITLE_RE = re.compile(
     r"(?i)^\s*(just a moment|attention required|one moment,? please|"
     r"access denied|security check|verifying you are human)"
@@ -170,18 +175,32 @@ class BotChallenge(DriverError):
 
     Nothing here solves it. A captcha exists to be answered by a human, and
     answering one programmatically is precisely the behaviour it is asking
-    about; the honest move is to say what happened and hand the window over.
+    about; the honest move is to say what happened and hand the window over --
+    which, when there is a screen to hand it over on, is what `await_challenge`
+    does. This exception is what is left when there is not, or when the offer
+    was made and nobody took it.
+
+    `waited` is that second case: the number of seconds the window was held
+    open on a real screen before giving up. `None` means it was never held
+    open, because there was no screen to hold it open on.
     """
 
-    def __init__(self, url: str, signature: str = ""):
+    def __init__(self, url: str, signature: str = "", *, waited: float | None = None):
         self.url = url
         self.host = host_of(url) or url
         self.signature = signature
+        self.waited = waited
         detail = f" ({signature})" if signature else ""
+        unanswered = (
+            f" The window was held open for {waited:g}s and the challenge was "
+            "not completed."
+            if waited is not None
+            else ""
+        )
         super().__init__(
             f"reached {self.host} and was served a human-verification "
             f"challenge{detail} instead of the article, on {url} -- this is "
-            "bot defence, and says nothing about KCL's entitlement."
+            f"bot defence, and says nothing about KCL's entitlement.{unanswered}"
         )
 
 
@@ -524,13 +543,70 @@ class Browser:
                 return True
             if time.monotonic() >= deadline:
                 return False
-            page.wait_for_timeout(2000)
+            page.wait_for_timeout(HUMAN_POLL_MS)
+
+    # -- challenges ------------------------------------------------------
+
+    def await_challenge(
+        self,
+        page,
+        signature: str,
+        *,
+        wait_seconds: float = 0.0,
+        announce=None,
+    ) -> None:
+        """Hold the window open while a human answers the challenge.
+
+        The same bargain as `interactive_login`, one publisher-defence layer
+        along: nothing is automated, a person looks at the screen, and all this
+        decides is when they are finished. Nothing here touches the widget --
+        answering a captcha programmatically is exactly the behaviour it is
+        asking about.
+
+        `wait_seconds <= 0` means there is no screen to wait on -- `get` paints
+        on a private Xvfb server unless `--show`, and nobody can answer a
+        challenge on a display nobody is looking at. Then this is just the
+        raise it always was.
+
+        Finished means two consecutive polls, each after the load state has
+        settled, that find no challenge signature *and* the same URL. One clear
+        poll is not enough: clearance is a navigation, and the moment between
+        the widget leaving the DOM and the real page arriving reads as clear
+        while showing nothing. Requiring the URL to hold still across two polls
+        is what "settled on something that is no longer a challenge" means
+        here; the caller then captures from that page as usual.
+        """
+        if wait_seconds <= 0:
+            raise BotChallenge(page.url, signature)
+        if announce is not None:
+            announce(signature)
+        deadline = time.monotonic() + wait_seconds
+        cleared_at: str | None = None
+        while True:
+            self._settle(page, timeout=5000)
+            if challenge_signature(page) is None:
+                if cleared_at is not None and cleared_at == page.url:
+                    return
+                cleared_at = page.url
+            else:
+                cleared_at = None
+            if time.monotonic() >= deadline:
+                raise BotChallenge(page.url, signature, waited=wait_seconds)
+            page.wait_for_timeout(HUMAN_POLL_MS)
 
     # -- fetching --------------------------------------------------------
 
     def fetch_pdf(self, access_url: str, *, doi: str, template: str,
-                  out_dir: Path, stem: str, min_bytes: int) -> Fetched:
-        """Navigate an institutional access URL and capture the article PDF."""
+                  out_dir: Path, stem: str, min_bytes: int,
+                  challenge_wait: float = 0.0, on_challenge=None) -> Fetched:
+        """Navigate an institutional access URL and capture the article PDF.
+
+        `challenge_wait` is how long a human has to answer a bot challenge in
+        the window, and is nonzero only when there is a window they can see
+        (`get --show`). It defaults to zero, so every caller that has not
+        thought about it keeps the old behaviour: report the challenge and
+        stop.
+        """
         page = self.page()
         response = page.goto(access_url, wait_until="domcontentloaded", timeout=60000)
 
@@ -546,7 +622,16 @@ class Browser:
         # alongside it.
         signature = challenge_signature(page)
         if signature and not has_pdf_control(page):
-            raise BotChallenge(page.url, signature)
+            # Waits when a person can see the window, raises when nobody can.
+            # Returning means the challenge is gone and this page is now the
+            # article, so the capture below runs on it -- no second navigation,
+            # and no second gated request.
+            self.await_challenge(
+                page,
+                signature,
+                wait_seconds=challenge_wait,
+                announce=on_challenge,
+            )
 
         capture = self._trigger_download(page)
         if capture is None:
@@ -563,7 +648,19 @@ class Browser:
             # navigation a click caused, after the first page looked ordinary.
             late = challenge_signature(page)
             if late:
-                raise BotChallenge(page.url, late)
+                self.await_challenge(
+                    page,
+                    late,
+                    wait_seconds=challenge_wait,
+                    announce=on_challenge,
+                )
+                # Answered. The click that ran into the challenge captured
+                # nothing, so the control is tried once more on the page that
+                # was actually served -- once, not in a loop, for the same
+                # reason `_trigger_download` clicks once.
+                capture = self._trigger_download(page)
+
+        if capture is None:
             # The old message said "KCL may not hold this article" for every
             # empty page, which is a verdict about a subscription drawn from
             # the absence of a link. Only a purchase offer is evidence of that;

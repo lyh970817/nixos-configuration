@@ -82,6 +82,33 @@ class TestParser(unittest.TestCase):
         self.assertTrue(self.parser.parse_args(["login", "--verbose"]).verbose)
         self.assertFalse(self.parser.parse_args(["get", "10.1000/x"]).verbose)
 
+    def test_get_takes_a_timeout_for_the_human_at_the_window(self):
+        """`get` had none: a challenge it told the user to answer by hand."""
+        self.assertEqual(
+            self.parser.parse_args(["get", "10.1000/x"]).timeout,
+            kcl_fetch.INTERACTIVE_TIMEOUT,
+        )
+        self.assertEqual(
+            self.parser.parse_args(["get", "10.1000/x", "--timeout", "60"]).timeout,
+            60.0,
+        )
+
+    def test_it_is_the_same_wait_login_gives_a_human(self):
+        """Both are "how long until a person walks to the machine"."""
+        self.assertEqual(
+            self.parser.parse_args(["login"]).timeout,
+            self.parser.parse_args(["get", "10.1000/x"]).timeout,
+        )
+
+    def test_the_default_is_long_enough_to_walk_to_another_room(self):
+        self.assertGreaterEqual(kcl_fetch.INTERACTIVE_TIMEOUT, 300.0)
+
+    def test_show_is_no_longer_advertised_as_a_spectator_flag(self):
+        help_text = _get_help(self.parser)
+        self.assertIn("waits", help_text)
+        # The reason it costs nothing is still worth saying.
+        self.assertIn("publisher can see", help_text)
+
     def test_there_is_no_batch_subcommand(self):
         """Bulk retrieval is the abuse signature; its absence is the feature."""
         actions = [
@@ -93,6 +120,15 @@ class TestParser(unittest.TestCase):
         for action in actions:
             offered.update(action.choices)
         self.assertEqual(offered, {"get", "login", "status"})
+
+
+def _get_help(parser) -> str:
+    """The `get` subparser's own help text, without exiting the process."""
+    for action in parser._subparsers._group_actions:
+        choices = getattr(action, "choices", None) or {}
+        if "get" in choices:
+            return choices["get"].format_help()
+    raise AssertionError("no get subparser")
 
 
 if __name__ == "__main__":
