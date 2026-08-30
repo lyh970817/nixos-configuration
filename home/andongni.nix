@@ -25,6 +25,7 @@
     ./programs/fzf.nix
     ./programs/newt.nix
     ./programs/r.nix
+    ./programs/apptainer.nix
     ./programs/fastfetch.nix
     ./programs/codexbar.nix
     ./programs/codex-theme.nix
