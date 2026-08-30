@@ -28,6 +28,11 @@ EZPROXY_LOGIN = "https://login.kcl.idm.oclc.org/login"
 #: and for recognising an IdP page during login-wall detection.
 KCL_IDP_ENTITY_ID = "https://kclidp.kcl.ac.uk/idp/shibboleth"
 
+#: Where `login` aims the redirector. Reaching *this* page is the proof the
+#: whole OpenAthens hop ran: the redirector itself answers on a different host
+#: and proves nothing.
+OPENATHENS_PORTAL = "https://my.openathens.net/"
+
 DOI_RESOLVER = "https://doi.org/"
 
 OPENATHENS = "openathens"

@@ -15,6 +15,7 @@ institution's whole IP range blocked.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import shutil
 import sys
@@ -23,7 +24,7 @@ from pathlib import Path
 from kcl_fetch_lib import config as config_mod
 from kcl_fetch_lib import display as display_mod
 from kcl_fetch_lib import driver as driver_mod
-from kcl_fetch_lib import libkey, metadata, paths, remote, routing, urls
+from kcl_fetch_lib import libkey, metadata, paths, remote, routing, urls, xvfb
 from kcl_fetch_lib.gate import (
     ArticleMeta,
     Gate,
@@ -69,6 +70,32 @@ def _display(args) -> display_mod.Display:
     return resolved
 
 
+def _get_screen(args, stack: contextlib.ExitStack) -> display_mod.Display:
+    """The screen `get` paints on: a private virtual one unless `--show`.
+
+    The browser stays headed either way. Headless is the strongest bot signal a
+    publisher SP looks for, so the window is not suppressed -- it is put on an
+    Xvfb server nobody is looking at. `login` never comes here: MFA needs a
+    human in front of the window.
+
+    The server is entered on the caller's `ExitStack`, so it is reaped on the
+    normal path, on any exception, and on the `KeyboardInterrupt` a SIGINT
+    raises.
+    """
+    if args.show:
+        return _display(args)
+    if args.ozone_platform:
+        raise SystemExit(
+            "kcl-fetch: --ozone-platform describes your real session, and "
+            "`get` runs on a virtual display -- add --show to use your screen."
+        )
+    server = stack.enter_context(xvfb.VirtualDisplay())
+    screen = server.display
+    if args.verbose:
+        print(f"kcl-fetch: display -- {screen.detail}", file=sys.stderr)
+    return screen
+
+
 def _doi_stem(doi: str) -> str:
     return doi.replace("/", "_").replace(":", "_")
 
@@ -88,9 +115,13 @@ def _open_gate(cfg: config_mod.Config) -> Gate:
 
 def cmd_get(args, cfg: config_mod.Config) -> int:
     # Before LibKey, before Crossref, before the gate: a fetch that cannot open
-    # a window should not consume a budget slot discovering that.
-    screen = _display(args)
+    # a window should not consume a budget slot discovering that. The Xvfb
+    # server lives for the whole command and is torn down by the stack.
+    with contextlib.ExitStack() as stack:
+        return _fetch(args, cfg, _get_screen(args, stack))
 
+
+def _fetch(args, cfg: config_mod.Config, screen: display_mod.Display) -> int:
     doi = urls.normalise_doi(args.doi)
     if not urls.is_doi(doi):
         print(f"kcl-fetch: {args.doi!r} is not a DOI", file=sys.stderr)
@@ -149,6 +180,7 @@ def cmd_get(args, cfg: config_mod.Config) -> int:
                         downloads_dir=paths.ensure(paths.state_dir() / "downloads"),
                         extra_args=screen.ozone_args(),
                         env=screen.env,
+                        env_unset=screen.unset,
                     ) as browser:
                         result = browser.fetch_pdf(
                             access_url,
@@ -165,8 +197,10 @@ def cmd_get(args, cfg: config_mod.Config) -> int:
                         print(f"kcl-fetch: {blocked.advice()}", file=sys.stderr)
                     return 4
                 except driver_mod.LoginRequired as needed:
-                    attempt.miss(str(needed))
-                    print(f"kcl-fetch: {needed}", file=sys.stderr)
+                    # Not a miss: nothing was fetched and no publisher was
+                    # asked, so this costs no budget (see `gate.login_wall`).
+                    attempt.login_wall(str(needed))
+                    _report_login_wall(template, needed)
                     return 5
                 except (driver_mod.NoFullText, NotAPdf) as miss:
                     attempt.miss(str(miss))
@@ -195,6 +229,24 @@ def cmd_get(args, cfg: config_mod.Config) -> int:
         gate.close()
 
 
+def _report_login_wall(template: str, needed: driver_mod.LoginRequired) -> None:
+    """Say "your session expired", never "KCL does not hold this".
+
+    The distinction is the whole point of the message. A route that ends at
+    Entra, KCL's IdP or OpenAthens tested nothing about the subscription, and
+    an entitlement verdict there sends the user to the library over a cookie.
+    """
+    print(
+        f"kcl-fetch: {template} route {needed}\n"
+        f"  This is an authentication lapse, not a subscription gap -- do not "
+        "ask the library about it.\n"
+        f"  Run `{remote.login_command()}` (a person has to complete it: MFA "
+        "is enforced), then retry this DOI.\n"
+        "  No budget was spent on this attempt.",
+        file=sys.stderr,
+    )
+
+
 # ---------------------------------------------------------------------------
 # login
 
@@ -217,7 +269,7 @@ def cmd_login(args, cfg: config_mod.Config) -> int:
 
     screen = _display(args)
     chromium = _resolve_chromium(cfg.chromium)
-    start = urls.openathens_url("https://my.openathens.net/")
+    start = urls.openathens_url(urls.OPENATHENS_PORTAL)
     print(
         "kcl-fetch: a Chromium window is opening.\n"
         "  Sign in as k1234567@kcl.ac.uk, then approve the Microsoft "
@@ -234,10 +286,22 @@ def cmd_login(args, cfg: config_mod.Config) -> int:
         extra_args=screen.ozone_args(),
         env=screen.env,
     ) as browser:
-        if browser.interactive_login(start, wait_seconds=args.timeout):
+        if browser.interactive_login(
+            start,
+            wait_seconds=args.timeout,
+            # Not "you left the login page" but "you arrived where we aimed":
+            # the redirector is not a login host, so the weaker test was
+            # already satisfied before the first hop ran.
+            target_host=urls.host_of(urls.OPENATHENS_PORTAL),
+        ):
             print("kcl-fetch: signed in; the session is stored in the profile.")
             return 0
-    print("kcl-fetch: sign-in did not complete", file=sys.stderr)
+    print(
+        f"kcl-fetch: sign-in did not complete -- the browser never reached "
+        f"{urls.host_of(urls.OPENATHENS_PORTAL)}, so no OpenAthens session was "
+        "established.",
+        file=sys.stderr,
+    )
     return 1
 
 
@@ -328,10 +392,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--ozone-platform",
         metavar="PLATFORM",
         help=(
-            "Chromium ozone platform (wayland, x11). Default: whichever of a "
-            "Wayland socket in $XDG_RUNTIME_DIR or an X socket in "
-            "/tmp/.X11-unix is actually there, Wayland first. An explicit "
-            "value is used even if its socket was not found."
+            "Chromium ozone platform (wayland, x11) for the real display, so "
+            "`login` and `get --show`. Default: whichever of a Wayland socket "
+            "in $XDG_RUNTIME_DIR or an X socket in /tmp/.X11-unix is actually "
+            "there, Wayland first. An explicit value is used even if its "
+            "socket was not found."
         ),
     )
     browser_opts.add_argument(
@@ -345,7 +410,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     get.add_argument("doi")
     get.add_argument("-o", "--output", default=".", metavar="DIR")
-    get.set_defaults(func=cmd_get)
+    get.add_argument(
+        "--show",
+        "--visible",
+        dest="show",
+        action="store_true",
+        help=(
+            "open the browser on your own screen instead of on a private Xvfb "
+            "display. For watching a fetch go wrong; the browser is headed "
+            "either way, so this changes nothing a publisher can see."
+        ),
+    )
+    get.set_defaults(func=cmd_get, show=False)
 
     login = sub.add_parser(
         "login",
@@ -388,10 +464,12 @@ def main(argv: list[str] | None = None) -> int:
         display_mod.NoDisplay,
         driver_mod.StaleProfileLock,
         remote.RemoteError,
+        xvfb.XvfbUnavailable,
     ) as exc:
-        # All three are facts about the machine -- no session, a profile
-        # already in use, no way to reach the host asked for -- not failures of
-        # the tool. One line, no traceback, no Chromium flag dump.
+        # All four are facts about the machine -- no session, a profile already
+        # in use, no way to reach the host asked for, no virtual display to
+        # hide behind -- not failures of the tool. One line, no traceback, no
+        # Chromium flag dump.
         print(f"kcl-fetch: {exc}", file=sys.stderr)
         return 2
 

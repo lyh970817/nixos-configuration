@@ -181,6 +181,16 @@ CREATE TABLE IF NOT EXISTS blocks (
 #: Outcomes that mean a request actually left the machine, so they spend
 #: budget. Refusals are still recorded -- they are the audit trail -- but they
 #: cost nothing, or a refused fetch would push the next one further away.
+#:
+#: `LOGIN_WALL_OUTCOME` is recorded and deliberately absent from this tuple.
+#: The traffic it names never reached a publisher: it went to KCL's IdP and
+#: came back as a sign-in page, which is the same SSO round trip `login`
+#: itself makes -- and `login` is ungated for exactly this reason. Charging it
+#: would bill the institutional budget for an expired cookie, and could leave
+#: the budget spent at the moment the user has just re-authenticated and wants
+#: to retry.
+LOGIN_WALL_OUTCOME = "login-wall"
+
 SPENDING_OUTCOMES = ("pending", "ok", "miss", "blocked", "error")
 
 
@@ -459,6 +469,10 @@ class Attempt:
 
     def error(self, detail: str | None = None) -> None:
         self._finish("error", detail)
+
+    def login_wall(self, detail: str | None = None) -> None:
+        """Ended at the IdP. Recorded in full, charged to nobody."""
+        self._finish(LOGIN_WALL_OUTCOME, detail)
 
     def blocked(self, status: int | None = 403, detail: str | None = None) -> None:
         """Latch this host off. There is no automatic retry, by design."""

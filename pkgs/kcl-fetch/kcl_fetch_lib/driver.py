@@ -9,7 +9,9 @@ means owning `expect_download` and `save_as`, which is the whole job.
 Three things are not negotiable:
 
 * **Headed.** Headless Chromium is the single strongest bot signal a publisher
-  SP looks for, and this session carries an institutional identity.
+  SP looks for, and this session carries an institutional identity. `get` still
+  launches headed; it is the *screen* that is virtual (see `xvfb.py`), so
+  nothing appears on a monitor and the fingerprint is unchanged.
 * **nixpkgs `chromium` via `executable_path`.** Playwright's own browser
   downloads are prebuilt glibc binaries that cannot run on NixOS. The nixpkgs
   `python3Packages.playwright` is patched to point at `playwright-core`'s
@@ -75,15 +77,23 @@ class DriverError(RuntimeError):
 
 
 class LoginRequired(DriverError):
-    """The session is absent or expired; only a human can fix it."""
+    """The route ended at an authentication wall, not at the article.
+
+    Kept strictly distinct from `NoFullText`, because the two send the user to
+    opposite places. This one means the stored session lapsed and a human has
+    to sign in again; `NoFullText` means we *reached* the publisher and KCL's
+    entitlement did not cover the article, which is a question for the library.
+    Reporting the first as the second is a wild goose chase over a cookie.
+    """
 
     def __init__(self, url: str):
-        super().__init__(
-            "KCL sign-in required (MFA is enforced, so this cannot be scripted). "
-            "Run `kcl-fetch login`, complete sign-in and the Authenticator "
-            "prompt in the window that opens, then retry."
-        )
         self.url = url
+        self.host = host_of(url) or url
+        super().__init__(
+            f"stopped at the sign-in wall on {self.host} -- the stored KCL "
+            "session has expired, so no publisher was reached and nothing was "
+            "learned about KCL's entitlement."
+        )
 
 
 class AccessForbidden(DriverError):
@@ -180,10 +190,21 @@ class Fetched:
     provenance: dict = field(default_factory=dict)
 
 
+def is_login_host(url: str) -> bool:
+    """True when this URL is an authentication host, subdomains included.
+
+    Exact matching alone misses the entries that are written as parents on
+    purpose: Entra serves its assets and some of its prompts from
+    `*.msftauth.net`, and a Shibboleth deployment moves between `idp.` names.
+    """
+    host = host_of(url)
+    if not host:
+        return False
+    return any(host == known or host.endswith(f".{known}") for known in LOGIN_HOSTS)
+
+
 def _looks_like_login(page) -> bool:
-    if host_of(page.url) in LOGIN_HOSTS:
-        return True
-    if any(page.url.startswith(f"https://{h}") for h in LOGIN_HOSTS):
+    if is_login_host(page.url):
         return True
     try:
         body = page.inner_text("body", timeout=2000)
@@ -204,6 +225,7 @@ class Browser:
         slow_mo: float = 0.0,
         extra_args: tuple[str, ...] = (),
         env: dict[str, str] | None = None,
+        env_unset: tuple[str, ...] = (),
     ):
         self.profile_dir = Path(profile_dir)
         self.chromium = chromium
@@ -217,8 +239,17 @@ class Browser:
         # Playwright's `env=` is the browser's *whole* environment -- passing
         # only these two would strip PATH, HOME and the rest.
         self.env = dict(env or {})
+        # Variables to drop rather than set. A private X server needs the
+        # session's `WAYLAND_DISPLAY` gone, not overridden.
+        self.env_unset = tuple(env_unset)
         self._playwright = None
         self.context = None
+
+    def browser_env(self) -> dict[str, str]:
+        merged = {**os.environ, **self.env}
+        for name in self.env_unset:
+            merged.pop(name, None)
+        return merged
 
     def __enter__(self) -> "Browser":
         from playwright.sync_api import sync_playwright
@@ -242,7 +273,7 @@ class Browser:
                 slow_mo=self.slow_mo,
                 viewport={"width": 1280, "height": 900},
                 args=["--no-first-run", "--no-default-browser-check", *self.extra_args],
-                env={**os.environ, **self.env},
+                env=self.browser_env(),
                 # Playwright passes `--enable-automation` by default, which sets
                 # `navigator.webdriver` and the "controlled by automated software"
                 # banner. Running headed to avoid looking like a bot and then
@@ -274,21 +305,48 @@ class Browser:
 
     # -- login -----------------------------------------------------------
 
-    def interactive_login(self, start_url: str, *, wait_seconds: float = 900.0) -> bool:
+    def interactive_login(
+        self,
+        start_url: str,
+        *,
+        wait_seconds: float = 900.0,
+        target_host: str | None = None,
+    ) -> bool:
         """Show the window and wait for the human to finish SSO.
 
-        Returns True once the browser lands somewhere that is not an
-        authentication host. There is no automation here on purpose: MFA means
-        the only supported login is a person looking at the screen.
+        There is no automation here on purpose: MFA means the only supported
+        login is a person looking at the screen. What this *does* decide is
+        when that person is finished, and "we are not currently on a login
+        host" is not that test. `start_url` is the OpenAthens redirector, which
+        is not a login host either -- so the old condition was already true on
+        the first poll, before a single hop had run, and a `login` that
+        established nothing could report success. The evidence for that is a
+        profile holding Entra cookies and no live OpenAthens session.
+
+        Finished therefore means: the chain has settled, we are not on a login
+        host, and we got here honestly -- either at `target_host`, the page we
+        actually asked the redirector for, or by having passed through a login
+        wall on the way (the case where the session was already good is the
+        first; the case where the human just signed in is either).
         """
         page = self.page()
         page.goto(start_url, wait_until="domcontentloaded")
+        started_on = host_of(start_url)
         deadline = time.monotonic() + wait_seconds
-        while time.monotonic() < deadline:
-            if not _looks_like_login(page):
+        saw_wall = False
+        while True:
+            self._settle(page, timeout=5000)
+            here = host_of(page.url)
+            if _looks_like_login(page):
+                saw_wall = True
+            elif target_host and (here == target_host
+                                  or here.endswith(f".{target_host}")):
                 return True
+            elif saw_wall and here != started_on:
+                return True
+            if time.monotonic() >= deadline:
+                return False
             page.wait_for_timeout(2000)
-        return False
 
     # -- fetching --------------------------------------------------------
 
@@ -300,14 +358,25 @@ class Browser:
 
         if response is not None and response.status == 403:
             raise AccessForbidden(page.url, 403)
+        self._settle(page)
         if _looks_like_login(page):
             raise LoginRequired(page.url)
 
         download = self._trigger_download(page)
         if download is None:
+            # Checked again, and this is the check that actually fires in
+            # practice. An SSO hop is a JS auto-POST, not an HTTP redirect, so
+            # `domcontentloaded` returns on the *form*, several hops before
+            # Entra; the login wall only becomes visible once the chain has
+            # run. Without this, an expired session is reported as "KCL may not
+            # hold this article" -- an entitlement verdict from a browser that
+            # never reached the publisher.
+            if _looks_like_login(page):
+                raise LoginRequired(page.url)
             raise NoFullText(
-                f"no downloadable PDF on {page.url} -- KCL may not hold this "
-                "article, or the link is behind a purchase option"
+                f"reached {host_of(page.url)} and found no downloadable PDF on "
+                f"{page.url} -- KCL may not hold this article, or the link is "
+                "behind a purchase option"
             )
 
         # The output directory is the user's, chosen with `-o`, so its mode is
@@ -335,6 +404,19 @@ class Browser:
         sidecar.write_text(json.dumps(provenance, indent=2) + "\n", encoding="utf-8")
         paths.secure_file(sidecar)
         return Fetched(target, facts, page.url, template, provenance)
+
+    @staticmethod
+    def _settle(page, timeout: int = 15000) -> None:
+        """Let the SSO hops finish before anyone reads `page.url`.
+
+        Costs no extra request -- it waits on the chain the navigation already
+        started. Best effort: a page that keeps a socket open never reaches
+        `networkidle`, and that is not a reason to fail a fetch.
+        """
+        try:
+            page.wait_for_load_state("networkidle", timeout=timeout)
+        except Exception:
+            pass
 
     def _trigger_download(self, page):
         """The page may already *be* the PDF, or hide it behind one link.
