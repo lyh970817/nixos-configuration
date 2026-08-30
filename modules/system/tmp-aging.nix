@@ -14,37 +14,67 @@
 # single day. atime is therefore not a liveness signal on this machine, it is
 # noise that permanently pins whatever it touches.
 #
-# So both rules below key on mtime alone (`mM`: lower case for files, upper
+# So the rule below keys on mtime alone (`mM`: lower case for files, upper
 # case for directories). mtime advances only when something is written, which
 # is what "still in use" actually means for scratch. ctime was also considered
 # and rejected: including it dropped the reclaimable set from 5.72 GiB to
 # 1.57 GiB at the same cutoff, because metadata operations during pipeline runs
 # refresh it without the data being live.
 #
-# Two tiers, because Claude Code session scratch has a different lifetime from
-# an ordinary mktemp directory.
+# One rule, plus exclusions. Claude Code session scratch is deliberately NOT
+# aged here -- see the note under the exclusion for it.
 
 {
   systemd.tmpfiles.rules = [
-    # --- exclusions, first, because the tier 1 rule below recurses ---
+    # --- exclusions, first, because the aging rule below recurses ---
     #
     # systemd-tmpfiles removes sockets and FIFOs just like regular files
     # (verified with `systemd-tmpfiles --clean --dry-run`), and a server's
     # socket keeps the mtime it had when it was bound. A tmux server that has
-    # been up longer than the tier 1 age would therefore have its socket
+    # been up longer than the aging cutoff would therefore have its socket
     # deleted underneath it, detaching every session and losing every running
-    # pane. Same shape for the other long-lived listeners in /tmp.
+    # pane. Same shape for the other long-lived listeners in /tmp. These are
+    # load-bearing, not belt-and-braces: /tmp/.ydotool_socket and
+    # /tmp/tmux-1000/default were both measured past the 14d line while their
+    # servers were running.
     "x /tmp/tmux-*"
     "x /tmp/nvim.*"
     "x /tmp/.ydotool_socket"
     "x /tmp/codex-browser-use"
 
-    # Claude Code scratch is excluded from tier 1 and handled by tier 2 below;
-    # an `x` on this directory stops the tier 1 walk descending into it without
-    # affecting the separate rule rooted inside it.
+    # Claude Code per-session scratch is excluded outright and never aged by
+    # tmpfiles. Do not "restore" a rule inside this tree -- an earlier revision
+    # had `e /tmp/claude-[0-9]*/* - - - mM:30d`, intending to reap whole
+    # finished session directories while leaving the project directories in
+    # place. tmpfiles.d cannot express that:
+    #
+    #   * Cleanup is per-file recursive with no depth limit. `e` sets the age
+    #     on the matched directories, then every file underneath is judged on
+    #     its OWN timestamp; there is no "the directory is young, keep the
+    #     subtree" semantics anywhere in tmpfiles.d(5).
+    #   * mtime on extracted content is the packager's clock, not a liveness
+    #     signal. Unpacked tarballs and conda package trees arrive already
+    #     years stale, so a session created this week is full of files that
+    #     read as ancient the moment they land.
+    #
+    # Dry-running the generated config caught exactly that. With the `e` line
+    # in, `systemd-tmpfiles --clean --dry-run` proposed 19561 removals under
+    # /tmp/claude-1000, spread over 397 session directories -- 13 of which had
+    # their own mtime younger than 30 days, i.e. the rule's own cutoff said
+    # keep them. Among the casualties: the live session the check was run from,
+    # and a 4.87-day-old session losing 13581 entries, mostly unpacked conda
+    # package trees under its scratchpad. The session mtimes were fine; the
+    # contents were not, and cleanup never consults the former.
+    #
+    # With the line removed the same dry run proposes 0 removals anywhere under
+    # /tmp/claude-1000 -- the `x` below covers the whole tree on its own.
+    #
+    # Session scratch is reclaimed by scripts/prune-scratch.py instead, which
+    # keys on the session directory as a unit, checks /proc for open fds and
+    # cwds, and only ever removes hardcoded targets.
     "x /tmp/claude-[0-9]*"
 
-    # --- tier 1: ordinary /tmp scratch, 14 days ---
+    # --- ordinary /tmp scratch, 14 days ---
     #
     # Shadows tmp.conf's line for the same path (00-nixos.conf sorts first, so
     # systemd logs "Duplicate line for path /tmp, ignoring" against tmp.conf and
@@ -53,27 +83,5 @@
     # atime gives up, while still bounding ordinary scratch to a fortnight of
     # inflow. Type and mode are copied from upstream's line unchanged.
     "q /tmp 1777 root root mM:14d"
-
-    # --- tier 2: Claude Code per-session scratch, 30 days ---
-    #
-    # /tmp/claude-<uid>/<project>/<session-uuid>/ is the harness scratchpad
-    # root, and agents are told to put every temporary file there, so pipeline
-    # work directories land in it -- two finished sessions accounted for 20 GiB.
-    # The rule cleans the contents of each project directory, i.e. it reaps
-    # whole session directories, leaving the project directories in place.
-    #
-    # 30 days because sessions are resumable and can idle for a long time, but
-    # a live session writes into its scratchpad constantly, so its mtime is
-    # never more than minutes old while it is running. A session directory with
-    # no write in a month is finished.
-    #
-    # Caveat: aging cannot see an open file descriptor. A process that appends
-    # to nothing for 30 days while holding a scratchpad file open would lose it
-    # -- a real shape here, a benchmark script was found still running 13 days
-    # after its session went idle. Nothing on this machine has hit 30 days, and
-    # a process that needs the guarantee can take a BSD lock on the directory,
-    # which systemd-tmpfiles honours (tmpfiles.d(5), "Age"). scripts/
-    # prune-scratch.py, used for one-off manual reclaim, does check open fds.
-    "e /tmp/claude-[0-9]*/* - - - mM:30d"
   ];
 }
