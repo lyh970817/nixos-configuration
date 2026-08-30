@@ -109,6 +109,7 @@
         pi-openai-server-compaction = final.callPackage ./pkgs/pi-openai-server-compaction.nix { };
         pi-web-access = final.callPackage ./pkgs/pi-web-access.nix { };
         quicktui = final.callPackage ./pkgs/quicktui.nix { };
+        screen-record = final.callPackage ./pkgs/screen-record { };
         screen-shader-controller = final.callPackage ./pkgs/screen-shader-controller.nix { };
         twitter-cli = final.python3Packages.callPackage ./pkgs/twitter-cli.nix { };
         xiaohongshu-cli = final.python3Packages.callPackage ./pkgs/xiaohongshu-cli.nix { };

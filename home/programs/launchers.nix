@@ -308,6 +308,43 @@ in
       };
     };
 
+    # wl-screenrec is stateful but rofi fires one command and exits, so both
+    # entries are toggles over one shared recording: whichever started it, the
+    # next trigger (either entry, or the Hyprland bind) stops and saves it.
+    screen-record = {
+      name = "Record Screen";
+      genericName = "Screen Recorder";
+      comment = "Start or stop recording the focused monitor";
+      exec = "${pkgs.screen-record}/bin/screen-record screen";
+      icon = "camera-video";
+      terminal = false;
+      type = "Application";
+      categories = [
+        "AudioVideo"
+        "Utility"
+      ];
+      settings = {
+        Keywords = "record;recording;screencast;capture;video;toggle;";
+      };
+    };
+
+    screen-record-region = {
+      name = "Record Region";
+      genericName = "Screen Recorder";
+      comment = "Start or stop recording an area selected with slurp";
+      exec = "${pkgs.screen-record}/bin/screen-record region";
+      icon = "camera-video";
+      terminal = false;
+      type = "Application";
+      categories = [
+        "AudioVideo"
+        "Utility"
+      ];
+      settings = {
+        Keywords = "record;recording;screencast;capture;video;region;area;toggle;";
+      };
+    };
+
     "115browser" = {
       name = "115 Browser";
       genericName = "Web Browser";
