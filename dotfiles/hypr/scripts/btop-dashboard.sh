@@ -71,7 +71,11 @@ peer="${HYPR_PEER_HOST:-}"
 # explicitly over the link — see the theme-hold call below.
 unset THEME_MODE
 
-trap 'rm -f "$child_file"' EXIT
+# Truncate rather than delete, as pkgs/screen-record/screen-record.sh does for
+# its own state: the only reader is `btop-workspace toggle-host`, which guards
+# on `read` succeeding and on the value being numeric, so an empty file reads
+# exactly like a missing one and this script never hands a path to rm.
+trap ': > "$child_file"' EXIT
 
 # Run the pane's inner process in a subshell that records its own PID and then
 # execs, so the recorded PID *is* the process finally running — btop itself,
@@ -140,7 +144,7 @@ while true; do
             -o ServerAliveCountMax=3 \
             "$peer" "theme-hold $mode btop"
         status=$?
-        rm -f "$child_file"
+        : > "$child_file"
         # A remote TUI killed mid-draw leaves this tty in raw mode.
         stty sane 2> /dev/null || true
         clear_pane
@@ -165,7 +169,7 @@ while true; do
         fi
     else
         run_pane btop
-        rm -f "$child_file"
+        : > "$child_file"
         clear_pane
     fi
 
