@@ -138,12 +138,16 @@
         key = "Super + Shift + s / Super + Ctrl + c";
       }
       {
-        description = "Toggle full recording";
-        key = "Super + Shift + o";
+        description = "Record screen / pause / resume";
+        key = "Super + i";
       }
       {
-        description = "Toggle region recording";
-        key = "Super + Alt + o";
+        description = "Record region / pause / resume";
+        key = "Super + Alt + i";
+      }
+      {
+        description = "Stop recording and save";
+        key = "Super + Shift + i";
       }
       {
         description = "Cancel recording (discard)";
