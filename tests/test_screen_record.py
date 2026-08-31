@@ -61,6 +61,13 @@ case "${FAKE_REC_MODE:-record}" in
       *" --audio "*) exit 3 ;;
     esac
     ;;
+  mixfail)
+    # The mix sink is in the graph but cannot be opened, so only the launches
+    # naming it fail. The plain default device still works.
+    case " $* " in
+      *" --audio-device "*) exit 3 ;;
+    esac
+    ;;
   hwaudiofail)
     # Both capabilities are unavailable: only the bottom rung starts.
     case " $* " in
@@ -122,6 +129,24 @@ FAKE_SLURP = r"""#!/usr/bin/env bash
 printf '10,20 300x200\n'
 """
 
+FAKE_PW_CLI = r"""#!/usr/bin/env bash
+# Stand-in for `pw-cli ls Node`, in the tab-indented `key = "value"` shape the
+# real one prints. FAKE_MIX=0 takes the screen-record-mix sink out of the
+# graph; FAKE_PW_CLI_FAIL=1 stands in for pw-cli missing or PipeWire being
+# unreachable.
+set -uo pipefail
+printf '%s\t%s\n' "$EPOCHREALTIME" "$*" >> "$PW_CLI_LOG"
+if [ "${FAKE_PW_CLI_FAIL:-0}" = "1" ]; then
+  exit 1
+fi
+printf '\tid 38, type PipeWire:Interface:Node/3\n'
+printf '\t\tnode.name = "alsa_output.usb-Yichip_USB-Audio-00.analog-stereo"\n'
+if [ "${FAKE_MIX:-1}" = "1" ]; then
+  printf '\tid 80, type PipeWire:Interface:Node/3\n'
+  printf '\t\tnode.name = "screen-record-mix"\n'
+fi
+"""
+
 FAKE_HYPRCTL_ABSENT = r"""#!/usr/bin/env bash
 # Outside a Hyprland session hyprctl exits non-zero; the script must survive it.
 exit 1
@@ -151,12 +176,20 @@ class ScreenRecordCase(unittest.TestCase):
         self._write_bin("gio", FAKE_GIO)
         self._write_bin("slurp", FAKE_SLURP)
         self._write_bin("hyprctl", self.hyprctl)
+        self._write_bin("pw-cli", FAKE_PW_CLI)
 
         self.notify_log = self.root / "notifications"
         self.gio_log = self.root / "trashed"
         self.argv_log = self.root / "recorder-argv"
         self.pids_file = self.root / "recorder-pids"
-        for f in (self.notify_log, self.gio_log, self.argv_log, self.pids_file):
+        self.pw_cli_log = self.root / "pw-cli-calls"
+        for f in (
+            self.notify_log,
+            self.gio_log,
+            self.argv_log,
+            self.pids_file,
+            self.pw_cli_log,
+        ):
             f.touch()
 
         self.env = dict(os.environ)
@@ -169,6 +202,9 @@ class ScreenRecordCase(unittest.TestCase):
             TRASH_DIR=str(self.trash),
             FAKE_REC_ARGV_LOG=str(self.argv_log),
             FAKE_REC_PIDS=str(self.pids_file),
+            PW_CLI_LOG=str(self.pw_cli_log),
+            # The mic+system mix sink is in the graph unless a test removes it.
+            FAKE_MIX="1",
             # $EPOCHREALTIME follows the locale's decimal separator.
             LC_ALL="C",
         )
@@ -262,6 +298,13 @@ class ScreenRecordCase(unittest.TestCase):
     def launches(self):
         return self.argv_log.read_text().splitlines()
 
+    def pw_cli_calls(self):
+        out = []
+        for line in self.pw_cli_log.read_text().splitlines():
+            stamp, _, args = line.partition("\t")
+            out.append((float(stamp), args))
+        return out
+
     def ffprobe(self, path, entries):
         proc = subprocess.run(
             [
@@ -352,6 +395,114 @@ class ScreenRecordCase(unittest.TestCase):
         self.assertEqual(st["audio"], "0")
         self.run_record("cancel")
 
+    # -- audio device: the microphone + system-audio mix -------------------
+
+    MIX_DEVICE = "--audio-device screen-record-mix.monitor"
+    MIX_LOST = "Recording screen — microphone only, no system-audio mix available"
+
+    def test_audio_device_names_the_mix_when_it_is_in_the_graph(self):
+        self.record_for(0.8)
+        # Both halves of a call: --audio alone would be the default capture
+        # device, which is the microphone on its own.
+        self.assertIn(self.MIX_DEVICE, self.launches()[-1])
+        self.assertEqual(self.state()["mix"], "1")
+        # Nothing was degraded, so the optimistic message is the only one.
+        self.assertEqual(self.bodies(), ["Recording screen — Super+I pauses, Super+Shift+I saves"])
+        self.run_record("cancel")
+
+    def test_the_mix_is_probed_only_after_the_first_notification(self):
+        """The probe costs ~10ms and the keypress path is ~17ms, so it must not
+        sit in front of the notification."""
+        self.run_record("screen")
+        first_note = self.notifications()[0][0]
+        calls = self.pw_cli_calls()
+        self.assertTrue(calls, "the mix was never probed at all")
+        self.assertLess(
+            first_note,
+            calls[0][0],
+            f"pw-cli ran at {calls[0][0]} before the notification at {first_note}",
+        )
+        self.run_record("cancel")
+
+    def test_a_missing_mix_falls_back_to_the_plain_default_device(self):
+        self.run_record("screen", FAKE_MIX=0)
+        launches = self.launches()
+        # Started optimistically on the mix, corrected once the probe answered.
+        self.assertIn(self.MIX_DEVICE, launches[0])
+        self.assertNotIn("--audio-device", launches[-1])
+        self.assertIn("--audio", launches[-1])
+        st = self.state()
+        self.assertEqual(st["state"], "recording")
+        self.assertEqual(st["mix"], "0")
+        # Only the device changed: the encoder and the audio track did not.
+        self.assertEqual(st["hw"], "1")
+        self.assertEqual(st["audio"], "1")
+        # The correction reuses the one segment rather than starting a session
+        # with a stillborn first part.
+        self.assertEqual(len(st["seg"]), 1)
+        self.assertEqual(self.last_notification(), self.MIX_LOST)
+        self.run_record("cancel")
+
+    def test_a_missing_mix_still_produces_a_playable_recording(self):
+        """Graceful degradation is only graceful if the file is still good: the
+        relaunch must not leave two recorders writing one segment."""
+        self.run_record("screen", FAKE_MIX=0)
+        time.sleep(1.5)
+        target = self.state()["target"]
+        self.run_record("stop")
+        self.assertEqual(self.last_notification(), f"Saved to {target}")
+        self.assertEqual(self.ffprobe(target, "stream=codec_type"), ["video", "audio"])
+        self.assertEqual(self.parts(), [])
+
+    def test_a_mix_that_cannot_be_opened_drops_to_the_default_device(self):
+        """The mix is in the graph, so the probe keeps it -- but the recorder
+        cannot open it, and the ladder gives it up before the encoder."""
+        self.run_record("screen", mode="mixfail")
+        st = self.state()
+        self.assertEqual(st["state"], "recording")
+        self.assertEqual(st["mix"], "0")
+        # The mix is the cheapest thing to lose, so nothing else was.
+        self.assertEqual(st["hw"], "1")
+        self.assertEqual(st["audio"], "1")
+        self.assertNotIn("--no-hw", self.launches()[-1])
+        self.assertNotIn("--audio-device", self.launches()[-1])
+        self.assertIn("--audio", self.launches()[-1])
+        self.assertEqual(self.last_notification(), self.MIX_LOST)
+        self.run_record("cancel")
+
+    def test_an_unreachable_pw_cli_is_treated_as_no_mix(self):
+        self.run_record("screen", FAKE_PW_CLI_FAIL=1)
+        self.assertEqual(self.state()["mix"], "0")
+        self.assertNotIn("--audio-device", self.launches()[-1])
+        self.assertIn("--audio", self.launches()[-1])
+        self.run_record("cancel")
+
+    def test_resume_replays_the_sessions_device_even_if_the_mix_vanished(self):
+        """Every segment must carry identical streams or stop() cannot join
+        them under `-c copy`, so a mid-session change is ignored."""
+        self.record_for(0.8)
+        self.assertEqual(self.state()["mix"], "1")
+        self.run_record("screen")  # pause
+        self.run_record("screen", FAKE_MIX=0)  # resume, mix now gone
+        time.sleep(0.4)
+        launches = self.launches()
+        self.assertEqual(len(launches), 2)
+        self.assertIn(self.MIX_DEVICE, launches[1])
+        self.assertEqual(self.state()["mix"], "1")
+        self.run_record("cancel")
+
+    def test_a_session_started_without_the_mix_resumes_without_it(self):
+        self.run_record("screen", FAKE_MIX=0)
+        time.sleep(0.8)
+        self.run_record("screen", FAKE_MIX=0)  # pause
+        self.run_record("screen")  # resume, mix back in the graph
+        time.sleep(0.4)
+        launches = self.launches()
+        # launches[0] is the optimistic first try that was corrected away.
+        self.assertNotIn("--audio-device", launches[-1])
+        self.assertEqual(self.state()["mix"], "0")
+        self.run_record("cancel")
+
     # -- encoding settings -------------------------------------------------
 
     def test_every_launch_carries_the_same_encoding_settings(self):
@@ -368,6 +519,10 @@ class ScreenRecordCase(unittest.TestCase):
             self.assertIn("-b 200 kB", line)
             self.assertIn("--max-fps 15", line)
             self.assertIn("--audio", line)
+            # The capture device is part of "identical parameters" too: two
+            # segments recorded off different devices cannot be stream-copied
+            # together if their channel counts disagree.
+            self.assertIn(self.MIX_DEVICE, line)
         # Identical parameters on every segment is the concat precondition.
         self.assertEqual(launches[0].rsplit(" -f ", 1)[0], launches[1].rsplit(" -f ", 1)[0])
         self.run_record("cancel")
@@ -386,6 +541,7 @@ class ScreenRecordCase(unittest.TestCase):
         self.assertEqual(st["mode"], "screen")
         self.assertEqual(st["hw"], "1")
         self.assertEqual(st["audio"], "1")
+        self.assertEqual(st["mix"], "1")
         self.assertEqual(len(st["seg"]), 1)
         self.assertTrue(st["seg"][0].endswith(".part001.mp4"))
         self.assertTrue(st["target"].endswith(".mp4"))

@@ -13,6 +13,10 @@
   hyprland,
   jq,
   libnotify,
+  # `pw-cli` answers the one question the recorder cannot: whether the
+  # mic+system mix sink exists. wl-screenrec records silence rather than
+  # failing when --audio-device names something that is not there.
+  pipewire,
   slurp,
   wl-screenrec,
 }:
@@ -37,6 +41,7 @@ stdenvNoCC.mkDerivation {
           hyprland
           jq
           libnotify
+          pipewire
           slurp
           wl-screenrec
         ]
