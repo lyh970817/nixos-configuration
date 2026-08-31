@@ -262,14 +262,18 @@ hl.bind(mainMod .. " + CTRL + C", hl.dsp.exec_cmd(scripts .. "/screenshot.sh reg
 hl.bind(mainMod .. " + I", hl.dsp.exec_cmd("screen-record screen"), { description = "Record screen / pause / resume" })
 hl.bind(mainMod .. " + ALT + I", hl.dsp.exec_cmd("screen-record region"), { description = "Record region / pause / resume" })
 hl.bind(mainMod .. " + SHIFT + I", hl.dsp.exec_cmd("screen-record stop"), { description = "Stop recording and save" })
--- Stop recording and throw the file away, as opposed to Super+Shift+I above,
--- which stops and keeps it. Super+Escape is long-form dictation cancel; this is
--- the free SHIFT variant of the same "cancel what is running" idea.
-hl.bind(mainMod .. " + SHIFT + ESCAPE", hl.dsp.exec_cmd("screen-record cancel"), { description = "Cancel recording (discard)" })
 hl.bind("SUPER + O", hl.dsp.exec_cmd("hyprwhispr-record toggle"), { description = "Speech-to-text" })
 hl.bind("CTRL + SHIFT + L", hl.dsp.exec_cmd("hyprwhspr-longform toggle"), { description = "Long-form dictation" })
 hl.bind("CTRL + SHIFT + P", hl.dsp.exec_cmd("hyprwhispr-profile toggle"), { description = "Toggle dictation profile" })
-hl.bind("SUPER + ESCAPE", hl.dsp.exec_cmd("hyprwhspr-longform cancel"))
+-- One cancel key for both captures. It used to be two -- Super+Escape for
+-- dictation, Super+Shift+Escape to discard a recording -- and the SHIFT variant
+-- is deliberately gone rather than kept as a second path. The script cancels
+-- every subsystem that is actually running, which is also why the bind cannot
+-- just be the two commands in sequence: with nothing running that would refuse
+-- twice, once per subsystem. See scripts/cancel-capture.sh for what each side
+-- leaves behind (dictation archives its transcript, a discarded recording is
+-- deleted for real).
+hl.bind("SUPER + ESCAPE", hl.dsp.exec_cmd(scripts .. "/cancel-capture.sh"), { description = "Cancel dictation / recording" })
 
 hl.bind("ALT + SHIFT + B", hl.dsp.exec_cmd(protect .. "alterzorder bottom"))
 

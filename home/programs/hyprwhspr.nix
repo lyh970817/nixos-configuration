@@ -697,7 +697,11 @@ in
       `~/.local/share/hyprwhspr/longform/`, and pastes the polished prose into
       the focused application. `Super+Escape` cancels short dictation, or if
       long-form dictation is active, finalizes and archives a canceled raw
-      transcript without polishing or pasting.
+      transcript without polishing or pasting. Either way it destroys nothing.
+      That key is shared with screen recording via
+      `dotfiles/hypr/scripts/cancel-capture.sh`, which cancels whichever of the
+      two is running, or both; unlike this side, a cancelled screen recording
+      really is deleted.
 
       Validate:
 

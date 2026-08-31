@@ -12,19 +12,28 @@ Nothing here touches the user's ~/Videos, and no test ever runs `rm`: the fake
 `gio trash` moves files into a per-test trash directory, exactly as the real one
 moves them into the desktop wastebasket, and the whole tree is a
 tempfile.TemporaryDirectory.
+
+The cancel path does really delete, through the guarded trash-then-purge in
+discard-segments.py -- but only ever inside that temporary tree, and the tests
+below check the guards that keep it there as closely as they check the deletion.
 """
 
+import contextlib
+import importlib.util
+import io
 import os
 import pathlib
 import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "pkgs" / "screen-record" / "screen-record.sh"
+HELPER = ROOT / "pkgs" / "screen-record" / "discard-segments.py"
 
 # The script's own optimistic-notify supervision window (two `sleep 2`s in the
 # worst case, plus the recorder launch).
@@ -295,6 +304,10 @@ class ScreenRecordCase(unittest.TestCase):
     def trashed(self):
         return sorted(p.name for p in self.trash.iterdir())
 
+    def discard_batches(self):
+        """Leftover trash batches. A completed purge removes its own."""
+        return sorted(p.name for p in self.rec_dir.glob(".discard-*"))
+
     def launches(self):
         return self.argv_log.read_text().splitlines()
 
@@ -343,7 +356,7 @@ class ScreenRecordCase(unittest.TestCase):
         proc.wait(timeout=60)
         self.assertIsNotNone(first, "no notification was ever emitted")
         latency = first[0] - started
-        self.assertIn("Recording screen", first[1])
+        self.assertIn("Recording Screen", first[1])
         # The old code slept 2s before its only notification. Anything under
         # half a second here is dominated by bash startup, not by a wait.
         self.assertLess(latency, 0.5, f"notification took {latency:.2f}s")
@@ -352,7 +365,7 @@ class ScreenRecordCase(unittest.TestCase):
     def test_hardware_failure_corrects_the_optimistic_message(self):
         self.run_record("screen", mode="hwfail")
         bodies = self.bodies()
-        self.assertIn("Recording screen", bodies[0])
+        self.assertIn("Recording Screen", bodies[0])
         self.assertNotIn("software", bodies[0])
         self.assertEqual(
             self.last_notification(),
@@ -407,7 +420,7 @@ class ScreenRecordCase(unittest.TestCase):
         self.assertIn(self.MIX_DEVICE, self.launches()[-1])
         self.assertEqual(self.state()["mix"], "1")
         # Nothing was degraded, so the optimistic message is the only one.
-        self.assertEqual(self.bodies(), ["Recording screen — Super+I pauses, Super+Shift+I saves"])
+        self.assertEqual(self.bodies(), ["● Recording Screen…"])
         self.run_record("cancel")
 
     def test_the_mix_is_probed_only_after_the_first_notification(self):
@@ -450,7 +463,7 @@ class ScreenRecordCase(unittest.TestCase):
         time.sleep(1.5)
         target = self.state()["target"]
         self.run_record("stop")
-        self.assertEqual(self.last_notification(), f"Saved to {target}")
+        self.assertEqual(self.last_notification(), f"✓ Saved to {target}")
         self.assertEqual(self.ffprobe(target, "stream=codec_type"), ["video", "audio"])
         self.assertEqual(self.parts(), [])
 
@@ -552,7 +565,7 @@ class ScreenRecordCase(unittest.TestCase):
         self.record_for(1.0)
         target = self.state()["target"]
         self.run_record("stop")
-        self.assertEqual(self.last_notification(), f"Saved to {target}")
+        self.assertEqual(self.last_notification(), f"✓ Saved to {target}")
         self.assertTrue(pathlib.Path(target).exists())
         self.assertGreater(pathlib.Path(target).stat().st_size, 0)
         self.assertEqual(self.parts(), [])
@@ -567,7 +580,7 @@ class ScreenRecordCase(unittest.TestCase):
         target = self.state()["target"]
 
         self.run_record("screen")  # pause
-        self.assert_notified("Paused after 1 segment(s)")
+        self.assert_notified("⏸ Paused")
         st = self.state()
         self.assertEqual(st["state"], "paused")
         self.assertNotIn("pid", st)
@@ -580,7 +593,7 @@ class ScreenRecordCase(unittest.TestCase):
         self.assertEqual(first_part.stat().st_size, size)
 
         self.run_record("screen")  # resume
-        self.assert_notified("Resumed — recording screen, segment 2")
+        self.assert_notified("● Recording Screen…")
         st = self.state()
         self.assertEqual(st["state"], "recording")
         self.assertEqual(len(st["seg"]), 2)
@@ -591,7 +604,7 @@ class ScreenRecordCase(unittest.TestCase):
         self.assertEqual(len(self.parts()), 2)
         self.run_record("stop")
         self.assert_notified("Joining 2 segments")
-        self.assertEqual(self.last_notification(), f"Saved to {target} — joined 2 segments")
+        self.assertEqual(self.last_notification(), f"✓ Saved to {target}")
         self.assertTrue(pathlib.Path(target).exists())
         self.assertGreater(pathlib.Path(target).stat().st_size, 0)
         # Both segments went to the wastebasket, not to rm.
@@ -615,7 +628,7 @@ class ScreenRecordCase(unittest.TestCase):
         self.assertEqual(len(self.state()["seg"]), 3)
         target = self.state()["target"]
         self.run_record("stop")
-        self.assertEqual(self.last_notification(), f"Saved to {target} — joined 3 segments")
+        self.assertEqual(self.last_notification(), f"✓ Saved to {target}")
         self.assertTrue(pathlib.Path(target).exists())
         self.assertEqual(len(self.trashed()), 3)
 
@@ -625,7 +638,7 @@ class ScreenRecordCase(unittest.TestCase):
         self.run_record("screen")  # pause
         self.assertEqual(self.state()["state"], "paused")
         self.run_record("stop")
-        self.assertEqual(self.last_notification(), f"Saved to {target}")
+        self.assertEqual(self.last_notification(), f"✓ Saved to {target}")
         self.assertTrue(pathlib.Path(target).exists())
         self.assertTrue(self.state_is_idle())
 
@@ -642,7 +655,7 @@ class ScreenRecordCase(unittest.TestCase):
 
         self.run_record("stop")
         # One live segment left, so the fast path applies and no join is run.
-        self.assertEqual(self.last_notification(), f"Saved to {target}")
+        self.assertEqual(self.last_notification(), f"✓ Saved to {target}")
         self.assertTrue(pathlib.Path(target).exists())
         self.assertGreater(pathlib.Path(target).stat().st_size, 0)
         # The empty leftover was trashed rather than left in the recordings dir.
@@ -686,7 +699,7 @@ class ScreenRecordCase(unittest.TestCase):
         self.assertEqual(st["target"], target)
         self.assertEqual(st["state"], "recording")
         self.assertEqual(len(st["seg"]), 2)
-        self.assert_notified("Resumed — recording screen, segment 2")
+        self.assert_notified("● Recording Screen…")
         self.run_record("cancel")
 
     def test_a_resume_that_fails_falls_back_to_paused(self):
@@ -700,24 +713,42 @@ class ScreenRecordCase(unittest.TestCase):
         self.assertEqual(st["target"], target)
         # The captured segment is still there and still saveable.
         self.run_record("stop")
-        self.assertEqual(self.last_notification(), f"Saved to {target}")
+        self.assertEqual(self.last_notification(), f"✓ Saved to {target}")
         self.assertTrue(pathlib.Path(target).exists())
 
     # -- cancel ------------------------------------------------------------
 
-    def test_cancel_discards_every_segment(self):
+    def test_cancel_deletes_every_segment(self):
+        """Multi-segment: a paused-and-resumed session is two files, and cancel
+        must account for both, not just the current one."""
         self.record_for(0.8)
         self.run_record("screen")  # pause
         self.run_record("screen")  # resume
         time.sleep(0.8)
-        segs = [pathlib.Path(s).name for s in self.state()["seg"]]
+        segs = [pathlib.Path(s) for s in self.state()["seg"]]
         self.assertEqual(len(segs), 2)
+        for seg in segs:
+            self.assertTrue(seg.exists())
+        before = len(self.bodies())
         self.run_record("cancel")
-        self.assert_notified("Recording discarded — 2 segment(s) moved to the trash")
-        self.assertEqual(self.trashed(), sorted(segs))
+        # Gone for real, not moved to the wastebasket, and the batch that held
+        # them in between was purged along with them.
+        for seg in segs:
+            self.assertFalse(seg.exists())
+        self.assertEqual(self.trashed(), [])
+        self.assertEqual(self.discard_batches(), [])
         self.assertEqual(self.parts(), [])
         self.assertEqual(self.finals(), [])
         self.assertTrue(self.state_is_idle())
+        # A discard that worked says nothing at all.
+        self.assertEqual(len(self.bodies()), before)
+
+    def test_cancel_leaves_the_recordings_directory_empty(self):
+        """The purge cleans up after itself: no batch directory, no manifest,
+        nothing at all left under the recordings root."""
+        self.record_for(0.8)
+        self.run_record("cancel")
+        self.assertEqual(sorted(p.name for p in self.rec_dir.iterdir()), [])
 
     def test_cancel_refuses_a_path_outside_the_recordings_directory(self):
         self.record_for(0.8)
@@ -729,6 +760,10 @@ class ScreenRecordCase(unittest.TestCase):
         self.assert_notified(f"Refusing to discard unexpected path: {outsider}")
         self.assertTrue(outsider.exists())
         self.assertEqual(outsider.read_text(), "precious")
+        # A refusal aborts before anything moves, so the legitimate segment of
+        # the same session is still in place too.
+        self.assertEqual(len(self.parts()), 1)
+        self.assertEqual(self.discard_batches(), [])
 
     def test_cancel_refuses_an_unexpected_basename(self):
         self.record_for(0.8)
@@ -739,6 +774,8 @@ class ScreenRecordCase(unittest.TestCase):
         self.run_record("cancel", expect=1)
         self.assert_notified("Refusing to discard unexpected file: notes.txt")
         self.assertTrue(intruder.exists())
+        self.assertEqual(intruder.read_text(), "precious")
+        self.assertEqual(self.discard_batches(), [])
 
     def test_cancel_never_follows_a_symlink(self):
         self.record_for(0.8)
@@ -752,19 +789,41 @@ class ScreenRecordCase(unittest.TestCase):
         self.assertTrue(secret.exists())
         self.assertEqual(secret.read_text(), "precious")
         self.assertTrue(link.is_symlink())
-        self.assertNotIn("screenrecord_link.mp4", self.trashed())
+        self.assertEqual(self.trashed(), [])
+        self.assertEqual(self.discard_batches(), [])
 
-    def test_cancel_before_anything_was_written_says_so(self):
+    def test_cancel_before_anything_was_written_is_silent(self):
         self.record_for(0.5, mode="empty")
+        before = len(self.bodies())
         self.run_record("cancel")
-        self.assert_notified("Recording discarded (nothing had been written)")
         self.assertTrue(self.state_is_idle())
+        self.assertEqual(len(self.bodies()), before)
 
-    def test_a_failing_trash_keeps_the_file_and_reports_it(self):
+    def test_a_failing_purge_keeps_the_segments_and_reports_it(self):
+        """The purge helper refusing is a failure, and failures are never
+        silent -- the segments are still on disk and the user must know."""
+        libexec = self.root / "stub-libexec"
+        libexec.mkdir()
+        (libexec / "discard-segments.py").write_text(
+            "import sys\nsys.stderr.write('refused\\n')\nsys.exit(2)\n"
+        )
         self.record_for(0.8)
-        self.run_record("cancel", expect=1, GIO_FAIL=1)
+        self.run_record("cancel", expect=1, SCREEN_RECORD_LIBEXEC=str(libexec))
         self.assert_notified("Discard failed")
         self.assertEqual(len(self.parts()), 1)
+
+    def test_a_failing_trash_keeps_the_file_and_reports_it(self):
+        """The gio route is still what cleans up after a successful join, and
+        it still reports a refusal rather than losing track of the segments."""
+        self.record_for(0.8)
+        self.run_record("screen")  # pause
+        self.run_record("screen")  # resume
+        time.sleep(0.8)
+        target = self.state()["target"]
+        self.run_record("stop", GIO_FAIL=1)
+        self.assert_notified("some could not be cleaned up")
+        self.assertTrue(pathlib.Path(target).exists())
+        self.assertEqual(len(self.parts()), 2)
 
     # -- idle and malformed state -----------------------------------------
 
@@ -808,6 +867,342 @@ class ScreenRecordFocusedMonitorCase(ScreenRecordCase):
         self.run_record("cancel")
 
 
+class DiscardSegmentsGuardCase(unittest.TestCase):
+    """The guards in discard-segments.py, exercised directly.
+
+    The wrapper validates before it calls the helper, so in normal operation
+    none of these refusals is reachable. They are the second, independent layer:
+    this is the only code in the tree that unlinks the user's files, and it has
+    to refuse on its own account rather than trusting whatever called it.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory(prefix="discard-segments-test-")
+        self.root = pathlib.Path(self._tmp.name)
+        self.rec_dir = self.root / "Videos" / "Recordings"
+        self.rec_dir.mkdir(parents=True)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def segment(self, name, body="video bytes", directory=None):
+        path = (directory or self.rec_dir) / name
+        path.write_text(body)
+        return path
+
+    def discard(self, *paths, root=None, purge=True, expect=0):
+        argv = [
+            sys.executable,
+            str(HELPER),
+            "--root",
+            str(root if root is not None else self.rec_dir),
+        ]
+        if purge:
+            argv.append("--purge")
+        argv += ["--", *(str(p) for p in paths)]
+        proc = subprocess.run(argv, capture_output=True, text=True, timeout=60)
+        self.assertEqual(
+            proc.returncode, expect, f"rc={proc.returncode} stderr={proc.stderr}"
+        )
+        return proc
+
+    def batches(self):
+        return sorted(p.name for p in self.rec_dir.glob(".discard-*"))
+
+    # -- the purge path ----------------------------------------------------
+
+    def test_it_deletes_every_segment_it_was_given_and_no_more(self):
+        segs = [
+            self.segment("screenrecord_2026-01-01_00-00-00.part001.mp4"),
+            self.segment("screenrecord_2026-01-01_00-00-00.part002.mp4"),
+            self.segment("screenrecord_2026-01-01_00-00-00.part003.mp4"),
+        ]
+        # A recording from another session, sitting in the same directory and
+        # matching the segment glob. It was not passed in, so it must survive.
+        bystander = self.segment(
+            "screenrecord_2020-05-05_05-05-05.mp4", body="someone else's"
+        )
+        self.discard(*segs)
+        for seg in segs:
+            self.assertFalse(seg.exists())
+        self.assertTrue(bystander.exists())
+        self.assertEqual(bystander.read_text(), "someone else's")
+        # The batch that held them in between is purged too, manifest included.
+        self.assertEqual(self.batches(), [])
+        self.assertEqual(
+            sorted(p.name for p in self.rec_dir.iterdir()), [bystander.name]
+        )
+
+    def test_it_logs_every_file_it_moved_and_purged(self):
+        seg = self.segment("screenrecord_2026-01-01_00-00-00.mp4", body="0123456789")
+        out = self.discard(seg).stdout
+        self.assertIn("trashed", out)
+        self.assertIn("purged", out)
+        self.assertIn(str(seg), out)
+        self.assertIn("10 bytes", out)
+
+    def test_it_trashes_before_it_purges(self):
+        """The ordering is the whole safety property: the file is renamed into
+        a manifested batch and verified there before anything is unlinked."""
+        seg = self.segment("screenrecord_2026-01-01_00-00-00.mp4")
+        out = self.discard(seg).stdout
+        self.assertLess(out.index("trashed"), out.index("purged"))
+
+    def test_a_dry_run_deletes_nothing(self):
+        seg = self.segment("screenrecord_2026-01-01_00-00-00.mp4")
+        out = self.discard(seg, purge=False).stdout
+        self.assertIn("would discard", out)
+        self.assertTrue(seg.exists())
+        self.assertEqual(self.batches(), [])
+
+    def test_a_missing_segment_is_not_an_error(self):
+        self.discard(self.rec_dir / "screenrecord_never-written.mp4")
+        self.assertEqual(self.batches(), [])
+
+    # -- guard refusals ----------------------------------------------------
+
+    def test_it_refuses_a_path_outside_the_recordings_directory(self):
+        outsider = self.segment(
+            "screenrecord_2026-01-01_00-00-00.mp4", directory=self.root
+        )
+        self.discard(outsider, expect=2)
+        self.assertTrue(outsider.exists())
+        self.assertEqual(self.batches(), [])
+
+    def test_it_refuses_a_traversal_out_of_the_recordings_directory(self):
+        outsider = self.segment(
+            "screenrecord_2026-01-01_00-00-00.mp4", directory=self.root
+        )
+        self.discard(self.rec_dir / ".." / outsider.name, expect=2)
+        self.assertTrue(outsider.exists())
+
+    def test_it_refuses_an_unexpected_basename(self):
+        intruder = self.segment("notes.txt", body="precious")
+        self.discard(intruder, expect=2)
+        self.assertTrue(intruder.exists())
+        self.assertEqual(intruder.read_text(), "precious")
+
+    def test_it_refuses_a_symlink(self):
+        secret = self.root / "secret"
+        secret.write_text("precious")
+        link = self.rec_dir / "screenrecord_2026-01-01_00-00-00.mp4"
+        link.symlink_to(secret)
+        self.discard(link, expect=2)
+        self.assertTrue(link.is_symlink())
+        self.assertTrue(secret.exists())
+        self.assertEqual(secret.read_text(), "precious")
+
+    def test_it_refuses_a_directory(self):
+        directory = self.rec_dir / "screenrecord_2026-01-01_00-00-00.mp4"
+        directory.mkdir()
+        self.discard(directory, expect=2)
+        self.assertTrue(directory.is_dir())
+
+    def test_it_refuses_a_segment_reached_through_a_symlinked_parent(self):
+        """Containment is re-checked after resolving, so a recordings directory
+        that is really a symlink elsewhere cannot smuggle a path past the
+        textual check."""
+        elsewhere = self.root / "elsewhere"
+        elsewhere.mkdir()
+        seg = self.segment("screenrecord_2026-01-01_00-00-00.mp4", directory=elsewhere)
+        link_dir = self.root / "Videos" / "Linked"
+        link_dir.symlink_to(elsewhere, target_is_directory=True)
+        self.discard(link_dir / seg.name, root=self.rec_dir, expect=2)
+        self.assertTrue(seg.exists())
+
+    def test_it_refuses_a_root_that_is_not_a_recordings_directory(self):
+        seg = self.segment("screenrecord_2026-01-01_00-00-00.mp4")
+        self.discard(seg, root=self.rec_dir.parent, expect=2)
+        self.assertTrue(seg.exists())
+
+    def test_it_refuses_a_protected_root(self):
+        self.discard("/home/nobody/screenrecord_x.mp4", root="/home", expect=2)
+
+    def test_it_refuses_a_shallow_root(self):
+        self.discard("/Recordings/screenrecord_x.mp4", root="/Recordings", expect=2)
+
+    def test_a_refusal_anywhere_in_the_batch_stops_the_whole_batch(self):
+        """One bad path does not cost the good ones: nothing is moved and
+        nothing is purged until every candidate has passed."""
+        good = self.segment("screenrecord_2026-01-01_00-00-00.part001.mp4")
+        intruder = self.segment("notes.txt", body="precious")
+        self.discard(good, intruder, expect=2)
+        self.assertTrue(good.exists())
+        self.assertTrue(intruder.exists())
+        self.assertEqual(self.batches(), [])
+
+
+class DiscardSegmentsPurgeStageCase(unittest.TestCase):
+    """The guards that only bite after the segments have been moved.
+
+    Everything here is about the same promise: a refusal stops *before* the
+    unlink and leaves the whole batch -- files and manifest -- sitting on disk.
+    That is what keeps the deletion reversible right up to the last step, so it
+    is worth testing at the point where there is something to lose.
+
+    These call the helper's functions directly. Reached through the command line
+    the batch is built and purged in one pass, so there is no way in from
+    outside to corrupt it in between, and no way to reach the cross-filesystem
+    check at all without a second filesystem to put a segment on.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("discard_segments", HELPER)
+        cls.mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.mod)
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory(prefix="discard-purge-test-")
+        self.root = pathlib.Path(self._tmp.name) / "Videos" / "Recordings"
+        self.root.mkdir(parents=True)
+        self.root_dev = os.lstat(self.root).st_dev
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def make_batch(self, *names, body="video bytes"):
+        """A batch as move_into_batch() leaves one: files moved in, manifest
+        written, nothing purged yet."""
+        batch = self.root / f"{self.mod.BATCH_PREFIX}2026-01-01_00-00-00-1234"
+        batch.mkdir()
+        entries = []
+        for name in names:
+            path = batch / name
+            path.write_text(body)
+            st = os.lstat(path)
+            entries.append(
+                {
+                    "original": str(self.root / name),
+                    "name": name,
+                    "bytes": st.st_size,
+                    "dev": st.st_dev,
+                    "ino": st.st_ino,
+                    "moved": True,
+                }
+            )
+        payload = {
+            "created": "2026-01-01_00-00-00",
+            "root": str(self.root),
+            "purged": False,
+            "entries": entries,
+        }
+        self.mod.write_manifest(batch, payload)
+        return batch, payload
+
+    def assert_batch_intact(self, batch, payload):
+        self.assertTrue(batch.is_dir())
+        self.assertTrue((batch / self.mod.MANIFEST_NAME).exists())
+        for entry in payload["entries"]:
+            self.assertTrue((batch / entry["name"]).exists())
+
+    def purge(self, batch, payload):
+        with self.assertRaises(self.mod.Refused):
+            self.mod.purge_batch(batch, payload, str(self.root), self.root_dev)
+
+    def purge_quietly(self, batch, payload):
+        """The helper logs each unlink to stdout. Useful in the journal, noise
+        in a test run."""
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            self.mod.purge_batch(batch, payload, str(self.root), self.root_dev)
+        return out.getvalue()
+
+    # -- the cross-filesystem guard ---------------------------------------
+
+    def test_it_refuses_a_segment_on_another_filesystem(self):
+        """st_dev is compared against the recordings root's own."""
+        seg = self.root / "screenrecord_2026-01-01_00-00-00.mp4"
+        seg.write_text("video bytes")
+        # Same call the real run makes, with a device id that is not the root's.
+        with self.assertRaises(self.mod.Refused):
+            self.mod.inspect(str(seg), str(self.root), self.root_dev + 1)
+        self.assertTrue(seg.exists())
+
+    def test_it_accepts_a_segment_on_the_same_filesystem(self):
+        """The negative control for the check above."""
+        seg = self.root / "screenrecord_2026-01-01_00-00-00.mp4"
+        seg.write_text("video bytes")
+        entry = self.mod.inspect(str(seg), str(self.root), self.root_dev)
+        self.assertEqual(entry["name"], seg.name)
+        self.assertTrue(seg.exists())
+
+    # -- refusals after the move ------------------------------------------
+
+    def test_an_unexpected_file_in_the_batch_stops_the_purge(self):
+        batch, payload = self.make_batch("screenrecord_2026-01-01_00-00-00.mp4")
+        intruder = batch / "someone-elses-file.mp4"
+        intruder.write_text("precious")
+        self.purge(batch, payload)
+        self.assert_batch_intact(batch, payload)
+        self.assertTrue(intruder.exists())
+        self.assertEqual(intruder.read_text(), "precious")
+
+    def test_a_missing_entry_stops_the_purge(self):
+        batch, payload = self.make_batch(
+            "screenrecord_2026-01-01_00-00-00.part001.mp4",
+            "screenrecord_2026-01-01_00-00-00.part002.mp4",
+        )
+        # The manifest promises two; the batch holds one.
+        (batch / "screenrecord_2026-01-01_00-00-00.part002.mp4").unlink()
+        self.purge(batch, payload)
+        self.assertTrue(batch.is_dir())
+        self.assertTrue((batch / self.mod.MANIFEST_NAME).exists())
+        # The one still there was not taken down with it.
+        self.assertTrue(
+            (batch / "screenrecord_2026-01-01_00-00-00.part001.mp4").exists()
+        )
+
+    def test_a_swapped_file_stops_the_purge(self):
+        """TOCTOU: the file is re-identified by inode immediately before the
+        unlink, so a replacement between the move and the purge is refused."""
+        batch, payload = self.make_batch("screenrecord_2026-01-01_00-00-00.mp4")
+        payload["entries"][0]["ino"] += 1
+        self.purge(batch, payload)
+        self.assert_batch_intact(batch, payload)
+
+    def test_a_batch_outside_the_recordings_directory_stops_the_purge(self):
+        """Correctly named and correctly prefixed, but somewhere else. The
+        containment check is what has to catch this one, not the prefix."""
+        batch, payload = self.make_batch("screenrecord_2026-01-01_00-00-00.mp4")
+        elsewhere = (
+            pathlib.Path(self._tmp.name)
+            / f"{self.mod.BATCH_PREFIX}2026-01-01_00-00-00-1234"
+        )
+        elsewhere.mkdir()
+        decoy = elsewhere / "screenrecord_2026-01-01_00-00-00.mp4"
+        decoy.write_text("precious")
+        with self.assertRaises(self.mod.Refused):
+            self.mod.purge_batch(
+                str(elsewhere), payload, str(self.root), self.root_dev
+            )
+        self.assertTrue(decoy.exists())
+        self.assertEqual(decoy.read_text(), "precious")
+        self.assert_batch_intact(batch, payload)
+
+    def test_a_batch_without_the_discard_prefix_stops_the_purge(self):
+        """Only a directory this script named can be purged."""
+        batch, payload = self.make_batch("screenrecord_2026-01-01_00-00-00.mp4")
+        renamed = self.root / "not-a-batch"
+        batch.rename(renamed)
+        with self.assertRaises(self.mod.Refused):
+            self.mod.purge_batch(
+                str(renamed), payload, str(self.root), self.root_dev
+            )
+        self.assert_batch_intact(renamed, payload)
+
+    def test_a_clean_batch_does_purge(self):
+        """The negative control for all of the above: with nothing wrong, the
+        batch and everything in it goes."""
+        batch, payload = self.make_batch(
+            "screenrecord_2026-01-01_00-00-00.part001.mp4",
+            "screenrecord_2026-01-01_00-00-00.part002.mp4",
+        )
+        log = self.purge_quietly(batch, payload)
+        self.assertIn("purged", log)
+        self.assertFalse(batch.exists())
+        self.assertEqual(sorted(p.name for p in self.root.iterdir()), [])
+
+
 def load_tests(loader, tests, pattern):
     # The inherited cases would otherwise run twice, once per fixture.
     suite = unittest.TestSuite()
@@ -817,6 +1212,10 @@ def load_tests(loader, tests, pattern):
             "test_the_focused_output_is_pinned_for_every_segment"
         )
     )
+    # Named explicitly, like everything else here: this hook collects nothing by
+    # discovery, so a class left out of it is silently never run.
+    suite.addTests(loader.loadTestsFromTestCase(DiscardSegmentsGuardCase))
+    suite.addTests(loader.loadTestsFromTestCase(DiscardSegmentsPurgeStageCase))
     return suite
 
 
