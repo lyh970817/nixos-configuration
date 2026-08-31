@@ -308,13 +308,16 @@ in
       };
     };
 
-    # wl-screenrec is stateful but rofi fires one command and exits, so both
-    # entries are toggles over one shared recording: whichever started it, the
-    # next trigger (either entry, or the Hyprland bind) stops and saves it.
+    # wl-screenrec is stateful but rofi fires one command and exits, so the
+    # state lives in a file and each entry is one transition on it. The two
+    # capture entries also pause and resume: with a recording already running,
+    # either one suspends it, and with one suspended, either one continues it —
+    # same as Super+I. "Stop Recording" is what saves the result, matching
+    # Super+Shift+I.
     screen-record = {
       name = "Record Screen";
       genericName = "Screen Recorder";
-      comment = "Start or stop recording the focused monitor";
+      comment = "Record the focused monitor, or pause/resume a running recording";
       exec = "${pkgs.screen-record}/bin/screen-record screen";
       icon = "camera-video";
       terminal = false;
@@ -324,14 +327,14 @@ in
         "Utility"
       ];
       settings = {
-        Keywords = "record;recording;screencast;capture;video;toggle;";
+        Keywords = "record;recording;screencast;capture;video;pause;resume;";
       };
     };
 
     screen-record-region = {
       name = "Record Region";
       genericName = "Screen Recorder";
-      comment = "Start or stop recording an area selected with slurp";
+      comment = "Record an area selected with slurp, or pause/resume a running recording";
       exec = "${pkgs.screen-record}/bin/screen-record region";
       icon = "camera-video";
       terminal = false;
@@ -341,7 +344,24 @@ in
         "Utility"
       ];
       settings = {
-        Keywords = "record;recording;screencast;capture;video;region;area;toggle;";
+        Keywords = "record;recording;screencast;capture;video;region;area;pause;resume;";
+      };
+    };
+
+    screen-record-stop = {
+      name = "Stop Recording";
+      genericName = "Screen Recorder";
+      comment = "Finish the recording and save it to ~/Videos/Recordings";
+      exec = "${pkgs.screen-record}/bin/screen-record stop";
+      icon = "media-playback-stop";
+      terminal = false;
+      type = "Application";
+      categories = [
+        "AudioVideo"
+        "Utility"
+      ];
+      settings = {
+        Keywords = "record;recording;screencast;stop;save;finish;";
       };
     };
 
