@@ -151,15 +151,31 @@ while true; do
 
         # ssh reserves 255 for its own failures — refused, timed out, name
         # unresolved, or a session the ServerAlive probes gave up on. Anything
-        # else is the remote btop having exited on its own terms (q), which
-        # should respawn remotely, or this pane having been killed by
-        # toggle-host, which the next iteration handles by reading the host
-        # file the keybind already rewrote.
+        # else is the remote btop having exited on its own terms (q, status 0),
+        # which should respawn remotely.
         #
-        # This is why toggle-host signals with SIGTERM (status 143) and not
-        # SIGINT: ssh turns SIGINT into its own 255, which would report every
-        # deliberate switch back to this machine as an unreachable peer.
-        if [ "$status" -eq 255 ]; then
+        # But 255 alone cannot mean "unreachable", because ssh also reports an
+        # abnormally torn-down session with it. Measured against this pair:
+        # SIGTERM to an ssh still inside connect() exits 143, while the same
+        # SIGTERM to an *established* -t session exits 255 — indistinguishable
+        # from a refused or dropped connection. Enumerating exit codes is what
+        # broke this; the signal number is not the fact we need.
+        #
+        # So ask the state file instead, which is already the single source of
+        # truth for the displayed host. toggle-host writes the new target
+        # *before* signalling this child, so by the time this exit is observed
+        # the write has landed: a file that no longer says "remote" means the
+        # user asked to leave, and this exit is intent, not failure. Fall back
+        # only when the file still says "remote" and nobody asked for anything.
+        #
+        # Resolved exactly as the top of the loop resolves it, so this branch
+        # can never disagree with the host the next iteration actually draws.
+        after=local
+        if [ -r "$host_file" ]; then
+            read -r after < "$host_file" || after=local
+        fi
+
+        if [ "$after" = remote ] && [ "$status" -eq 255 ]; then
             printf 'local\n' > "$host_file"
             printf 'Cannot reach %s — showing this machine.\n' "$peer"
             notify-send -a "btop dashboard" "$peer unreachable" \
