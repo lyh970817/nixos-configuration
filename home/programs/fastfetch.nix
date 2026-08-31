@@ -170,6 +170,105 @@ let
       done <<< "$device_rows"
     '';
   };
+  fastfetchBluetooth = pkgs.writeShellApplication {
+    name = "fastfetch-bluetooth";
+    runtimeInputs = with pkgs; [
+      bluez
+      coreutils
+      gnugrep
+      gnused
+    ];
+    text = ''
+      # Connected devices, one indented row each, in the same shape as the
+      # Tailnet block. bluetoothctl is local D-Bus IPC and answers in ~15ms
+      # while bluetoothd is up, but with bluetooth.service stopped it waits for
+      # org.bluez to appear on the bus indefinitely rather than failing -- so
+      # every call is bounded by a timeout, and this producer rides the status
+      # cache so that wait can never land on a shell's startup path.
+      indent='                     '
+
+      # No adapter at all: sysfs answers without touching the bus, so a machine
+      # without Bluetooth hardware never pays the timeout.
+      if ! compgen -G '/sys/class/bluetooth/*' > /dev/null; then
+        printf 'unavailable\n'
+        exit 0
+      fi
+
+      # A timeout or a crash here means bluetoothd is unreachable, which is a
+      # different thing from an adapter with nothing connected to it.
+      if ! devices=$(timeout 1s bluetoothctl devices Connected 2>/dev/null); then
+        printf 'unavailable\n'
+        exit 0
+      fi
+      devices=$(printf '%s\n' "$devices" | grep '^Device ' || true)
+      if [[ -z "$devices" ]]; then
+        printf 'none\n'
+        exit 0
+      fi
+
+      # Pass one: name and battery per device. The name is the rest of the
+      # line, so names containing spaces ("HK Aura Studio 3") survive intact.
+      rows=""
+      while read -r _device mac name; do
+        if [[ -z "$mac" || -z "$name" ]]; then
+          continue
+        fi
+        info=$(timeout 1s bluetoothctl info "$mac" 2>/dev/null || true)
+        # "Battery Percentage: 0x5a (90)" -- the decimal in parentheses, the
+        # same org.bluez Battery1 property the built-in module read. Absent for
+        # devices that expose no battery service.
+        percent=$(printf '%s\n' "$info" |
+          sed -n 's/.*Battery Percentage:[^(]*(\([0-9][0-9]*\)).*/\1/p' | head -n1)
+        rows+="$name"$'\t'"$percent"$'\n'
+      done <<< "$devices"
+      rows=''${rows%$'\n'}
+      if [[ -z "$rows" ]]; then
+        printf 'none\n'
+        exit 0
+      fi
+
+      name_width=0
+      while IFS=$'\t' read -r name _percent; do
+        if (( ''${#name} > name_width )); then
+          name_width=''${#name}
+        fi
+      done <<< "$rows"
+
+      # Battery is higher-is-better, so it takes the same severity ladder the
+      # codexbar block uses -- Fastfetch's own polarity and thresholds as ANSI
+      # slots, so a phosphor switch carries them. This keeps the colour the
+      # built-in Bluetooth module used to apply to the very same figure.
+      set_rung() {
+        if (( $1 >= 50 )); then
+          rung=34 # accent, 5.5:1 -- healthy, recedes behind the value
+        elif (( $1 >= 20 )); then
+          rung=94 # bright, 9.6:1 -- rises above ordinary text
+        else
+          rung=92 # hot, 13.1:1 -- the top rung, reserved for alarm
+        fi
+      }
+
+      # Every row is a connected device, so the bullet is always filled -- ○ is
+      # deliberately unused. Paired-but-disconnected devices are not listed
+      # (the built-in module hid them too): the pairing list is durable and
+      # mostly stale, so on a desktop it is a standing column of hollow bullets
+      # for hardware that is switched off, which is noise rather than signal.
+      printf '\n'
+      while IFS=$'\t' read -r name percent; do
+        if [[ -z "$name" ]]; then
+          continue
+        fi
+        if [[ -n "$percent" ]]; then
+          set_rung "$percent"
+          printf '%s● %-*s \033[%sm%s%%\033[m\n' "$indent" "$name_width" "$name" "$rung" "$percent"
+        else
+          # No battery service: no padding and no empty detail column.
+          printf '%s● %s\n' "$indent" "$name"
+        fi
+      done <<< "$rows"
+    '';
+  };
+
   fastfetchMihomo = pkgs.writeShellApplication {
     name = "fastfetch-mihomo";
     runtimeInputs = with pkgs; [
@@ -293,6 +392,7 @@ let
     runtimeInputs = [
       pkgs.coreutils
       fastfetchAudio
+      fastfetchBluetooth
       fastfetchMihomo
       fastfetchQwen
       fastfetchTailnet
@@ -319,18 +419,23 @@ let
       # cost ~350ms — by far the greeting's biggest line item — so it rides
       # the same cache. Volume shown can be up to a refresh interval stale.
       #
+      # Bluetooth is cached for a different reason: bluetoothctl answers in
+      # ~15ms while bluetoothd is up, but with bluetooth.service stopped it
+      # blocks waiting for org.bluez rather than failing, so its bounded 1s
+      # wait must land here and never on a shell's startup path.
+      #
       # No arguments refreshes every producer, which is the timer's job. Named
       # producers refresh only those: a mute is a state change the greeting
       # should show immediately, so the mute watcher (home/desktop/audio-mute-
-      # notify.nix) asks for `audio` alone rather than paying for four.
+      # notify.nix) asks for `audio` alone rather than paying for five.
       producers=("$@")
       if [[ ''${#producers[@]} -eq 0 ]]; then
-        producers=(audio mihomo qwen tailnet)
+        producers=(audio bluetooth mihomo qwen tailnet)
       fi
       for producer in "''${producers[@]}"; do
         case "$producer" in
           qwen) refresh qwen true & ;;
-          audio | mihomo | tailnet) refresh "$producer" & ;;
+          audio | bluetooth | mihomo | tailnet) refresh "$producer" & ;;
           *)
             printf 'unknown producer: %s\n' "$producer" >&2
             exit 1
@@ -587,6 +692,7 @@ in
 {
   home.packages = [
     fastfetchAudio
+    fastfetchBluetooth
     fastfetchTailnet
     fastfetchMihomo
     fastfetchQwen
@@ -650,7 +756,6 @@ in
           type = "wifi";
           format = "{ssid} - {protocol} - {band} GHz ({signal-quality})";
         }
-        "Bluetooth"
         {
           type = "command";
           key = "Audio";
@@ -660,6 +765,16 @@ in
           type = "command";
           key = "Mihomo";
           text = "fastfetch-status mihomo";
+        }
+        # Replaces the built-in Bluetooth module's numbered one-line-per-device
+        # rows with the same header-plus-indented-bullets block the Tailnet and
+        # codexbar sections use. No Break of its own: Mihomo sits directly above
+        # by request, and the blank-key codexbar block below already separates
+        # it from what follows.
+        {
+          type = "command";
+          key = "Bluetooth";
+          text = "fastfetch-status bluetooth";
         }
         # A blank key renders the block with no header, and supplies the blank
         # line that would otherwise need a Break.
