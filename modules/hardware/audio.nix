@@ -196,6 +196,54 @@ in
     };
   };
 
+  # Nothing above reaches the running daemon on its own. PipeWire reads its
+  # configuration from the fixed path /etc/pipewire, which never appears in
+  # pipewire.service, so editing a fragment leaves the unit byte-identical and
+  # switch-to-configuration correctly concludes there is nothing to do -- the
+  # edit then does nothing at all until the next reboot. That is how the mix
+  # above shipped invisible: both hosts had the fragment on disk and no mix
+  # sink in the graph, on daemons older than the commit that added it.
+  #
+  # WirePlumber does not have this problem: its config tree reaches it as
+  # XDG_DATA_DIRS *inside* its own unit drop-in, so a wireplumber.extraConfig
+  # edit already changes the unit and already restarts it. Only the pipewire
+  # side needs the link made explicit.
+  #
+  # So hand the daemon its config tree as a restart trigger. The value is the
+  # store path /etc/pipewire points at, built by the NixOS module as a buildEnv
+  # over the config packages alone (services/desktops/pipewire/pipewire.nix:
+  # `environment.etc.pipewire.source = "${configs}/share/pipewire"`). It does
+  # not reference the pipewire package, so its hash moves only when the
+  # *content* of a fragment moves: an unrelated rebuild, or a nixpkgs bump that
+  # leaves audio alone, changes nothing here and no audio is dropped. A bump
+  # that rebuilds pipewire itself restarts the daemon anyway -- the package
+  # path is in ExecStart -- which is the behaviour we want and is unchanged by
+  # this.
+  #
+  # pipewire.service is the only unit that needs the trigger. wireplumber and
+  # pipewire-pulse both declare BindsTo=pipewire.service, so they stop with it,
+  # and /etc/systemd/user/pipewire.service.wants/wireplumber.service pulls the
+  # session manager back up on the way in. pipewire-pulse returns on demand
+  # through pipewire-pulse.socket, which is not bound to the service and stays
+  # listening throughout.
+  systemd.user.services.pipewire = {
+    restartTriggers = [ config.environment.etc.pipewire.source ];
+
+    # Take the plain-restart path rather than the socket-activation path.
+    # switch-to-configuration treats a changed service with a live socket by
+    # stopping the service and merely re-arming the socket (main.rs, the
+    # X-StopIfChanged branch), which would leave PipeWire *and* WirePlumber
+    # down after the rebuild until something happened to open an audio client
+    # -- no session manager, no device management, no mix sink. Restarting
+    # instead brings the graph back immediately, and leaves pipewire.socket
+    # untouched so a client connecting during the gap still connects.
+    #
+    # The usual objection to this -- that a single-step restart runs ExecStop
+    # from the *new* configuration -- does not apply: pipewire.service declares
+    # no ExecStop at all.
+    stopIfChanged = false;
+  };
+
   # Portege X30W-K: NHLT under-reports 2 DMICs instead of 4, leaving the
   # internal mic silent unless SOF is told the real lane count. Opt-in per
   # machine via portable.quirks.dynabookX30wkDmic in local.nix.
