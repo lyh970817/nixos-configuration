@@ -278,7 +278,19 @@ let
       # first line to the logo column but emits continuation lines verbatim,
       # so the header takes the same indent as the rows -- which is where
       # fastfetch puts its own keys, as the Tailnet block above shows.
-      printf '\n%sBluetooth:\n' "$indent"
+      #
+      # Printing the header also means printing its style, or it is the one
+      # unbolded header in the greeting. Captured from real fastfetch 2.66
+      # output, a key renders as ESC[m ESC[1m ESC[36m <key> ESC[m ESC[m ": "
+      # ESC[m -- bold on the accent slot, with the separator and its trailing
+      # space left unstyled -- and that byte sequence is reproduced here. It is
+      # fastfetch's compiled-in default (nothing below sets a key colour;
+      # display.percent.color governs percentages, not keys) and it is not
+      # mode-dependent: the bytes are identical under either THEME_MODE, since
+      # 36 is a palette slot the phosphor switch resolves, exactly like the
+      # rungs above. Escapes are zero-width, so the indent still lands the
+      # header on the logo column.
+      printf '\n%s\033[m\033[1m\033[36mBluetooth\033[m\033[m: \033[m\n' "$indent"
       while IFS=$'\t' read -r name percent; do
         if [[ -z "$name" ]]; then
           continue
