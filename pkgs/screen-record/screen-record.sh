@@ -41,21 +41,48 @@ rec_dir="${XDG_VIDEOS_DIR:-$HOME/Videos}/Recordings"
 
 # Encoding settings. Sessions here run 40-60 minutes and should land in the
 # same ballpark as a Zoom or Teams meeting recording, roughly 300 MB - 1 GB an
-# hour. Retune by editing these two constants; the arithmetic is:
+# hour.
 #
-#   video  200 kB/s = 1.6 Mbps  ~= 720 MB/hour
-#   audio   16 kB/s = 128 kbps  ~=  58 MB/hour   (wl-screenrec's own default)
-#   total                       ~= 780 MB/hour
+# -b is BYTES per second, and it is not the output bitrate. That gap is why an
+# earlier 200 kB setting rendered 11px UI text as mush. wl-screenrec sets only
+# AVCodecContext.bit_rate -- no maxrate, no bufsize, no CRF -- and VA-API's VBR
+# controller turns that into a per-frame budget of bit_rate/nominal_fps, where
+# nominal_fps is the *display refresh*: wl-screenrec passes the monitor's mode,
+# never --max-fps. Damage tracking then submits a frame only when the screen
+# changed, so a mostly-static session codes a small fraction of the nominal
+# frames and spends the same fraction of the budget. Measured against a
+# losslessly-rendered Outlook-web clip, ~26% of whose frames change:
 #
-# wl-screenrec's -b is BYTES per second, not bits, so its 5 MB default is
-# 40 Mbps -- about 18 GB for one session, which is what this replaces. The
-# unit suffix is mandatory rather than decoration: its parser rejects a bare
-# `200000` with "no multiple".
+#   -b  200 kB  1920x1080@60   50 MB/hour   preview lines unreadable
+#   -b 1500 kB  1920x1080@60  265 MB/hour   indistinguishable from the source
+#   -b 1500 kB  2200x1650@40  512 MB/hour   indistinguishable from the source
+#   audio 16 kB/s = 128 kbps   58 MB/hour   (wl-screenrec's own default)
 #
-# --max-fps is a ceiling, not a floor. wl-screenrec only copies a frame when
-# the content changed, so a still screen still costs nothing; 15 is invisible
-# on a screencast and buys the encoder a lot of room at this bitrate.
-video_bitrate="200 kB"
+# So 1500 kB is ~320 MB/hour on the laptop and ~570 MB/hour on the desktop,
+# both inside the band. The band is not a guarantee: a screen that changes on
+# every captured frame codes max_fps/refresh of the nominal frames and would
+# reach ~1.4 GB/hour at 60 Hz and ~2 GB/hour at 40 Hz. Full-screen video does
+# that; a call or a document does not.
+#
+# The unit suffix is mandatory rather than decoration: the parser rejects a
+# bare `1500000` with "no multiple".
+#
+# The codec stays at wl-screenrec's default (AVC/H.264), deliberately. HEVC is
+# not the usual free 30-50% here, because the two machines disagree: at 1500 kB
+# it beats AVC by a wide margin on the laptop's Intel iGPU (185 MB/hour at
+# 55.7 dB XPSNR-Y against 265 MB/hour at 46.0) and is consistently worse on the
+# desktop's AMD radeonsi (597 MB/hour at 36.3 dB against 512 at 37.7). One
+# constant serves both hosts, so the codec that is good enough on both -- and
+# that every browser and player can open, which matters for sharing these --
+# takes it.
+#
+# --max-fps is a size knob, not a quality knob, and is not what broke the text.
+# The per-frame budget is fixed by the refresh rate, so halving the cap halves
+# the file and leaves per-frame quality where it was: at 2200x1650, cap 15 gave
+# 169 MB/hour at 27.5 dB and cap 30 gave 264 MB/hour at 27.4 dB for the same
+# -b. 15 stays because it is invisible on a screencast and holds the worst case
+# down.
+video_bitrate="1500 kB"
 max_fps=15
 
 # Audio device. wl-screenrec 0.2.0 takes exactly one --audio-device, and a bare
