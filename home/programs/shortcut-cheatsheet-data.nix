@@ -154,10 +154,6 @@
         key = "Super + Shift + i";
       }
       {
-        description = "Cancel recording (discard)";
-        key = "Super + Shift + Escape";
-      }
-      {
         description = "Turn display on";
         key = "Fn + F12";
       }
@@ -179,7 +175,7 @@
         key = "Ctrl + Shift + p";
       }
       {
-        description = "Cancel long dictation";
+        description = "Cancel dictation / recording";
         key = "Super + Escape";
       }
     ];
