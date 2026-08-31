@@ -95,9 +95,44 @@ mix_available() {
 # previous one in place instead of stacking a column of them. That is what
 # makes the optimistic-then-correct pattern in supervise() safe: a correction
 # overwrites the message it is correcting.
+#
+# Two flavours, and what separates them is how long each stays on screen.
+# Hyprland applies `no_screen_share` to mako's layer, which does not omit
+# notifications from a recording -- it paints an opaque black rectangle over
+# mako's box in the captured frame, for exactly as long as the notification is
+# up. Every notification this script sends is therefore a visible artifact in
+# the recording it is narrating, and its timeout is the size of that artifact.
+#
+# So routine status is terse and brief: 2 seconds and a summary with no body at
+# all, which mako's `[body=""]` rule collapses to a single bold line.
+#
+# The leading glyph is the icon, and that is not a workaround. It is what the
+# dictation notifications do -- `● Recording…`, `⏸ Paused`, `✓ Inserted`, all
+# title-only, all passing no `-i` at all -- because mako sets `icons=0` in dark
+# mode and drops a real icon on the floor. Matching the dictation set means
+# matching that, glyphs included, so the two read as one system. Nothing here
+# reminds the user of a keybind; they just pressed it.
 notify() {
-  notify-send -h string:x-canonical-private-synchronous:screen-record \
-    "Screen recording" "$1"
+  notify-send -t 2000 \
+    -h string:x-canonical-private-synchronous:screen-record "$1"
+}
+
+# The exception. A failure usually means files were left on disk waiting on a
+# decision, and 2 seconds is not long enough to read that, so alerts keep a body
+# and stay up 15 seconds. They still expire, and deliberately: a notification
+# that never timed out would be a permanent black rectangle in every recording
+# made after it.
+notify_alert() {
+  notify-send -t 15000 \
+    -h string:x-canonical-private-synchronous:screen-record "⚠ Screen recording" "$1"
+}
+
+# "screen" -> "Screen", for the notification summaries.
+mode_label() {
+  case "$1" in
+    region) printf 'Region' ;;
+    *) printf 'Screen' ;;
+  esac
 }
 
 log() {
@@ -417,7 +452,7 @@ supervise() {
     # real loss (no system audio) that the user should hear about now rather
     # than when they play the recording back.
     if [ "$phase" = "start" ]; then
-      notify "Recording $st_mode — $(degraded_note)"
+      notify_alert "Recording $st_mode — $(degraded_note)"
     fi
     return 0
   fi
@@ -432,7 +467,7 @@ supervise() {
     st_state="paused"
     st_pid=""
     write_state
-    notify "Resume failed — see $log_file. Still paused with $(count_segments) segment(s)."
+    notify_alert "Resume failed — see $log_file. Still paused with $(count_segments) segment(s)."
     exit 1
   fi
 
@@ -473,7 +508,7 @@ supervise() {
     # Notified only once a rung has actually held, so a ladder walk costs one
     # correction rather than one per attempt.
     if survived; then
-      notify "Recording $st_mode — $(degraded_note)"
+      notify_alert "Recording $st_mode — $(degraded_note)"
       return 0
     fi
     if ! state_still_owns "$pid"; then
@@ -482,7 +517,7 @@ supervise() {
   done
 
   clear_state
-  notify "Failed to start — see $log_file"
+  notify_alert "Failed to start — see $log_file"
   exit 1
 }
 
@@ -530,7 +565,7 @@ start() {
   st_state="recording"
   st_pid="$pid"
   write_state
-  notify "Recording $mode — Super+I pauses, Super+Shift+I saves"
+  notify "● Recording $(mode_label "$mode")…"
   supervise start
 }
 
@@ -538,13 +573,13 @@ pause() {
   if ! finalize_current 100; then
     # A long segment can take a while to write its index. Keep the state so the
     # next trigger retries this pause instead of doing something else.
-    notify "Still finalizing the segment — trigger again in a moment"
+    notify_alert "Still finalizing the segment — trigger again in a moment"
     exit 0
   fi
   st_state="paused"
   st_pid=""
   write_state
-  notify "Paused after $(count_segments) segment(s) — Super+I resumes, Super+Shift+I saves"
+  notify "⏸ Paused"
 }
 
 resume() {
@@ -553,7 +588,7 @@ resume() {
   st_state="recording"
   st_pid="$pid"
   write_state
-  notify "Resumed — recording $st_mode, segment ${#st_segs[@]}"
+  notify "● Recording $(mode_label "$st_mode")…"
   # No degradation ladder here, deliberately. Every segment has to share one
   # codec, one pixel format and one set of streams for `-c copy` to join them,
   # so switching encoders or dropping the audio track mid-session would produce
@@ -599,24 +634,23 @@ concat_segments() {
     -f concat -safe 0 -i "$concat_list" -c copy "$st_target" >> "$log_file" 2>&1
 }
 
-# Move one file this script created to the desktop trash.
+# Check that a path is one this script wrote and is safe to dispose of, without
+# disposing of it. Both disposal routes below go through this, so they cannot
+# drift apart on what they are willing to touch.
 #
-# Deliberately not `rm`: `gio trash` is reversible (`gio trash --restore`), so a
-# mis-fired cancel costs a trip to the wastebasket rather than the recording,
-# and the segment cleanup after a successful join is a deletion too and goes
-# the same way. $path is not free-form input -- start() and resume() wrote it
-# -- but it is re-checked here, immediately before the move, so a stale or
-# hand-edited state file cannot aim this at anything else.
+# $path is not free-form input -- start() and resume() wrote it -- but it is
+# re-checked here, immediately before the caller acts, so a stale or hand-edited
+# state file cannot aim either route at anything else.
 #
-# 0 trashed, 1 there was nothing to trash, 2 refused or failed.
-trash_one() {
-  local path="$1" base
+# 0 validated, 1 there is nothing there, 2 refused (and notified).
+validate_discardable() {
+  local path="$1" base real
   base="${path##*/}"
   # Rejects an empty path, any directory but the recordings directory, and any
   # `..` component: $base can contain no slash, so a path that still equals
   # "$rec_dir/$base" is a direct child of $rec_dir under that literal name.
   if [ -z "$base" ] || [ "$path" != "$rec_dir/$base" ]; then
-    notify "Refusing to discard unexpected path: $path"
+    notify_alert "Refusing to discard unexpected path: $path"
     return 2
   fi
   # Covers both shapes this script writes: the final screenrecord_<stamp>.mp4
@@ -624,7 +658,7 @@ trash_one() {
   case "$base" in
     screenrecord_*.mp4) ;;
     *)
-      notify "Refusing to discard unexpected file: $base"
+      notify_alert "Refusing to discard unexpected file: $base"
       return 2
       ;;
   esac
@@ -633,10 +667,38 @@ trash_one() {
     # to throw away.
     return 1
   fi
+  # Containment re-checked after resolving. The test above is textual, so a
+  # symlinked *parent* -- a swapped-out recordings directory -- would otherwise
+  # pass it while pointing somewhere else entirely.
+  real="$(realpath -- "$path" 2> /dev/null)" || {
+    notify_alert "Refusing to discard unresolvable path: $path"
+    return 2
+  }
+  if [ "$real" != "$(realpath -- "$rec_dir" 2> /dev/null)/$base" ]; then
+    notify_alert "Refusing to discard unexpected path: $path"
+    return 2
+  fi
+  return 0
+}
+
+# Move one file this script created to the desktop trash.
+#
+# Deliberately not `rm`: `gio trash` is reversible (`gio trash --restore`), so
+# the segment cleanup after a successful join costs a trip to the wastebasket
+# rather than the recording. This is the route for segments whose content was
+# already saved; cancel() takes the purging route below instead.
+#
+# 0 trashed, 1 there was nothing to trash, 2 refused or failed.
+trash_one() {
+  local path="$1" status=0
+  validate_discardable "$path" || status=$?
+  if [ "$status" != "0" ]; then
+    return "$status"
+  fi
   if gio trash -- "$path"; then
     return 0
   fi
-  notify "Discard failed — $path kept"
+  notify_alert "Discard failed — $path kept"
   return 2
 }
 
@@ -653,6 +715,47 @@ trash_all_segments() {
   return "$rc"
 }
 
+# The guarded purge, alongside this script. Overridable so the test suite can
+# substitute a failing stub; in the Nix build the wrapper sets it.
+libexec_dir="${SCREEN_RECORD_LIBEXEC:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)}"
+
+# Delete every segment of this session for real, as cancel() means it.
+#
+# A cancelled recording is one the user decided is worthless, and at hundreds of
+# megabytes to gigabytes a session those must not accumulate in the wastebasket
+# the way trash_one() leaves them. Deleting is still not an unlink: the segments
+# are renamed into a timestamped batch with a manifest, verified there, and only
+# then purged, so the whole operation stays reversible until its last step. See
+# discard-segments.py, which re-runs every guard below independently and refuses
+# to purge anything it cannot account for.
+#
+# Non-zero if any segment was refused or the purge failed; on that path the
+# files are still on disk, either in place or in the batch directory.
+purge_all_segments() {
+  local s rc=0 status
+  local -a keep=()
+  for s in ${st_segs[@]+"${st_segs[@]}"}; do
+    status=0
+    validate_discardable "$s" || status=$?
+    case "$status" in
+      0) keep+=("$s") ;;
+      2) rc=1 ;;
+    esac
+  done
+  if [ "$rc" != "0" ]; then
+    return 1
+  fi
+  if [ ${#keep[@]} -eq 0 ]; then
+    return 0
+  fi
+  if python3 "$libexec_dir/discard-segments.py" \
+    --root "$rec_dir" --purge -- "${keep[@]}" >> "$log_file" 2>&1; then
+    return 0
+  fi
+  notify_alert "Discard failed — segments kept, see $log_file"
+  return 1
+}
+
 # ---------------------------------------------------------------------------
 # Terminal actions
 # ---------------------------------------------------------------------------
@@ -662,7 +765,7 @@ stop() {
   if [ "$st_state" = "recording" ] && ! finalize_current 100; then
     # Keep the state so the next trigger resumes this stop instead of starting
     # a second, overlapping recording on top of it.
-    notify "Still finalizing — trigger again in a moment"
+    notify_alert "Still finalizing — trigger again in a moment"
     exit 0
   fi
 
@@ -672,7 +775,7 @@ stop() {
   if [ "$n" -eq 0 ]; then
     clear_state
     trash_all_segments || true
-    notify "Stopped, but nothing was written — see $log_file"
+    notify_alert "Stopped, but nothing was written — see $log_file"
     return 0
   fi
 
@@ -687,10 +790,10 @@ stop() {
       # Any *other* segment here was empty, so it is a leftover to clean up.
       # The renamed one is no longer at its old path and is simply skipped.
       trash_all_segments || true
-      notify "Saved to $st_target"
+      notify "✓ Saved to $st_target"
       return 0
     fi
-    notify "Could not move ${segs[0]} to $st_target — segment kept"
+    notify_alert "Could not move ${segs[0]} to $st_target — segment kept"
     exit 1
   fi
 
@@ -698,14 +801,14 @@ stop() {
   if ! concat_segments "${segs[@]}"; then
     # Keep both the segments and the state: the recording is not lost, it is
     # just still in pieces, and a second trigger can retry the join.
-    notify "Join failed — $n segments kept in $rec_dir, see $log_file"
+    notify_alert "Join failed — $n segments kept in $rec_dir, see $log_file"
     exit 1
   fi
   clear_state
   if trash_all_segments; then
-    notify "Saved to $st_target — joined $n segments"
+    notify "✓ Saved to $st_target"
   else
-    notify "Saved to $st_target — joined $n segments, some could not be cleaned up"
+    notify_alert "Saved to $st_target — joined $n segments, some could not be cleaned up"
   fi
 }
 
@@ -716,8 +819,12 @@ stop() {
 # encoder tidily, then SIGKILL once a short grace has passed. The
 # `env --default-signal=INT` in launch() is what makes that first SIGINT
 # deliverable at all.
+#
+# Silent when it works. The user asked for no notification on a discard, so the
+# recording stopping is the whole signal; a refusal or a failure still speaks up
+# below, because silence is for the case that worked.
 cancel() {
-  local i n
+  local i
   if [ "$st_state" = "recording" ]; then
     if ! finalize_current 20; then
       kill -KILL "$st_pid" 2> /dev/null || true
@@ -729,21 +836,15 @@ cancel() {
     if is_recorder "$st_pid" "${st_segs[-1]}"; then
       # Still running: keep the files and the state rather than trash something
       # another process still holds open.
-      notify "Could not stop the recorder — segments kept"
+      notify_alert "Could not stop the recorder — segments kept"
       exit 1
     fi
   fi
-  n=$(count_segments)
-  # Cleared before the trashing: the recorder is gone either way, so a refusal
+  # Cleared before the disposal: the recorder is gone either way, so a refusal
   # below must not leave a wedged session behind. It notifies loudly instead.
   clear_state
-  if ! trash_all_segments; then
+  if ! purge_all_segments; then
     exit 1
-  fi
-  if [ "$n" -eq 0 ]; then
-    notify "Recording discarded (nothing had been written)"
-  else
-    notify "Recording discarded — $n segment(s) moved to the trash"
   fi
 }
 
