@@ -185,6 +185,16 @@ let
       # org.bluez to appear on the bus indefinitely rather than failing -- so
       # every call is bounded by a timeout, and this producer rides the status
       # cache so that wait can never land on a shell's startup path.
+      #
+      # With nothing connected the whole section disappears, header included,
+      # the way the built-in Bluetooth module behaved. Fastfetch drops a
+      # `command` module whose output is empty or whitespace-only, so the block
+      # is emitted by a blank-key module that carries its own "Bluetooth:"
+      # header (see modules below) and a producer that can print nothing at
+      # all. Nothing-to-show is spelled `hidden` rather than an empty string so
+      # the status cache keeps its "a cache file is never empty" invariant and
+      # a crashed producer still reads as a miss; fastfetch-status turns the
+      # sentinel back into no output.
       indent='                     '
 
       # No adapter at all: sysfs answers without touching the bus, so a machine
@@ -196,19 +206,20 @@ let
       # An unmatched glob stays literal, and -e on the literal then fails.
       adapters=(/sys/class/bluetooth/*)
       if [[ ! -e "''${adapters[0]}" ]]; then
-        printf 'unavailable\n'
+        printf 'hidden\n'
         exit 0
       fi
 
-      # A timeout or a crash here means bluetoothd is unreachable, which is a
-      # different thing from an adapter with nothing connected to it.
+      # A timeout or a crash here means bluetoothd is unreachable. That is a
+      # different thing from an adapter with nothing connected to it, but both
+      # render the same way -- as nothing.
       if ! devices=$(timeout 1s bluetoothctl devices Connected 2>/dev/null); then
-        printf 'unavailable\n'
+        printf 'hidden\n'
         exit 0
       fi
       devices=$(printf '%s\n' "$devices" | grep '^Device ' || true)
       if [[ -z "$devices" ]]; then
-        printf 'none\n'
+        printf 'hidden\n'
         exit 0
       fi
 
@@ -229,7 +240,7 @@ let
       done <<< "$devices"
       rows=''${rows%$'\n'}
       if [[ -z "$rows" ]]; then
-        printf 'none\n'
+        printf 'hidden\n'
         exit 0
       fi
 
@@ -259,7 +270,15 @@ let
       # (the built-in module hid them too): the pairing list is durable and
       # mostly stale, so on a desktop it is a standing column of hollow bullets
       # for hardware that is switched off, which is noise rather than signal.
-      printf '\n'
+      #
+      # The leading empty line is the separator above the block, exactly as in
+      # the codexbar producer: it belongs to this module, so it leaves with it.
+      # The header is printed here rather than being a fastfetch key because
+      # only a keyless module can vanish cleanly; fastfetch pads a module's
+      # first line to the logo column but emits continuation lines verbatim,
+      # so the header takes the same indent as the rows -- which is where
+      # fastfetch puts its own keys, as the Tailnet block above shows.
+      printf '\n%sBluetooth:\n' "$indent"
       while IFS=$'\t' read -r name percent; do
         if [[ -z "$name" ]]; then
           continue
@@ -524,6 +543,14 @@ let
           fi
         elif [[ "$name" == qwen && -e "$error" ]]; then
           printf '%s · stale\n' "$(cat "$cache")"
+        elif [[ "$name" == bluetooth ]]; then
+          # `hidden` is the Bluetooth producer's nothing-to-show sentinel.
+          # Printing nothing makes fastfetch drop the whole module, header
+          # included. Emitted byte-for-byte otherwise: the block's own first
+          # line is empty, so it can never collide with the sentinel.
+          if [[ "$(head -n1 "$cache")" != hidden ]]; then
+            cat "$cache"
+          fi
         else
           cat "$cache"
         fi
@@ -531,7 +558,12 @@ let
         echo "unavailable"
       else
         systemctl --user start --no-block fastfetch-status-refresh.service 2>/dev/null || true
-        echo "…"
+        # Bluetooth is absent unless something is connected, so a pending
+        # marker would be the one time the block appears on a machine that
+        # otherwise never shows it. Stay silent; the next shell has real data.
+        if [[ "$name" != bluetooth ]]; then
+          echo "…"
+        fi
       fi
     '';
   };
@@ -772,22 +804,25 @@ in
           key = "Mihomo";
           text = "fastfetch-status mihomo";
         }
-        # Replaces the built-in Bluetooth module's numbered one-line-per-device
-        # rows with the same header-plus-indented-bullets block the Tailnet and
-        # codexbar sections use. No Break of its own: Mihomo sits directly above
-        # by request, and the blank-key codexbar block below already separates
-        # it from what follows.
-        {
-          type = "command";
-          key = "Bluetooth";
-          text = "fastfetch-status bluetooth";
-        }
         # A blank key renders the block with no header, and supplies the blank
         # line that would otherwise need a Break.
         {
           type = "command";
           key = " ";
           text = "fastfetch-codexbar";
+        }
+        # Replaces the built-in Bluetooth module's numbered one-line-per-device
+        # rows with the same header-plus-indented-bullets block the Tailnet and
+        # codexbar sections use, and like the built-in module it is absent when
+        # nothing is connected. Fastfetch drops a `command` module that prints
+        # nothing, so the key is blank and the producer emits its own header
+        # and its own leading blank line -- both then leave with the block. The
+        # Break below is unconditional, which is what keeps exactly one blank
+        # line above Tailnet whether or not this block rendered.
+        {
+          type = "command";
+          key = " ";
+          text = "fastfetch-status bluetooth";
         }
         "Break"
         {
