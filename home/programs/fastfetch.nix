@@ -188,8 +188,14 @@ let
       indent='                     '
 
       # No adapter at all: sysfs answers without touching the bus, so a machine
-      # without Bluetooth hardware never pays the timeout.
-      if ! compgen -G '/sys/class/bluetooth/*' > /dev/null; then
+      # without Bluetooth hardware never pays the timeout. The probe is a plain
+      # glob rather than `compgen -G`: writeShellApplication runs the script
+      # under bashNonInteractive, which is built --disable-progcomp and so has
+      # no compgen builtin at all. That form exits 127 on both hosts and
+      # reports every adapter missing, including one with devices connected.
+      # An unmatched glob stays literal, and -e on the literal then fails.
+      adapters=(/sys/class/bluetooth/*)
+      if [[ ! -e "''${adapters[0]}" ]]; then
         printf 'unavailable\n'
         exit 0
       fi
