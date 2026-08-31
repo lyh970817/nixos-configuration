@@ -516,7 +516,7 @@ class ScreenRecordCase(unittest.TestCase):
         for line in launches:
             # Bytes per second, and the unit suffix is mandatory: wl-screenrec
             # 0.2.0 rejects a bare number with "no multiple".
-            self.assertIn("-b 200 kB", line)
+            self.assertIn("-b 1500 kB", line)
             self.assertIn("--max-fps 15", line)
             self.assertIn("--audio", line)
             # The capture device is part of "identical parameters" too: two
