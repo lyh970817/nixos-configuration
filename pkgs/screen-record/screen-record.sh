@@ -23,6 +23,12 @@
 # encoder, same streams -- which is what lets stop join them with ffmpeg's
 # concat demuxer under `-c copy`. Nothing is ever re-encoded, and a recording
 # that was never paused is a single segment that is simply renamed into place.
+#
+# Audio is the microphone and the system output together, so a recorded call
+# carries both halves of the conversation. wl-screenrec accepts only one
+# capture device, so the mixing happens in PipeWire, in the null sink declared
+# by modules/hardware/audio.nix; this script only names its monitor. See
+# mix_available() below for why the naming is not blindly trusted.
 
 set -euo pipefail
 
@@ -52,6 +58,39 @@ rec_dir="${XDG_VIDEOS_DIR:-$HOME/Videos}/Recordings"
 video_bitrate="200 kB"
 max_fps=15
 
+# Audio device. wl-screenrec 0.2.0 takes exactly one --audio-device, and a bare
+# --audio means the default capture device -- normally just the microphone, so
+# a recorded call would carry the user's own half of the conversation and none
+# of the other participants'. The mix that fixes this is a null sink declared
+# in modules/hardware/audio.nix: the default sink's monitor and the default
+# source are looped into it, and its monitor is a single device carrying both.
+#
+# Named, not discovered: the wrapper must not care which speakers or microphone
+# are current, and it deliberately does not, because the two loopbacks follow
+# the default devices themselves.
+mix_sink="screen-record-mix"
+mix_device="$mix_sink.monitor"
+
+# True when the mix sink is present in the PipeWire graph.
+#
+# This has to be an explicit check, because wl-screenrec does not fail on a
+# missing --audio-device: measured against a name that does not exist, it runs
+# happily for as long as you let it and writes a fully silent AAC track, with
+# nothing in its output to say so. So the degradation ladder below can never
+# learn about a missing mix by watching the recorder die -- it has to ask.
+#
+# ~10ms, which is why start() does not call this. See supervise().
+mix_available() {
+  local nodes
+  # Non-zero when pw-cli is missing or cannot reach PipeWire at all, which is
+  # the same answer as "the mix is not there" and is treated as such.
+  nodes="$(pw-cli ls Node 2> /dev/null)" || return 1
+  case "$nodes" in
+    *"node.name = \"$mix_sink\""*) return 0 ;;
+  esac
+  return 1
+}
+
 # Every notification carries the same synchronous hint, so mako replaces the
 # previous one in place instead of stacking a column of them. That is what
 # makes the optimistic-then-correct pattern in supervise() safe: a correction
@@ -74,18 +113,21 @@ log() {
 # st_mode   screen | region, for the notifications and for resume
 # st_hw     1 while the hardware encoder is in use, 0 after the --no-hw fallback
 # st_audio  1 while --audio is in use, 0 once it has been dropped
+# st_mix    1 while --audio-device names the mic+system mix, 0 for the plain
+#           default capture device. Only meaningful while st_audio=1.
 # st_pid    the live recorder, meaningful only while st_state=recording
 # st_args   capture arguments, replayed verbatim on every resume
 # st_segs   the segment files, in order; the last one is the current segment
 #
-# st_hw and st_audio are part of the session, not of one launch: every segment
-# must be produced by the same encoder with the same set of streams, or the
-# `-c copy` join in stop() has nothing valid to write.
+# st_hw, st_audio and st_mix are part of the session, not of one launch: every
+# segment must be produced by the same encoder with the same set of streams, or
+# the `-c copy` join in stop() has nothing valid to write.
 st_state=""
 st_target=""
 st_mode=""
 st_hw=""
 st_audio=""
+st_mix=""
 st_pid=""
 st_args=()
 st_segs=()
@@ -122,6 +164,7 @@ write_state() {
     printf 'mode=%s\n' "$st_mode"
     printf 'hw=%s\n' "$st_hw"
     printf 'audio=%s\n' "$st_audio"
+    printf 'mix=%s\n' "$st_mix"
     if [ -n "$st_pid" ]; then
       printf 'pid=%s\n' "$st_pid"
     fi
@@ -145,7 +188,8 @@ clear_state() {
 # forgotten state left behind by a crash, a reboot, or a recycled PID.
 load_state() {
   local key value line
-  st_state=""; st_target=""; st_mode=""; st_hw=""; st_audio=""; st_pid=""
+  st_state=""; st_target=""; st_mode=""; st_hw=""; st_audio=""; st_mix=""
+  st_pid=""
   st_args=(); st_segs=()
   [ -s "$state_file" ] || return 1
   while IFS= read -r line || [ -n "$line" ]; do
@@ -157,6 +201,7 @@ load_state() {
       mode) st_mode="$value" ;;
       hw) st_hw="$value" ;;
       audio) st_audio="$value" ;;
+      mix) st_mix="$value" ;;
       pid) st_pid="$value" ;;
       arg) st_args+=("$value") ;;
       seg) st_segs+=("$value") ;;
@@ -179,6 +224,10 @@ load_state() {
   [ -n "$st_mode" ] || st_mode="screen"
   [ -n "$st_hw" ] || st_hw="1"
   [ -n "$st_audio" ] || st_audio="1"
+  # No mix= line means a state file written before the mix existed, whose
+  # segments were recorded off the plain default device. Resuming has to match
+  # them, so 0 rather than 1 is the safe default here.
+  [ -n "$st_mix" ] || st_mix="0"
 
   if [ "$st_state" = "recording" ] && ! is_recorder "$st_pid" "${st_segs[-1]}"; then
     # The recorder died without us asking it to: killed by hand, OOM, a crash.
@@ -228,9 +277,14 @@ launch() {
     tune+=(--no-hw)
   fi
   if [ "$st_audio" = "1" ]; then
-    # Default capture device. On by default because a narrated 40-60 minute
-    # screencast that turns out to be silent is only discovered an hour in.
+    # On by default because a narrated 40-60 minute screencast that turns out
+    # to be silent is only discovered an hour in.
     tune+=(--audio)
+    if [ "$st_mix" = "1" ]; then
+      # Microphone and system audio together. Without this it is the default
+      # capture device, which is the microphone alone.
+      tune+=(--audio-device "$mix_device")
+    fi
   fi
   # `env --default-signal=INT` is load-bearing, not decoration. Bash sets
   # SIGINT (and SIGQUIT) to SIG_IGN for a background job in a non-interactive
@@ -257,13 +311,42 @@ survived() {
 # How the currently settled configuration differs from the ideal one, for the
 # notification that reports a degraded start.
 degraded_note() {
-  if [ "$st_hw" = "1" ] && [ "$st_audio" != "1" ]; then
-    printf 'no audio, no capture device available'
-  elif [ "$st_hw" != "1" ] && [ "$st_audio" = "1" ]; then
-    printf 'software encoding, no hardware encoder available'
+  if [ "$st_audio" != "1" ]; then
+    if [ "$st_hw" = "1" ]; then
+      printf 'no audio, no capture device available'
+    else
+      printf 'software encoding and no audio'
+    fi
+  elif [ "$st_hw" != "1" ]; then
+    if [ "$st_mix" = "1" ]; then
+      printf 'software encoding, no hardware encoder available'
+    else
+      printf 'software encoding, microphone only'
+    fi
   else
-    printf 'software encoding and no audio'
+    printf 'microphone only, no system-audio mix available'
   fi
+}
+
+# SIGINT the recorder we just launched and wait for it to let go of its segment.
+#
+# Only used by supervise() when it has to relaunch a recorder that is still
+# alive, which the degradation ladder never has to do -- a rung that failed
+# failed by exiting. Two processes writing one path would interleave two MP4s
+# into one unplayable file, so the relaunch waits for the old one to be gone.
+relinquish() {
+  local i
+  kill -INT "$pid" 2> /dev/null || true
+  for i in $(seq 1 30); do
+    is_recorder "$pid" "${st_segs[-1]}" || return 0
+    sleep 0.1
+  done
+  kill -KILL "$pid" 2> /dev/null || true
+  for i in $(seq 1 20); do
+    is_recorder "$pid" "${st_segs[-1]}" || return 0
+    sleep 0.1
+  done
+  return 1
 }
 
 # Send SIGINT and wait for the recorder to finalize its container. $1 is the
@@ -294,8 +377,48 @@ finalize_current() {
 # $1 is "start" (which walks a degradation ladder) or "resume" (which does not
 # -- see resume()).
 supervise() {
-  local phase="$1" rung hw audio
+  local phase="$1" rung hw audio mix mix_ok="$st_mix"
+  # Settle the audio device before anything else, for the same reason the
+  # notification is optimistic: probing the graph costs ~10ms, and start()
+  # spends about 17ms getting from the keypress to the notification, so asking
+  # there would have more than doubled it. start() assumes the mix is present
+  # -- after a rebuild it always is -- and this corrects the assumption a few
+  # frames later if it was wrong, which is cheap because the segment is
+  # restarted from the beginning either way.
+  #
+  # Only at start. A resume must reproduce the earlier segments' streams
+  # exactly or stop() cannot `-c copy` them together, so st_mix is replayed
+  # from the state file there, even if the mix has appeared or vanished since.
+  if [ "$phase" = "start" ]; then
+    if mix_available; then
+      mix_ok="1"
+    else
+      mix_ok="0"
+    fi
+    if [ "$mix_ok" != "$st_mix" ] && state_still_owns "$pid"; then
+      log "mix $mix_device availability is $mix_ok, session started with $st_mix; relaunching"
+      if relinquish; then
+        st_mix="$mix_ok"
+        launch "${st_segs[-1]}"
+        st_pid="$pid"
+        write_state
+      else
+        log "could not stop $pid to switch audio device; leaving it alone"
+      fi
+    fi
+  fi
+
   if survived; then
+    if [ "$st_hw" = "1" ] && [ "$st_audio" = "1" ] && [ "$st_mix" = "1" ]; then
+      return 0
+    fi
+    # Started, but not on the ideal configuration -- the mix correction above
+    # is the only way to get here without the ladder having run, and it is a
+    # real loss (no system audio) that the user should hear about now rather
+    # than when they play the recording back.
+    if [ "$phase" = "start" ]; then
+      notify "Recording $st_mode — $(degraded_note)"
+    fi
     return 0
   fi
   # It died. Only act if nothing else has moved the session on since.
@@ -313,26 +436,37 @@ supervise() {
     exit 1
   fi
 
-  # Degradation ladder, "<hw> <audio>", best first and starting one rung below
-  # the ideal "1 1" that start() already tried. Two capabilities can each fail
-  # independently, so this drops one at a time rather than both at once.
+  # Degradation ladder, "<hw> <audio> <mix>", best first and starting one rung
+  # below the ideal "1 1 1" that start() already tried. Three capabilities can
+  # each fail independently, so this drops one at a time rather than all at
+  # once, cheapest loss first.
   #
-  # wl-screenrec defaults to VA-API hardware encoding: mesa's radeonsi covers
-  # the home desktop's amdgpu and intel-media-driver the laptop's Intel iGPU,
-  # both via hardware.graphics (modules/hardware/video.nix). Dropping to a CPU
-  # encode still beats a zero-byte file with no indication anything went wrong.
-  # Audio is given up last and only after software encoding has been tried with
-  # it, because a silent recording of a narrated session is the more expensive
-  # loss -- and a host with no usable capture device would otherwise not record
-  # at all now that --audio is on by default.
-  for rung in "0 1" "1 0" "0 0"; do
-    hw="${rung% *}"
+  # The mix goes first: it is the newest thing in the chain and the least
+  # costly to lose, since dropping it still records the microphone and so still
+  # captures the narration. (A mix that is simply absent was already handled
+  # above without spending a rung; this covers one that exists but cannot be
+  # opened.) Then the encoder: wl-screenrec defaults to VA-API hardware
+  # encoding -- mesa's radeonsi covers the home desktop's amdgpu and
+  # intel-media-driver the laptop's Intel iGPU, both via hardware.graphics
+  # (modules/hardware/video.nix) -- and dropping to a CPU encode still beats a
+  # zero-byte file with no indication anything went wrong. Audio is given up
+  # last and only after software encoding has been tried with it, because a
+  # silent recording of a narrated session is the more expensive loss.
+  for rung in "1 1 0" "0 1 1" "0 1 0" "1 0 0" "0 0 0"; do
+    hw="${rung%% *}"
     audio="${rung#* }"
-    if [ "$hw" = "$st_hw" ] && [ "$audio" = "$st_audio" ]; then
+    audio="${audio%% *}"
+    mix="${rung##* }"
+    # No point spending 2s re-testing a mix the probe above says is not there.
+    if [ "$mix" = "1" ] && [ "$mix_ok" != "1" ]; then
+      continue
+    fi
+    if [ "$hw" = "$st_hw" ] && [ "$audio" = "$st_audio" ] && [ "$mix" = "$st_mix" ]; then
       continue
     fi
     st_hw="$hw"
     st_audio="$audio"
+    st_mix="$mix"
     launch "${st_segs[-1]}"
     st_pid="$pid"
     write_state
@@ -358,6 +492,10 @@ start() {
   st_mode="$mode"
   st_hw="1"
   st_audio="1"
+  # Optimistic, and deliberately not checked here: mix_available() costs ~10ms
+  # against a ~17ms keypress-to-notification path. supervise() checks it a few
+  # frames later and restarts the segment if this was wrong.
+  st_mix="1"
   # Sortable stamp, matching the screenshot script's naming.
   st_target="$rec_dir/screenrecord_$(date +'%Y-%m-%d_%H-%M-%S').mp4"
   st_args=()
