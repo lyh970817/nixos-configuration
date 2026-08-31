@@ -306,16 +306,24 @@ case "${1:-}" in
             *) next=remote ;;
         esac
 
-        # Write before killing: the loop re-reads this file as soon as its
-        # child exits, so the new target has to already be on disk.
+        # Write before killing, and this ordering is load-bearing rather than
+        # incidental: it is the only thing that tells btop-dashboard.sh a
+        # non-zero exit was intent and not a dead peer. The write completes
+        # before the signal is sent, and the loop only looks once the signalled
+        # child has been reaped, so the file it reads is always this new value.
         printf '%s\n' "$next" > "$host_file"
 
         # btop-dashboard.sh execs over the subshell that records this PID, so
         # it is the inner process itself — btop, or ssh — and the signal
         # reaches ssh directly instead of orphaning it behind a wrapper still
-        # holding the terminal. SIGTERM rather than SIGINT: ssh turns SIGINT
-        # into its own exit 255, which the loop would then misreport as an
-        # unreachable peer on every deliberate switch back to this machine.
+        # holding the terminal.
+        #
+        # SIGTERM rather than SIGINT because btop and a connecting ssh both
+        # take it cleanly. It carries no information the loop can use: a
+        # SIGTERMed ssh exits 143 while still in connect() but 255 once the
+        # -t session is established, the same code an unreachable peer gives.
+        # The state file above is what disambiguates; do not reintroduce an
+        # exit-code test here.
         if [ -r "$child_pid_file" ] && read -r child < "$child_pid_file"; then
             if [[ "$child" =~ ^[0-9]+$ ]]; then
                 kill "$child" 2> /dev/null || true
