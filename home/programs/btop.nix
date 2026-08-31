@@ -5,14 +5,22 @@
 # by reading the hypr current-theme symlink directly. There is no btop-level
 # theme symlink: btop is invoked with -c pointing at whichever of
 # btop-dark.conf / btop-light.conf matches the resolved mode.
-{ pkgs, ... }:
+{
+  lib,
+  pkgs,
+  osConfig,
+  ...
+}:
 
 let
+  role = osConfig.portable.role;
+
   # Active phosphor profile; see ../palettes.nix.
   p = (import ../palettes.nix).active;
 
   # Settings shared by both dark and light configs. Only color_theme differs
-  # between the two variants (see mkBtopConfig below).
+  # between the two variants (see mkBtopConfig below), plus the role-gated
+  # shown_boxes appended after this set — keep that property.
   commonSettings = {
     theme_background = false;
     truecolor = true;
@@ -28,6 +36,32 @@ let
     show_disks = true;
     only_physical = true;
     use_fstab = false;
+  }
+  # Memory and disk figures are not worth the screen on the portable laptop.
+  # In btop the disks panel is drawn *inside* the mem box, so dropping "mem"
+  # covers both in one key; show_disks = false would hide only the disks and
+  # leave the memory graph. Verified on the 1.4.7 in this flake: with
+  # shown_boxes = "cpu net proc" the Cached/Available/Used labels and the disk
+  # rows disappear together. show_disks/only_physical/use_fstab above are
+  # simply inert here, and stay shared rather than being duplicated per role.
+  #
+  # Home keeps the key unset so btop's own default applies, unchanged from
+  # today — including whatever it decides about GPU boxes.
+  #
+  # Layout follows the machine BEING MONITORED, and theme follows the machine
+  # DOING THE DISPLAYING. Deliberately opposite, do not collapse them: the
+  # peer's btop runs on the peer and reads the peer's config, so viewing the
+  # laptop from the home desktop shows this trimmed layout, while the wrapper
+  # below still paints it in the *home desktop's* mode because that is the
+  # screen it shares. See dotfiles/hypr/scripts/btop-dashboard.sh.
+  #
+  # That also makes this difference load-bearing beyond preference: it is the
+  # only thing identifying which machine the workspace-10 dashboard is
+  # showing. btop 1.4.7 prints no hostname anywhere in its UI and the pane
+  # carries no badge of its own, so restoring the laptop to the default layout
+  # would silently remove the distinction between the two panes.
+  // lib.optionalAttrs (role != "home") {
+    shown_boxes = "cpu net proc";
   };
 
   # Render a single btop.conf value: bools as True/False, strings quoted,

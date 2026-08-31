@@ -298,6 +298,21 @@ hl.bind(mainMod .. " + SHIFT + J", hl.dsp.exec_cmd(protect .. "moveactive 0 30")
 -- Move to workspace 10 as a "minimized" area
 hl.bind("SUPER + M", hl.dsp.exec_cmd(scripts .. "/move-and-tile.sh"))
 
+-- Flip the workspace-10 btop dashboard between this machine and the peer, in
+-- its one existing kitty window. B for btop; it carries no navigation meaning
+-- inside whatever TUI has focus, unlike the arrows this replaced.
+--
+-- This is also the rescue for a pane stuck on an unreachable peer: it kills a
+-- hung ssh outright rather than waiting out the connect timeout. That works
+-- because the toggle reads its current target from the state file rather than
+-- from the live connection, so a wedged ssh cannot make it hang in turn — see
+-- toggle-host in scripts/btop-workspace.sh.
+hl.bind(
+  mainMod .. " + B",
+  hl.dsp.exec_cmd("btop-workspace toggle-host"),
+  { description = "Toggle btop dashboard host" }
+)
+
 -- Switch workspaces with mainMod + [0-9]
 -- Move active window to a workspace with mainMod + SHIFT + [0-9]
 for i = 1, 10 do
