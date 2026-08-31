@@ -3,8 +3,12 @@
   stdenvNoCC,
   makeWrapper,
   coreutils,
-  # glib provides `gio`, used by the cancel mode to trash a discarded
-  # recording instead of unlinking it.
+  # Pause segments the recording, so stop has to join the segments back
+  # together; ffmpeg's concat demuxer under `-c copy` does that without
+  # re-encoding. Headless is enough: no filters, no devices, no display.
+  ffmpeg-headless,
+  # glib provides `gio`, used to trash a discarded recording, and the spent
+  # segments after a successful join, instead of unlinking them.
   glib,
   hyprland,
   jq,
@@ -28,6 +32,7 @@ stdenvNoCC.mkDerivation {
       --prefix PATH : ${
         lib.makeBinPath [
           coreutils
+          ffmpeg-headless
           glib
           hyprland
           jq
@@ -40,7 +45,7 @@ stdenvNoCC.mkDerivation {
   '';
 
   meta = {
-    description = "Toggle a wl-screenrec screen or region recording on Hyprland";
+    description = "Start, pause, resume and save a wl-screenrec recording on Hyprland";
     license = lib.licenses.mit;
     platforms = lib.platforms.linux;
     mainProgram = "screen-record";
