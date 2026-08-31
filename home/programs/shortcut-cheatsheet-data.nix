@@ -104,6 +104,10 @@
         description = "Minimize to workspace 10";
         key = "Super + m";
       }
+      {
+        description = "Toggle btop dashboard host";
+        key = "Super + b";
+      }
     ];
   }
   {

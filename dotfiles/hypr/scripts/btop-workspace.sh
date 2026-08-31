@@ -6,6 +6,11 @@ readonly protected_workspace=10
 readonly runtime_dir="${XDG_RUNTIME_DIR:?}/btop-workspace"
 readonly lock_file="$runtime_dir/locked"
 readonly dashboard_file="$runtime_dir/dashboard-address"
+# Which machine's btop the dashboard pane shows ("local" or "remote"), and the
+# PID of the process currently drawing it. Both are the interface to the loop
+# in btop-dashboard.sh; see toggle-host below.
+readonly host_file="$runtime_dir/dashboard-host"
+readonly child_pid_file="$runtime_dir/dashboard-child-pid"
 readonly last_workspace_file="$runtime_dir/last-normal-workspace"
 readonly origins_dir="$runtime_dir/origins"
 
@@ -177,6 +182,16 @@ run_daemon() {
     : > "$lock_file"
     rm -f "$dashboard_file"
     rm -f "$origins_dir"/*
+    # The dashboard comes back up showing this machine on every fresh
+    # graphical session: booting into a pane pointed at a laptop that is shut
+    # in a bag is a bad default, and the remote target is only ever a
+    # deliberate keypress away. Reset here, in the once-per-session daemon
+    # startup, rather than in btop-dashboard.sh — the theme hooks in
+    # home/desktop/theming.nix try-restart btop-dashboard.service on every
+    # dark/light switch, so resetting there would silently yank the pane back
+    # to this machine every time the theme changed, and would throw away the
+    # peer reconnect that carries the new mode across.
+    printf 'local\n' > "$host_file"
     remember_workspace "$(active_workspace)"
 
     while read -r address workspace; do
@@ -265,6 +280,48 @@ case "${1:-}" in
     is-locked)
         is_locked
         ;;
+    toggle-host)
+        # Flip the dashboard pane between this machine and the peer.
+        #
+        # The current target is resolved from the state file and from nothing
+        # else — never by probing the connection or inspecting the running
+        # process. That is what keeps this usable as the rescue: when the pane
+        # is wedged on an ssh hung mid-connect, the file still says "remote",
+        # so the flip decides on "local" and kills the ssh immediately instead
+        # of blocking on the very connection it is trying to escape.
+        #
+        # It also makes the auto-fallback in btop-dashboard.sh load-bearing:
+        # that path writes "local" before falling back, so a pane demoted by a
+        # connect timeout or a dead link leaves the file agreeing with the
+        # screen. Were it not to, this toggle would invert and the user would
+        # have to press twice.
+        current=local
+        if [ -r "$host_file" ] && read -r stored < "$host_file"; then
+            current=$stored
+        fi
+        case "$current" in
+            remote) next=local ;;
+            # Anything that is not exactly "remote" is displayed as local by
+            # the loop, so it has to toggle as local too.
+            *) next=remote ;;
+        esac
+
+        # Write before killing: the loop re-reads this file as soon as its
+        # child exits, so the new target has to already be on disk.
+        printf '%s\n' "$next" > "$host_file"
+
+        # btop-dashboard.sh execs over the subshell that records this PID, so
+        # it is the inner process itself — btop, or ssh — and the signal
+        # reaches ssh directly instead of orphaning it behind a wrapper still
+        # holding the terminal. SIGTERM rather than SIGINT: ssh turns SIGINT
+        # into its own exit 255, which the loop would then misreport as an
+        # unreachable peer on every deliberate switch back to this machine.
+        if [ -r "$child_pid_file" ] && read -r child < "$child_pid_file"; then
+            if [[ "$child" =~ ^[0-9]+$ ]]; then
+                kill "$child" 2> /dev/null || true
+            fi
+        fi
+        ;;
     is-dashboard-active)
         is_dashboard "$(hyprctl activewindow -j | jq -r '.address // ""')"
         ;;
@@ -276,7 +333,7 @@ case "${1:-}" in
         exec "$@"
         ;;
     *)
-        printf 'Usage: btop-workspace {lock|unlock|status}\n' >&2
+        printf 'Usage: btop-workspace {lock|unlock|status|toggle-host}\n' >&2
         exit 2
         ;;
 esac
