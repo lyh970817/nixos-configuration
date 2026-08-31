@@ -814,3 +814,48 @@ hl.window_rule({
 
   no_focus = true,
 })
+
+-- --- Layer Rules ---
+
+-- Keep notifications off screen recordings. wl-screenrec captures the
+-- composited output through wlr-screencopy, and mako draws in the overlay
+-- layer, so notification text otherwise lands in the file like any other
+-- content -- most reliably the recorder's own "Recording started" / "Saved
+-- to ..." notifications, which by construction fire while recording is live.
+--
+-- Read what this actually does before expecting it to be invisible: it does
+-- **not** omit the surface and show what is behind it. Hyprland composites the
+-- monitor normally and then paints an opaque black rectangle over the layer's
+-- bounding box in the *captured* frame only
+-- (CScreenshareFrame::renderMonitor, "render black boxes for noscreenshare").
+-- So a recording gets a black box top-right for the notification's lifetime
+-- rather than the notification, and the content underneath is redacted too.
+-- Omission is not on offer -- the capture path shares the on-screen render, so
+-- hiding a layer properly would need a second scene render. The black box is
+-- the whole of what the compositor implements.
+--
+-- Nothing on the physical monitor changes: `noScreenShare` is read only by the
+-- screenshare frame renderer. All three capture protocols funnel through it
+-- (wlr-screencopy, ext-image-copy-capture, hyprland-toplevel-export), and both
+-- the dmabuf and shm copy paths, so this covers grim and portal-based sharing
+-- as well as wl-screenrec, and region captures as well as whole-monitor ones.
+--
+-- `notifications` is mako's layer-shell namespace, read off a live compositor
+-- (`hyprctl layers -j` while a notification is up, pid matching mako) rather
+-- than guessed; mako does not expose it as a setting. Anchored so it selects
+-- that namespace and nothing else -- `wallpaper` and every bar/menu surface
+-- carry their own names and cannot match.
+--
+-- Confirming it took, after a rebuild: `hyprctl configerrors` must stay empty.
+-- A misspelled field or match property here does not raise -- hl.layer_rule
+-- still returns a handle and the rule registers as a silent no-op -- but 0.56.1
+-- does report it as `hl.layer_rule: unknown field '...'` / `unknown match
+-- property '...'` in configerrors, so an empty configerrors is a real check
+-- rather than a vacuous one. For the effect itself, take a `grim` shot while a
+-- notification is on screen: the corner reads black in the file while the
+-- notification is plainly visible on the monitor.
+hl.layer_rule({
+  name = "mako-no-screen-share",
+  match = { namespace = "^notifications$" },
+  no_screen_share = true,
+})
