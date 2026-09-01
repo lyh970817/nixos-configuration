@@ -106,7 +106,7 @@ in
           Version=1.0
           Type=Application
           Name=Network Manager
-          GenericName=Network Configuration
+          GenericName=System
           Comment=Text-based network configuration tool
           Exec=kitty --title nmtui zsh -i -c nmtui
           Icon=network-wired
@@ -123,6 +123,7 @@ in
           [Desktop Entry]
           Type=Application
           Name=Network configuration
+          GenericName=System
           Comment=Manage and change your network connection settings
           Icon=preferences-system-network
           Exec=nm-connection-editor
