@@ -175,8 +175,12 @@
         key = "Ctrl + Shift + p";
       }
       {
-        description = "Cancel dictation / recording";
+        description = "Cancel dictation / drop last segment";
         key = "Super + Escape";
+      }
+      {
+        description = "Cancel dictation / discard recording";
+        key = "Super + Shift + Escape";
       }
     ];
   }

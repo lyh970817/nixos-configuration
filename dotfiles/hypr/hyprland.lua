@@ -265,15 +265,21 @@ hl.bind(mainMod .. " + SHIFT + I", hl.dsp.exec_cmd("screen-record stop"), { desc
 hl.bind("SUPER + O", hl.dsp.exec_cmd("hyprwhispr-record toggle"), { description = "Speech-to-text" })
 hl.bind("CTRL + SHIFT + L", hl.dsp.exec_cmd("hyprwhspr-longform toggle"), { description = "Long-form dictation" })
 hl.bind("CTRL + SHIFT + P", hl.dsp.exec_cmd("hyprwhispr-profile toggle"), { description = "Toggle dictation profile" })
--- One cancel key for both captures. It used to be two -- Super+Escape for
--- dictation, Super+Shift+Escape to discard a recording -- and the SHIFT variant
--- is deliberately gone rather than kept as a second path. The script cancels
--- every subsystem that is actually running, which is also why the bind cannot
--- just be the two commands in sequence: with nothing running that would refuse
--- twice, once per subsystem. See scripts/cancel-capture.sh for what each side
--- leaves behind (dictation archives its transcript, a discarded recording is
--- deleted for real).
-hl.bind("SUPER + ESCAPE", hl.dsp.exec_cmd(scripts .. "/cancel-capture.sh"), { description = "Cancel dictation / recording" })
+-- Two cancel keys, and both of them act on both captures. The SHIFT variant is
+-- back, but it no longer means what it did: the original split was by subsystem
+-- (Super+Escape cancelled dictation, Super+Shift+Escape discarded a recording),
+-- which was ambiguous exactly when it mattered, since both are usually running
+-- at once. That was merged into one key, and this splits it again on a
+-- different axis -- how much of the recording goes. Plain Escape drops the last
+-- segment and leaves the session paused, ready to resume with Super+I; SHIFT
+-- throws the whole recording away. Dictation has no segments, so both keys
+-- cancel it whole, unchanged.
+-- Neither bind can be the two commands in sequence: with nothing running that
+-- would refuse twice, once per subsystem, so the script tests each side first.
+-- See scripts/cancel-capture.sh for what each side leaves behind (dictation
+-- archives its transcript, a discarded recording is deleted for real).
+hl.bind("SUPER + ESCAPE", hl.dsp.exec_cmd(scripts .. "/cancel-capture.sh segment"), { description = "Cancel dictation / drop last recording segment" })
+hl.bind("SUPER + SHIFT + ESCAPE", hl.dsp.exec_cmd(scripts .. "/cancel-capture.sh all"), { description = "Cancel dictation / discard recording" })
 
 hl.bind("ALT + SHIFT + B", hl.dsp.exec_cmd(protect .. "alterzorder bottom"))
 
