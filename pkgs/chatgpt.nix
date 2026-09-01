@@ -176,7 +176,10 @@ let
 
   orchestratorDesktopItem = makeDesktopItem {
     name = "chatgpt-orchestrator";
-    desktopName = "ChatGPT Orchestrator";
+    # Parenthesised so the plain and orchestrator entries sort and read as
+    # variants of one app in the launcher rather than two unrelated names.
+    desktopName = "ChatGPT (Orchestrator)";
+    genericName = "AI assistant";
     comment = "ChatGPT Desktop with the Codex orchestrator configuration";
     exec = "chatgpt-orchestrator %U";
     icon = "chatgpt";
