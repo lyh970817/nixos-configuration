@@ -100,8 +100,10 @@ esac
 # duration instantly and look like a recorder that died on startup.
 case " $* " in
   *" --audio "*)
-    # A second stream, so the stream-copy join is exercised with the two
-    # streams a real --audio recording produces, not just with video.
+    # A second stream, so the join is exercised with the two streams a real
+    # --audio recording produces, not just with video. Real AAC, deliberately:
+    # the per-segment encoder priming that concat_segments() re-encodes away is
+    # a property of AAC, so a faked audio track would not reproduce it.
     exec ffmpeg -hide_banner -loglevel error -y \
       -re -f lavfi -i "testsrc=size=64x48:rate=10" \
       -re -f lavfi -i "sine=frequency=440:sample_rate=48000" -t 300 \
@@ -330,6 +332,47 @@ class ScreenRecordCase(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         return proc.stdout.split()
 
+    def audio_samples(self, path):
+        """Decoded audio samples per channel, with edit lists applied.
+
+        This is the measurement the priming bug shows up in: a player skips
+        what an edit list tells it to skip, and so does this decode, so a
+        priming block that survived the join is counted here exactly as it
+        would be heard.
+        """
+        proc = subprocess.run(
+            [
+                "ffmpeg", "-hide_banner", "-loglevel", "error",
+                "-i", str(path), "-map", "0:a:0",
+                "-f", "s16le", "-acodec", "pcm_s16le", "-ac", "1",
+                "-ar", "48000", "-",
+            ],
+            capture_output=True, env=self.env,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        return len(proc.stdout) // 2
+
+    def video_frame_hashes(self, path):
+        """Per-frame checksums of the decoded video, timestamps stripped.
+
+        Timestamps restart at zero in every segment, so comparing them against
+        a join would be meaningless; the picture data is the thing that must
+        come through a stream copy untouched.
+        """
+        proc = subprocess.run(
+            [
+                "ffmpeg", "-hide_banner", "-loglevel", "error",
+                "-i", str(path), "-map", "0:v:0", "-f", "framemd5", "-",
+            ],
+            capture_output=True, text=True, env=self.env,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        return [
+            line.split(",")[-1].strip()
+            for line in proc.stdout.splitlines()
+            if line and not line.startswith("#")
+        ]
+
     def record_for(self, seconds, mode=None, capture="screen"):
         """Start a recording and let it capture for a while."""
         self.run_record(capture, mode=mode)
@@ -492,7 +535,7 @@ class ScreenRecordCase(unittest.TestCase):
 
     def test_resume_replays_the_sessions_device_even_if_the_mix_vanished(self):
         """Every segment must carry identical streams or stop() cannot join
-        them under `-c copy`, so a mid-session change is ignored."""
+        them under `-c:v copy`, so a mid-session change is ignored."""
         self.record_for(0.8)
         self.assertEqual(self.state()["mix"], "1")
         self.run_record("screen")  # pause
@@ -612,8 +655,8 @@ class ScreenRecordCase(unittest.TestCase):
         self.assertEqual(self.parts(), [])
         self.assertTrue(self.state_is_idle())
         # The joined file really is a playable container spanning both parts,
-        # and both streams survived the copy -- a two-stream stream-copy concat
-        # is the fragile case, so it is asserted rather than assumed.
+        # and both streams survived the join -- a two-stream concat is the
+        # fragile case, so it is asserted rather than assumed.
         self.assertGreater(float(self.ffprobe(target, "format=duration")[0]), 1.0)
         self.assertEqual(
             self.ffprobe(target, "stream=codec_type"), ["video", "audio"]
@@ -631,6 +674,64 @@ class ScreenRecordCase(unittest.TestCase):
         self.assertEqual(self.last_notification(), f"✓ Saved to {target}")
         self.assertTrue(pathlib.Path(target).exists())
         self.assertEqual(len(self.trashed()), 3)
+
+    # -- the join: audio re-encoded, video copied ---------------------------
+
+    def _paused_three_segment_session(self):
+        """Three finalized segments, session left paused so they can be read."""
+        self.record_for(0.8)
+        for _ in range(2):
+            self.run_record("screen")  # pause
+            self.run_record("screen")  # resume
+            time.sleep(0.8)
+        self.run_record("screen")  # pause, finalizing the third
+        st = self.state()
+        self.assertEqual(st["state"], "paused")
+        self.assertEqual(len(st["seg"]), 3)
+        return st
+
+    def test_the_join_does_not_smuggle_encoder_priming_into_the_audio(self):
+        """The regression this whole re-encode exists for.
+
+        Every segment is an independently encoded AAC track carrying 1024
+        samples of encoder priming, marked for the player to drop by an edit
+        list with media_time=1024. A `-c copy` join collapses those into one
+        media_time=0 entry, so each segment's priming survives as audible
+        audio: a 21.3 ms dropout at every pause. Re-encoding the audio makes
+        ffmpeg decode through the concat demuxer, which honours the skip.
+
+        Asserted as sample accounting rather than as levels, because it is
+        exact: the excess over the segments' own totals is 1024 per segment
+        under a stream copy, and only ffmpeg's own single head priming here.
+        """
+        st = self._paused_three_segment_session()
+        parts = sum(self.audio_samples(p) for p in st["seg"])
+        target = st["target"]
+        self.run_record("stop")
+        self.assertEqual(self.last_notification(), f"✓ Saved to {target}")
+
+        joined = self.audio_samples(target)
+        excess = joined - parts
+        # A stream copy would land on 3 * 1024 = 3072 here. One block is
+        # ffmpeg's own encode priming at t=0, which is not a seam and is left
+        # alone deliberately -- see concat_segments().
+        self.assertLess(
+            excess, 2048,
+            f"{excess} samples of unskipped priming survived the join "
+            f"({parts} in the segments, {joined} in {target})",
+        )
+
+    def test_the_join_leaves_the_video_bit_exact(self):
+        """Audio is re-encoded; video must still be a pure stream copy."""
+        st = self._paused_three_segment_session()
+        parts = [h for p in st["seg"] for h in self.video_frame_hashes(p)]
+        target = st["target"]
+        self.run_record("stop")
+        self.assertEqual(self.last_notification(), f"✓ Saved to {target}")
+
+        self.assertEqual(self.video_frame_hashes(target), parts)
+        # Re-encoding would have replaced the codec the segments were made with.
+        self.assertEqual(self.ffprobe(target, "stream=codec_name"), ["mpeg4", "aac"])
 
     def test_stop_while_paused_saves_what_exists(self):
         self.record_for(1.0)
