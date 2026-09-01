@@ -132,6 +132,73 @@ in
       };
     };
 
+    # Screen recordings carried a 1 kHz beep at every pause/resume on the
+    # Portege. It is not an acoustic sound: the impulses are spaced exactly 48
+    # samples at 48 kHz -- 1000.000 Hz, the canonical 1 ms SOF DSP block period
+    # -- and stayed phase-locked across events 40 minutes apart, and the
+    # harmonics fall as 1/n (-6.1, -9.8, -11.9, -14.1 dB across 2f-5f,
+    # reproducible within 0.5 dB over five events), which is the spectrum of an
+    # impulse train and of nothing else. It is gated on a threshold: 47 beeps
+    # across two sessions, every one after a pause of >= 5.17 s, and zero after
+    # 160 resumes under 5.0 s. It is in the raw segments, upstream of ffmpeg,
+    # so no change to the join could ever have touched it.
+    #
+    # 5 s is WirePlumber's default idle suspend timeout (node/suspend-node.lua).
+    # screen-record's pause kills wl-screenrec, which drops the only non-passive
+    # consumer of the mix; the whole passive chain below goes idle, the capture
+    # device suspends, and the resume restarts the SOF/DMIC pipeline, which
+    # flushes ~30 impulses into the first captured audio. Reproduced on demand
+    # through the mix monitor: an 8 s gap left /proc/asound/card0/pcm6c/sub0/
+    # status at "closed" and the next capture peaked +42.0 dB over its own
+    # 1 kHz floor; a 2 s gap left it "RUNNING" and the next capture peaked
+    # +9.1 dB, which is room noise.
+    #
+    # So keep that one device from suspending. This does not contradict the
+    # passive-node reasoning below, which is about capture *streams*: no stream
+    # is added here, and a node whose suspend is disabled sits in "idle", never
+    # "running". WirePlumber downgrades a headset from A2DP to HSP/HFP when a
+    # bluetooth source is *running with a capture stream attached*, and neither
+    # half of that becomes true. The match is on the SOF card's own ALSA
+    # identity, so the bluez monitor's nodes are not in scope at all.
+    #
+    # Not gated on portable.quirks. The artifact belongs to SOF's DSP restart
+    # rather than to this model's firmware -- unlike the DMIC lane-count quirk
+    # at the bottom of this file, which is a real NHLT bug on this machine --
+    # and the match key is already the gate: linglong has no SOF hardware (AMD
+    # HDA plus USB audio), so the rule matches nothing there.
+    #
+    # 0 rather than a long timeout. A finite timeout would keep the bug's shape
+    # and only move its threshold: a pause longer than the number beeps again,
+    # intermittently, which is precisely what made this cost three separate
+    # measurement campaigns to pin down. Pay the price openly instead. With
+    # suspend off, the capture PCM stays open from the first capture until
+    # PipeWire restarts (measured: pcm6c reads "state: RUNNING" where it used
+    # to read "closed"), so the internal microphone's ADC stays powered.
+    # Nothing is listening to it, but the hardware path is live, and that power
+    # and privacy cost is accepted deliberately in exchange for recordings that
+    # are clean every time. Both of the card's capture nodes are matched, not
+    # just the DMIC: a headset mic on the analog jack runs through the same DSP
+    # and would beep the same way once it became the default source.
+    wireplumber.extraConfig."51-sof-capture-no-suspend" = {
+      "monitor.alsa.rules" = [
+        {
+          matches = [
+            {
+              # alsa.* and api.alsa.card.* are copied from the device onto each
+              # node expressly for rule matching (monitors/alsa.lua). The
+              # driver name identifies the SOF HDA DSP card without pinning a
+              # PCI path or an object index, both of which move.
+              "alsa.driver_name" = "snd_soc_skl_hda_dsp";
+              "api.alsa.pcm.stream" = "capture";
+            }
+          ];
+          actions.update-props = {
+            "session.suspend-timeout-seconds" = 0;
+          };
+        }
+      ];
+    };
+
     # A recording of a call has to carry both halves of the conversation: the
     # user's own voice from the microphone, and the other participants' voices,
     # which arrive as ordinary playback and are therefore only capturable off
