@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# Drive a wl-screenrec recording: start, pause/resume, stop-and-save, and
-# cancel-and-discard.
+# Drive a wl-screenrec recording: start, pause/resume, stop-and-save,
+# drop-the-last-take, and cancel-and-discard.
 #
 # A Hyprland bind and a rofi entry each fire one command and exit, so the
 # session state lives in a file under $XDG_RUNTIME_DIR rather than in a daemon.
@@ -11,7 +11,9 @@
 # Either one doubles as the pause/resume trigger: with a recording live it
 # pauses, with one paused it resumes. `stop` finishes and keeps the file;
 # `cancel` is the deliberate opposite, ending the recording and throwing every
-# byte of it away.
+# byte of it away. `drop-segment` is the same discard at the granularity of one
+# segment: it throws away the most recent take and leaves the rest of the
+# session paused and saveable.
 #
 # Pause is segmentation, not a signal. wl-screenrec 0.2.0 has no pause -- its
 # only signal feature is `--history`, a SIGUSR1 replay buffer -- and
@@ -746,9 +748,10 @@ trash_all_segments() {
 # substitute a failing stub; in the Nix build the wrapper sets it.
 libexec_dir="${SCREEN_RECORD_LIBEXEC:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)}"
 
-# Delete every segment of this session for real, as cancel() means it.
+# Delete the segments named in $@ for real, as cancel() and drop_segment() mean
+# it.
 #
-# A cancelled recording is one the user decided is worthless, and at hundreds of
+# A discarded recording is one the user decided is worthless, and at hundreds of
 # megabytes to gigabytes a session those must not accumulate in the wastebasket
 # the way trash_one() leaves them. Deleting is still not an unlink: the segments
 # are renamed into a timestamped batch with a manifest, verified there, and only
@@ -756,12 +759,19 @@ libexec_dir="${SCREEN_RECORD_LIBEXEC:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")
 # discard-segments.py, which re-runs every guard below independently and refuses
 # to purge anything it cannot account for.
 #
+# Takes a list rather than reading st_segs so that dropping a single segment and
+# cancelling the whole session are one disposal route with one set of guards,
+# instead of two that can drift apart on what they are willing to touch.
+#
 # Non-zero if any segment was refused or the purge failed; on that path the
-# files are still on disk, either in place or in the batch directory.
-purge_all_segments() {
+# files are still on disk, either in place or in the batch directory. A segment
+# that is simply not there is not a failure -- validate_discardable() answers 1
+# for it and there is nothing left to delete, which is the outcome the caller
+# wanted.
+purge_segments() {
   local s rc=0 status
   local -a keep=()
-  for s in ${st_segs[@]+"${st_segs[@]}"}; do
+  for s in "$@"; do
     status=0
     validate_discardable "$s" || status=$?
     case "$status" in
@@ -781,6 +791,11 @@ purge_all_segments() {
   fi
   notify_alert "Discard failed — segments kept, see $log_file"
   return 1
+}
+
+# Every segment of this session, for cancel().
+purge_all_segments() {
+  purge_segments ${st_segs[@]+"${st_segs[@]}"}
 }
 
 # ---------------------------------------------------------------------------
@@ -839,33 +854,39 @@ stop() {
   fi
 }
 
-# Stop the running recording and throw every segment away.
+# Take the current segment away from the live recorder, for the two discard
+# paths below.
 #
-# Unlike stop(), no container ever has to end up valid, so this does not wait
-# out a long index flush: SIGINT first, so wl-screenrec still releases the
+# Unlike stop(), no container ever has to end up valid here, so this does not
+# wait out a long index flush: SIGINT first, so wl-screenrec still releases the
 # encoder tidily, then SIGKILL once a short grace has passed. The
 # `env --default-signal=INT` in launch() is what makes that first SIGINT
 # deliverable at all.
+#
+# Non-zero when the recorder is *still* running afterwards, which is the
+# caller's cue to keep both the files and the state rather than dispose of a
+# file another process still holds open.
+release_current() {
+  local i
+  if ! finalize_current 20; then
+    kill -KILL "$st_pid" 2> /dev/null || true
+    for i in $(seq 1 20); do
+      is_recorder "$st_pid" "${st_segs[-1]}" || break
+      sleep 0.1
+    done
+  fi
+  ! is_recorder "$st_pid" "${st_segs[-1]}"
+}
+
+# Stop the running recording and throw every segment away.
 #
 # Silent when it works. The user asked for no notification on a discard, so the
 # recording stopping is the whole signal; a refusal or a failure still speaks up
 # below, because silence is for the case that worked.
 cancel() {
-  local i
-  if [ "$st_state" = "recording" ]; then
-    if ! finalize_current 20; then
-      kill -KILL "$st_pid" 2> /dev/null || true
-      for i in $(seq 1 20); do
-        is_recorder "$st_pid" "${st_segs[-1]}" || break
-        sleep 0.1
-      done
-    fi
-    if is_recorder "$st_pid" "${st_segs[-1]}"; then
-      # Still running: keep the files and the state rather than trash something
-      # another process still holds open.
-      notify_alert "Could not stop the recorder — segments kept"
-      exit 1
-    fi
+  if [ "$st_state" = "recording" ] && ! release_current; then
+    notify_alert "Could not stop the recorder — segments kept"
+    exit 1
   fi
   # Cleared before the disposal: the recorder is gone either way, so a refusal
   # below must not leave a wedged session behind. It notifies loudly instead.
@@ -875,13 +896,72 @@ cancel() {
   fi
 }
 
+# Throw away the most recent segment and keep the rest of the session.
+#
+# The take-back for a spoiled take: the last few minutes are wrong, everything
+# before them is fine. It always lands in `paused`, never back in `recording`,
+# and that is the point rather than an omission -- the user just walked away
+# from what the camera was pointed at, so the natural next act is to re-compose
+# and press Super+I, which resumes onto a fresh segment. Auto-restarting a
+# recorder here would be recording exactly the thing they abandoned.
+#
+# Not silent, unlike cancel(): the session is still sitting there paused with
+# files on disk, so it has to say what it did and what is left.
+drop_segment() {
+  local seg index
+  if [ "$st_state" = "recording" ]; then
+    if ! release_current; then
+      notify_alert "Could not stop the recorder — segment kept"
+      exit 1
+    fi
+    # Persisted before the disposal, because it is already true: the recorder is
+    # gone. If the purge below is then refused, what is left on disk is an
+    # honest paused session that still lists this segment, and the next resume
+    # numbers past it rather than reusing a name that is still taken.
+    st_state="paused"
+    st_pid=""
+    write_state
+  fi
+
+  seg="${st_segs[-1]}"
+  index=${#st_segs[@]}
+
+  if [ "$index" -eq 1 ]; then
+    # Nothing would be left to keep, and load_state() rejects a session with no
+    # segments, so a session cannot survive this -- it is a full cancel wearing
+    # a different name. Cleared only after the purge succeeded, for the same
+    # reason the multi-segment path below drops the entry only then: a session
+    # that still owns its segment is recoverable, one that has forgotten a file
+    # still on disk is not. Announced rather than silent, because the user asked
+    # to drop one take and got the whole recording discarded.
+    if ! purge_segments "$seg"; then
+      exit 1
+    fi
+    clear_state
+    notify "✂ Dropped the only segment — recording cancelled"
+    return 0
+  fi
+
+  # The entry leaves st_segs only once the file is really gone. segment_path()
+  # and resume() both derive the next index from ${#st_segs[@]}, so a successful
+  # drop hands partNNN back to the next resume -- which is only safe because
+  # nothing is sitting at that path any more. Keeping the entry on a refusal is
+  # what stops the reused name from colliding with a file that survived.
+  if ! purge_segments "$seg"; then
+    exit 1
+  fi
+  st_segs=("${st_segs[@]:0:$((index - 1))}")
+  write_state
+  notify "✂ Dropped segment $index — $((index - 1)) kept"
+}
+
 # ---------------------------------------------------------------------------
 
 mode="${1:-screen}"
 case "$mode" in
-  screen | region | stop | cancel) ;;
+  screen | region | stop | cancel | drop-segment) ;;
   *)
-    echo "Usage: screen-record {screen|region|stop|cancel}" >&2
+    echo "Usage: screen-record {screen|region|stop|cancel|drop-segment}" >&2
     exit 1
     ;;
 esac
@@ -890,6 +970,7 @@ if load_state; then
   case "$mode" in
     stop) stop ;;
     cancel) cancel ;;
+    drop-segment) drop_segment ;;
     # Both capture modes are the one pause/resume trigger, so the bind that
     # starts a recording is also the bind that suspends and continues it.
     # Whichever mode the session was started in is the one that resumes.
@@ -903,9 +984,11 @@ if load_state; then
   esac
 else
   case "$mode" in
-    # Stopping or cancelling with nothing running is harmless, not an error.
+    # Stopping, cancelling or dropping with nothing running is harmless, not an
+    # error.
     stop) notify "Nothing to stop — no recording in progress" ;;
     cancel) notify "Nothing to cancel — no recording in progress" ;;
+    drop-segment) notify "Nothing to drop — no recording in progress" ;;
     *) start "$mode" ;;
   esac
 fi
