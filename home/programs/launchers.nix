@@ -314,6 +314,12 @@ in
     # either one suspends it, and with one suspended, either one continues it —
     # same as Super+I. "Stop Recording" is what saves the result, matching
     # Super+Shift+I.
+    #
+    # The discarding transitions -- `cancel` and `drop-segment`, on the Escape
+    # keys -- deliberately have no entry here. Every one of these is a
+    # transition that either keeps the recording or saves it, and a list you
+    # arrow through is the wrong place to keep an irreversible delete one row
+    # away from the entry that starts a recording.
     screen-record = {
       name = "Record Screen";
       genericName = "Screen Recorder";
