@@ -19,6 +19,7 @@ below check the guards that keep it there as closely as they check the deletion.
 """
 
 import contextlib
+import fcntl
 import importlib.util
 import io
 import os
@@ -38,6 +39,14 @@ HELPER = ROOT / "pkgs" / "screen-record" / "discard-segments.py"
 # The script's own optimistic-notify supervision window (two `sleep 2`s in the
 # worst case, plus the recorder launch).
 SUPERVISE = 2.0
+
+
+def is_alive(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
 
 
 FAKE_RECORDER = r"""#!/usr/bin/env bash
@@ -377,6 +386,35 @@ class ScreenRecordCase(unittest.TestCase):
         """Start a recording and let it capture for a while."""
         self.run_record(capture, mode=mode)
         time.sleep(seconds)
+
+    @contextlib.contextmanager
+    def lock_held(self):
+        """Hold the script's lock, as an invocation still working does.
+
+        flock(2) either way, so this is the same lock the script takes and not
+        a simulation of one.
+        """
+        path = self.runtime / "screen-record.lock"
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            yield
+        finally:
+            os.close(fd)
+
+    def lock_is_free(self):
+        """True when nothing holds the script's lock."""
+        path = self.runtime / "screen-record.lock"
+        if not path.exists():
+            return True
+        fd = os.open(path, os.O_WRONLY | os.O_APPEND)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return True
+        except BlockingIOError:
+            return False
+        finally:
+            os.close(fd)
 
     # -- Part 1: notification latency -------------------------------------
 
@@ -754,6 +792,16 @@ class ScreenRecordCase(unittest.TestCase):
         self.assertTrue(empty.exists())
         self.assertEqual(empty.stat().st_size, 0)
 
+        # A segment that captured nothing is still a take the user has lost, and
+        # the count check does not know why a segment is unusable -- so the
+        # first stop reports it and the second one saves what is really there.
+        self.run_record("stop")
+        self.assertEqual(
+            self.last_notification(),
+            "Missing 1 of 2 segments — trigger again to join the remaining 1",
+        )
+        self.assertFalse(pathlib.Path(target).exists())
+
         self.run_record("stop")
         # One live segment left, so the fast path applies and no join is run.
         self.assertEqual(self.last_notification(), f"✓ Saved to {target}")
@@ -812,10 +860,176 @@ class ScreenRecordCase(unittest.TestCase):
         st = self.state()
         self.assertEqual(st["state"], "paused")
         self.assertEqual(st["target"], target)
-        # The captured segment is still there and still saveable.
+        # The captured segment is still there and still saveable -- through the
+        # count check, because the session lists a second segment the dead
+        # recorder never wrote. That is reported once and then consented to.
+        self.run_record("stop")
+        self.assertEqual(
+            self.last_notification(),
+            "Missing 1 of 2 segments — trigger again to join the remaining 1",
+        )
         self.run_record("stop")
         self.assertEqual(self.last_notification(), f"✓ Saved to {target}")
         self.assertTrue(pathlib.Path(target).exists())
+
+    # -- serialization and the completeness check ---------------------------
+    #
+    # The regression these exist for cost a 63-minute recording. A stop began a
+    # multi-minute join; with no feedback the user pressed stop again; the
+    # invocation that finished first trashed the segments the others were still
+    # reading; and a later one joined only the survivors and reported success.
+    # The lock stops the collision, and the count check stops any short join --
+    # whatever caused it -- from passing itself off as the whole recording.
+
+    BUSY = "Still busy with the last trigger — joining a long recording takes minutes"
+
+    def test_a_second_invocation_does_nothing_while_the_lock_is_held(self):
+        """The keypress that started all this. It must be refused, silently as
+        far as the files are concerned, and it must not fail: these run from
+        Hyprland binds where a non-zero exit is noise."""
+        st = self._paused_three_segment_session()
+        target = st["target"]
+        with self.lock_held():
+            self.run_record("stop", expect=0)
+        self.assertEqual(self.last_notification(), self.BUSY)
+        # Nothing was joined, nothing was trashed, the session is untouched.
+        self.assertFalse(pathlib.Path(target).exists())
+        self.assertFalse((self.runtime / "screen-record.concat").exists())
+        self.assertEqual(len(self.parts()), 3)
+        self.assertEqual(self.trashed(), [])
+        self.assertEqual(len(self.state()["seg"]), 3)
+        self.assertEqual(self.state()["state"], "paused")
+        # Once the holder is gone the very same trigger does the whole job.
+        self.run_record("stop")
+        self.assertEqual(self.last_notification(), f"✓ Saved to {target}")
+        self.assertEqual(self.parts(), [])
+
+    def test_a_held_lock_refuses_every_action_not_just_stop(self):
+        """cancel, drop-segment and the pause/resume trigger mutate the same
+        session, so none of them may run alongside a join either."""
+        self._paused_three_segment_session()
+        for action in ("cancel", "drop-segment", "screen"):
+            with self.subTest(action=action):
+                with self.lock_held():
+                    self.run_record(action, expect=0)
+                self.assertEqual(self.last_notification(), self.BUSY)
+                self.assertEqual(len(self.parts()), 3)
+                self.assertEqual(len(self.state()["seg"]), 3)
+
+    def test_the_backgrounded_recorder_does_not_hold_the_lock(self):
+        """The recorder outlives the invocation that started it, so if it
+        inherited the lock descriptor it would hold the lock for the whole
+        recording and every later trigger would be refused as busy. bash does
+        not set close-on-exec on a descriptor opened by `exec`, so launch()
+        closes it in the child explicitly."""
+        self.record_for(0.8)
+        st = self.state()
+        self.assertEqual(st["state"], "recording")
+        # The recorder is alive and the script has exited.
+        self.assertTrue(is_alive(int(st["pid"])))
+        self.assertTrue(
+            self.lock_is_free(),
+            "the backgrounded recorder is still holding the lock",
+        )
+        # And the observable consequence: stopping a live recording works.
+        target = st["target"]
+        self.run_record("stop")
+        self.assertEqual(self.last_notification(), f"✓ Saved to {target}")
+        self.assertTrue(pathlib.Path(target).exists())
+
+    def test_the_lock_is_released_when_the_script_exits(self):
+        """Advisory and process-scoped, so nothing has to clean it up -- not
+        even after the paths that exit non-zero."""
+        self.run_record("screen", mode="die", expect=1)
+        self.assert_notified("Failed to start")
+        self.assertTrue(self.lock_is_free())
+
+    def test_a_stop_missing_segments_refuses_once_and_joins_on_the_second(self):
+        """The silent loss, in miniature: with a segment gone, live_segments()
+        returns a short list that used to be indistinguishable from a complete
+        one. Now it is reported, nothing is trashed, and the join happens only
+        because the user asked a second time."""
+        st = self._paused_three_segment_session()
+        target = st["target"]
+        gone = pathlib.Path(st["seg"][1])
+        # A hand-deleted bad take, which is supported -- and the same shape a
+        # concurrent stop's trash_all_segments() left behind.
+        gone.rename(self.root / "hand-deleted.mp4")
+
+        self.run_record("stop")
+        self.assertEqual(
+            self.last_notification(),
+            "Missing 1 of 3 segments — trigger again to join the remaining 2",
+        )
+        # The refusing path saves nothing and disposes of nothing: the evidence
+        # is all still on disk if the number is a surprise.
+        self.assertFalse(pathlib.Path(target).exists())
+        self.assertFalse((self.runtime / "screen-record.concat").exists())
+        self.assertEqual(len(self.parts()), 2)
+        self.assertEqual(self.trashed(), [])
+        after = self.state()
+        self.assertEqual(after["state"], "paused")
+        self.assertNotIn("pid", after)
+        self.assertEqual(len(after["seg"]), 3)
+        self.assertEqual(after["short"], "2")
+
+        self.run_record("stop")
+        self.assertEqual(self.last_notification(), f"✓ Saved to {target}")
+        self.assertTrue(pathlib.Path(target).exists())
+        self.assertEqual(self.parts(), [])
+        self.assertEqual(len(self.trashed()), 2)
+        self.assertTrue(self.state_is_idle())
+        # What was consented to is a real, playable join of the survivors.
+        self.assertGreater(float(self.ffprobe(target, "format=duration")[0]), 1.0)
+        self.assertEqual(self.ffprobe(target, "stream=codec_type"), ["video", "audio"])
+
+    def test_a_complete_stop_is_never_challenged(self):
+        """The negative control. Every segment present is the ordinary case and
+        must still be one keypress."""
+        st = self._paused_three_segment_session()
+        target = st["target"]
+        self.run_record("stop")
+        self.assertEqual(self.last_notification(), f"✓ Saved to {target}")
+        for body in self.bodies():
+            self.assertNotIn("missing", body)
+        # And the join says up front that it is not instant, which is the
+        # feedback whose absence made the user press stop again.
+        self.assert_notified("Joining 3 segments — this takes minutes")
+        self.assertTrue(self.state_is_idle())
+
+    def test_consent_is_to_a_count_not_to_a_session(self):
+        """st_short records how many segments were reported as surviving, so a
+        session that loses more between the two presses asks again rather than
+        cashing in a confirmation the user gave for a different number.
+
+        The last press here also takes the single-segment rename path, which is
+        the reason the check sits in front of it: one survivor renamed into
+        place and the rest trashed is the same silent loss as a short join.
+        """
+        st = self._paused_three_segment_session()
+        target = st["target"]
+        first, second, third = (pathlib.Path(s) for s in st["seg"])
+
+        second.rename(self.root / "gone-second.mp4")
+        self.run_record("stop")
+        self.assertEqual(
+            self.last_notification(),
+            "Missing 1 of 3 segments — trigger again to join the remaining 2",
+        )
+
+        third.rename(self.root / "gone-third.mp4")
+        self.run_record("stop")
+        self.assertEqual(
+            self.last_notification(),
+            "Missing 2 of 3 segments — trigger again to join the remaining 1",
+        )
+        self.assertFalse(pathlib.Path(target).exists())
+        self.assertEqual(len(self.parts()), 1)
+
+        self.run_record("stop")
+        self.assertEqual(self.last_notification(), f"✓ Saved to {target}")
+        self.assertTrue(pathlib.Path(target).exists())
+        self.assertEqual(self.parts(), [])
 
     # -- cancel ------------------------------------------------------------
 
