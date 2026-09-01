@@ -33,6 +33,13 @@
 # capture device, so the mixing happens in PipeWire, in the null sink declared
 # by modules/hardware/audio.nix; this script only names its monitor. See
 # mix_available() below for why the naming is not blindly trusted.
+#
+# Exactly one invocation runs at a time. Every action here is a
+# read-modify-write of a session that lives on disk, and stop() in particular
+# spends minutes joining files that a second invocation would happily throw
+# away underneath it. The flock at the bottom of this file serializes the lot;
+# the comment there records the 63-minute recording that was lost proving it
+# necessary.
 
 set -euo pipefail
 
@@ -41,6 +48,12 @@ runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 state_file="$runtime_dir/screen-record.state"
 log_file="$runtime_dir/screen-record.log"
 concat_list="$runtime_dir/screen-record.concat"
+# Held for the lifetime of every invocation; see the acquisition at the bottom.
+# A file of its own rather than the state file, which write_state() replaces by
+# rename: the lock lives on the open file description, so locking a path that is
+# unlinked out from under it would leave two invocations holding locks on two
+# different inodes and believing they were alone.
+lock_file="$runtime_dir/screen-record.lock"
 rec_dir="${XDG_VIDEOS_DIR:-$HOME/Videos}/Recordings"
 
 # Encoding settings. Sessions here run 40-60 minutes and should land in the
@@ -144,8 +157,28 @@ mix_available() {
 # matching that, glyphs included, so the two read as one system. Nothing here
 # reminds the user of a keybind; they just pressed it.
 notify() {
-  notify-send -t 2000 \
-    -h string:x-canonical-private-synchronous:screen-record "$1"
+  notify_timed 2000 "$1"
+}
+
+# The same title-only status with a lifetime the caller picks, for the two
+# places where 2 seconds is the wrong length.
+#
+# stop() announces a join and then blocks in ffmpeg. Since the join re-encodes
+# the audio it runs for minutes on a long session, so a 2-second toast is gone
+# almost immediately and the screen goes back to looking exactly like nothing
+# happened -- which is what made the user press stop again and cost them most of
+# a recording. The announcement therefore has to outlive the operation it is
+# announcing, and the completion line has to still be there when the user looks
+# back after several minutes away.
+#
+# Long timeouts are safe here specifically because they are not left to expire:
+# every exit path out of the join sends a replacement carrying the same
+# synchronous hint, so mako overwrites the progress message in place the moment
+# there is a verdict. The bound is the backstop for a script that is killed
+# mid-join, not the normal way these end.
+notify_timed() {
+  notify-send -t "$1" \
+    -h string:x-canonical-private-synchronous:screen-record "$2"
 }
 
 # The exception. A failure usually means files were left on disk waiting on a
@@ -184,6 +217,11 @@ log() {
 # st_pid    the live recorder, meaningful only while st_state=recording
 # st_args   capture arguments, replayed verbatim on every resume
 # st_segs   the segment files, in order; the last one is the current segment
+# st_short  the live-segment count a stop() has already reported as short of
+#           st_segs, and empty when it has not. This is the whole of the
+#           confirmation stop() asks for before joining an incomplete session --
+#           see the count check there for why the warning is a state transition
+#           rather than a prompt.
 #
 # st_hw, st_audio and st_mix are part of the session, not of one launch: every
 # segment must be produced by the same encoder with the same set of streams, or
@@ -195,6 +233,7 @@ st_hw=""
 st_audio=""
 st_mix=""
 st_pid=""
+st_short=""
 st_args=()
 st_segs=()
 
@@ -234,6 +273,11 @@ write_state() {
     if [ -n "$st_pid" ]; then
       printf 'pid=%s\n' "$st_pid"
     fi
+    # Absent until a stop() has warned about missing segments, so an ordinary
+    # session's state file is unchanged by any of this.
+    if [ -n "$st_short" ]; then
+      printf 'short=%s\n' "$st_short"
+    fi
     for a in ${st_args[@]+"${st_args[@]}"}; do
       printf 'arg=%s\n' "$a"
     done
@@ -255,7 +299,7 @@ clear_state() {
 load_state() {
   local key value line
   st_state=""; st_target=""; st_mode=""; st_hw=""; st_audio=""; st_mix=""
-  st_pid=""
+  st_pid=""; st_short=""
   st_args=(); st_segs=()
   [ -s "$state_file" ] || return 1
   while IFS= read -r line || [ -n "$line" ]; do
@@ -269,6 +313,7 @@ load_state() {
       audio) st_audio="$value" ;;
       mix) st_mix="$value" ;;
       pid) st_pid="$value" ;;
+      short) st_short="$value" ;;
       arg) st_args+=("$value") ;;
       seg) st_segs+=("$value") ;;
       # Anything else is a state file this version does not understand.
@@ -359,10 +404,22 @@ launch() {
   # ignored and neither the stop nor the pause path below could ever reach it,
   # so every recording would have to be killed and every file would be a
   # corrupt container.
+  # `9>&-` is the other load-bearing redirection, and it is what keeps the lock
+  # at the bottom of this file honest. This is the one child that outlives the
+  # script -- it records for the next hour while every invocation that started
+  # it has long exited -- and bash deliberately does *not* set close-on-exec on
+  # a descriptor opened by `exec`, so without this the recorder inherits fd 9.
+  # An inherited descriptor shares the open file description the lock lives on,
+  # so the flock stays held for as long as *any* holder of that description is
+  # alive: measured, a child that inherits it keeps the lock after the parent
+  # exits, and every later invocation is refused as busy for the whole
+  # recording. Closing it in the child costs nothing -- the recorder has no use
+  # for the lock and must never hold it.
+  #
   # `env` execs in place, so $! is still the recorder's own PID.
   env --default-signal=INT wl-screenrec \
     ${st_args[@]+"${st_args[@]}"} "${tune[@]}" -f "$out" \
-    >> "$log_file" 2>&1 &
+    >> "$log_file" 2>&1 9>&- &
   pid=$!
 }
 
@@ -862,7 +919,7 @@ purge_all_segments() {
 # ---------------------------------------------------------------------------
 
 stop() {
-  local segs=() n
+  local segs=() n total
   if [ "$st_state" = "recording" ] && ! finalize_current 100; then
     # Keep the state so the next trigger resumes this stop instead of starting
     # a second, overlapping recording on top of it.
@@ -872,12 +929,55 @@ stop() {
 
   mapfile -t segs < <(live_segments)
   n=${#segs[@]}
+  total=${#st_segs[@]}
 
   if [ "$n" -eq 0 ]; then
+    # Every segment is absent or zero-byte, so there is nothing here to reduce
+    # and nothing the count check below could protect: what trash_all_segments()
+    # sweeps up is by definition empty. The session never captured anything, or
+    # its files are all gone -- either way there is no recording to save and no
+    # decision to put to the user.
     clear_state
     trash_all_segments || true
     notify_alert "Stopped, but nothing was written — see $log_file"
     return 0
+  fi
+
+  # Refuse to quietly save less than the session says it has.
+  #
+  # live_segments() skips a segment that is not there, which is deliberate and
+  # is what makes a stillborn resume or a hand-deleted bad take harmless. The
+  # defect was that stop() then joined whatever came back without ever comparing
+  # it against st_segs, so "76 of the 88 segments still exist" and "this session
+  # has 76 segments" were indistinguishable -- and the join is immediately
+  # followed by trash_all_segments(), which disposes of the evidence. That is
+  # how a 63-minute recording was saved as a 41-minute file reported with a ✓.
+  #
+  # Refusing outright would be wrong: deleting a spoiled take by hand is
+  # supported, and a session that could never be stopped again would be a worse
+  # failure than the one being fixed. So the discrepancy is made visible and
+  # joining it made deliberate -- the first stop reports and does nothing, a
+  # second stop within the same discrepancy goes ahead with the survivors.
+  # Nothing is joined and nothing is trashed on this path, so the segments are
+  # all still on disk if the number is a surprise and the user wants to look.
+  #
+  # st_short remembers the count that was reported rather than a bare "warned"
+  # flag, so consent is to a specific set of survivors: if more segments go
+  # missing between the two presses, the count no longer matches and the user is
+  # asked again about the new number.
+  if [ "$n" -ne "$total" ] && [ "$st_short" != "$n" ]; then
+    # The recorder is gone by now whatever the state file still claims, and
+    # this path leaves the session on disk, so record that too rather than
+    # leaving a dead pid behind for load_state() to demote later.
+    st_state="paused"
+    st_pid=""
+    st_short="$n"
+    write_state
+    # Phrased so it reads correctly at every count, which "1 segments are
+    # missing" would not; the script's other counted message settles for
+    # "segment(s)" and this one is read at a worse moment than that.
+    notify_alert "Missing $((total - n)) of $total segments — trigger again to join the remaining $n"
+    exit 0
   fi
 
   if [ "$n" -eq 1 ]; then
@@ -890,7 +990,8 @@ stop() {
     # recording that takes longer than a second make one all but impossible.
     if [ ! -e "$st_target" ] && [ ! -L "$st_target" ] && mv -- "${segs[0]}" "$st_target"; then
       clear_state
-      # Any *other* segment here was empty, so it is a leftover to clean up.
+      # Any *other* segment here was empty, or is already gone and was
+      # consented to by the count check above, so it is a leftover to clean up.
       # The renamed one is no longer at its old path and is simply skipped.
       trash_all_segments || true
       notify "✓ Saved to $st_target"
@@ -900,7 +1001,18 @@ stop() {
     exit 1
   fi
 
-  notify "Joining $n segments…"
+  # Says how long this will take, and stays up while it does. Both halves are
+  # the fix for the same thing: the join re-encodes the audio (see
+  # concat_segments()) and so runs for minutes on a long session, and the old
+  # 2-second "Joining n segments…" left the user watching a screen with no
+  # evidence anything was happening. What they did next was press stop again.
+  #
+  # Deliberately not a progress bar or a polling daemon: this script is a set of
+  # one-shot commands that fire and exit, and ffmpeg's own progress would need a
+  # background reader and a notification loop to display. One honest sentence
+  # about the duration, held on screen until there is a verdict, is what the
+  # missing feedback actually was.
+  notify_timed 300000 "⧗ Joining $n segments — this takes minutes for a long recording"
   if ! concat_segments "${segs[@]}"; then
     # Keep both the segments and the state: the recording is not lost, it is
     # just still in pieces, and a second trigger can retry the join.
@@ -908,8 +1020,12 @@ stop() {
     exit 1
   fi
   clear_state
+  # Longer than the routine 2 seconds, and for the same reason the announcement
+  # is: several minutes have passed and the user is not necessarily still
+  # watching. The wording is the plain one the rename path uses -- a join is not
+  # a different outcome, just a slower one.
   if trash_all_segments; then
-    notify "✓ Saved to $st_target"
+    notify_timed 10000 "✓ Saved to $st_target"
   else
     notify_alert "Saved to $st_target — joined $n segments, some could not be cleaned up"
   fi
@@ -1026,6 +1142,54 @@ case "$mode" in
     exit 1
     ;;
 esac
+
+# One invocation at a time, from here to the end of whatever it is doing.
+#
+# Every action below reads the session, works on the files it names, and writes
+# it back. write_state()'s atomic rename makes a single write indivisible, which
+# is a much smaller claim than it looks: it says nothing about the minutes
+# between reading st_segs and finishing with the files it listed. Two
+# invocations could each pass through that window unaware of the other, and one
+# real session is what it cost.
+#
+# What happened, on 88 segments: the user pressed stop, and stop() began an
+# ffmpeg concat. That join used to take seconds, because it was a pure stream
+# copy -- but it now re-encodes the audio to strip the per-segment AAC encoder
+# priming (see concat_segments()), so on a 63-minute session it takes minutes.
+# That change is correct and stays; what it did was stretch the read-modify-write
+# window from a race nobody could hit into one anybody could. Its only feedback
+# was a single 2-second toast, so from outside it looked like the keypress had
+# not registered, and the user pressed stop again -- several times. Each new
+# invocation started its own join over the same segments toward the same target.
+# Whichever finished first cleared the state and ran trash_all_segments(),
+# pulling the segments out from under the joins still reading them: the log
+# shows three dying on `Impossible to open ...part029.mp4`, then part060, then
+# part080. A later invocation then called live_segments(), which by design skips
+# segments that are not there, found only the survivors, joined them, and
+# reported `✓ Saved` -- 41.4 minutes presented as a complete recording of a
+# 63-minute session.
+#
+# So the lock is the first of the two fixes and the count check in stop() is the
+# second, and they are aimed at different things. The lock stops the invocations
+# from colliding; the check in stop() means that if segments are missing for any
+# reason at all, the join says so instead of silently producing a shorter file.
+# Neither is sufficient alone.
+#
+# Non-blocking, and a refusal is reported and then dropped. Queuing would be
+# actively wrong -- the queued command would run a second stop, or a pause,
+# against a session the first one has already finished with -- and the whole
+# point is that the second keypress must not do anything. Exit 0 because these
+# are Hyprland binds and rofi entries, where a non-zero exit is noise for
+# something that is not an error: the user pressed a key twice.
+#
+# The cost, accepted knowingly: a trigger during the ~2s supervise() window
+# after a start, or during a degradation ladder walk, is now refused rather than
+# racing. Being told to press again is the better failure.
+exec 9>> "$lock_file"
+if ! flock -n 9; then
+  notify_alert "Still busy with the last trigger — joining a long recording takes minutes"
+  exit 0
+fi
 
 if load_state; then
   case "$mode" in

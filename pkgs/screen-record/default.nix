@@ -21,6 +21,10 @@
   # failing when --audio-device names something that is not there.
   pipewire,
   slurp,
+  # `flock` serializes the invocations against each other. Without it a second
+  # stop can trash the segments a first one is still joining -- see the lock at
+  # the bottom of screen-record.sh.
+  util-linux,
   wl-screenrec,
 }:
 
@@ -49,6 +53,7 @@ stdenvNoCC.mkDerivation {
           pipewire
           python3
           slurp
+          util-linux
           wl-screenrec
         ]
       }
