@@ -23,8 +23,10 @@
 # not reading. So pause finalizes the current segment and resume starts a new
 # one with byte-identical capture parameters -- same output or geometry, same
 # encoder, same streams -- which is what lets stop join them with ffmpeg's
-# concat demuxer under `-c copy`. Nothing is ever re-encoded, and a recording
-# that was never paused is a single segment that is simply renamed into place.
+# concat demuxer. The video is stream-copied and never re-encoded; the audio
+# has to be, for a reason specific to AAC that concat_segments() sets out. A
+# recording that was never paused is a single segment that is simply renamed
+# into place, and is not re-encoded at all.
 #
 # Audio is the microphone and the system output together, so a recorded call
 # carries both halves of the conversation. wl-screenrec accepts only one
@@ -185,7 +187,7 @@ log() {
 #
 # st_hw, st_audio and st_mix are part of the session, not of one launch: every
 # segment must be produced by the same encoder with the same set of streams, or
-# the `-c copy` join in stop() has nothing valid to write.
+# the `-c:v copy` join in stop() has nothing valid to write.
 st_state=""
 st_target=""
 st_mode=""
@@ -335,7 +337,7 @@ segment_path() {
 launch() {
   local out="$1"
   # Identical on every segment of a session, which is the precondition for the
-  # `-c copy` join in stop().
+  # `-c:v copy` join in stop().
   local tune=(-b "$video_bitrate" --max-fps "$max_fps")
   if [ "$st_hw" != "1" ]; then
     tune+=(--no-hw)
@@ -451,7 +453,9 @@ supervise() {
   # restarted from the beginning either way.
   #
   # Only at start. A resume must reproduce the earlier segments' streams
-  # exactly or stop() cannot `-c copy` them together, so st_mix is replayed
+  # exactly or stop() cannot join them at all -- the video is stream-copied,
+  # and a channel-count change would break even the audio re-encode. So st_mix
+  # is replayed
   # from the state file there, even if the mix has appeared or vanished since.
   if [ "$phase" = "start" ]; then
     if mix_available; then
@@ -619,10 +623,10 @@ resume() {
   write_state
   notify "● Recording $(mode_label "$st_mode")…"
   # No degradation ladder here, deliberately. Every segment has to share one
-  # codec, one pixel format and one set of streams for `-c copy` to join them,
-  # so switching encoders or dropping the audio track mid-session would produce
-  # a set of files that cannot be concatenated. Failing back to paused keeps
-  # the earlier segments saveable instead.
+  # codec, one pixel format and one set of streams for `-c:v copy` to join
+  # them, so switching encoders or dropping the audio track mid-session would
+  # produce a set of files that cannot be concatenated. Failing back to paused
+  # keeps the earlier segments saveable instead.
   supervise resume
 }
 
@@ -647,7 +651,60 @@ count_segments() {
   live_segments | wc -l
 }
 
-# Join $@ into $st_target with the concat demuxer under stream copy.
+# Join $@ into $st_target with the concat demuxer: video stream-copied, audio
+# re-encoded.
+#
+# The asymmetry is the point, and each half is what that stream needs rather
+# than a compromise between them.
+#
+# Video is never re-encoded, and that invariant is load-bearing. These are
+# 1500 kB/s VA-API H.264 captures (see the encoding settings at the top); a
+# re-encode would cost minutes on a 40-60 minute session and spend visible
+# quality doing it. `-c:v copy` is legal precisely because every segment came
+# out of one recorder launched with byte-identical capture arguments -- same
+# output or geometry, same encoder, same pixel format, same streams -- which is
+# what launch(), resume() and supervise() go to such lengths to guarantee. That
+# reasoning is unchanged.
+#
+# Audio has to be re-encoded, and `-c copy` here was a bug rather than a missed
+# optimization. Each segment is an independently encoded AAC-LC track, so each
+# one opens with 1024 samples of encoder priming: the codec's start-up
+# transient, which is not program audio. The muxer marks it for the player to
+# throw away, as an edit list entry with media_time=1024 on the audio track.
+# Concatenating under stream copy collapses those per-file edit lists into a
+# single track-level entry with media_time=0, and the mark is gone -- so every
+# segment's priming block survives into the output as ordinary audible audio.
+# That is a 21.3 ms dropout (1024 samples at 48 kHz) at every single pause,
+# 20-40 dB below program level: an audible hole in exactly the place the user
+# pressed a key, and so in exactly the place they were most likely to be
+# mid-sentence.
+#
+# Decoding the audio is what fixes it. Run through the concat demuxer, ffmpeg
+# propagates each input's per-packet skip_samples side data, so each segment's
+# priming is discarded while it is still known about and only real samples
+# reach the encoder. Measured on a real 4-segment session: under `-c copy` the
+# join decoded to 9,618,432 samples against the segments' own 9,614,336, which
+# is 4096 too many -- exactly 4 x 1024, one priming block per segment. Its
+# first boundary read -65.0, -64.4, -50.1, -49.1 dBFS across four 1024-sample
+# windows, and -19.5, -23.2, -27.0, -25.7 after re-encoding, which is program
+# level. All three boundaries came out clean.
+#
+# The cost is a second AAC generation on a ~128 kbps speech track, which is
+# inaudible, and 3.1 s of CPU to rebuild a 3.5-minute file. A 21 ms dropout at
+# every pause is not inaudible. 128k is wl-screenrec's own audio bitrate, so
+# the track does not change size either.
+#
+# What this deliberately does not do: ffmpeg writes media_time=0 for its own
+# encode too, so the output's first 21 ms is the new encoder's priming, audible
+# at the very start of the file. That sits at t=0 rather than at a pause, where
+# a screencast has not begun. `-af atrim=start_sample=1024` looks like the
+# remedy and was measured not to be: it deletes 1024 samples of real audio,
+# whereupon the muxer represents the resulting gap as an empty edit and puts
+# 21 ms of silence back in the same place. The head dropout came out unchanged
+# (-58.0 dBFS with it against -59.1 without, both spanning the same 1024
+# samples) while the whole audio track then ran 21 ms ahead of the video -- an
+# audio marker authored in sync with a video flash landed at 1.000 s against
+# the flash's 1.021 s. A permanent A/V offset in exchange for nothing.
 concat_segments() {
   local s esc
   : > "$concat_list"
@@ -656,11 +713,13 @@ concat_segments() {
     esc="${s//\'/\'\\\'\'}"
     printf "file '%s'\n" "$esc" >> "$concat_list"
   done
-  # -safe 0 because the list holds absolute paths; -c copy because the segments
-  # were produced by one encoder with one set of parameters and must not be
-  # re-encoded.
+  # -safe 0 because the list holds absolute paths. -c:v copy passes the H.264
+  # through untouched; -c:a aac -b:a 128k is the re-encode the priming skip
+  # above requires. A session recorded without audio has no audio stream for
+  # the latter two to apply to, and they are simply ignored.
   ffmpeg -hide_banner -loglevel error -y \
-    -f concat -safe 0 -i "$concat_list" -c copy "$st_target" >> "$log_file" 2>&1
+    -f concat -safe 0 -i "$concat_list" \
+    -c:v copy -c:a aac -b:a 128k "$st_target" >> "$log_file" 2>&1
 }
 
 # Check that a path is one this script wrote and is safe to dispose of, without
@@ -823,7 +882,9 @@ stop() {
 
   if [ "$n" -eq 1 ]; then
     # Never paused, or paused with everything else empty: one rename inside the
-    # recordings directory, no concat and no re-read of the data. `mv -n` is
+    # recordings directory, no concat and no re-read of the data. An unpaused
+    # recording therefore keeps its original audio too -- there is no seam to
+    # repair, so concat_segments()'s re-encode never touches it. `mv -n` is
     # not the guard here -- it skips silently and still exits 0 -- so the
     # collision is checked outright, even though a per-second timestamp and a
     # recording that takes longer than a second make one all but impossible.
