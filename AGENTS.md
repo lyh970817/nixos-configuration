@@ -91,6 +91,34 @@ Check generations under `sudo`: without it `nix-env --list-generations` exits 0
 with empty output and `ls /boot/loader/entries` looks empty, both reading as
 "nothing there".
 
+## Updating the Pinned Agent Tools
+
+`pkgs/claude-code.nix`, `pkgs/codex.nix` and `pkgs/chatgpt.nix` pin a version and
+a hash. Moving the pin is not the whole task: report what changed between the old
+and the new version.
+
+Lead with behaviour changes — changed defaults, removed or renamed flags, altered
+permission, hook or config semantics. Those break workflows already in use and
+outrank new features. Then the added and changed features, marking the ones that
+touch how the agents here are actually driven: multi-agent orchestration in
+worktrees and background agents, skills (repo-local ones live in
+`.agents/skills/`), hooks and `settings.json` permissions, MCP servers,
+file-based memory, context handling in long sessions, driving the peer host over
+SSH, and anything that widens what an agent may do unasked or undoably.
+
+Where the notes live:
+
+- Claude Code —
+  `https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md`.
+- Codex CLI — the GitHub release for tag `rust-v<version>`
+  (`https://api.github.com/repos/openai/codex/releases/tags/rust-v<version>`),
+  whose body is categorized by hand. The repo's `CHANGELOG.md` is a stub that
+  only points there, and most tags are prereleases with an empty body, so filter
+  on `prerelease == false`.
+- ChatGPT/Codex desktop — none. No public per-version changelog exists, the
+  release-notes pages refuse automated fetches, and its `src` tracks a `latest`
+  URL rather than a version. Report that the build moved and stop; do not hunt.
+
 ## Coding Style & Naming Conventions
 
 Keep modules focused on one concern and name files by feature, for example
