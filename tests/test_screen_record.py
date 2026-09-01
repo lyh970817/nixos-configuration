@@ -825,6 +825,150 @@ class ScreenRecordCase(unittest.TestCase):
         self.assertTrue(pathlib.Path(target).exists())
         self.assertEqual(len(self.parts()), 2)
 
+    # -- drop-segment ------------------------------------------------------
+
+    def two_segment_session(self):
+        """A session of two real segments, still recording the second."""
+        self.record_for(0.8)
+        self.run_record("screen")  # pause
+        self.run_record("screen")  # resume onto segment 2
+        time.sleep(0.8)
+        st = self.state()
+        self.assertEqual(len(st["seg"]), 2)
+        return st
+
+    def test_drop_while_recording_lands_in_paused(self):
+        """The live take is stopped and thrown away, and nothing is restarted:
+        the user walked away from what was on screen, so the next act is theirs.
+        """
+        st = self.two_segment_session()
+        self.assertEqual(st["state"], "recording")
+        kept, dropped = (pathlib.Path(s) for s in st["seg"])
+        self.run_record("drop-segment")
+        st = self.state()
+        self.assertEqual(st["state"], "paused")
+        self.assertNotIn("pid", st)
+        self.assertEqual(st["seg"], [str(kept)])
+        self.assertFalse(dropped.exists())
+        self.assertTrue(kept.exists())
+        # Deleted for real, like cancel: not left in the wastebasket, and the
+        # batch that held it in between was purged along with it.
+        self.assertEqual(self.trashed(), [])
+        self.assertEqual(self.discard_batches(), [])
+        self.assertEqual(self.last_notification(), "✂ Dropped segment 2 — 1 kept")
+        self.run_record("cancel")
+
+    def test_drop_while_paused_stays_paused(self):
+        st = self.two_segment_session()
+        self.run_record("screen")  # pause
+        self.assertEqual(self.state()["state"], "paused")
+        kept, dropped = (pathlib.Path(s) for s in st["seg"])
+        self.run_record("drop-segment")
+        st = self.state()
+        self.assertEqual(st["state"], "paused")
+        self.assertEqual(st["seg"], [str(kept)])
+        self.assertFalse(dropped.exists())
+        self.assertTrue(kept.exists())
+        self.assertEqual(self.last_notification(), "✂ Dropped segment 2 — 1 kept")
+        # What is left is still a saveable recording, not a wedged session.
+        target = st["target"]
+        self.run_record("stop")
+        self.assertTrue(pathlib.Path(target).exists())
+
+    def test_dropping_the_only_segment_cancels_the_recording(self):
+        """load_state() rejects a session with no segments, so there is nothing
+        left to be paused -- and that has to be said, not done silently."""
+        self.record_for(0.8)
+        seg = pathlib.Path(self.state()["seg"][0])
+        self.run_record("drop-segment")
+        self.assertTrue(self.state_is_idle())
+        self.assertFalse(seg.exists())
+        self.assertEqual(self.trashed(), [])
+        self.assertEqual(sorted(p.name for p in self.rec_dir.iterdir()), [])
+        self.assertEqual(
+            self.last_notification(), "✂ Dropped the only segment — recording cancelled"
+        )
+
+    def test_a_failing_drop_keeps_the_segment_and_the_session(self):
+        """The entry may only leave st_segs once the file is really gone: the
+        next resume reuses that partNNN, and it must not find one there."""
+        libexec = self.root / "stub-libexec"
+        libexec.mkdir()
+        (libexec / "discard-segments.py").write_text(
+            "import sys\nsys.stderr.write('refused\\n')\nsys.exit(2)\n"
+        )
+        segs = self.two_segment_session()["seg"]
+        self.run_record("drop-segment", expect=1, SCREEN_RECORD_LIBEXEC=str(libexec))
+        self.assert_notified("Discard failed")
+        st = self.state()
+        self.assertEqual(st["seg"], segs)
+        self.assertEqual(len(self.parts()), 2)
+        # The session survives, and the recorder that was stopped to do this is
+        # accounted for rather than left claimed as live.
+        self.assertEqual(st["state"], "paused")
+        self.assertNotIn("pid", st)
+
+    def test_a_refused_drop_keeps_the_segment_and_the_session(self):
+        """Same invariant on the other refusal: a guard saying no, rather than
+        the purge failing."""
+        self.record_for(0.8)
+        outsider = self.root / "screenrecord_outside.mp4"
+        outsider.write_text("precious")
+        state_path = self.runtime / "screen-record.state"
+        state_path.write_text(state_path.read_text() + f"seg={outsider}\n")
+        segs = self.state()["seg"]
+        self.run_record("drop-segment", expect=1)
+        self.assert_notified(f"Refusing to discard unexpected path: {outsider}")
+        self.assertTrue(outsider.exists())
+        self.assertEqual(outsider.read_text(), "precious")
+        self.assertEqual(self.state()["seg"], segs)
+        self.assertEqual(len(self.parts()), 1)
+        self.assertEqual(self.discard_batches(), [])
+
+    def test_a_segment_that_was_never_written_is_still_dropped(self):
+        """A resume whose recorder died leaves an entry with no file behind it.
+        There is nothing to purge, which is a successful drop -- and the entry
+        has to go, or the next resume would number past a free name."""
+        self.record_for(0.8)
+        self.run_record("screen")  # pause
+        self.run_record("screen", mode="die", expect=1)  # resume, recorder dies
+        st = self.state()
+        self.assertEqual(len(st["seg"]), 2)
+        self.assertFalse(pathlib.Path(st["seg"][1]).exists())
+        self.run_record("drop-segment")
+        st = self.state()
+        self.assertEqual(st["state"], "paused")
+        self.assertEqual(len(st["seg"]), 1)
+        self.assertEqual(self.last_notification(), "✂ Dropped segment 2 — 1 kept")
+
+    def test_the_next_resume_reuses_the_index_a_drop_freed(self):
+        """segment_path() numbers from ${#st_segs[@]}, so the freed partNNN
+        comes back -- and it is a fresh recording under that name, joinable with
+        the segment that was kept."""
+        st = self.two_segment_session()
+        self.assertTrue(st["seg"][1].endswith(".part002.mp4"))
+        target = st["target"]
+        self.run_record("drop-segment")
+        self.run_record("screen")  # resume
+        time.sleep(0.8)
+        st = self.state()
+        self.assertEqual(st["state"], "recording")
+        self.assertEqual(len(st["seg"]), 2)
+        self.assertTrue(st["seg"][1].endswith(".part002.mp4"))
+        self.assertEqual(st["target"], target)
+        self.run_record("screen")  # pause
+        self.run_record("stop")
+        self.assertEqual(self.last_notification(), f"✓ Saved to {target}")
+        self.assertTrue(pathlib.Path(target).exists())
+        self.assertEqual(self.parts(), [])
+
+    def test_drop_is_harmless_when_nothing_is_recording(self):
+        self.run_record("drop-segment")
+        self.assertEqual(
+            self.last_notification(), "Nothing to drop — no recording in progress"
+        )
+        self.assertTrue(self.state_is_idle())
+
     # -- idle and malformed state -----------------------------------------
 
     def test_stop_and_cancel_are_harmless_when_nothing_is_recording(self):
