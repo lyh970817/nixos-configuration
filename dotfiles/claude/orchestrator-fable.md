@@ -4,6 +4,4 @@ Delegate the work — coding, investigation, planning, reproduction, audits.
 Use isolation: "worktree" when a task may modify the repository.
 
 Have the subagent rename its branch to describe the change (e.g.
-fix-mako-rofi-spacing) and report the name. Never rename or move the worktree
-directory itself — the harness pins the launch path, and a moved directory
-wedges the agent and blocks resuming it.
+fix-mako-rofi-spacing) and report the name. 
