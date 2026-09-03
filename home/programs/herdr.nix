@@ -19,15 +19,19 @@ let
       rm "$out/bin/herdr"
       cat > "$out/bin/herdr" <<'WRAPPER'
       #!${pkgs.runtimeShell}
-      # An incoming session mode is authoritative. Otherwise snapshot this
-      # machine's desktop mode once, using the same dark-versus-light fallback
-      # as theme-mode and btop.
+      # An incoming viewer mode is authoritative. Otherwise snapshot this
+      # machine's applied monitor theme once before the persistent server is
+      # created. Unknown state is an error rather than an implicit palette.
       case "$THEME_MODE" in
         dark | light) ;;
         *)
           case "$(${pkgs.coreutils}/bin/readlink "$HOME/.local/state/hypr/current-theme.lua" 2>/dev/null)" in
             *dark.lua) THEME_MODE=dark ;;
-            *) THEME_MODE=light ;;
+            *light.lua) THEME_MODE=light ;;
+            *)
+              echo "herdr: cannot determine the applied monitor theme" >&2
+              exit 1
+              ;;
           esac
           ;;
       esac
@@ -152,7 +156,13 @@ let
         exit 1
       fi
 
-      export THEME_MODE=dark
+      case "''${THEME_MODE:-}" in
+        dark | light) ;;
+        *)
+          echo "remote-herdr-client: THEME_MODE must be supplied by the laptop viewer" >&2
+          exit 64
+          ;;
+      esac
       exec herdr --session remote "$@"
     '';
   };

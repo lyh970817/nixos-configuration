@@ -237,16 +237,19 @@ let
     theme-push "$new"
   '';
 
-  # theme-mode: prints the currently applied mode, derived from the hypr
-  # current-theme symlink target using the same idiom (and the same "light"
-  # default when unknown) as theme-toggle above. Used by the ssh/mosh client
-  # wrappers and home-terminal to learn which mode to hand off to the peer.
+  # theme-mode: prints the currently applied monitor-derived mode from the
+  # Hyprland theme symlink. An unknown target is an error: terminal launchers
+  # use this result as viewer identity and must not guess a palette when that
+  # identity cannot be established.
   themeMode = pkgs.writeShellScriptBin "theme-mode" ''
     target="$(readlink "${hyprCurrentTheme}" 2>/dev/null || true)"
     case "$target" in
     *light.lua) echo light ;;
     *dark.lua) echo dark ;;
-    *) echo light ;;
+    *)
+      echo "theme-mode: cannot determine the applied monitor theme from ${hyprCurrentTheme}" >&2
+      exit 1
+      ;;
     esac
   '';
 
@@ -301,10 +304,18 @@ let
   # and frozen for that process's life. This is the entire transport for
   # session colours; it never touches this machine's own desktop appearance.
   themeHold = pkgs.writeShellScriptBin "theme-hold" ''
-    case "$1" in
+    case "''${1:-}" in
     dark | light) export THEME_MODE="$1" ;;
+    *)
+      echo "usage: theme-hold <dark|light> <command> [args...]" >&2
+      exit 64
+      ;;
     esac
     shift
+    [ "$#" -gt 0 ] || {
+      echo "usage: theme-hold <dark|light> <command> [args...]" >&2
+      exit 64
+    }
     exec "$@"
   '';
 in

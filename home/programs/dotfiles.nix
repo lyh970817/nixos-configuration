@@ -9,17 +9,50 @@ let
   role = osConfig.portable.role;
   peerHost = osConfig.portable.peerHost;
 
-  # Wrapper baked with the peer host. Retries an SSH Herdr session to the home
-  # box a few times; if home is unreachable (or no peer configured) it falls
-  # back to a local shell so the floating window lands at a usable prompt
-  # instead of closing.
-  homeTerminal = pkgs.writeShellApplication {
-    name = "home-terminal";
+  # Runs on home after the laptop hands off its monitor-derived mode. Herdr is
+  # preferred; the tmux fallback has its own socket so its server-global theme
+  # can never collide with home-local main/secondary sessions.
+  remoteTerminalSession = pkgs.writeShellApplication {
+    name = "remote-terminal-session";
+    runtimeInputs = [ pkgs.tmux ];
+    text = ''
+      case "''${THEME_MODE:-}" in
+        dark | light) ;;
+        *)
+          echo "remote-terminal-session: THEME_MODE must be dark or light" >&2
+          exit 64
+          ;;
+      esac
+
+      if command -v remote-herdr-client >/dev/null 2>&1 \
+        && remote-herdr-client; then
+        exit 0
+      fi
+
+      exec tmux -L laptop new-session -A -d -s remote \
+        -e THEME_MODE="$THEME_MODE" ";" attach -t remote
+    '';
+  };
+
+  # Runs inside the already-themed Kitty window on the laptop. It retries the
+  # connection to home, handing the exact laptop viewer mode to the remote
+  # session. If home is unavailable, the same terminal remains useful as a
+  # local shell without changing its captured laptop theme.
+  homeTerminalConnect = pkgs.writeShellApplication {
+    name = "home-terminal-connect";
     runtimeInputs = [
       pkgs.openssh
       pkgs.coreutils
     ];
     text = ''
+      case "''${THEME_MODE:-}" in
+        dark | light) ;;
+        *)
+          echo "home-terminal-connect: THEME_MODE must be dark or light" >&2
+          exit 64
+          ;;
+      esac
+
       PEER=${pkgs.lib.escapeShellArg peerHost}
 
       if [ -z "$PEER" ]; then
@@ -27,17 +60,7 @@ let
       fi
 
       for _ in 1 2 3; do
-        # shellcheck disable=SC2016 # The single-quoted script expands $SHELL on the remote host.
-        if ssh -t "$PEER" '
-          if command -v remote-herdr-client >/dev/null 2>&1 && remote-herdr-client; then
-            exit 0
-          fi
-          if command -v tmux >/dev/null 2>&1; then
-            export THEME_MODE=dark
-            exec tmux new-session -A -d -s remote -e THEME_MODE=dark ";" attach -t remote
-          fi
-          exec "''${SHELL:-${pkgs.runtimeShell}}" -l
-        '; then
+        if ssh -t "$PEER" "theme-hold $THEME_MODE remote-terminal-session"; then
           exit 0
         fi
         sleep 2
@@ -48,22 +71,79 @@ let
     '';
   };
 
+  # Laptop Super+Enter resolves the laptop monitor before Kitty starts, then
+  # the child above transports that immutable mode through SSH to home.
+  homeTerminal = pkgs.writeShellApplication {
+    name = "home-terminal";
+    text = ''
+      if ! mode="$(theme-mode)"; then
+        echo "home-terminal: cannot determine the laptop monitor theme" >&2
+        exit 1
+      fi
+      case "$mode" in
+        dark | light) ;;
+        *)
+          echo "home-terminal: invalid laptop monitor theme: $mode" >&2
+          exit 1
+          ;;
+      esac
+
+      export THEME_MODE="$mode"
+      exec ${pkgs.kitty}/bin/kitty --class kitty-float home-terminal-connect
+    '';
+  };
+
   # Attaches (or creates) the local 'remote' Herdr session — the one SSH
   # sessions from the laptop land in — from a terminal launched right here on
   # home. Non-modal: Super+Enter keeps meaning "my local session"; this is a
   # separate, deliberate action for the rare occasion of walking over to the
   # home desk and wanting to see what the laptop session was doing.
   #
-  # This is an independent dark session, regardless of the light home desktop
-  # or the laptop's current desktop mode. It deliberately bypasses
-  # remote-herdr-client, so viewing the session locally never makes openers
-  # think a remote viewer is attached.
+  # The caller must supply the laptop's current monitor-derived mode before
+  # Kitty starts. This deliberately bypasses remote-herdr-client, so viewing
+  # the session locally never makes openers think a remote viewer is attached.
   attachRemote = pkgs.writeShellApplication {
     name = "attach-remote";
     runtimeInputs = [ pkgs.herdr ];
     text = ''
-      export THEME_MODE=dark
+      case "''${THEME_MODE:-}" in
+        dark | light) ;;
+        *)
+          echo "attach-remote: THEME_MODE must be supplied by laptop-terminal" >&2
+          exit 64
+          ;;
+      esac
       exec herdr --session remote
+    '';
+  };
+
+  # Home Super+Ctrl+Enter represents the laptop viewer even though the window
+  # is displayed on home. Resolve the live laptop mode before opening Kitty;
+  # an unreachable laptop or invalid reply is an error, never a cached guess.
+  laptopTerminal = pkgs.writeShellApplication {
+    name = "laptop-terminal";
+    runtimeInputs = [ pkgs.openssh ];
+    text = ''
+      PEER=${pkgs.lib.escapeShellArg peerHost}
+      if [ -z "$PEER" ]; then
+        echo "laptop-terminal: no laptop peer is configured" >&2
+        exit 1
+      fi
+
+      if ! mode="$(ssh "$PEER" theme-mode)"; then
+        echo "laptop-terminal: cannot determine the laptop monitor theme from $PEER" >&2
+        exit 1
+      fi
+      case "$mode" in
+        dark | light) ;;
+        *)
+          echo "laptop-terminal: invalid monitor theme from $PEER: $mode" >&2
+          exit 1
+          ;;
+      esac
+
+      export THEME_MODE="$mode"
+      exec ${pkgs.kitty}/bin/kitty --class kitty-float attach-remote
     '';
   };
 
@@ -111,12 +191,12 @@ let
   roleLua =
     if role == "remote" then
       ''
-        -- Remote role: Super+Enter and boot connect to the home box; Super+Shift+Enter opens local Herdr.
+        -- Remote role: Super+Enter and boot connect to home using the laptop monitor theme; Super+Shift+Enter opens local Herdr in that same local mode.
         local onHyprlandStart = ...
-        hl.bind("SUPER + Return", hl.dsp.exec_cmd("btop-workspace exec kitty --class kitty-float home-terminal"))
+        hl.bind("SUPER + Return", hl.dsp.exec_cmd("btop-workspace exec home-terminal"))
         hl.bind("SUPER + SHIFT + Return", hl.dsp.exec_cmd("btop-workspace exec kitty --class kitty-float herdr"))
         onHyprlandStart(function()
-          hl.exec_cmd("btop-workspace exec kitty --class kitty-float home-terminal")
+          hl.exec_cmd("btop-workspace exec home-terminal")
         end)
         -- Remote laptop: lid close turns the screen off via DPMS without
         -- suspending. logind ignores the lid; see modules/system/lid.nix.
@@ -158,17 +238,20 @@ let
       ''
     else
       ''
-        -- Home role: Super+Enter attaches to the 'main' tmux session, Super+Shift+Enter opens 'secondary', Super+Ctrl+Enter attaches the laptop's remote Herdr session.
+        -- Home role: local sessions snapshot the home monitor theme; the laptop attachment queries and snapshots the laptop monitor theme before Kitty starts.
         hl.bind("SUPER + Return", hl.dsp.exec_cmd("btop-workspace exec kitty --class kitty-float tmux new-session -A -s main"))
         hl.bind("SUPER + SHIFT + Return", hl.dsp.exec_cmd("btop-workspace exec kitty --class kitty-float tmux new-session -A -s secondary"))
-        hl.bind("SUPER + CTRL + Return", hl.dsp.exec_cmd("btop-workspace exec kitty --class kitty-float attach-remote"))
+        hl.bind("SUPER + CTRL + Return", hl.dsp.exec_cmd("btop-workspace exec laptop-terminal"))
       '';
 
 in
 {
   home.packages = [
+    remoteTerminalSession
+    homeTerminalConnect
     homeTerminal
     attachRemote
+    laptopTerminal
   ];
 
   xdg.configFile = {

@@ -63,15 +63,21 @@ in
       # theme-hold (see theming.nix), which exports it once at launch and
       # freezes it for that process's life. Locally — no incoming remote
       # session — it's unset here, so default it from this machine's own
-      # monitor via theme-mode; anything other than dark/light (including
-      # theme-mode failing) collapses to dark. Done once at startup, not in
-      # the precmd hook below, since the mode never changes within a process.
+      # monitor via theme-mode. Unknown state is rejected rather than guessed.
+      # Done once at startup, not in the precmd hook below, since the mode never
+      # changes within a process.
       if [ -z "$THEME_MODE" ]; then
-        THEME_MODE="$(theme-mode 2>/dev/null)"
+        if ! THEME_MODE="$(theme-mode)"; then
+          print -u2 "zsh: cannot determine the terminal session theme"
+          return 1
+        fi
       fi
       case "$THEME_MODE" in
       dark | light) ;;
-      *) THEME_MODE="dark" ;;
+      *)
+        print -u2 "zsh: invalid THEME_MODE: $THEME_MODE"
+        return 1
+        ;;
       esac
       export THEME_MODE
 
@@ -95,8 +101,8 @@ in
       }
 
       # Runs before every prompt to reload the theme vars (cheap, forkless).
-      # Do not write THEME_MODE back to tmux: the dedicated remote session has
-      # a fixed dark policy, independent of whichever pane was used last.
+      # Do not write THEME_MODE back to tmux: each persistent session keeps the
+      # viewer mode captured when its server was created.
       # Capture/restore $? so this hook does not clobber the exit status
       # starship's own precmd reads.
       theme_precmd() {
@@ -119,7 +125,11 @@ in
         # through untouched.
         ssh() {
           if [[ $# -eq 1 && "$1" == "${peerHost}" ]]; then
-            local mode; mode=$(theme-mode 2>/dev/null || echo dark)
+            local mode
+            if ! mode=$(theme-mode); then
+              print -u2 "ssh: cannot determine the local viewer theme"
+              return 1
+            fi
             command ssh -t "$1" "theme-hold $mode zsh -l"
           else
             command ssh "$@"
@@ -128,7 +138,11 @@ in
 
         mosh() {
           if [[ $# -eq 1 && "$1" == "${peerHost}" ]]; then
-            local mode; mode=$(theme-mode 2>/dev/null || echo dark)
+            local mode
+            if ! mode=$(theme-mode); then
+              print -u2 "mosh: cannot determine the local viewer theme"
+              return 1
+            fi
             # mosh-server never times out by default and nothing else reaps
             # it, so this bounds orphans from SIGKILL-class client deaths
             # (crash, OOM, terminal window closed while offline). Deliberate

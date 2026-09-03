@@ -16,7 +16,6 @@ in
 {
   home.packages = [
     pkgs.chatgpt
-    pkgs.codex
   ];
 
   home.file.".codex-desktop/skills/nix-environment-setup".source =
