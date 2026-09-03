@@ -48,38 +48,129 @@ let
     color236 #${p.subtleBorder}
   '';
 
+  # E-ink palette, matching foot's light theme slot for slot. Keeping every
+  # ANSI entry monochrome is what lets palette-relative TUIs share one light
+  # vocabulary instead of reintroducing coloured syntax on the Paperlike.
+  lightTheme = ''
+    background #FFFFFF
+    foreground #000000
+    selection_foreground #FFFFFF
+    selection_background #000000
+    cursor #000000
+    cursor_text_color #FFFFFF
+    color0 #000000
+    color1 #000000
+    color2 #000000
+    color3 #000000
+    color4 #000000
+    color5 #000000
+    color6 #000000
+    color7 #FFFFFF
+    color8 #808080
+    color9 #808080
+    color10 #808080
+    color11 #808080
+    color12 #808080
+    color13 #808080
+    color14 #808080
+    color15 #FFFFFF
+    color236 #E8E8E8
+  '';
+
   # Startup-time phosphor selection. Kitty cannot follow foot's SIGUSR1/SIGUSR2
   # live swap (live re-theming of running kitty windows is deliberately out of
   # scope), but a window must at least *open* in the currently selected
   # phosphor. `geninclude` runs this at every kitty startup: it reads the
   # runtime state the `phosphor` command maintains ($XDG_RUNTIME_DIR/
   # phosphor-mode), and when that is absent (fresh boot: XDG_RUNTIME_DIR is
-  # tmpfs) falls back to decoding the foot.ini symlink phosphor also relinks,
-  # which persists across boots. Anything unrecognised — including light mode's
-  # light.ini — lands on the active profile.
+  # tmpfs) falls back to decoding the foot.ini symlink phosphor also relinks.
+  # THEME_MODE is authoritative when a terminal belongs to a viewer session;
+  # otherwise the machine's applied monitor theme is resolved at startup.
   phosphorTheme = ''
     #!/bin/sh
     themes="$HOME/.config/kitty/themes"
 
-    state="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/phosphor-mode"
-    mode=""
-    [ -r "$state" ] && mode="$(cat "$state")"
-
-    if [ ! -f "$themes/$mode.conf" ]; then
-      target="$(readlink "$HOME/.config/foot/foot.ini" 2>/dev/null || true)"
+    session_mode="''${THEME_MODE:-}"
+    if [ -z "$session_mode" ]; then
+      target="$(readlink "$HOME/.local/state/hypr/current-theme.lua" 2>/dev/null || true)"
       case "$target" in
-        */dark-swapped.ini) mode="${palettes.alternateName}" ;;
-        */dark-*.ini)
-          mode="''${target##*/dark-}"
-          mode="''${mode%.ini}"
+        *light.lua) session_mode=light ;;
+        *dark.lua) session_mode=dark ;;
+        *)
+          echo "kitty: cannot determine the viewer theme" >&2
+          exit 1
           ;;
-        *) mode="${palettes.activeName}" ;;
       esac
     fi
 
-    [ -f "$themes/$mode.conf" ] || mode="${palettes.activeName}"
+    case "$session_mode" in
+      light)
+        mode=light
+        ;;
+      dark)
+        state="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/phosphor-mode"
+        mode=""
+        [ -r "$state" ] && mode="$(cat "$state")"
+
+        if [ ! -f "$themes/$mode.conf" ]; then
+          target="$(readlink "$HOME/.config/foot/foot.ini" 2>/dev/null || true)"
+          case "$target" in
+            */dark-swapped.ini) mode="${palettes.alternateName}" ;;
+            */dark-*.ini)
+              mode="''${target##*/dark-}"
+              mode="''${mode%.ini}"
+              ;;
+            *) mode="${palettes.activeName}" ;;
+          esac
+        fi
+        [ -f "$themes/$mode.conf" ] || mode="${palettes.activeName}"
+        ;;
+      *)
+        echo "kitty: invalid THEME_MODE: $session_mode" >&2
+        exit 1
+        ;;
+    esac
+
     cat "$themes/$mode.conf"
   '';
+
+  # Resolve the local viewer mode before Kitty itself starts. The environment
+  # then reaches both Kitty's geninclude and the terminal's complete child
+  # process tree, so terminal colours and TUI colours share one snapshot.
+  kittyWrapped = pkgs.symlinkJoin {
+    name = "kitty-themed";
+    paths = [ pkgs.kitty ];
+    postBuild = ''
+      rm "$out/bin/kitty"
+      cat > "$out/bin/kitty" <<'WRAPPER'
+      #!${pkgs.runtimeShell}
+      mode="''${THEME_MODE:-}"
+      if [ -z "$mode" ]; then
+        target="$(${pkgs.coreutils}/bin/readlink "$HOME/.local/state/hypr/current-theme.lua" 2>/dev/null || true)"
+        case "$target" in
+          *light.lua) mode=light ;;
+          *dark.lua) mode=dark ;;
+          *)
+            echo "kitty: cannot determine the applied monitor theme" >&2
+            exit 1
+            ;;
+        esac
+      fi
+
+      case "$mode" in
+        dark | light) ;;
+        *)
+          echo "kitty: invalid THEME_MODE: $mode" >&2
+          exit 1
+          ;;
+      esac
+
+      export THEME_MODE="$mode"
+      exec ${pkgs.kitty}/bin/kitty "$@"
+      WRAPPER
+      chmod +x "$out/bin/kitty"
+    '';
+  };
 
   kittyConf = ''
     # Ported from home/programs/foot.nix (dark variant): Hack Nerd Font at
@@ -161,7 +252,7 @@ let
 in
 {
   home.packages = [
-    pkgs.kitty
+    kittyWrapped
     # Snacks.image support in the explanation window: ImageMagick converts
     # non-PNG images for the graphics protocol; Ghostscript rasterizes PDFs.
     # (ImageMagick is also in home/packages/desktop.nix; listed here too so
@@ -180,6 +271,7 @@ in
       text = phosphorTheme;
       executable = true;
     };
+    "kitty/themes/light.conf".text = lightTheme;
   }
   # Every phosphor profile as a kitty theme, same naming idea as foot's
   # themes/dark-<name>.ini set, so the geninclude script can resolve any

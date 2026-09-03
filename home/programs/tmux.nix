@@ -86,7 +86,9 @@ in
 
       # Clear the earlier user-level update-environment setting when this
       # config reloads in an existing server. The default list does not include
-      # THEME_MODE, so attaches cannot overwrite the fixed remote session.
+      # THEME_MODE, so a later client cannot overwrite the mode a persistent
+      # server captured when it was created. The laptop fallback uses its own
+      # socket (see dotfiles.nix), keeping these server-global styles isolated.
       set -gu update-environment
 
       # Emit OSC 52 on copy so copy-mode selections reach the local terminal's

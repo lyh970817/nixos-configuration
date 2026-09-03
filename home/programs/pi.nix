@@ -36,6 +36,26 @@ let
     text = ''
       ${piHostEnvironment}
 
+      mode="''${THEME_MODE:-}"
+      if [ -z "$mode" ]; then
+        case "$(${pkgs.coreutils}/bin/readlink "$HOME/.local/state/hypr/current-theme.lua" 2>/dev/null)" in
+          *dark.lua) mode=dark ;;
+          *light.lua) mode=light ;;
+          *)
+            echo "pi: cannot determine the terminal session theme" >&2
+            exit 1
+            ;;
+        esac
+      fi
+      case "$mode" in
+        dark) export COLORFGBG="15;0" ;;
+        light) export COLORFGBG="0;15" ;;
+        *)
+          echo "pi: invalid THEME_MODE: $mode" >&2
+          exit 1
+          ;;
+      esac
+
       exec ${pkgs.pi-coding-agent}/bin/pi "$@"
     '';
   };
@@ -79,9 +99,12 @@ in
     ".pi/agent/models.json".source = link "dotfiles/pi/models.json";
     ".pi/agent/skills/herdr".source = link "dotfiles/universal-skills/herdr";
 
-    # pi never writes into its custom themes directory, so a live symlink is
-    # safe here too. Colors are ANSI palette indices (0-15), not hex, so this
-    # theme tracks whatever dark.ini in home/programs/foot.nix defines.
+    # pi never writes into its custom themes directory, so live symlinks are
+    # safe here. The tracked settings select the pair as `eink/vt220-amber`;
+    # Pi resolves it from the terminal background, with COLORFGBG supplied by
+    # the wrapper as a process-local fallback when an OSC query cannot cross a
+    # multiplexer.
+    ".pi/agent/themes/eink.json".source = link "dotfiles/pi/themes/eink.json";
     ".pi/agent/themes/vt220-amber.json".source = link "dotfiles/pi/themes/vt220-amber.json";
   };
 }

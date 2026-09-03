@@ -114,9 +114,42 @@ let
     cursor = "000000";
     messageFg = "FFFFFF";
   };
+
+  tuicrWrapped = pkgs.symlinkJoin {
+    name = "tuicr-themed";
+    paths = [ pkgs.tuicr ];
+    postBuild = ''
+      rm "$out/bin/tuicr"
+      cat > "$out/bin/tuicr" <<'WRAPPER'
+      #!${pkgs.runtimeShell}
+      mode="''${THEME_MODE:-}"
+      if [ -z "$mode" ]; then
+        case "$(${pkgs.coreutils}/bin/readlink "$HOME/.local/state/hypr/current-theme.lua" 2>/dev/null)" in
+          *dark.lua) mode=dark ;;
+          *light.lua) mode=light ;;
+          *)
+            echo "tuicr: cannot determine the terminal session theme" >&2
+            exit 1
+            ;;
+        esac
+      fi
+
+      case "$mode" in
+        dark | light) ;;
+        *)
+          echo "tuicr: invalid THEME_MODE: $mode" >&2
+          exit 1
+          ;;
+      esac
+
+      exec ${pkgs.tuicr}/bin/tuicr --appearance "$mode" "$@"
+      WRAPPER
+      chmod +x "$out/bin/tuicr"
+    '';
+  };
 in
 {
-  home.packages = [ pkgs.tuicr ];
+  home.packages = [ tuicrWrapped ];
 
   xdg.configFile = {
     "tuicr/config.toml".text = ''

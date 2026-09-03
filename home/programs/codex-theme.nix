@@ -19,21 +19,18 @@
 #     default), which maps each segment onto a TextMate scope.
 # Both are covered below.
 #
-# The selection is pinned by the codex config reconciler in
-# mutable-configs.nix, which enforces `[tui] theme` on every activation --
-# otherwise a stray `/theme` would silently strand Codex on a bat theme.
-#
-# Only the dark profile is generated. Light mode is a single flat black-on-
-# white scheme with no ladder to map scopes onto, and `[tui] theme` is one
-# static config key with no per-session switch, so there is nothing useful to
-# point it at; in light mode Codex falls back to its adaptive default.
-{ ... }:
+# The mutable config keeps a dark fallback for direct store-path invocations;
+# the user-facing wrapper below supplies a process-local `-c tui.theme=...`
+# override from THEME_MODE. That override never rewrites config.toml, so light
+# and dark Codex sessions can run concurrently without racing over one setting.
+{ pkgs, ... }:
 
 let
   # Active phosphor profile; see ../palettes.nix.
   p = (import ../palettes.nix).active;
 
-  themeName = "vt220-phosphor";
+  darkThemeName = "vt220-phosphor";
+  lightThemeName = "eink";
 
   # Syntax highlighting has no hue to work with here, so the usual
   # "keywords are purple, strings are green" vocabulary collapses into the one
@@ -64,67 +61,129 @@ let
     <key>background</key>
     <string>#${colour}</string>'';
 
-  tmTheme = ''
+  mkTmTheme = c: ''
     <?xml version="1.0" encoding="UTF-8"?>
     <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
     <plist version="1.0">
     <dict>
       <key>name</key>
-      <string>VT220 Phosphor</string>
+      <string>${c.displayName}</string>
       <key>settings</key>
       <array>
         <dict>
           <key>settings</key>
           <dict>
             <key>background</key>
-            <string>#${p.background}</string>
+            <string>#${c.background}</string>
             <key>foreground</key>
-            <string>#${p.foreground}</string>
+            <string>#${c.foreground}</string>
             <key>caret</key>
-            <string>#${p.accent}</string>
+            <string>#${c.accent}</string>
             <key>lineHighlight</key>
-            <string>#${p.deepSurface}</string>
+            <string>#${c.deepSurface}</string>
             <key>selection</key>
-            <string>#${p.accent}</string>
+            <string>#${c.selection}</string>
           </dict>
         </dict>
-    ${scope "comment, punctuation.definition.comment" p.secondaryText (fontStyle "italic")}
-    ${scope "punctuation, meta.brace, punctuation.separator, punctuation.terminator" p.secondaryText ""}
-    ${scope "string, string.quoted, constant.character, constant.character.escape" p.accent ""}
-    ${scope "constant.numeric, constant.language, constant.other" p.accent ""}
-    ${scope "entity.other.attribute-name" p.accent ""}
-    ${scope "variable, variable.other, variable.parameter, meta.definition.variable" p.foreground ""}
+    ${scope "comment, punctuation.definition.comment" c.secondaryText (fontStyle "italic")}
+    ${scope "punctuation, meta.brace, punctuation.separator, punctuation.terminator" c.secondaryText ""}
+    ${scope "string, string.quoted, constant.character, constant.character.escape" c.accent ""}
+    ${scope "constant.numeric, constant.language, constant.other" c.accent ""}
+    ${scope "entity.other.attribute-name" c.accent ""}
+    ${scope "variable, variable.other, variable.parameter, meta.definition.variable" c.foreground ""}
     ${scope "keyword, keyword.control, keyword.operator, storage, storage.type, storage.modifier"
-      p.bright
+      c.bright
       ""
     }
-    ${scope "entity.name.function, support.function, meta.function-call" p.bright ""}
+    ${scope "entity.name.function, support.function, meta.function-call" c.bright ""}
     ${scope
       "entity.name.type, entity.name.class, entity.other.inherited-class, support.type, support.class"
-      p.bright
+      c.bright
       ""
     }
-    ${scope "entity.name.tag" p.bright ""}
-    ${scope "invalid, invalid.illegal, invalid.deprecated" p.hot (fontStyle "bold")}
-    ${scope "markup.heading, entity.name.section" p.bright (fontStyle "bold")}
-    ${scope "markup.underline.link, markup.underline" p.accent (fontStyle "underline")}
-    ${scope "markup.bold" p.foreground (fontStyle "bold")}
-    ${scope "markup.italic" p.foreground (fontStyle "italic")}
-    ${scope "meta.diff, meta.diff.header, meta.diff.range" p.secondaryText ""}
-    ${scope "markup.changed, markup.changed.diff" p.accent ""}
-    ${
-      # A diff has no red and green to spend either. An added line is lifted
-      # onto `bright` over the raised black that ANSI black already uses for
-      # panel fills; a removed line recedes to `secondaryText` over the
-      # deeper surface. Direction reads as intensity, not hue.
-      scope "markup.inserted, markup.inserted.diff" p.bright (background p.raisedBlack)
-    }
-    ${scope "markup.deleted, markup.deleted.diff" p.secondaryText (background p.deepSurface)}
+    ${scope "entity.name.tag" c.bright ""}
+    ${scope "invalid, invalid.illegal, invalid.deprecated" c.invalid (fontStyle "bold")}
+    ${scope "markup.heading, entity.name.section" c.bright (fontStyle "bold")}
+    ${scope "markup.underline.link, markup.underline" c.accent (fontStyle "underline")}
+    ${scope "markup.bold" c.foreground (fontStyle "bold")}
+    ${scope "markup.italic" c.foreground (fontStyle "italic")}
+    ${scope "meta.diff, meta.diff.header, meta.diff.range" c.secondaryText ""}
+    ${scope "markup.changed, markup.changed.diff" c.accent ""}
+    ${scope "markup.inserted, markup.inserted.diff" c.inserted (background c.insertedBackground)}
+    ${scope "markup.deleted, markup.deleted.diff" c.deleted (background c.deletedBackground)}
       </array>
     </dict>
     </plist>
   '';
+
+  darkTheme = mkTmTheme (
+    p
+    // {
+      displayName = "VT220 Phosphor";
+      selection = p.accent;
+      invalid = p.hot;
+      inserted = p.bright;
+      insertedBackground = p.raisedBlack;
+      deleted = p.secondaryText;
+      deletedBackground = p.deepSurface;
+    }
+  );
+
+  lightTheme = mkTmTheme {
+    displayName = "E-ink";
+    background = "FFFFFF";
+    foreground = "000000";
+    accent = "303030";
+    secondaryText = "686868";
+    bright = "000000";
+    deepSurface = "E8E8E8";
+    selection = "D0D0D0";
+    invalid = "000000";
+    inserted = "000000";
+    insertedBackground = "E2E2E2";
+    deleted = "686868";
+    deletedBackground = "F2F2F2";
+  };
+
+  codexWrapped = pkgs.symlinkJoin {
+    name = "codex-themed";
+    paths = [ pkgs.codex ];
+    postBuild = ''
+      rm "$out/bin/codex"
+      cat > "$out/bin/codex" <<'WRAPPER'
+      #!${pkgs.runtimeShell}
+      mode="''${THEME_MODE:-}"
+      if [ -z "$mode" ]; then
+        case "$(${pkgs.coreutils}/bin/readlink "$HOME/.local/state/hypr/current-theme.lua" 2>/dev/null)" in
+          *dark.lua) mode=dark ;;
+          *light.lua) mode=light ;;
+          *)
+            echo "codex: cannot determine the terminal session theme" >&2
+            exit 1
+            ;;
+        esac
+      fi
+
+      case "$mode" in
+        dark) theme="${darkThemeName}" ;;
+        light) theme="${lightThemeName}" ;;
+        *)
+          echo "codex: invalid THEME_MODE: $mode" >&2
+          exit 1
+          ;;
+      esac
+
+      exec ${pkgs.codex}/bin/codex -c "tui.theme=\"$theme\"" "$@"
+      WRAPPER
+      chmod +x "$out/bin/codex"
+    '';
+  };
 in
 {
-  home.file.".codex/themes/${themeName}.tmTheme".text = tmTheme;
+  home.packages = [ codexWrapped ];
+
+  home.file = {
+    ".codex/themes/${darkThemeName}.tmTheme".text = darkTheme;
+    ".codex/themes/${lightThemeName}.tmTheme".text = lightTheme;
+  };
 }

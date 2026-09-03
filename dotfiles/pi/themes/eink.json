@@ -1,0 +1,75 @@
+{
+  "$schema": "https://raw.githubusercontent.com/earendil-works/pi/main/packages/coding-agent/src/modes/interactive/theme/theme-schema.json",
+  "name": "eink",
+  "vars": {
+    "raised": "#E8E8E8",
+    "soft": "#F2F2F2",
+    "selection": "#D0D0D0",
+    "muted": "#686868"
+  },
+  "colors": {
+    "accent": 0,
+    "border": 8,
+    "borderAccent": 0,
+    "borderMuted": 8,
+    "success": 0,
+    "error": 0,
+    "warning": 8,
+    "muted": "muted",
+    "dim": 8,
+    "text": "",
+    "thinkingText": "muted",
+
+    "selectedBg": "selection",
+    "userMessageBg": "raised",
+    "userMessageText": "",
+    "customMessageBg": "soft",
+    "customMessageText": "",
+    "customMessageLabel": 0,
+    "toolPendingBg": "raised",
+    "toolSuccessBg": "#E2E2E2",
+    "toolErrorBg": "soft",
+    "toolTitle": 0,
+    "toolOutput": "muted",
+
+    "mdHeading": 0,
+    "mdLink": 0,
+    "mdLinkUrl": "muted",
+    "mdCode": 0,
+    "mdCodeBlock": "",
+    "mdCodeBlockBorder": 8,
+    "mdQuote": "muted",
+    "mdQuoteBorder": 8,
+    "mdHr": 8,
+    "mdListBullet": 0,
+
+    "toolDiffAdded": 0,
+    "toolDiffRemoved": "muted",
+    "toolDiffContext": "muted",
+
+    "syntaxComment": "muted",
+    "syntaxKeyword": 0,
+    "syntaxFunction": 0,
+    "syntaxVariable": "",
+    "syntaxString": "#303030",
+    "syntaxNumber": "#303030",
+    "syntaxType": 0,
+    "syntaxOperator": 0,
+    "syntaxPunctuation": "muted",
+
+    "thinkingOff": 8,
+    "thinkingMinimal": "muted",
+    "thinkingLow": "muted",
+    "thinkingMedium": 0,
+    "thinkingHigh": 0,
+    "thinkingXhigh": 0,
+    "thinkingMax": 0,
+
+    "bashMode": 0
+  },
+  "export": {
+    "pageBg": "#FFFFFF",
+    "cardBg": "#F2F2F2",
+    "infoBg": "#E8E8E8"
+  }
+}

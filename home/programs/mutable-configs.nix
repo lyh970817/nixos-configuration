@@ -793,10 +793,10 @@ let
                 return
         lines = old.splitlines(True)
         changed = table_key(lines, "features", "remote_plugin", "false")
-        # Pin the syntax theme at the one generated from the phosphor palette
-        # (see programs/codex-theme.nix). Every bundled bat theme hardcodes its
-        # own RGB, so a stray /theme silently strands code blocks and the
-        # status line on a scheme that fights the rest of the terminal.
+        # Keep a dark fallback for direct store-path/headless invocations. The
+        # user-facing wrapper in programs/codex-theme.nix supplies a stronger,
+        # process-local light/dark override, so concurrent sessions never
+        # rewrite this shared setting to select their viewer theme.
         changed = table_key(lines, "tui", "theme", '"vt220-phosphor"') or changed
         # Herdr consumes Codex's semantic thread name through the terminal's
         # OSC title; status and project fields would create unrelated renames.
