@@ -117,20 +117,15 @@ in
 
       ${lib.optionalString (peerHost != "") ''
         # SSH/mosh theme override (client side): wrap the bare `ssh ${peerHost}`
-        # and `mosh ${peerHost}` forms so the peer picks up our current theme
-        # for the session. Both hand the theme off via theme-hold, which just
-        # exports THEME_MODE into the wrapped session process (tmux client or
+        # and `mosh ${peerHost}` forms so the peer keeps the viewer theme this
+        # terminal captured at launch. Both hand THEME_MODE off via theme-hold,
+        # which exports it into the wrapped session process (tmux client or
         # login shell) and everything it forks (see theming.nix). Flags,
         # commands, and scp/rsync (which exec their binaries directly) fall
         # through untouched.
         ssh() {
           if [[ $# -eq 1 && "$1" == "${peerHost}" ]]; then
-            local mode
-            if ! mode=$(theme-mode); then
-              print -u2 "ssh: cannot determine the local viewer theme"
-              return 1
-            fi
-            command ssh -t "$1" "theme-hold $mode zsh -l"
+            command ssh -t "$1" "theme-hold $THEME_MODE zsh -l"
           else
             command ssh "$@"
           fi
@@ -138,18 +133,13 @@ in
 
         mosh() {
           if [[ $# -eq 1 && "$1" == "${peerHost}" ]]; then
-            local mode
-            if ! mode=$(theme-mode); then
-              print -u2 "mosh: cannot determine the local viewer theme"
-              return 1
-            fi
             # mosh-server never times out by default and nothing else reaps
             # it, so this bounds orphans from SIGKILL-class client deaths
             # (crash, OOM, terminal window closed while offline). Deliberate
             # exits don't need it: mosh-client does a real shutdown handshake
             # on SIGHUP/SIGTERM and mosh-server exits in well under a second.
             # 24h is long enough that a suspended laptop reconnects fine.
-            command mosh --server 'MOSH_SERVER_NETWORK_TMOUT=86400 mosh-server' "$1" -- theme-hold "$mode" zsh -l
+            command mosh --server 'MOSH_SERVER_NETWORK_TMOUT=86400 mosh-server' "$1" -- theme-hold "$THEME_MODE" zsh -l
           else
             command mosh "$@"
           fi
