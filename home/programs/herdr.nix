@@ -22,9 +22,9 @@ let
       # An incoming viewer mode is authoritative. Otherwise snapshot this
       # machine's applied monitor theme once before the persistent server is
       # created. Unknown state is an error rather than an implicit palette.
-      case "$THEME_MODE" in
+      case "''${THEME_MODE:-}" in
         dark | light) ;;
-        *)
+        "")
           case "$(${pkgs.coreutils}/bin/readlink "$HOME/.local/state/hypr/current-theme.lua" 2>/dev/null)" in
             *dark.lua) THEME_MODE=dark ;;
             *light.lua) THEME_MODE=light ;;
@@ -33,6 +33,10 @@ let
               exit 1
               ;;
           esac
+          ;;
+        *)
+          echo "herdr: invalid THEME_MODE: $THEME_MODE" >&2
+          exit 1
           ;;
       esac
       export THEME_MODE
