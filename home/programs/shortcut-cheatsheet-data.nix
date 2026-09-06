@@ -697,7 +697,7 @@
         key = "clo";
       }
       {
-        description = "Fable 5 orchestrator (yolo)";
+        description = "Fable 5.1 orchestrator (yolo)";
         key = "clfo";
       }
       {
