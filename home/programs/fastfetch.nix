@@ -738,6 +738,187 @@ let
     '';
   };
 
+  syncStatusDir = "${config.home.homeDirectory}/.cache/sync-status";
+  fastfetchSync = pkgs.writeShellApplication {
+    name = "fastfetch-sync";
+    runtimeInputs = with pkgs; [
+      coreutils
+      jq
+    ];
+    text = ''
+      status_dir="''${SYNC_STATUS_DIR:-${syncStatusDir}}"
+      indent='                     '
+      now=$(date +%s)
+
+      # Emit state, progress, total, started, last success and freshness on
+      # separate lines. These files are the service-owned interface; rendering
+      # never probes either daemon or repository.
+      read_status() {
+        local service="$1" stale_after="$2" file="$status_dir/$3.json" out updated updated_epoch age state
+        if [[ ! -r "$file" ]] || ! out=$(jq -r --arg service "$service" '
+          select(
+            type == "object" and
+            .version == 1 and
+            .service == $service and
+            (.state | IN("active", "scanning", "finished", "failed", "unavailable")) and
+            (.progress_bytes == null or (.progress_bytes | type == "number")) and
+            (.total_bytes == null or (.total_bytes | type == "number")) and
+            (.started_at == null or (.started_at | type == "string")) and
+            (.last_success == null or (.last_success | type == "string")) and
+            (.updated_at | type == "string")
+          ) |
+          [
+            .state,
+            (.progress_bytes // ""),
+            (.total_bytes // ""),
+            (.started_at // ""),
+            (.last_success // ""),
+            .updated_at
+          ] | .[]
+        ' "$file" 2>/dev/null) || [[ $(wc -l <<< "$out") -ne 6 ]]; then
+          printf 'unavailable\n\n\n\n\ninvalid\n'
+          return
+        fi
+
+        state=$(sed -n '1p' <<< "$out")
+        updated=$(sed -n '6p' <<< "$out")
+        if ! updated_epoch=$(date -d "$updated" +%s 2>/dev/null); then
+          printf 'unavailable\n\n\n\n\nstale\n'
+          return
+        fi
+        age=$(( now - updated_epoch ))
+        if (( age < 0 || age > stale_after )); then
+          sed -n '1,5p' <<< "$out"
+          printf 'stale\n'
+        else
+          printf '%s\nfresh\n' "$(sed -n '1,5p' <<< "$out")"
+        fi
+      }
+
+      relative_age() {
+        local timestamp="$1" target delta
+        if [[ -z "$timestamp" ]] || ! target=$(date -d "$timestamp" +%s 2>/dev/null); then
+          return
+        fi
+        delta=$(( now - target ))
+        (( delta < 0 )) && delta=0
+        if (( delta < 60 )); then
+          printf 'now'
+        elif (( delta < 3600 )); then
+          printf '%dm ago' "$(( delta / 60 ))"
+        elif (( delta < 86400 )); then
+          printf '%dh ago' "$(( delta / 3600 ))"
+        else
+          printf '%dd ago' "$(( delta / 86400 ))"
+        fi
+      }
+
+      elapsed() {
+        local timestamp="$1" target delta
+        if [[ -z "$timestamp" ]] || ! target=$(date -d "$timestamp" +%s 2>/dev/null); then
+          printf 'running'
+          return
+        fi
+        delta=$(( now - target ))
+        (( delta < 0 )) && delta=0
+        if (( delta < 60 )); then
+          printf '<1m elapsed'
+        elif (( delta < 3600 )); then
+          printf '%dm elapsed' "$(( delta / 60 ))"
+        elif (( delta < 86400 )); then
+          printf '%dh elapsed' "$(( delta / 3600 ))"
+        else
+          printf '%dd elapsed' "$(( delta / 86400 ))"
+        fi
+      }
+
+      progress_amounts() {
+        local progress="$1" total="$2" scale base unit
+        if [[ "$3" == si ]]; then
+          base=1000
+          unit=GB
+        else
+          base=1024
+          unit=GiB
+        fi
+        scale=$(( base * base * base ))
+        awk -v progress="$progress" -v total="$total" -v scale="$scale" -v unit="$unit" \
+          'BEGIN { printf "%.1f / %.1f %s", progress / scale, total / scale, unit }'
+      }
+
+      last_detail() {
+        local last_success="$1" age
+        if [[ -z "$last_success" ]]; then
+          printf 'success not yet recorded'
+        elif age=$(relative_age "$last_success"); then
+          printf 'last %s' "$age"
+        fi
+      }
+
+      finished_time() {
+        local last_success="$1"
+        if [[ -z "$last_success" ]]; then
+          printf 'completion not yet recorded'
+        else
+          TZ=Asia/Shanghai date -d "$last_success" +%H:%M
+        fi
+      }
+
+      row() {
+        local service="$1" file="$2" name="$3" success_verb="$4" units="$5" stale_after="$6"
+        local fields state progress total started last_success freshness symbol detail
+        mapfile -t fields < <(read_status "$service" "$stale_after" "$file")
+        state="''${fields[0]}"
+        progress="''${fields[1]}"
+        total="''${fields[2]}"
+        started="''${fields[3]}"
+        last_success="''${fields[4]}"
+        freshness="''${fields[5]}"
+
+        if [[ "$freshness" == stale ]]; then
+          symbol='?'
+          detail="stale · $(last_detail "$last_success")"
+        else
+          case "$state" in
+            active)
+              symbol='○'
+              if [[ "$progress" =~ ^[0-9]+$ && "$total" =~ ^[1-9][0-9]*$ ]]; then
+                detail="$(progress_amounts "$progress" "$total" "$units") · $(last_detail "$last_success")"
+              elif [[ "$service" == restic ]]; then
+                detail="scanning · $(elapsed "$started") · $(last_detail "$last_success")"
+              else
+                detail="running · $(elapsed "$started") · $(last_detail "$last_success")"
+              fi
+              ;;
+            scanning)
+              symbol='○'
+              detail="scanning · $(elapsed "$started") · $(last_detail "$last_success")"
+              ;;
+            finished)
+              symbol='●'
+              detail="$success_verb · $(finished_time "$last_success")"
+              ;;
+            failed)
+              symbol='×'
+              detail="failed · $(last_detail "$last_success")"
+              ;;
+            *)
+              symbol='?'
+              detail="unavailable · $(last_detail "$last_success")"
+              ;;
+          esac
+        fi
+        printf '%s%s %-11s %s\n' "$indent" "$symbol" "$name" "$detail"
+      }
+
+      printf '\n'
+      row yandex-disk yandex-disk 'Yandex Disk' synced si 120
+      # Restic reports logical bytes processed from its source tree. This is
+      # deliberately not labelled or interpreted as bytes uploaded.
+      row restic restic Restic 'backed up' iec 1200
+    '';
+  };
+
 in
 {
   home.packages = [
@@ -748,6 +929,7 @@ in
     fastfetchQwen
     fastfetchStatus
     fastfetchCodexbar
+    fastfetchSync
   ];
 
   programs.fastfetch = {
@@ -841,6 +1023,11 @@ in
           type = "command";
           key = "Tailnet";
           text = "fastfetch-status tailnet";
+        }
+        {
+          type = "command";
+          key = "Sync";
+          text = "fastfetch-sync";
         }
         "Break"
       ];

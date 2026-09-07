@@ -19,6 +19,7 @@ let
 
   homeRepository = "rclone:yandex:restic/home";
   archiveRepository = "rclone:yandex:restic/archive";
+  statusDir = "${home}/.cache/sync-status";
 
   # Two repositories, because these are different lifecycles rather than two
   # halves of one. `home` holds live data on a rolling retention. `archive`
@@ -64,6 +65,7 @@ let
     # TypeScript sources rather than any video.
     "*.iso"
   ];
+  excludeFile = pkgs.writeText "restic-home-excludes" (lib.concatStringsSep "\n" excludes);
 
   # Kept deliberately, against their size: every git repository (working trees
   # carry uncommitted work and several branches hold unpushed commits), agent
@@ -110,6 +112,154 @@ let
     ${pkgs.restic}/bin/restic prune --max-unused 10%
   '';
 
+  restic-backup-status = pkgs.writeShellApplication {
+    name = "restic-backup-status";
+    runtimeInputs = with pkgs; [
+      coreutils
+      jq
+      restic
+      rclone
+      util-linux
+    ];
+    text = ''
+      status_dir="''${SYNC_STATUS_DIR:-${statusDir}}"
+      status_file="$status_dir/restic.json"
+      lock_file="$status_dir/.restic.lock"
+      run_dir=/run/restic-backups-home
+      fifo="$run_dir/status-stream"
+      snapshot_marker="$run_dir/status-snapshot"
+      install -d -m 700 "$status_dir"
+
+      last_success=
+      if [[ -r "$status_file" ]]; then
+        last_success=$(jq -r '.last_success // empty' "$status_file" 2>/dev/null || true)
+      fi
+      started_at=$(date --utc +%Y-%m-%dT%H:%M:%SZ)
+
+      publish() {
+        local state="$1" progress="$2" total="$3" started="$4"
+        (
+          flock 9
+          local tmp updated_at
+          updated_at=$(date --utc +%Y-%m-%dT%H:%M:%SZ)
+          tmp=$(mktemp "$status_dir/.restic.XXXXXX")
+          jq -n \
+            --arg state "$state" \
+            --arg progress "$progress" \
+            --arg total "$total" \
+            --arg started "$started" \
+            --arg last_success "$last_success" \
+            --arg updated_at "$updated_at" '
+              {
+                version: 1,
+                service: "restic",
+                state: $state,
+                progress_bytes: (if $progress == "" then null else ($progress | tonumber) end),
+                total_bytes: (if $total == "" then null else ($total | tonumber) end),
+                started_at: (if $started == "" then null else $started end),
+                last_success: (if $last_success == "" then null else $last_success end),
+                updated_at: $updated_at
+              }
+            ' > "$tmp"
+          chmod 600 "$tmp"
+          mv -f "$tmp" "$status_file"
+        ) 9> "$lock_file"
+      }
+
+      heartbeat() {
+        (
+          flock 9
+          if [[ -r "$status_file" ]] && jq -e '.state == "active" or .state == "scanning"' "$status_file" >/dev/null; then
+            local tmp updated_at
+            updated_at=$(date --utc +%Y-%m-%dT%H:%M:%SZ)
+            tmp=$(mktemp "$status_dir/.restic.XXXXXX")
+            jq --arg updated_at "$updated_at" '.updated_at = $updated_at' "$status_file" > "$tmp"
+            chmod 600 "$tmp"
+            mv -f "$tmp" "$status_file"
+          fi
+        ) 9> "$lock_file"
+      }
+
+      parse_stream() {
+        local line message_type progress total snapshot_id
+        while IFS= read -r line; do
+          printf '%s\n' "$line"
+          message_type=$(jq -r '.message_type // empty' <<< "$line" 2>/dev/null || true)
+          case "$message_type" in
+            status)
+              progress=$(jq -r '.bytes_done // empty' <<< "$line")
+              total=$(jq -r '.total_bytes // empty' <<< "$line")
+              if [[ "$progress" =~ ^[0-9]+$ && "$total" =~ ^[1-9][0-9]*$ ]]; then
+                publish active "$progress" "$total" "$started_at"
+              else
+                heartbeat
+              fi
+              ;;
+            summary)
+              snapshot_id=$(jq -r '.snapshot_id // empty' <<< "$line")
+              if [[ -n "$snapshot_id" ]]; then
+                printf '%s\n' "$snapshot_id" > "$snapshot_marker"
+              fi
+              ;;
+          esac
+        done
+      }
+
+      cleanup() {
+        if [[ -n "''${heartbeat_pid:-}" ]]; then
+          kill "$heartbeat_pid" 2>/dev/null || true
+          wait "$heartbeat_pid" 2>/dev/null || true
+        fi
+        rm -f "$fifo" "$snapshot_marker"
+      }
+      trap cleanup EXIT
+      trap 'publish failed "" "" ""; exit 1' HUP INT TERM
+
+      rm -f "$fifo" "$snapshot_marker"
+      mkfifo "$fifo"
+      publish scanning "" "" "$started_at"
+      parse_stream < "$fifo" &
+      parser_pid=$!
+
+      restic backup --json --exclude-caches \
+        --exclude-file=${excludeFile} \
+        --files-from="$run_dir/includes" > "$fifo" &
+      restic_pid=$!
+
+      (
+        while kill -0 "$restic_pid" 2>/dev/null; do
+          sleep 30
+          if kill -0 "$restic_pid" 2>/dev/null; then
+            heartbeat
+          fi
+        done
+      ) &
+      heartbeat_pid=$!
+
+      set +e
+      wait "$restic_pid"
+      restic_exit=$?
+      wait "$parser_pid"
+      parser_exit=$?
+      set -e
+      kill "$heartbeat_pid" 2>/dev/null || true
+      wait "$heartbeat_pid" 2>/dev/null || true
+      heartbeat_pid=
+
+      if (( restic_exit == 0 && parser_exit == 0 )) && [[ -s "$snapshot_marker" ]]; then
+        last_success=$(date --utc +%Y-%m-%dT%H:%M:%SZ)
+        publish finished "" "" ""
+        exit 0
+      fi
+
+      publish failed "" "" ""
+      if (( restic_exit == 0 )); then
+        exit 1
+      fi
+      exit "$restic_exit"
+    '';
+  };
+
   secretsPresent = [
     rcloneConfigFile
     homePasswordFile
@@ -125,6 +275,7 @@ in
     paths = [ home ];
     exclude = excludes;
     extraBackupArgs = [ "--exclude-caches" ];
+    progressFps = 0.1;
 
     # Every 15 minutes rather than daily. The scan is not the cost -- walking
     # all 3.9M entries of $HOME measures at well under a second warm -- so the
@@ -148,6 +299,7 @@ in
     unitConfig.ConditionPathExists = secretsPresent;
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
+    serviceConfig.ExecStart = lib.mkForce [ "${restic-backup-status}/bin/restic-backup-status" ];
   };
 
   systemd.services.restic-prune-home = {
