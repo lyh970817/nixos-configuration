@@ -10,6 +10,8 @@ such approval.
 
 Do not programme defensively. Implement the intended contract directly and let invalid states fail at the boundary that owns them.
 
-Choose a model family and reasoning effort that fit each subagent task, and set
-both explicitly on every spawn. Explicit overrides
-require `fork_turns` to be `"none"` or a positive history count.
+Choose the model family and reasoning effort deliberately for each subagent
+task. Set both explicitly when using a model or effort different from the
+parent's. A full-history fork (`fork_turns: "all"`) is allowed when deliberately
+choosing to inherit the parent's model and effort; omit the overrides in that
+case because the spawning tool does not accept them with `"all"`.
