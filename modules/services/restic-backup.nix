@@ -166,7 +166,10 @@ let
         ) 9> "$lock_file"
       }
 
-      if [[ "''${1:-}" == finalize ]]; then
+      if [[ "''${1:-}" == preflight ]]; then
+        publish active "" "" "$started_at"
+        exit 0
+      elif [[ "''${1:-}" == finalize ]]; then
         # shellcheck disable=SC2154 # Set by systemd for ExecStopPost.
         if [[ "$SERVICE_RESULT" != success ]]; then
           publish failed "" "" ""
@@ -314,6 +317,9 @@ in
     wants = [ "network-online.target" ];
     serviceConfig = {
       ExecStart = lib.mkForce [ "${restic-backup-status}/bin/restic-backup-status" ];
+      # Run before the module's repository check so its retries do not leave an
+      # old terminal cache visible while this invocation is already active.
+      ExecStartPre = lib.mkBefore [ "${restic-backup-status}/bin/restic-backup-status preflight" ];
       # ExecStartPre can fail before the cache-writing wrapper starts. Systemd
       # still runs ExecStopPost, so reflect that lifecycle failure while
       # leaving a successful wrapper's finished state intact.
