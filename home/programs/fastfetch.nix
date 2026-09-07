@@ -898,12 +898,12 @@ let
           case "$state" in
             active)
               symbol='○'
-              if [[ "$progress" =~ ^[0-9]+$ && "$total" =~ ^[1-9][0-9]*$ ]]; then
-                detail="$(progress_amounts "$progress" "$total" "$units") · $(last_detail "$last_success")"
-              elif [[ "$service" == restic && "$progress" =~ ^[1-9][0-9]*$ ]]; then
+              if [[ "$service" == restic && "$progress" =~ ^[1-9][0-9]*$ ]]; then
                 detail="processed $(progress_amount "$progress" "$units") · $(elapsed "$started") · $(last_detail "$last_success")"
               elif [[ "$service" == restic ]]; then
                 detail="preparing · $(elapsed "$started") · $(last_detail "$last_success")"
+              elif [[ "$progress" =~ ^[0-9]+$ && "$total" =~ ^[1-9][0-9]*$ ]]; then
+                detail="$(progress_amounts "$progress" "$total" "$units") · $(last_detail "$last_success")"
               else
                 detail="running · $(elapsed "$started") · $(last_detail "$last_success")"
               fi
