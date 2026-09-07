@@ -166,6 +166,14 @@ let
         ) 9> "$lock_file"
       }
 
+      if [[ "''${1:-}" == finalize ]]; then
+        # shellcheck disable=SC2154 # Set by systemd for ExecStopPost.
+        if [[ "$SERVICE_RESULT" != success ]]; then
+          publish failed "" "" ""
+        fi
+        exit 0
+      fi
+
       heartbeat() {
         (
           flock 9
@@ -188,9 +196,13 @@ let
           case "$message_type" in
             status)
               progress=$(jq -r '.bytes_done // empty' <<< "$line")
-              total=$(jq -r '.total_bytes // empty' <<< "$line")
-              if [[ "$progress" =~ ^[0-9]+$ && "$total" =~ ^[1-9][0-9]*$ ]]; then
-                publish active "$progress" "$total" "$started_at"
+              if [[ "$progress" =~ ^[0-9]+$ ]]; then
+                # Restic discovers total_bytes concurrently with processing, so
+                # it is not a denominator until the scan has finished. JSON
+                # only exposes scan_finished in verbose mode, which emits a
+                # record for every item; keep the frequent backup lightweight
+                # and publish the exact processed byte count instead.
+                publish active "$progress" "" "$started_at"
               else
                 heartbeat
               fi
@@ -300,7 +312,13 @@ in
     unitConfig.ConditionPathExists = secretsPresent;
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
-    serviceConfig.ExecStart = lib.mkForce [ "${restic-backup-status}/bin/restic-backup-status" ];
+    serviceConfig = {
+      ExecStart = lib.mkForce [ "${restic-backup-status}/bin/restic-backup-status" ];
+      # ExecStartPre can fail before the cache-writing wrapper starts. Systemd
+      # still runs ExecStopPost, so reflect that lifecycle failure while
+      # leaving a successful wrapper's finished state intact.
+      ExecStopPost = [ "${restic-backup-status}/bin/restic-backup-status finalize" ];
+    };
   };
 
   systemd.services.restic-prune-home = {

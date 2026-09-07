@@ -59,11 +59,43 @@ let
         mv -f "$tmp" "$status_file"
       }
 
-      if ! output=$(LC_ALL=C timeout 12s yandex-disk status \
+      if ! output=$(LC_ALL=C timeout 3s yandex-disk status \
         --dir=${lib.escapeShellArg "${home}/Yandex.Disk"} \
         --auth=${lib.escapeShellArg "${home}/.config/yandex-disk/token"} 2>&1); then
         if systemctl is-failed --quiet yandex-disk.service; then
           publish failed "" "" ""
+        elif systemctl is-active --quiet yandex-disk.service; then
+          if [[ ! -r ${lib.escapeShellArg "${home}/Yandex.Disk/.sync/status"} ]]; then
+            publish unavailable "" "" ""
+            exit 0
+          fi
+          mapfile -t local_status < ${lib.escapeShellArg "${home}/Yandex.Disk/.sync/status"}
+          main_pid=$(systemctl show yandex-disk.service --property MainPID --value)
+          if [[ "''${local_status[0]:-}" != "$main_pid" ]]; then
+            publish unavailable "" "" ""
+            exit 0
+          fi
+          case "''${local_status[1]:-}" in
+            busy | index)
+              if [[ ( "$previous_state" == active || "$previous_state" == scanning ) && -n "$previous_start" ]]; then
+                started_at="$previous_start"
+              else
+                started_at="$now"
+              fi
+              if [[ "''${local_status[1]}" == index ]]; then
+                publish scanning "" "" "$started_at"
+              else
+                publish active "" "" "$started_at"
+              fi
+              ;;
+            idle)
+              if [[ "$previous_state" == active || "$previous_state" == scanning ]]; then
+                last_success="$now"
+              fi
+              publish finished "" "" ""
+              ;;
+            *) publish unavailable "" "" "" ;;
+          esac
         else
           publish unavailable "" "" ""
         fi

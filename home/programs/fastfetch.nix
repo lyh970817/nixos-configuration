@@ -832,24 +832,36 @@ let
         fi
       }
 
-      progress_amounts() {
-        local progress="$1" total="$2" scale base unit
-        if [[ "$3" == si ]]; then
-          base=1000
-          unit=GB
+      progress_amount() {
+        local bytes="$1" units="$2"
+        if [[ "$units" == si ]]; then
+          awk -v bytes="$bytes" 'BEGIN {
+            if (bytes >= 1000000000) printf "%.1f GB", bytes / 1000000000
+            else if (bytes >= 1000000) printf "%.1f MB", bytes / 1000000
+            else if (bytes >= 1000) printf "%.1f KB", bytes / 1000
+            else printf "%d B", bytes
+          }'
         else
-          base=1024
-          unit=GiB
+          awk -v bytes="$bytes" 'BEGIN {
+            if (bytes >= 1073741824) printf "%.1f GiB", bytes / 1073741824
+            else if (bytes >= 1048576) printf "%.1f MiB", bytes / 1048576
+            else if (bytes >= 1024) printf "%.1f KiB", bytes / 1024
+            else printf "%d B", bytes
+          }'
         fi
-        scale=$(( base * base * base ))
-        awk -v progress="$progress" -v total="$total" -v scale="$scale" -v unit="$unit" \
-          'BEGIN { printf "%.1f / %.1f %s", progress / scale, total / scale, unit }'
+      }
+
+      progress_amounts() {
+        local progress="$1" total="$2" units="$3"
+        printf '%s / %s' \
+          "$(progress_amount "$progress" "$units")" \
+          "$(progress_amount "$total" "$units")"
       }
 
       last_detail() {
         local last_success="$1" age
         if [[ -z "$last_success" ]]; then
-          printf 'success not yet recorded'
+          printf 'last time unknown'
         elif age=$(relative_age "$last_success"); then
           printf 'last %s' "$age"
         fi
@@ -858,7 +870,7 @@ let
       finished_time() {
         local last_success="$1"
         if [[ -z "$last_success" ]]; then
-          printf 'completion not yet recorded'
+          return
         else
           TZ=Asia/Shanghai date -d "$last_success" +%H:%M
         fi
@@ -866,7 +878,7 @@ let
 
       row() {
         local service="$1" file="$2" name="$3" success_verb="$4" units="$5" stale_after="$6"
-        local fields state progress total started last_success freshness symbol detail
+        local fields state progress total started last_success freshness symbol detail finished
         mapfile -t fields < <(read_status "$service" "$stale_after" "$file")
         state="''${fields[0]}"
         progress="''${fields[1]}"
@@ -888,8 +900,10 @@ let
               symbol='○'
               if [[ "$progress" =~ ^[0-9]+$ && "$total" =~ ^[1-9][0-9]*$ ]]; then
                 detail="$(progress_amounts "$progress" "$total" "$units") · $(last_detail "$last_success")"
+              elif [[ "$service" == restic && "$progress" =~ ^[1-9][0-9]*$ ]]; then
+                detail="processed $(progress_amount "$progress" "$units") · $(elapsed "$started") · $(last_detail "$last_success")"
               elif [[ "$service" == restic ]]; then
-                detail="scanning · $(elapsed "$started") · $(last_detail "$last_success")"
+                detail="processing · $(elapsed "$started") · $(last_detail "$last_success")"
               else
                 detail="running · $(elapsed "$started") · $(last_detail "$last_success")"
               fi
@@ -900,7 +914,8 @@ let
               ;;
             finished)
               symbol='●'
-              detail="$success_verb · $(finished_time "$last_success")"
+              finished=$(finished_time "$last_success")
+              detail="$success_verb''${finished:+ · $finished}"
               ;;
             failed)
               symbol='×'
@@ -1009,6 +1024,11 @@ in
           key = " ";
           text = "fastfetch-codexbar";
         }
+        {
+          type = "command";
+          key = "Sync";
+          text = "fastfetch-sync";
+        }
         # Replaces the built-in Bluetooth module's numbered one-line-per-device
         # rows with the same header-plus-indented-bullets block the Tailnet and
         # codexbar sections use, and like the built-in module it is absent when
@@ -1027,11 +1047,6 @@ in
           type = "command";
           key = "Tailnet";
           text = "fastfetch-status tailnet";
-        }
-        {
-          type = "command";
-          key = "Sync";
-          text = "fastfetch-sync";
         }
         "Break"
       ];
