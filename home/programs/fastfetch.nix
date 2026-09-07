@@ -749,6 +749,12 @@ let
       status_dir="''${SYNC_STATUS_DIR:-${syncStatusDir}}"
       indent='                     '
       now=$(date +%s)
+      name_width=0
+      for name in Yandex Restic; do
+        if (( ''${#name} > name_width )); then
+          name_width=''${#name}
+        fi
+      done
 
       # Emit state, progress, total, started, last success and freshness on
       # separate lines. These files are the service-owned interface; rendering
@@ -927,11 +933,11 @@ let
               ;;
           esac
         fi
-        printf '%s%s %-11s %s\n' "$indent" "$symbol" "$name" "$detail"
+        printf '%s%s %-*s %s\n' "$indent" "$symbol" "$name_width" "$name" "$detail"
       }
 
       printf '\n'
-      row yandex-disk yandex-disk 'Yandex Disk' synced si 120
+      row yandex-disk yandex-disk Yandex synced si 120
       # Restic reports logical bytes processed from its source tree. This is
       # deliberately not labelled or interpreted as bytes uploaded.
       row restic restic Restic 'backed up' iec 1200
@@ -1024,6 +1030,7 @@ in
           key = " ";
           text = "fastfetch-codexbar";
         }
+        "Break"
         {
           type = "command";
           key = "Sync";
