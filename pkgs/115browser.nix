@@ -250,11 +250,21 @@ let
   };
 
   launcher = writeShellScriptBin "115browser" ''
+    remove_empty_115=false
+    if [ ! -e "$HOME/115" ] && [ ! -L "$HOME/115" ]; then
+      remove_empty_115=true
+    fi
+
     mkdir -p "$HOME/.cache/115browser-tmp/.X11-unix"
     mkdir -p "$HOME/.cache/115browser-run"
     mkdir -p "$HOME/Downloads/115"
 
-    exec ${browserEnv}/bin/115browser-env "$@"
+    ${browserEnv}/bin/115browser-env "$@"
+    browser_status=$?
+    if $remove_empty_115; then
+      rmdir "$HOME/115" 2>/dev/null || true
+    fi
+    exit "$browser_status"
   '';
 in
 symlinkJoin {
