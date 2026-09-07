@@ -205,6 +205,7 @@ let
         done
       }
 
+      # shellcheck disable=SC2329 # Invoked by the EXIT trap below.
       cleanup() {
         if [[ -n "''${heartbeat_pid:-}" ]]; then
           kill "$heartbeat_pid" 2>/dev/null || true

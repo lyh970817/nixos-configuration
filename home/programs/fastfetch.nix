@@ -769,21 +769,21 @@ let
           ) |
           [
             .state,
-            (.progress_bytes // ""),
-            (.total_bytes // ""),
-            (.started_at // ""),
-            (.last_success // ""),
+            (.progress_bytes // "null"),
+            (.total_bytes // "null"),
+            (.started_at // "null"),
+            (.last_success // "null"),
             .updated_at
           ] | .[]
         ' "$file" 2>/dev/null) || [[ $(wc -l <<< "$out") -ne 6 ]]; then
-          printf 'unavailable\n\n\n\n\ninvalid\n'
+          printf 'unavailable\nnull\nnull\nnull\nnull\ninvalid\n'
           return
         fi
 
         state=$(sed -n '1p' <<< "$out")
         updated=$(sed -n '6p' <<< "$out")
         if ! updated_epoch=$(date -d "$updated" +%s 2>/dev/null); then
-          printf 'unavailable\n\n\n\n\nstale\n'
+          printf 'unavailable\nnull\nnull\nnull\nnull\nstale\n'
           return
         fi
         age=$(( now - updated_epoch ))
@@ -874,6 +874,10 @@ let
         started="''${fields[3]}"
         last_success="''${fields[4]}"
         freshness="''${fields[5]}"
+        [[ "$progress" == null ]] && progress=
+        [[ "$total" == null ]] && total=
+        [[ "$started" == null ]] && started=
+        [[ "$last_success" == null ]] && last_success=
 
         if [[ "$freshness" == stale ]]; then
           symbol='?'
