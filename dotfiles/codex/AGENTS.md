@@ -10,5 +10,6 @@ such approval.
 
 Do not programme defensively. Implement the intended contract directly and let invalid states fail at the boundary that owns them.
 
-Use your own judgement to carefully choose a model family and reasoning effort
-that match the difficulty of each subagent task.
+Choose a model family and reasoning effort that fit each subagent task, and set
+both explicitly on every spawn. Explicit overrides
+require `fork_turns` to be `"none"` or a positive history count.
