@@ -122,6 +122,7 @@ let
         wayland
         udev
         coreutils
+        jq
         util-linux
         xdg-utils
         glibcLocales
@@ -192,6 +193,8 @@ let
 
     runScript = writeScript "init-115browser" ''
       #!/bin/bash
+      set -e
+
       RUN_DIR="$HOME/.cache/115browser-run"
       mkdir -p "$RUN_DIR"
 
@@ -212,6 +215,20 @@ let
       cp -rf --no-preserve=mode,ownership "$SOURCE_DIR/"* "$RUN_DIR/"
       cd "$RUN_DIR"
       chmod -R u+wx .
+
+      PREFERENCES="$RUN_DIR/profile/Default/Preferences"
+      mkdir -p "$(dirname "$PREFERENCES")"
+      if [ -e "$PREFERENCES" ]; then
+        UPDATED_PREFERENCES=$(mktemp "$RUN_DIR/preferences.XXXXXX")
+        jq --arg download_directory "$HOME/Downloads/115" \
+          '.download //= {} | .download.default_directory //= $download_directory' \
+          "$PREFERENCES" > "$UPDATED_PREFERENCES"
+        mv "$UPDATED_PREFERENCES" "$PREFERENCES"
+      else
+        jq -n --arg download_directory "$HOME/Downloads/115" \
+          '{ download: { default_directory: $download_directory } }' \
+          > "$PREFERENCES"
+      fi
 
       rm -f libEGL.so* libGLESv2.so* libvk_swiftshader.so* libvulkan.so* libgbm.so*
       if [ -e /usr/lib/libudev.so.1 ] && [ ! -e ./libudev.so.0 ]; then
@@ -235,21 +252,9 @@ let
   launcher = writeShellScriptBin "115browser" ''
     mkdir -p "$HOME/.cache/115browser-tmp/.X11-unix"
     mkdir -p "$HOME/.cache/115browser-run"
-    mkdir -p "$HOME/Downloads"
-    mkdir -p "''${XDG_DOWNLOAD_DIR:-$HOME/Downloads}/115"
+    mkdir -p "$HOME/Downloads/115"
 
-    ARGS=()
-    ARGS+=(--bind "$HOME/.cache/115browser-tmp" "/tmp")
-    ARGS+=(--bind "$HOME/.cache/115browser-tmp" "/var/tmp")
-    ARGS+=(--ro-bind "/tmp/.X11-unix" "/tmp/.X11-unix")
-    ARGS+=(--bind "''${XDG_DOWNLOAD_DIR:-$HOME/Downloads}/115" "$HOME/115")
-
-    if [ -d "/dev/shm" ]; then ARGS+=(--bind "/dev/shm" "/dev/shm"); fi
-    if [ -d "/mnt" ]; then ARGS+=(--bind "/mnt" "/mnt"); fi
-    if [ -d "/run/media" ]; then ARGS+=(--bind "/run/media" "/run/media"); fi
-    if [ -d "/media" ]; then ARGS+=(--bind "/media" "/media"); fi
-
-    exec ${browserEnv}/bin/115browser-env --bwrap-flags "''${ARGS[*]}" "$@"
+    exec ${browserEnv}/bin/115browser-env "$@"
   '';
 in
 symlinkJoin {
