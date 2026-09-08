@@ -54,6 +54,11 @@ for name in ("browser", "chrome"):
         with tempfile.TemporaryDirectory(prefix=".install-", dir=cache) as staging:
             staged = Path(staging) / version
             shutil.copytree(source, staged)
+            # Nix store directories are read-only; cache directories must be
+            # movable and removable by the application that owns them.
+            for directory, _, _ in os.walk(staged):
+                path = Path(directory)
+                path.chmod(path.stat().st_mode | 0o700)
             staged.rename(target)
     with tempfile.TemporaryDirectory(prefix=".latest-", dir=cache) as staging:
         link = Path(staging) / "latest"
