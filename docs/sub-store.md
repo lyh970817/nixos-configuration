@@ -29,3 +29,11 @@ patches. The local service listens on `127.0.0.1:3001`, stores private data unde
 `/var/lib/sub-store`, and uses a private backend path from
 `secrets/mihomo-cache/sub-store.env`. The launcher supplies that path to the UI.
 Do not commit the environment file, subscription URLs, or downloaded nodes.
+
+## Manage the other machine
+
+Use the application launchers **Mihomo — Home Desktop** and **Sub-Store — Home Desktop** on the laptop. On the desktop, use **Mihomo — Laptop** and **Sub-Store — Laptop**. The other machine must be awake and connected to Tailscale.
+
+The launchers start a user service that forwards local ports 19090 (Mihomo) and 13001 (Sub-Store) through Tailscale SSH. It reconnects after interruptions and stops at logout; no public listener or dashboard source modification is needed. Local dashboards retain ports 9090 and 3001, keeping browser settings separate. The Mihomo launcher explicitly selects the peer endpoint, and the Sub-Store launcher reads the peer’s access path over SSH.
+
+Changes in these windows apply to the other machine. Subscription state remains independent on each host. Stop the tunnel with `systemctl --user stop peer-dashboards`.

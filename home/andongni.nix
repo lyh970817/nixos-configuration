@@ -10,6 +10,7 @@
   imports = [
     ./programs/shell.nix
     ./programs/git.nix
+    ./programs/peer-dashboards.nix
     ./programs/ssh.nix
     ./programs/mpv.nix
     ./programs/gnome-keyring.nix
