@@ -136,20 +136,22 @@ let
       (
         browser:
         writeShellScriptBin browser.name ''
-          export XDG_CONFIG_HOME="$HOME/.config"
-          export XDG_DATA_HOME="$HOME/.local/share"
-          export XDG_CACHE_HOME="$HOME/.cache"
-          exec ${browser.executable} "$@"
+              export XDG_CONFIG_HOME="$HOME/.config"
+              export XDG_DATA_HOME="$HOME/.local/share"
+              export XDG_CACHE_HOME="$HOME/.cache"
+          exec ${browser.executable} "$@" --user-data-dir="$HOME/.config/${browser.profileDirectory}"
         ''
       )
       [
         {
           name = "chromium";
           executable = lib.getExe chromium;
+          profileDirectory = "chromium";
         }
         {
           name = "brave";
           executable = lib.getExe brave;
+          profileDirectory = "BraveSoftware/Brave-Browser";
         }
       ];
 
