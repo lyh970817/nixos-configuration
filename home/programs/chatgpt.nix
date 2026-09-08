@@ -18,6 +18,8 @@ in
     pkgs.chatgpt
   ];
 
+  home.file.".codex-desktop/AGENTS.md".source = link "dotfiles/codex/desktop-AGENTS.md";
+
   home.file.".codex-desktop/skills/nix-environment-setup".source =
     link "dotfiles/universal-skills/nix-environment-setup";
 

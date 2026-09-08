@@ -145,7 +145,12 @@ let
   codexChromeMarketplaceName = "openai-cli-runtime";
   codexChromePluginId = "chrome@${codexChromeMarketplaceName}";
   codexChromeNativeHostName = "com.openai.codexextension";
-  codexChromiumNativeHostManifestRelativePath = ".config/chromium-browser/NativeMessagingHosts/${codexChromeNativeHostName}.json";
+  codexBrowserNativeHostManifestRelativePaths =
+    map (directory: ".config/${directory}/NativeMessagingHosts/${codexChromeNativeHostName}.json")
+      [
+        "chromium"
+        "BraveSoftware/Brave-Browser"
+      ];
   codexChromeExtensionIds = [
     "hehggadaopoacecdllhhajmbjkdcmajg"
     "odlomjlbamekndcpllcnffbgeohgkmjh"
@@ -160,9 +165,6 @@ let
   codexChromeExtensionHost = "${codexChromePlugin}/extension-host/linux/${codexChromeExtensionHostArch}/extension-host";
   codexChromeNativeHostLauncher = pkgs.writeShellScript "codex-cli-chrome-native-host" ''
     export CODEX_HOME="''${HOME}/.codex"
-    export CODEX_CHROMIUM_USER_DATA_DIR="''${HOME}/.config/chromium-browser"
-    export CODEX_CHROMIUM_PREFERENCES_PATH="''${HOME}/.config/chromium-browser/Default/Preferences"
-    export CODEX_CHROMIUM_NATIVE_HOST_MANIFEST_PATH="''${HOME}/${codexChromiumNativeHostManifestRelativePath}"
     exec ${codexChromeExtensionHost} "$@"
   '';
   codexChromeMarketplace =
@@ -195,9 +197,9 @@ let
       ];
       NODE_REPL_TRUSTED_RPC_ENABLED = "1";
       CODEX_HOME = "${config.home.homeDirectory}/.codex";
-      CODEX_CHROMIUM_USER_DATA_DIR = "${config.home.homeDirectory}/.config/chromium-browser";
-      CODEX_CHROMIUM_PREFERENCES_PATH = "${config.home.homeDirectory}/.config/chromium-browser/Default/Preferences";
-      CODEX_CHROMIUM_NATIVE_HOST_MANIFEST_PATH = "${config.home.homeDirectory}/${codexChromiumNativeHostManifestRelativePath}";
+      CODEX_CHROME_USER_DATA_DIR = "${config.home.homeDirectory}/.config/chromium";
+      CODEX_CHROME_PREFERENCES_PATH = "${config.home.homeDirectory}/.config/chromium/Default/Preferences";
+      CODEX_CHROME_NATIVE_HOST_MANIFEST_PATH = "${config.home.homeDirectory}/.config/chromium/NativeMessagingHosts/${codexChromeNativeHostName}.json";
       BROWSER_USE_AVAILABLE_BACKENDS = "chrome";
       NODE_REPL_INSTRUCTIONS_USE_CASE_CHROME = "Control the Chrome browser in conjunction with the Chrome Plugin. Prefer this method of controlling Chrome over alternatives (such as Computer Use) unless the user explicitly mentions an alternative.";
       BROWSER_USE_CODEX_APP_BUILD_FLAVOR = "prod";
@@ -238,7 +240,7 @@ let
         parser.add_argument("--plugin-root", required=True)
         parser.add_argument("--extension-host-path", required=True)
         parser.add_argument("--launcher-path", required=True)
-        parser.add_argument("--manifest-path", required=True)
+        parser.add_argument("--manifest-path", action="append", required=True)
         parser.add_argument("--native-host-name", required=True)
         parser.add_argument("--extension-id", action="append", required=True)
         parser.add_argument("--registry-path", action="append", required=True)
@@ -404,13 +406,14 @@ let
             "path": args.launcher_path,
             "type": "stdio",
         }
-        old_manifest = None
-        try:
-            with open(args.manifest_path, encoding="utf-8") as handle:
-                old_manifest = handle.read()
-        except OSError:
-            pass
-        write_atomic(args.manifest_path, manifest, old_manifest)
+        for manifest_path in args.manifest_path:
+            old_manifest = None
+            try:
+                with open(manifest_path, encoding="utf-8") as handle:
+                    old_manifest = handle.read()
+            except OSError:
+                pass
+            write_atomic(manifest_path, manifest, old_manifest)
 
 
     if __name__ == "__main__":
@@ -477,6 +480,9 @@ let
     NODE_REPL_POLICY = json.loads(${builtins.toJSON (builtins.toJSON codexNodeReplPolicy)})
     NODE_REPL_OBSOLETE_ENV = [
         "NODE_REPL_INSTRUCTIONS_USE_CASE_BROWSER",
+        "CODEX_CHROMIUM_USER_DATA_DIR",
+        "CODEX_CHROMIUM_PREFERENCES_PATH",
+        "CODEX_CHROMIUM_NATIVE_HOST_MANIFEST_PATH",
     ]
     # Curated remote skills remain blocked even if a future CLI release ignores
     # remote_plugin for an already-cached plugin.  These names come from the
@@ -1507,8 +1513,6 @@ in
     codex_home="$HOME/.codex"
     codex_chrome_runtime_dir="$codex_home/plugins/linux-runtime-cache/${codexChromeMarketplaceName}/chrome"
     codex_chrome_launcher="$codex_chrome_runtime_dir/native-host"
-    codex_chromium_manifest="$HOME/${codexChromiumNativeHostManifestRelativePath}"
-    codex_chromium_obsolete_manifest="$HOME/.config/chromium/NativeMessagingHosts/${codexChromeNativeHostName}.json"
     codex_chrome_global_registry="$HOME/.local/state/openai-codex/chrome-native-hosts-v2.json"
     codex_chrome_home_registry="$codex_home/chrome-native-hosts-v2.json"
 
@@ -1532,7 +1536,11 @@ in
       --plugin-root ${lib.escapeShellArg codexChromePlugin} \
       --extension-host-path ${lib.escapeShellArg codexChromeExtensionHost} \
       --launcher-path "$codex_chrome_launcher" \
-      --manifest-path "$codex_chromium_manifest" \
+      ${
+        lib.concatMapStringsSep " \\\n      " (
+          path: "--manifest-path \"$HOME/${path}\""
+        ) codexBrowserNativeHostManifestRelativePaths
+      } \
       --native-host-name ${lib.escapeShellArg codexChromeNativeHostName} \
       ${
         lib.concatMapStringsSep " \\\n      " (
@@ -1542,13 +1550,6 @@ in
       --registry-path "$codex_chrome_global_registry" \
       --registry-path "$codex_chrome_home_registry"
 
-    if [ ! -L "$codex_chromium_obsolete_manifest" ] \
-      && [ -f "$codex_chromium_obsolete_manifest" ] \
-      && ${pkgs.diffutils}/bin/cmp -s \
-        "$codex_chromium_obsolete_manifest" \
-        "$codex_chromium_manifest"; then
-      run ${pkgs.coreutils}/bin/rm -f -- "$codex_chromium_obsolete_manifest"
-    fi
   '';
 
   # Codex opens custom-agent definitions through its sensitive-file reader,
@@ -1589,6 +1590,7 @@ in
     # Codex CLI authored resources. The base config.toml, profiles, auth,
     # sessions, caches, marketplaces, and installed payloads stay mutable.
     ".codex/AGENTS.md".source = link "dotfiles/codex/AGENTS.md";
+    ".config/agent-browser-selection.md".source = link "dotfiles/codex/browser-selection.md";
     ".codex/hooks.json" = {
       source = link "dotfiles/codex/hooks.json";
       force = true;

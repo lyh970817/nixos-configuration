@@ -3,6 +3,8 @@ or refactoring mistakes are to be introduced. Assume such mistakes can be
 caught and fixed later through testing or review, and base the recommendation
 on the merits of the design itself.
 
+For browser tasks, read ~/.config/agent-browser-selection.md before selecting a browser.
+
 Require explicit user approval only to patch the source of a directly called
 third-party programme that the user or team did not write. Pipeline and
 orchestration changes, and programmes written by the user or team, need no

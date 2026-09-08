@@ -5,6 +5,8 @@
   fetchurl,
   autoPatchelfHook,
   bubblewrap,
+  brave,
+  chromium,
   coreutils,
   dpkg,
   glibc,
@@ -127,6 +129,30 @@ let
     };
   });
 
+  # Browser children share the user's profiles even though the app has its
+  # own XDG directories. Keep these wrappers local to the desktop process.
+  browserLaunchers =
+    map
+      (
+        browser:
+        writeShellScriptBin browser.name ''
+          export XDG_CONFIG_HOME="$HOME/.config"
+          export XDG_DATA_HOME="$HOME/.local/share"
+          export XDG_CACHE_HOME="$HOME/.cache"
+          exec ${browser.executable} "$@"
+        ''
+      )
+      [
+        {
+          name = "chromium";
+          executable = lib.getExe chromium;
+        }
+        {
+          name = "brave";
+          executable = lib.getExe brave;
+        }
+      ];
+
   makeLauncher =
     {
       name,
@@ -141,6 +167,10 @@ let
       export XDG_DATA_HOME="$HOME/.local/share/${stateName}"
       export XDG_CACHE_HOME="$HOME/.cache/${stateName}"
       export CODEX_ELECTRON_USER_DATA_PATH="$XDG_CONFIG_HOME/Codex"
+      export PATH="${lib.makeBinPath browserLaunchers}:$PATH"
+      export CODEX_CHROME_USER_DATA_DIR="$HOME/.config/chromium"
+      export CODEX_CHROME_PREFERENCES_PATH="$HOME/.config/chromium/Default/Preferences"
+      export CODEX_CHROME_NATIVE_HOST_MANIFEST_PATH="$HOME/.config/chromium/NativeMessagingHosts/com.openai.codexextension.json"
 
       bwrapArgs=(
         --die-with-parent
