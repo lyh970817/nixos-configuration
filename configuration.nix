@@ -41,6 +41,7 @@
     ./modules/services/yandex-disk.nix
     ./modules/services/restic-backup.nix
     ./modules/services/mihomo.nix
+    ./modules/services/sub-store.nix
     ./modules/services/keyd.nix
     ./modules/services/gnome-keyring.nix
     ./modules/services/ydotool.nix
