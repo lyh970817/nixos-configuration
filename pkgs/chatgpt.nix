@@ -4,12 +4,10 @@
   stdenvNoCC,
   fetchurl,
   autoPatchelfHook,
-  bubblewrap,
   brave,
   chromium,
-  coreutils,
   dpkg,
-  glibc,
+  python3,
   makeShellWrapper,
   makeDesktopItem,
   symlinkJoin,
@@ -42,6 +40,10 @@
 }:
 
 let
+  configureDesktop = writeShellScriptBin "configure-chatgpt-desktop" ''
+    exec ${python3.withPackages (ps: [ ps.tomlkit ])}/bin/python ${./chatgpt-config.py} "$@"
+  '';
+  orchestratorConfig = ../dotfiles/codex/profiles/orchestrator.config.toml;
   chatgpt-unwrapped = stdenvNoCC.mkDerivation (finalAttrs: {
     pname = "chatgpt";
     version = "26.901.51231";
@@ -162,8 +164,6 @@ let
       windowClass,
     }:
     writeShellScriptBin name ''
-      runtimeDir="''${XDG_RUNTIME_DIR:-/run/user/$(${lib.getExe' coreutils "id"} -u)}"
-
       export CODEX_HOME="$HOME/.${stateName}"
       export XDG_CONFIG_HOME="$HOME/.config/${stateName}"
       export XDG_DATA_HOME="$HOME/.local/share/${stateName}"
@@ -174,24 +174,10 @@ let
       export CODEX_CHROME_PREFERENCES_PATH="$HOME/.config/chromium/Default/Preferences"
       export CODEX_CHROME_NATIVE_HOST_MANIFEST_PATH="$HOME/.config/chromium/NativeMessagingHosts/com.openai.codexextension.json"
 
-      bwrapArgs=(
-        --die-with-parent
-        --ro-bind / /
-        --dev-bind /dev /dev
-        --proc /proc
-        --bind "$HOME" "$HOME"
-        --bind /tmp /tmp
-        --tmpfs /usr
-        --dir /usr/bin
-        --ro-bind ${lib.getExe' glibc.bin "ldd"} /usr/bin/ldd
-      )
-
-      if [[ -d "$runtimeDir" ]]; then
-        bwrapArgs+=(--bind "$runtimeDir" "$runtimeDir")
-      fi
-
-      exec ${lib.getExe bubblewrap} "''${bwrapArgs[@]}" \
-        ${chatgpt-unwrapped}/libexec/chatgpt --class=${windowClass} "$@"
+      ${lib.getExe configureDesktop} "$CODEX_HOME" ${
+        lib.optionalString (stateName == "codex-desktop-orchestrator") (toString orchestratorConfig)
+      }
+      exec ${chatgpt-unwrapped}/libexec/chatgpt --class=${windowClass} "$@"
     '';
 
   launcher = makeLauncher {
@@ -232,4 +218,5 @@ symlinkJoin {
 
   inherit (chatgpt-unwrapped) meta;
   passthru.unwrapped = chatgpt-unwrapped;
+  passthru.configureDesktop = configureDesktop;
 }
