@@ -53,6 +53,7 @@ in
 {
   systemd.user.services.peer-dashboards = {
     Unit.Description = "Private dashboard tunnels to ${peerLabel}";
+    Install.WantedBy = [ "default.target" ];
     Service = {
       ExecStart = "${pkgs.openssh}/bin/ssh -NT -o BatchMode=yes -o ConnectTimeout=10 -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -L 127.0.0.1:19090:127.0.0.1:9090 -L 127.0.0.1:13001:127.0.0.1:3001 ${peer}";
       Restart = "always";

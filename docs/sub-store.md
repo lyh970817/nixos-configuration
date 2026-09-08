@@ -34,6 +34,8 @@ Do not commit the environment file, subscription URLs, or downloaded nodes.
 
 Use the application launchers **Mihomo — Home Desktop** and **Sub-Store — Home Desktop** on the laptop. On the desktop, use **Mihomo — Laptop** and **Sub-Store — Laptop**. The other machine must be awake and connected to Tailscale.
 
-The launchers start a user service that forwards local ports 19090 (Mihomo) and 13001 (Sub-Store) through Tailscale SSH. It reconnects after interruptions and stops at logout; no public listener or dashboard source modification is needed. Local dashboards retain ports 9090 and 3001, keeping browser settings separate. The Mihomo launcher explicitly selects the peer endpoint, and the Sub-Store launcher reads the peer’s access path over SSH.
+A user service starts automatically at login and forwards local ports 19090 (Mihomo) and 13001 (Sub-Store) through Tailscale SSH. It reconnects after interruptions; no public listener or dashboard source modification is needed. Local dashboards retain ports 9090 and 3001, keeping browser settings separate. The Mihomo launcher explicitly selects the peer endpoint, and the Sub-Store launcher reads the peer’s access path over SSH.
 
 Changes in these windows apply to the other machine. Subscription state remains independent on each host. Stop the tunnel with `systemctl --user stop peer-dashboards`.
+
+Browser bookmarks can use `http://127.0.0.1:19090/ui/#/setup?hostname=127.0.0.1&port=19090&http=true` for the peer Mihomo dashboard. For peer Sub-Store, bookmark the launcher URL including its `api` parameter, which contains the peer’s private backend path. Local dashboard ports remain 9090 and 3001. These bookmarks work without opening a launcher first.
