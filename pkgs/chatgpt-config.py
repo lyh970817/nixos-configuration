@@ -2,7 +2,6 @@ import argparse
 import json
 import os
 from pathlib import Path
-import shutil
 import tempfile
 
 import tomlkit
@@ -51,15 +50,7 @@ for name in ("browser", "chrome"):
     cache.mkdir(parents=True, exist_ok=True)
     target = cache / version
     if not target.exists():
-        with tempfile.TemporaryDirectory(prefix=".install-", dir=cache) as staging:
-            staged = Path(staging) / version
-            shutil.copytree(source, staged)
-            # Nix store directories are read-only; cache directories must be
-            # movable and removable by the application that owns them.
-            for directory, _, _ in os.walk(staged):
-                path = Path(directory)
-                path.chmod(path.stat().st_mode | 0o700)
-            staged.rename(target)
+        target.symlink_to(source, target_is_directory=True)
     with tempfile.TemporaryDirectory(prefix=".latest-", dir=cache) as staging:
         link = Path(staging) / "latest"
         link.symlink_to(version)
