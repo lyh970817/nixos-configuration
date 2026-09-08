@@ -42,7 +42,8 @@
 
 let
   configureDesktop = writeShellScriptBin "configure-chatgpt-desktop" ''
-    exec ${python3.withPackages (ps: [ ps.tomlkit ])}/bin/python ${./chatgpt-config.py} "$@"
+    exec ${python3.withPackages (ps: [ ps.tomlkit ])}/bin/python ${./chatgpt-config.py} \
+      --resources ${chatgpt-unwrapped}/lib/chatgpt/resources "$@"
   '';
   orchestratorConfig = writeText "chatgpt-orchestrator-config.toml" (
     builtins.readFile ../dotfiles/codex/profiles/orchestrator.config.toml
@@ -177,7 +178,7 @@ let
       export CODEX_CHROME_PREFERENCES_PATH="$HOME/.config/chromium/Default/Preferences"
       export CODEX_CHROME_NATIVE_HOST_MANIFEST_PATH="$HOME/.config/chromium/NativeMessagingHosts/com.openai.codexextension.json"
 
-      ${lib.getExe configureDesktop} --resources ${chatgpt-unwrapped}/lib/chatgpt/resources "$CODEX_HOME" ${
+      ${lib.getExe configureDesktop} "$CODEX_HOME" ${
         lib.optionalString (stateName == "codex-desktop-orchestrator") (toString orchestratorConfig)
       }
       exec ${chatgpt-unwrapped}/libexec/chatgpt --class=${windowClass} "$@"
