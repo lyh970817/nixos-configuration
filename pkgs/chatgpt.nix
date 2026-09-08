@@ -13,6 +13,7 @@
   symlinkJoin,
   wrapGAppsHook3,
   writeShellScriptBin,
+  writeText,
   alsa-lib,
   at-spi2-atk,
   at-spi2-core,
@@ -43,7 +44,9 @@ let
   configureDesktop = writeShellScriptBin "configure-chatgpt-desktop" ''
     exec ${python3.withPackages (ps: [ ps.tomlkit ])}/bin/python ${./chatgpt-config.py} "$@"
   '';
-  orchestratorConfig = ../dotfiles/codex/profiles/orchestrator.config.toml;
+  orchestratorConfig = writeText "chatgpt-orchestrator-config.toml" (
+    builtins.readFile ../dotfiles/codex/profiles/orchestrator.config.toml
+  );
   chatgpt-unwrapped = stdenvNoCC.mkDerivation (finalAttrs: {
     pname = "chatgpt";
     version = "26.901.51231";
