@@ -20,13 +20,6 @@ let
   # config, so an agent can inspect what it tried. May hold secrets: 0600 root.
   rejectedFile = "${acceptedStateDir}/rejected.yaml";
 
-  subscriptionPython = pkgs.python3.withPackages (p: [ p.pyyaml ]);
-  subscriptionDashboard = pkgs.runCommand "mihomo-subscription-dashboard" { } ''
-    cp -r ${pkgs.metacubexd}/. "$out"
-    chmod -R u+w "$out"
-    ${pkgs.python3}/bin/python ${../../pkgs/mihomo-dashboard-patch.py} "$out"
-  '';
-
   # Timer payload: fired by the dead-man's-switch if a change is not confirmed
   # in time. Its own PATH must be complete because it runs under a minimal
   # transient-unit environment.
@@ -228,37 +221,11 @@ in
   services.mihomo = {
     enable = true;
     tunMode = true;
-    webui = subscriptionDashboard;
+    webui = pkgs.metacubexd;
     configFile = mihomoConfig;
   };
 
   environment.systemPackages = [ mihomoGuard ];
-
-  # The browser cannot identify itself as Clash.Meta. Import locally and keep
-  # only proxy definitions in Mihomo's persistent file provider.
-  systemd.services.mihomo-subscription = {
-    description = "Import short-lived Mihomo subscriptions from the dashboard";
-    wantedBy = [ "multi-user.target" ];
-    after = [ "mihomo.service" ];
-    environment.MIHOMO = "${pkgs.mihomo}/bin/mihomo";
-    serviceConfig = {
-      ExecStart = "${subscriptionPython}/bin/python ${../../pkgs/mihomo-subscription.py}";
-      User = "mihomo";
-      DynamicUser = true;
-      StateDirectory = "mihomo";
-      UMask = "0077";
-      ProtectSystem = "strict";
-      ProtectHome = true;
-      PrivateTmp = true;
-      NoNewPrivileges = true;
-      RestrictAddressFamilies = [
-        "AF_INET"
-        "AF_INET6"
-        "AF_UNIX"
-      ];
-      Restart = "on-failure";
-    };
-  };
 
   # Ensure the root-owned state dir exists for the guard/boot-check tools.
   systemd.tmpfiles.rules = [
