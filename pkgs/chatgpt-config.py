@@ -50,6 +50,10 @@ for name in ("browser", "chrome"):
     version = json.loads((source / ".codex-plugin/plugin.json").read_text())["version"]
     cache.mkdir(parents=True, exist_ok=True)
     target = cache / version
+    # The trusted RPC loader requires real files below the profile cache;
+    # links into /nix/store fail its canonical-path containment check.
+    if target.is_symlink() and target.resolve() == source.resolve():
+        target.unlink()
     if not target.exists():
         with tempfile.TemporaryDirectory(prefix=".install-", dir=cache) as staging:
             staged = Path(staging) / version
