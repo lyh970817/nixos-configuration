@@ -441,7 +441,6 @@ let
     "social-bookmarks"
     "tuicr"
     "visual-verification"
-    "writing-agent-instructions"
   ];
 
   codexSkillLinks = lib.listToAttrs (
@@ -1641,8 +1640,6 @@ in
     "claude/skills/r-dev-shell".source = link "dotfiles/claude/skills/r-dev-shell";
     "claude/skills/social-bookmarks".source = link "dotfiles/claude/skills/social-bookmarks";
     "claude/skills/tuicr".source = link "dotfiles/claude/skills/tuicr";
-    "claude/skills/writing-agent-instructions".source =
-      link "dotfiles/claude/skills/writing-agent-instructions";
     "claude/commands".source = link "dotfiles/claude/commands";
     "claude/output-styles".source = link "dotfiles/claude/output-styles";
     "claude/agents".source = link "dotfiles/claude/agents";
