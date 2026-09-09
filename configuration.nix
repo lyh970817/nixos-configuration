@@ -39,6 +39,7 @@
     # System services
     ./modules/services/greetd.nix
     ./modules/services/yandex-disk.nix
+    ./modules/services/sync-power-policy.nix
     ./modules/services/restic-backup.nix
     ./modules/services/mihomo.nix
     ./modules/services/sub-store.nix
