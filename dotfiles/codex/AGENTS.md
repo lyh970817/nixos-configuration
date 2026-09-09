@@ -12,8 +12,12 @@ such approval.
 
 Do not programme defensively. Implement the intended contract directly and let invalid states fail at the boundary that owns them.
 
-Choose the model family and reasoning effort deliberately for each subagent
-task. Set both explicitly when using a model or effort different from the
-parent's. A full-history fork (`fork_turns: "all"`) is allowed when deliberately
-choosing to inherit the parent's model and effort; omit the overrides in that
-case because the spawning tool does not accept them with `"all"`.
+For every delegated task, including nested delegation, choose the most
+economical model and reasoning effort sufficient for the scoped outcome.
+State the choice and a brief task-specific reason in the spawning brief.
+
+Choose the model and effort before choosing how much history to pass.
+Use `fork_turns: "all"` only when the task independently warrants the
+parent's model and effort. Otherwise, supply the necessary context with
+`fork_turns: "none"` or a positive history count, and set both `model`
+and `reasoning_effort` explicitly.
