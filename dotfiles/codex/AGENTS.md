@@ -12,9 +12,9 @@ such approval.
 
 Do not programme defensively. Implement the intended contract directly and let invalid states fail at the boundary that owns them.
 
-For every delegated task, including nested delegation, choose the most
-economical model and reasoning effort sufficient for the scoped outcome.
-State the choice and a brief task-specific reason in the spawning brief.
+For every delegated task, including nested delegation, choose the model
+and reasoning effort best suited to the task's complexity, ambiguity,
+and required judgment.
 
 Choose the model and effort before choosing how much history to pass.
 Use `fork_turns: "all"` only when the task independently warrants the
