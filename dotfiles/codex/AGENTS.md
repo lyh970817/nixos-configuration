@@ -16,6 +16,13 @@ For every delegated task, including nested delegation, choose the model
 and reasoning effort best suited to the task's complexity, ambiguity,
 and required judgment.
 
+Use Sol for lighter execution work. Prefer Astra at low reasoning effort for a
+task that would otherwise warrant Sol at high effort. Reserve Astra at higher
+reasoning effort for work whose core difficulty is substantial unresolved
+scientific, architectural, or other complex judgment. Do not choose
+higher-effort Astra merely because a task is large, touches many files, needs
+broad verification, or executes a detailed, already-decided plan.
+
 Choose the model and effort before choosing how much history to pass.
 Use `fork_turns: "all"` only when the task independently warrants the
 parent's model and effort. Otherwise, supply the necessary context with
