@@ -34,6 +34,22 @@ let
     ${pkgs.captive-browser}/bin/captive-browser
   '';
 
+  publicWifiLogin = pkgs.writeShellScriptBin "public-wifi-login" ''
+    set -eu
+    export LC_ALL=C
+    # Prefer the joined Wi-Fi network; wired hotel networks work too.
+    devices="$(${pkgs.networkmanager}/bin/nmcli -t -f DEVICE,TYPE,STATE device)"
+    iface="$(printf '%s\n' "$devices" | ${pkgs.gawk}/bin/awk -F: '$2 == "wifi" && $3 == "connected" { print $1; exit }')"
+    if [ -z "$iface" ]; then
+      iface="$(printf '%s\n' "$devices" | ${pkgs.gawk}/bin/awk -F: '$2 == "ethernet" && $3 == "connected" { print $1; exit }')"
+    fi
+    if [ -z "$iface" ]; then
+      ${pkgs.libnotify}/bin/notify-send "Public Wi-Fi login" "Join a Wi-Fi or wired network first."
+      exit 1
+    fi
+    exec ${captiveBrowserLauncher} "$iface"
+  '';
+
   # See the systemd unit below for the failure this repairs.
   reapStaleTailscaleSockets = pkgs.writeShellScript "tailscaled-reap-stale-sockets" ''
     set -euo pipefail
@@ -132,22 +148,6 @@ in
           exit 0
         fi
 
-        iface="''${1:-}"
-        if [ -z "$iface" ]; then
-          ${pkgs.util-linux}/bin/logger -t captive-browser "Portal detected, but NetworkManager supplied no interface."
-          exit 0
-        fi
-
-        # Only bind a real physical NM device; reject tailscale/virtual/loopback.
-        iface_type="$(${pkgs.networkmanager}/bin/nmcli -t -f DEVICE,TYPE device | ${pkgs.gawk}/bin/awk -F: -v d="$iface" '$1 == d { print $2; exit }')"
-        case "$iface_type" in
-          wifi|ethernet) : ;;
-          *)
-            ${pkgs.util-linux}/bin/logger -t captive-browser "Refusing captive-browser on non-physical interface '$iface' (type ''${iface_type:-unknown})."
-            exit 0
-            ;;
-        esac
-
         user="andongni"
         uid="$(${pkgs.coreutils}/bin/id -u "$user" 2>/dev/null || true)"
         if [ -z "$uid" ] || [ ! -S "/run/user/$uid/bus" ]; then
@@ -155,12 +155,22 @@ in
           exit 0
         fi
 
-        ${pkgs.util-linux}/bin/runuser -u "$user" -- \
-          ${pkgs.coreutils}/bin/env \
-            XDG_RUNTIME_DIR="/run/user/$uid" \
-            DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
-            ${pkgs.systemd}/bin/systemctl --user start "captive-browser-auto@$iface.service" \
-          || ${pkgs.util-linux}/bin/logger -t captive-browser "Failed to start captive-browser-auto@$iface.service."
+        # connectivity-change has no interface argument. Find physical devices
+        # whose per-device connectivity is PORTAL (NMConnectivityState 2).
+        export LC_ALL=C
+        interfaces="$(${pkgs.networkmanager}/bin/nmcli -t -f DEVICE,TYPE device | ${pkgs.gawk}/bin/awk -F: '$2 == "wifi" || $2 == "ethernet" { print $1 }')"
+        for iface in $interfaces; do
+          connectivity="$(${pkgs.networkmanager}/bin/nmcli -g GENERAL.IP4-CONNECTIVITY,GENERAL.IP6-CONNECTIVITY device show "$iface")"
+          if ! printf '%s\n' "$connectivity" | ${pkgs.gnugrep}/bin/grep -q '^2 '; then
+            continue
+          fi
+          ${pkgs.util-linux}/bin/runuser -u "$user" -- \
+            ${pkgs.coreutils}/bin/env \
+              XDG_RUNTIME_DIR="/run/user/$uid" \
+              DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
+              ${pkgs.systemd}/bin/systemctl --user start "captive-browser-auto@$iface.service" \
+            || ${pkgs.util-linux}/bin/logger -t captive-browser "Failed to start captive-browser-auto@$iface.service."
+        done
       '';
     }
   ];
@@ -173,6 +183,24 @@ in
   # home machine needs the mosh-server binary to answer.
   environment.systemPackages = [
     pkgs.captive-browser
+    publicWifiLogin
+    (pkgs.makeDesktopItem {
+      name = "public-wifi-login";
+      desktopName = "Public Wi-Fi login";
+      genericName = "System";
+      comment = "Open the hotel, airport or public Wi-Fi sign-in page";
+      exec = "${publicWifiLogin}/bin/public-wifi-login";
+      icon = "network-wireless";
+      categories = [ "Network" ];
+      keywords = [
+        "wifi"
+        "hotel"
+        "airport"
+        "captive"
+        "portal"
+        "login"
+      ];
+    })
     pkgs.mosh
   ];
 
