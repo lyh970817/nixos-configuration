@@ -22,6 +22,7 @@
     ./programs/kitty.nix
     ./programs/mako.nix
     ./programs/rofi.nix
+    ./programs/networkmanager-dmenu.nix
     ./programs/shortcut-cheatsheet.nix
     ./programs/fzf.nix
     ./programs/newt.nix
