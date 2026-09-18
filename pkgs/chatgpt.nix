@@ -36,6 +36,7 @@
   openssl,
   pango,
   systemdLibs,
+  tpm2-tss,
   xdg-utils,
   xorg,
 }:
@@ -88,6 +89,8 @@ let
       openssl
       pango
       systemdLibs
+      # remote-control-device-key.node binds a device key to the TPM.
+      tpm2-tss
       xorg.libX11
       xorg.libXcomposite
       xorg.libXdamage
