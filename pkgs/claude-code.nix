@@ -10,11 +10,11 @@
 
 stdenv.mkDerivation (finalAttrs: {
   pname = "claude-code";
-  version = "2.1.261";
+  version = "2.1.276";
 
   src = fetchzip {
     url = "https://registry.npmjs.org/@anthropic-ai/claude-code-linux-x64/-/claude-code-linux-x64-${finalAttrs.version}.tgz";
-    hash = "sha256-h9PbkYHSheLeEKx7Wl9+UlebREX4BQ6fdlfp0yhmt60=";
+    hash = "sha256-XPmMGcuZ5bnE2xNS88fG2au4sfqFtDxyEShQRnaD4uc=";
   };
 
   nativeBuildInputs = [
