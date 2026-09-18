@@ -438,6 +438,7 @@ let
     "kcl-create-hpc"
     "r-dev-shell"
     "session-handoff"
+    "show-me"
     "social-bookmarks"
     "tuicr"
     "visual-verification"
@@ -1638,6 +1639,7 @@ in
     "claude/skills/herdr".source = link "dotfiles/claude/skills/herdr";
     "claude/skills/kcl-create-hpc".source = link "dotfiles/claude/skills/kcl-create-hpc";
     "claude/skills/r-dev-shell".source = link "dotfiles/claude/skills/r-dev-shell";
+    "claude/skills/show-me".source = link "dotfiles/claude/skills/show-me";
     "claude/skills/social-bookmarks".source = link "dotfiles/claude/skills/social-bookmarks";
     "claude/skills/tuicr".source = link "dotfiles/claude/skills/tuicr";
     "claude/commands".source = link "dotfiles/claude/commands";
@@ -1661,6 +1663,7 @@ in
     "claude-gpt56/skills/herdr".source = link "dotfiles/claude/skills/herdr";
     "claude-gpt56/skills/kcl-create-hpc".source = link "dotfiles/claude/skills/kcl-create-hpc";
     "claude-gpt56/skills/r-dev-shell".source = link "dotfiles/claude/skills/r-dev-shell";
+    "claude-gpt56/skills/show-me".source = link "dotfiles/claude/skills/show-me";
     "claude-gpt56/skills/social-bookmarks".source = link "dotfiles/claude/skills/social-bookmarks";
     "claude-gpt56/skills/tuicr".source = link "dotfiles/claude/skills/tuicr";
     "claude-gpt56/skills/explain-session".source = link "dotfiles/claude/skills/explain-session";
@@ -1715,6 +1718,10 @@ in
     };
     "claude-mattpocock/skills/r-dev-shell" = {
       source = link "dotfiles/claude/skills/r-dev-shell";
+      force = true;
+    };
+    "claude-mattpocock/skills/show-me" = {
+      source = link "dotfiles/claude/skills/show-me";
       force = true;
     };
     "claude-mattpocock/skills/social-bookmarks" = {
