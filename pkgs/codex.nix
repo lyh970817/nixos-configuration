@@ -41,11 +41,10 @@ stdenv.mkDerivation (finalAttrs: {
     # that alsa-lib predates the `libs` field NixOS uses in /etc/alsa/conf.d, so
     # it gets a private alsa.conf routing the default device to PipeWire. Codex
     # launches it with an environment allowlist, so the variable has to be set
-    # by a wrapper around the helper itself. Its libraries resolve relative to
-    # the executable, so the real binary stays a sibling of lib/.
+    # by a wrapper around the helper itself, which refuses to start unless the
+    # real binary stays in bin/.
     voice="$out/lib/codex/vendor/x86_64-unknown-linux-musl/codex-resources/voice"
-    mkdir -p "$voice/libexec" "$voice/alsa/conf.d"
-    mv "$voice/bin/codex-voice-host" "$voice/libexec/codex-voice-host"
+    mkdir -p "$voice/alsa/conf.d"
     sed -e "s|\"/var/lib/alsa/conf.d\"|\"$voice/alsa/conf.d\"|" \
       -e '\|"/usr/etc/alsa/conf.d"|d' \
       -e '\|"/etc/alsa/conf.d"|d' \
@@ -57,7 +56,7 @@ stdenv.mkDerivation (finalAttrs: {
     pcm_type.pipewire { lib "${pipewire}/lib/alsa-lib/libasound_module_pcm_pipewire.so" }
     ctl_type.pipewire { lib "${pipewire}/lib/alsa-lib/libasound_module_ctl_pipewire.so" }
     EOF
-    makeWrapper "$voice/libexec/codex-voice-host" "$voice/bin/codex-voice-host" \
+    wrapProgram "$voice/bin/codex-voice-host" \
       --set ALSA_CONFIG_PATH "$voice/alsa/alsa.conf"
 
     install -Dm644 README.md "$out/share/doc/codex/README.md"
