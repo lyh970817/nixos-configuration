@@ -61,6 +61,38 @@ def notify(summary: str, body: str) -> None:
         pass
 
 
+def adopt_compositor_environment() -> None:
+    # An ssh session from the peer carries none of the handles a Wayland
+    # client needs. Derive them the way the shader controller does, from the
+    # one live Hyprland instance under the runtime directory; its lock file
+    # names the Wayland socket on its second line.
+    runtime = os.environ.get("XDG_RUNTIME_DIR", "")
+    if not runtime:
+        runtime = f"/run/user/{os.getuid()}"
+        if not Path(runtime).is_dir():
+            return
+        os.environ["XDG_RUNTIME_DIR"] = runtime
+    if os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+        return
+    live = [
+        socket_path
+        for socket_path in Path(runtime, "hypr").glob("*/.socket.sock")
+        if socket_path.is_socket()
+    ]
+    if len(live) != 1:
+        return
+    instance = live[0].parent
+    os.environ["HYPRLAND_INSTANCE_SIGNATURE"] = instance.name
+    if os.environ.get("WAYLAND_DISPLAY"):
+        return
+    try:
+        lines = (instance / "hyprland.lock").read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return
+    if len(lines) >= 2 and lines[1]:
+        os.environ["WAYLAND_DISPLAY"] = lines[1]
+
+
 def current_mode() -> str:
     try:
         result = subprocess.run(

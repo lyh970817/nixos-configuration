@@ -876,6 +876,37 @@ if [ "$1" = clients ]; then pid=$(cat {pid_file} 2>/dev/null || printf 0); print
         self.assertEqual(ended["restored_mode"], "light")
         self.assertEqual(mode_file.read_text(), "light")
 
+    def test_compositor_handles_are_derived_from_the_live_instance(self) -> None:
+        instance = self.runtime / "hypr" / "realsig"
+        instance.mkdir(parents=True)
+        main_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        main_socket.bind(str(instance / ".socket.sock"))
+        self.connections.append(main_socket)
+        (instance / "hyprland.lock").write_text("1\nwayland-9\n")
+        self.environment.pop("WAYLAND_DISPLAY", None)
+        report = self.root / "handles"
+        session = self.begin()
+        self.cli(
+            "launch",
+            "--session",
+            session,
+            "--no-stage",
+            "--wait-seconds",
+            "0",
+            "--",
+            sys.executable,
+            "-c",
+            "import os, pathlib, sys; pathlib.Path(sys.argv[1]).write_text("
+            "os.environ.get('HYPRLAND_INSTANCE_SIGNATURE', '') + ' ' + "
+            "os.environ.get('WAYLAND_DISPLAY', ''))",
+            str(report),
+        )
+        deadline = time.monotonic() + 5
+        while not report.exists() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.assertEqual(report.read_text(), "realsig wayland-9")
+        self.cli("end", "--session", session)
+
     def test_unrecognised_session_mode_is_refused(self) -> None:
         self.environment["THEME_MODE"] = "sepia"
         with self.assertRaises(subprocess.CalledProcessError):

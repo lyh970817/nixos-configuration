@@ -14,7 +14,10 @@ screen-verify end --session ID
 
 `begin` locks the task to the viewer's light or dark mode, `THEME_MODE` when
 theme-hold set one and this desktop's own otherwise, and reports the desktop's
-current `live_mode` beside it. `stage` explicitly
+current `live_mode` beside it. Every command derives `XDG_RUNTIME_DIR`,
+`HYPRLAND_INSTANCE_SIGNATURE` and `WAYLAND_DISPLAY` from the one live Hyprland
+instance when the caller lacks them, so an ssh session from the peer can drive
+the local compositor. `stage` explicitly
 creates or returns the session's invisible headless staging output; `launch`
 and `adapter` also create it lazily. `status` reports whether a stage is
 active and its output name. `end` terminates owned process groups unless

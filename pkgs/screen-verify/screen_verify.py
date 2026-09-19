@@ -19,6 +19,7 @@ from screen_verify_lib.desktop import (
     ADAPTER_COMMANDS,
     ADAPTER_NAMES,
     active_window_geometry,
+    adopt_compositor_environment,
     associated_window,
     current_mode,
     starting_mode,
@@ -619,6 +620,7 @@ def parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     try:
+        adopt_compositor_environment()
         arguments = parser().parse_args()
         # The watcher is a long-lived background helper, not a user command;
         # purging from it would race the very sessions it exists to watch.
