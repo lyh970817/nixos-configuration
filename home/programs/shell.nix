@@ -292,6 +292,12 @@ in
       alias clty='claude-matt --dangerously-skip-permissions'
       alias clgy='claude-gpt56 --dangerously-skip-permissions'
 
+      # lsd as ls.
+      alias ls='lsd'
+      alias ll='lsd -l'
+      alias la='lsd -la'
+      alias lt='lsd --tree'
+
       # Git push shortcuts.
       alias gp='git push'
       alias gpf='git push --force'
