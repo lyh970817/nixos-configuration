@@ -4,10 +4,15 @@
       "last30days-skill": {
         "source": "github",
         "repo": "mvanhorn/last30days-skill"
+      },
+      "compact-adviser": {
+        "source": "github",
+        "repo": "kunchenguid/compact-adviser"
       }
     },
     "plugins": {
-      "last30days@last30days-skill": true
+      "last30days@last30days-skill": true,
+      "compact-adviser@compact-adviser": true
     }
   },
   "mattpocock": {
@@ -15,10 +20,15 @@
       "mattpocock": {
         "source": "github",
         "repo": "mattpocock/skills"
+      },
+      "compact-adviser": {
+        "source": "github",
+        "repo": "kunchenguid/compact-adviser"
       }
     },
     "plugins": {
-      "mattpocock-skills@mattpocock": true
+      "mattpocock-skills@mattpocock": true,
+      "compact-adviser@compact-adviser": true
     }
   },
   "gpt56": {
@@ -26,10 +36,15 @@
       "mattpocock": {
         "source": "github",
         "repo": "mattpocock/skills"
+      },
+      "compact-adviser": {
+        "source": "github",
+        "repo": "kunchenguid/compact-adviser"
       }
     },
     "plugins": {
-      "mattpocock-skills@mattpocock": true
+      "mattpocock-skills@mattpocock": true,
+      "compact-adviser@compact-adviser": true
     }
   }
 }

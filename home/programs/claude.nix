@@ -44,6 +44,23 @@ let
     # in settings.json or environment.json.
     export CLAUDE_CODE_ALT_SCREEN_FULL_REPAINT="1"
     export CLAUDE_CODE_PROCESS_WRAPPER="${claudeProcessWrapper}/bin/claude-process-wrapper"
+
+    # Claude Mod plugins (compact-adviser, installed by mutable-configs.nix
+    # from dotfiles/claude/marketplaces.json) load only when this is exactly
+    # "1" in the process environment; the mod's /compact-adviser command is
+    # simply absent otherwise.
+    export CLAUDE_CODE_ENABLE_FUNCTION_HOOKS="1"
+
+    # compact-adviser judges checkpoints through the TypeSafe Jev API with the
+    # user's own key. Read from the git-ignored secrets/ dir so no profile has
+    # to save it separately; a missing file leaves the adviser inert
+    # ("Key: missing" in /compact-adviser status).
+    typesafe_key_file=${lib.escapeShellArg "${osConfig.portable.configDir}/secrets/typesafe-api-key"}
+    if [ -z "''${TYPESAFE_API_KEY:-}" ] && [ -s "$typesafe_key_file" ]; then
+      TYPESAFE_API_KEY="$(${pkgs.coreutils}/bin/tr -d '\r\n' < "$typesafe_key_file")"
+      export TYPESAFE_API_KEY
+    fi
+    unset typesafe_key_file
   '';
 
   claudeThemeSettings = ''
