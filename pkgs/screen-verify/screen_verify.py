@@ -21,6 +21,7 @@ from screen_verify_lib.desktop import (
     active_window_geometry,
     associated_window,
     current_mode,
+    starting_mode,
     descendant_pids,
     focused_monitor,
     notify,
@@ -113,13 +114,14 @@ def purge_abandoned() -> None:
 
 
 def command_begin(_: argparse.Namespace) -> dict[str, Any]:
+    mode = starting_mode()
     session = secrets.token_hex(12)
     path = runtime_root() / session
     private_dir(path)
     data = {
         "session": session,
         "started_at": now().isoformat(),
-        "mode": starting_mode(),
+        "mode": mode,
         "captures": 0,
         "processes": [],
     }
