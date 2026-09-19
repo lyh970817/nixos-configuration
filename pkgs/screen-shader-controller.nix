@@ -21,13 +21,17 @@ writeShellApplication {
     util-linux
   ];
   text = ''
-    state_root="''${XDG_STATE_HOME:-$HOME/.local/state}/screen-shader"
+    runtime_dir="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+    # A toggle is a choice for the current boot, not a lasting one: the
+    # preference lives on the per-boot runtime tmpfs so every boot starts with
+    # the shader enabled.
+    state_root="$runtime_dir/screen-shader"
     preference_file="$state_root/preference"
     source_shader="''${XDG_CONFIG_HOME:-$HOME/.config}/hypr/shaders/panel.glsl"
     empty_shader='[[EMPTY]]'
     target_marker='-2147483647'
     command="''${1:-}"
-    runtime_base="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/hypr"
+    runtime_base="$runtime_dir/hypr"
 
     notify_message() {
       local urgency="$1" body="$2"
