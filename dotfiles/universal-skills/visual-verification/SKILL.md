@@ -29,9 +29,13 @@ behavior with an authoritative CLI, test, log, or state inspection.
 ## 1. Lock the task mode
 
 Run `screen-verify begin`, retain its JSON `session` value, and announce visual
-verification before the first capture. The returned light or dark mode is the
-only mode this task may change or assess. If the live mode changes, run
-`screen-verify ensure-mode --session ID` before previewing or capturing.
+verification before the first capture. The returned `mode` is the viewer's:
+`THEME_MODE` when theme-hold handed one over (an ssh/mosh session from the
+peer), otherwise this desktop's own. It is the only mode this task may change
+or assess. `live_mode` is what this desktop shows now; whenever the two differ,
+from the start or because the live mode changes later, run
+`screen-verify ensure-mode --session ID` before previewing or capturing. That
+displaces this desktop into the session mode, and `end` restores it.
 
 Completion criterion: every planned edit is scoped to the session's starting
 mode, unless the user explicitly requested both modes.

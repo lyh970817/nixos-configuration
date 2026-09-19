@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import time
 from pathlib import Path
@@ -71,6 +72,19 @@ def current_mode() -> str:
         return "light" if "light" in result.stdout else "dark"
     except (OSError, subprocess.CalledProcessError):
         return "unknown"
+
+
+def starting_mode() -> str:
+    # THEME_MODE is the mode the viewer is looking at: theme-hold exports it
+    # into ssh/mosh sessions from the peer, whose desktop may be in the other
+    # mode from this one. Only when no session mode was handed over is this
+    # desktop's own appearance the viewer's.
+    held = os.environ.get("THEME_MODE", "")
+    if not held:
+        return current_mode()
+    if held not in {"dark", "light"}:
+        raise ScreenError(f"THEME_MODE must be dark or light, not {held!r}")
+    return held
 
 
 def focused_monitor() -> str:

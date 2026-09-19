@@ -119,13 +119,13 @@ def command_begin(_: argparse.Namespace) -> dict[str, Any]:
     data = {
         "session": session,
         "started_at": now().isoformat(),
-        "mode": current_mode(),
+        "mode": starting_mode(),
         "captures": 0,
         "processes": [],
     }
     atomic_json(path / "session.json", data)
     audit("begin", session=session)
-    return {"session": session, "mode": data["mode"]}
+    return {"session": session, "mode": data["mode"], "live_mode": current_mode()}
 
 
 def owned_window_geometry(data: dict[str, Any], stage: dict[str, Any]) -> str | None:

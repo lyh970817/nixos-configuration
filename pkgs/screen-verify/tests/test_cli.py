@@ -339,6 +339,9 @@ class ScreenVerifyCliTests(unittest.TestCase):
         # reading real compositor events instead of exiting at once. Tests
         # that want a watcher install their own socket via `enable_socket2`.
         self.environment.pop("HYPRLAND_INSTANCE_SIGNATURE", None)
+        # A held session mode leaking in from the developer's own ssh session
+        # would make every begin ignore the faked desktop mode.
+        self.environment.pop("THEME_MODE", None)
         self.socket2 = None
         self.connections: list[socket.socket] = []
         self.write_hypr_state()
@@ -847,6 +850,37 @@ if [ "$1" = clients ]; then pid=$(cat {pid_file} 2>/dev/null || printf 0); print
         ended = self.cli("end", "--session", session)
         self.assertEqual(ended["restored_mode"], "light")
         self.assertEqual(mode_file.read_text(), "light")
+
+    def test_held_session_mode_outranks_the_desktop_mode(self) -> None:
+        mode_file = self.root / "mode"
+        mode_file.write_text("light")
+        self.fake(
+            "gsettings",
+            f"#!/bin/sh\nprintf \"'prefer-%s'\\n\" \"$(cat {mode_file})\"\n",
+        )
+        self.fake("switch-dark", f"#!/bin/sh\nprintf dark > {mode_file}\n")
+        self.fake("switch-light", f"#!/bin/sh\nprintf light > {mode_file}\n")
+        self.environment["THEME_MODE"] = "dark"
+
+        begun = self.cli("begin")
+        self.assertEqual(begun["mode"], "dark")
+        self.assertEqual(begun["live_mode"], "light")
+        self.assertEqual(mode_file.read_text(), "light")
+        session = begun["session"]
+
+        ensured = self.cli("ensure-mode", "--session", session)
+        self.assertEqual(ensured["mode"], "dark")
+        self.assertEqual(mode_file.read_text(), "dark")
+
+        ended = self.cli("end", "--session", session)
+        self.assertEqual(ended["restored_mode"], "light")
+        self.assertEqual(mode_file.read_text(), "light")
+
+    def test_unrecognised_session_mode_is_refused(self) -> None:
+        self.environment["THEME_MODE"] = "sepia"
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.cli("begin")
+        self.assertEqual(list(self.runtime.glob("screen-verify/*")), [])
 
     def test_reversible_preview_adapters_restore_state_on_end(self) -> None:
         actions = self.root / "actions"

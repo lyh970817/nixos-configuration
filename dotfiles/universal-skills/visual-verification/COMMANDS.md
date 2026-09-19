@@ -12,7 +12,9 @@ screen-verify ensure-mode --session ID
 screen-verify end --session ID
 ```
 
-`begin` locks the task to the active light or dark mode. `stage` explicitly
+`begin` locks the task to the viewer's light or dark mode, `THEME_MODE` when
+theme-hold set one and this desktop's own otherwise, and reports the desktop's
+current `live_mode` beside it. `stage` explicitly
 creates or returns the session's invisible headless staging output; `launch`
 and `adapter` also create it lazily. `status` reports whether a stage is
 active and its output name. `end` terminates owned process groups unless
