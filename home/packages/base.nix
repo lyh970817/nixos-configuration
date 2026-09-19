@@ -18,7 +18,6 @@
     fzf
     deno
     jq
-    lsd
     tealdeer
     yazi
     duf

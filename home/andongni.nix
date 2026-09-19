@@ -61,6 +61,7 @@
     ./programs/qutebrowser.nix
     ./programs/nvim-theme.nix
     ./programs/yazi-theme.nix
+    ./programs/lsd.nix
     ./programs/dotfiles.nix
     ./programs/mutable-configs.nix
     ./directories.nix
