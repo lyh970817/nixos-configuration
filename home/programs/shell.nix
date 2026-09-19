@@ -12,32 +12,6 @@ let
   # Peer machine to hand our theme off to over SSH, baked from the host
   # config. Empty string ("" default) disables the client-side ssh wrapper.
   peerHost = osConfig.portable.peerHost;
-
-  # File-type colours by phosphor rung, through the ANSI slots foot.nix lays
-  # the ladder over. Replaces oh-my-zsh's dircolors defaults, whose
-  # per-extension entries reach outside the ladder. lsd takes every
-  # file-type colour from here as well; its own theme (lsd.nix) covers only
-  # the metadata columns.
-  lsColors = builtins.concatStringsSep ":" [
-    "rs=0"
-    "di=01;94" # bright: directories are the landmarks
-    "tw=01;94"
-    "ow=01;94"
-    "st=01;94"
-    "ex=01;35" # foreground, bold
-    "su=01;35"
-    "sg=01;35"
-    "ln=36" # accent
-    "pi=33"
-    "so=33"
-    "do=33"
-    "bd=33"
-    "cd=33"
-    "or=01;31" # mutedText: broken links fade
-    "mi=31"
-    "mh=00"
-    "ca=00"
-  ];
 in
 {
   programs.zsh = {
@@ -63,7 +37,6 @@ in
     initContent = ''
       unsetopt BEEP
       KEYTIMEOUT=1
-      export LS_COLORS='${lsColors}'
 
       # Silence zoxide's one-time doctor nag. It only checks that __zoxide_hook
       # is present in chpwd_functions (not that it is "last"), and fires
