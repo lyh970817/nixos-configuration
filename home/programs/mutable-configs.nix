@@ -425,7 +425,6 @@ let
   codexSkillNames = [
     "nix-environment-setup"
     "commit-guidelines"
-    "domain-context"
     "herdr"
     "kcl-create-hpc"
     "r-dev-shell"
@@ -1630,7 +1629,6 @@ in
       link "dotfiles/claude/hooks/explain-session-register.sh";
     "claude/skills/nix-environment-setup".source = link "dotfiles/claude/skills/nix-environment-setup";
     "claude/skills/visual-verification".source = link "dotfiles/claude/skills/visual-verification";
-    "claude/skills/domain-context".source = link "dotfiles/claude/skills/domain-context";
     "claude/skills/domain-modeling".source = link "dotfiles/claude/skills/domain-modeling";
     "claude/skills/herdr".source = link "dotfiles/claude/skills/herdr";
     "claude/skills/kcl-create-hpc".source = link "dotfiles/claude/skills/kcl-create-hpc";
@@ -1671,10 +1669,6 @@ in
     };
     "claude-mattpocock/skills/visual-verification" = {
       source = link "dotfiles/claude/skills/visual-verification";
-      force = true;
-    };
-    "claude-mattpocock/skills/domain-context" = {
-      source = link "dotfiles/claude/skills/domain-context";
       force = true;
     };
     "claude-mattpocock/skills/herdr" = {

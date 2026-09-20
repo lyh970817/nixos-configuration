@@ -17,7 +17,6 @@
     "code-review": "user-invocable-only",
     "dataviz": "user-invocable-only",
     "design": "user-invocable-only",
-    "domain-context": "user-invocable-only",
     "domain-modeling": "user-invocable-only",
     "explain-session": "user-invocable-only",
     "explain-session-sync": "user-invocable-only",
