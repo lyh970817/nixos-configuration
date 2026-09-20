@@ -31,14 +31,12 @@ METADATA_VERSION = 1
 # EX_TEMPFAIL: a concurrent update holds the tree lock; try again later.
 EX_BUSY = 75
 
-KNOWN_LAUNCHERS = ("claude", "claude-gpt56")
+KNOWN_LAUNCHERS = ("claude",)
 
-# Launcher name by CLAUDE_CONFIG_DIR basename. The gpt56 launcher owns its
-# gateway/token environment, so only the launcher name is recorded — never
-# credentials (see home/programs/claude.nix).
+# Launcher name by CLAUDE_CONFIG_DIR basename. Only the launcher name is
+# recorded, never its environment (see home/programs/claude.nix).
 _CONFIG_DIR_LAUNCHERS = {
     "claude": "claude",
-    "claude-gpt56": "claude-gpt56",
 }
 
 

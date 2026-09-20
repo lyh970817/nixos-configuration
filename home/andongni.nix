@@ -33,7 +33,6 @@
     ./programs/codex-theme.nix
     ./programs/claude.nix
     ./programs/backpass.nix
-    ./programs/cli-proxy-api.nix
     ./programs/chatgpt.nix
     ./programs/claude-desktop.nix
     ./programs/visual-verification.nix

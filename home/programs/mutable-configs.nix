@@ -68,13 +68,6 @@ let
         builtins.readFile ../../dotfiles/claude-mattpocock/settings.json
       );
     }
-    {
-      name = "gpt56";
-      configDir = ".config/claude-gpt56";
-      settings = pkgs.writeText "claude-settings-gpt56.json" (
-        builtins.readFile ../../dotfiles/claude-gpt56/settings.json
-      );
-    }
   ];
 
   # Claude Code custom theme, installed into every profile above.
@@ -1073,7 +1066,6 @@ in
     claude_marketplaces=${lib.escapeShellArg "${claudeMarketplaces}"}
     claude_herdr_session_command=${lib.escapeShellArg claudeHerdrSessionCommand}
     claude_explain_register_standard=${lib.escapeShellArg (claudeExplainRegisterCommand ".config/claude")}
-    claude_explain_register_gpt56=${lib.escapeShellArg (claudeExplainRegisterCommand ".config/claude-gpt56")}
 
     # Which ANSI-only theme matches this machine's current mode. Derived from
     # the hypr current-theme symlink, the same source the claude-theme helper
@@ -1098,7 +1090,6 @@ in
         --arg claude_theme "$claude_theme" \
         --arg claude_herdr_session_command "$claude_herdr_session_command" \
         --arg claude_explain_register_standard "$claude_explain_register_standard" \
-        --arg claude_explain_register_gpt56 "$claude_explain_register_gpt56" \
         '
           ($template[0]) as $template |
           ($environment[0]) as $environment |
@@ -1133,15 +1124,6 @@ in
                 }, {
                   type: "command",
                   command: $claude_explain_register_standard,
-                  timeout: 10
-                }]
-              }]
-            elif $profile == "gpt56" then
-              .hooks.SessionStart = [{
-                matcher: "*",
-                hooks: [{
-                  type: "command",
-                  command: $claude_explain_register_gpt56,
                   timeout: 10
                 }]
               }]
@@ -1188,14 +1170,9 @@ in
                   (.;
                     .[$plugin.key] = $plugin.value)
               ) |
-            if ($profile == "mattpocock" or $profile == "gpt56") then
+            if $profile == "mattpocock" then
               del(.enabledPlugins["last30days@last30days-skill"]) |
               del(.extraKnownMarketplaces["last30days-skill"])
-            else .
-            end |
-            if ($profile == "gpt56") then
-              .availableModels = $template.availableModels |
-              .modelOverrides = $template.modelOverrides
             else .
             end
           end
@@ -1308,7 +1285,7 @@ in
     }
 
     run "$claude_jq" -e 'type == "object" and all(to_entries[]; .value | type == "string")' "$claude_environment" >/dev/null
-    run "$claude_jq" -e 'type == "object" and (keys | sort) == ["gpt56", "mattpocock", "standard"] and all(to_entries[]; (.value | type) == "object" and ((.value.marketplaces | type) == "object") and all(.value.marketplaces | to_entries[]; .value.source == "github" and (.value.repo | type) == "string") and ((.value.plugins | type) == "object") and all(.value.plugins | to_entries[]; (.value | type) == "boolean"))' "$claude_marketplaces" >/dev/null
+    run "$claude_jq" -e 'type == "object" and (keys | sort) == ["mattpocock", "standard"] and all(to_entries[]; (.value | type) == "object" and ((.value.marketplaces | type) == "object") and all(.value.marketplaces | to_entries[]; .value.source == "github" and (.value.repo | type) == "string") and ((.value.plugins | type) == "object") and all(.value.plugins | to_entries[]; (.value | type) == "boolean"))' "$claude_marketplaces" >/dev/null
     ${lib.concatMapStringsSep "\n" (profile: ''
       claude_settings_dir="$HOME/${profile.configDir}"
       claude_settings="$claude_settings_dir/settings.json"
@@ -1666,33 +1643,6 @@ in
     "claude/commands".source = link "dotfiles/claude/commands";
     "claude/output-styles".source = link "dotfiles/claude/output-styles";
     "claude/agents".source = link "dotfiles/claude/agents";
-
-    # GPT-5.6 gateway profile. Share portable authored assets from the standard
-    # profile, but keep credentials, history, sessions, plugins, caches, and all
-    # other mutable state isolated under its own CLAUDE_CONFIG_DIR.
-    "claude-gpt56/CLAUDE.md".source = link "dotfiles/claude-gpt56/CLAUDE.md";
-    "claude-gpt56/statusline.sh".source = link "dotfiles/claude/statusline.sh";
-    "claude-gpt56/commands".source = link "dotfiles/claude/commands";
-    "claude-gpt56/output-styles".source = link "dotfiles/claude/output-styles";
-    "claude-gpt56/agents".source = link "dotfiles/claude/agents";
-    "claude-gpt56/skills/bro".source = link "dotfiles/claude/skills/bro";
-    "claude-gpt56/skills/nix-environment-setup".source =
-      link "dotfiles/claude/skills/nix-environment-setup";
-    "claude-gpt56/skills/visual-verification".source =
-      link "dotfiles/claude/skills/visual-verification";
-    "claude-gpt56/skills/domain-context".source = link "dotfiles/claude/skills/domain-context";
-    "claude-gpt56/skills/herdr".source = link "dotfiles/claude/skills/herdr";
-    "claude-gpt56/skills/kcl-create-hpc".source = link "dotfiles/claude/skills/kcl-create-hpc";
-    "claude-gpt56/skills/r-dev-shell".source = link "dotfiles/claude/skills/r-dev-shell";
-    "claude-gpt56/skills/show-me".source = link "dotfiles/claude/skills/show-me";
-    "claude-gpt56/skills/social-bookmarks".source = link "dotfiles/claude/skills/social-bookmarks";
-    "claude-gpt56/skills/tuicr".source = link "dotfiles/claude/skills/tuicr";
-    "claude-gpt56/skills/explain-session".source = link "dotfiles/claude/skills/explain-session";
-    "claude-gpt56/skills/explain-session-sync".source =
-      link "dotfiles/claude/skills/explain-session-sync";
-    "claude-gpt56/explain-session".source = link "dotfiles/claude/explain-session";
-    "claude-gpt56/hooks/explain-session-register.sh".source =
-      link "dotfiles/claude/hooks/explain-session-register.sh";
 
     # Claude has a profile per CLAUDE_CONFIG_DIR. Share only portable authored
     # assets with claude-mattpocock; its credential, settings, plugin state,

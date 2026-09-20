@@ -284,7 +284,7 @@ let
     *) exit 0 ;;
     esac
 
-    for dir in claude claude-mattpocock claude-gpt56; do
+    for dir in claude claude-mattpocock; do
       settings="$HOME/.config/$dir/settings.json"
       [ -f "$settings" ] || continue
       tmp="$(${pkgs.coreutils}/bin/mktemp "$settings.XXXXXX")" || continue

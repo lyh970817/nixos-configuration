@@ -93,7 +93,6 @@
         claude-agent-acp = final.callPackage ./pkgs/claude-agent-acp.nix { };
         claude-code = final.callPackage ./pkgs/claude-code.nix { };
         claude-science = final.callPackage ./pkgs/claude-science.nix { };
-        cli-proxy-api = final.callPackage ./pkgs/cli-proxy-api.nix { };
         codex = final.callPackage ./pkgs/codex.nix { };
         codexbar = final.callPackage ./pkgs/codexbar.nix { };
         chatgpt = final.callPackage ./pkgs/chatgpt.nix { };
