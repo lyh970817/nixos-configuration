@@ -1,105 +1,66 @@
 ---
 name: r-dev-shell
-description: R package development shell setup with a project-local R library. Use when configuring shell.nix, flake devShells, .R-lib, R_LIBS_USER, devtools::install_dev_deps(), or moving R package dependencies out of Nix/OS-level tooling into an R-managed local library.
+description: Set up or repair an R package's dev shell so that Nix provides only R, compilers, system libraries and the devtools bootstrap, while R installs the package's own dependencies into a project-local .R-lib. Invoked manually inside an R project (shell.nix or flake devShell).
 disable-model-invocation: true
 ---
 
 # R Dev Shell
 
-Use a **role split**: the shell manager provides the development environment; R installs the package dependencies.
+Role split: **Nix** owns R, compilers, system libraries, `pandoc`/`qpdf`/TeX
+when `R CMD check` needs them, and `rPackages.devtools` (the one R package
+kept in Nix, because it is the installer and its compiled closure is heavy;
+it already carries roxygen2, testthat, usethis and pkgload). **R** owns every
+package named in `DESCRIPTION`, installed into `.R-lib` at the repo root.
 
 ## Process
 
-1. Inspect the current setup before editing:
-   - Read `DESCRIPTION`, `shell.nix` or `flake.nix`, `.envrc`, `.Rprofile`, `.Rbuildignore`, `.gitignore`, and `git status`.
-   - Identify which R packages are package dependencies from `DESCRIPTION` and which are development/review tools.
-   - Completion criterion: every R package currently provided by the shell is classified as package dependency, development tool, review tool, or transitive dependency.
+1. Read `DESCRIPTION`, `shell.nix`/`flake.nix`, `.envrc`, `.Rprofile`,
+   `.Rbuildignore`, `.gitignore`. Every `rPackages.*` entry in the shell
+   other than `devtools` is a candidate for removal; keep one only when it
+   cannot be built by R (not on CRAN/r-universe, or needs a Nix-only
+   library). Do not introduce `renv` or `pak` unless asked.
 
-2. Preserve the role split:
-   - Nix/devShell owns R itself, OS libraries, compilers, `pandoc`, `qpdf`, `pre-commit`, and development/review tools that are intentionally part of the shell.
-   - R owns ordinary package dependencies declared in `DESCRIPTION`, installed into the project-local library with `devtools::install_dev_deps(dependencies = TRUE, upgrade = "never")`.
-   - Keep `devtools` in the shell when using it as the installer. Keep `roxygen2` in the shell when the repo uses roxygen-generated docs.
-   - Duplicates are acceptable when a `DESCRIPTION` package is also intentionally a shell development tool.
-   - Do not introduce `renv` or `pak` unless the user asks for lockfile management or a different resolver.
-   - Completion criterion: the shell does not mirror runtime `Imports` by default, but all intended development/review tools remain available.
+2. For each `rPackages.*` you remove, check whether it compiles against a
+   system library and add that library instead (`libxml2` for xml2, `libuv`
+   for fs, `openssl`, `curl`, `zlib`, `icu`, `jdk` for rJava, ...).
 
-3. Activate a project-local R library from the shell:
-   - Prefer `.R-lib` at the repository root.
-   - Anchor it with `git rev-parse --show-toplevel` instead of `$PWD`.
-   - Hide the global user R library inside the dev shell so missing dependencies fail honestly.
-   - Account for R startup resetting `R_LIBS_USER`: set `R_PROFILE_USER` to a generated shell-local profile that enforces `.libPaths()`.
-   - Completion criterion: inside the shell, `Sys.getenv("R_LIBS_USER")` and `.libPaths()[1]` both point at repo-root `.R-lib`, and the normal global user library is absent from `.libPaths()`.
+3. Put this in the shell (`shellHook` of `pkgs.mkShell`; same text in a
+   flake devShell). `~/.Renviron` on this host resets `R_LIBS_USER` at every
+   R start, so the export alone is not enough; `R_ENVIRON_USER` makes the
+   project value win in every R subprocess, `R CMD check` included.
+   `devtools::install_dev_deps()` force-updates roxygen2 regardless of its
+   `upgrade` argument; `R_REMOTES_UPGRADE=never` stops that.
 
-Use this `shellHook` pattern:
+   ```nix
+   buildInputs = [ pkgs.R pkgs.rPackages.devtools pkgs.pandoc pkgs.qpdf ];
+   shellHook = ''
+     PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+     mkdir -p "$PROJECT_ROOT/.R-lib" "$PROJECT_ROOT/.nix"
+     export R_LIBS_USER="$PROJECT_ROOT/.R-lib"
+     export R_ENVIRON_USER="$PROJECT_ROOT/.nix/Renviron"
+     printf 'R_LIBS_USER=%s\n' "$R_LIBS_USER" > "$R_ENVIRON_USER"
+     export R_REMOTES_UPGRADE=never
+   '';
+   ```
 
-```sh
-PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-export PROJECT_R_LIB="$PROJECT_ROOT/.R-lib"
-export R_LIBS_USER="$PROJECT_R_LIB"
-mkdir -p "$PROJECT_R_LIB" "$PROJECT_ROOT/.nix"
+   Keep any existing Bash-default guard (`nix-environment-setup`) after
+   these lines. `.envrc` stays `use nix`.
 
-export R_PROFILE_USER="$PROJECT_ROOT/.nix/Rprofile"
-cat > "$R_PROFILE_USER" <<'EOF'
-local_lib <- Sys.getenv("PROJECT_R_LIB")
-if (nzchar(local_lib)) {
-  dir.create(local_lib, recursive = TRUE, showWarnings = FALSE)
-  local_lib <- normalizePath(local_lib, winslash = "/", mustWork = TRUE)
-  user_lib <- normalizePath(Sys.getenv("R_LIBS_USER"), winslash = "/", mustWork = FALSE)
-  paths <- normalizePath(.libPaths(), winslash = "/", mustWork = FALSE)
-  Sys.setenv(R_LIBS_USER = local_lib)
-  .libPaths(c(local_lib, paths[paths != user_lib & paths != local_lib]))
-}
-EOF
-```
-
-4. Ignore generated local environment files:
-   - Add `.R-lib/` and `.nix/` to `.gitignore`.
-   - Add `^\.R-lib$`, `^\.R-lib/`, `^\.nix$`, and `^\.nix/` to `.Rbuildignore`.
-   - Completion criterion: the local library and generated R profile cannot be committed accidentally or included in an R package build.
-
-5. Model tool dependencies faithfully:
-   - If a custom Nix-built R tool uses `buildRPackage`, put its dependencies in `propagatedBuildInputs`.
-   - Do not duplicate every transitive dependency in the top-level shell package list.
-   - Completion criterion: each top-level development/review tool and at least one non-top-level propagated dependency load with `requireNamespace()` inside the shell.
+4. Add `.R-lib/` and `.nix/` to `.gitignore`; add `^\.R-lib$`, `^\.R-lib/`,
+   `^\.nix$`, `^\.nix/` to `.Rbuildignore`.
 
 ## Validation
 
-Run checks equivalent to:
-
 ```sh
-nix-shell --run 'Rscript -e '\''
-cat("R_LIBS_USER=", Sys.getenv("R_LIBS_USER"), "\n", sep = "")
-cat("PROJECT_R_LIB=", Sys.getenv("PROJECT_R_LIB"), "\n", sep = "")
-print(.libPaths()[1:5])
-stopifnot(
-  normalizePath(Sys.getenv("R_LIBS_USER"), winslash = "/", mustWork = TRUE) ==
-    normalizePath(Sys.getenv("PROJECT_R_LIB"), winslash = "/", mustWork = TRUE)
-)
-stopifnot(
-  normalizePath(.libPaths()[1], winslash = "/", mustWork = TRUE) ==
-    normalizePath(Sys.getenv("PROJECT_R_LIB"), winslash = "/", mustWork = TRUE)
-)
-'\'''
+nix-shell --run 'Rscript -e '\''stopifnot(.libPaths()[1] == normalizePath(Sys.getenv("R_LIBS_USER")), !any(grepl("/.local/share/R/", .libPaths())), requireNamespace("devtools"))'\'''
 ```
 
-Also validate intended shell tools:
-
-```sh
-nix-shell --run 'Rscript -e '\''for (pkg in c("devtools", "roxygen2")) stopifnot(requireNamespace(pkg, quietly = TRUE))'\'''
-```
-
-For custom development tools, include their package names and one propagated dependency, for example:
-
-```sh
-nix-shell --run 'Rscript -e '\''for (pkg in c("goodpractice", "cyclocomp")) stopifnot(requireNamespace(pkg, quietly = TRUE))'\'''
-```
-
-Do not run `devtools::install_dev_deps()` unless the user wants dependencies installed now; it may use network and mutate `.R-lib`.
-
-## User-Facing Command
-
-Print or document this command as the explicit package dependency step:
+Do not run the install step yourself unless the user asks: it uses the
+network and writes `.R-lib`. Tell the user:
 
 ```sh
 Rscript -e 'devtools::install_dev_deps(dependencies = TRUE, upgrade = "never")'
 ```
+
+If it fails with `Configuration failed because <lib> was not found`, that
+is the signal to add the system library to the shell, not the R package.
