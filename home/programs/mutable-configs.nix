@@ -1154,6 +1154,9 @@ in
             # unasked versus only on a user /invocation. Plugin skills are
             # unaffected by it; those are governed by enabledPlugins below.
             (if ($template.skillOverrides | type) == "object" then .skillOverrides = $template.skillOverrides else . end) |
+            # claude-plugins-official is auto-registered by Claude itself, but
+            # mirroring it here is a no-op: the startup reconciler compares the
+            # declared source with known_marketplaces.json and they match.
             .extraKnownMarketplaces =
               (
                 if (.extraKnownMarketplaces | type) == "object"
@@ -1204,7 +1207,7 @@ in
       failure_status="$2"
       if printf '%s\n' "$failure_output" \
         | ${pkgs.gnugrep}/bin/grep -Eiq \
-          'network|dns|resolve|github|remote|timed[ -]?out|timeout|connection|fetch|tls|temporar|unavailable|clone|premature|out[ -]?of[ -]?date|already (enabled|installed|exists)|502|503|429'; then
+          'network|dns|resolve|github|remote|timed[ -]?out|timeout|connection|fetch|tls|temporar|unavailable|clone|premature|out[ -]?of[ -]?date|already (enabled|disabled|installed|exists)|502|503|429'; then
         echo "warning: transient Claude marketplace failure (status $failure_status); will retry on next activation: $failure_output" >&2
         return 0
       fi
@@ -1271,6 +1274,9 @@ in
         if ! printf '%s\n' "$plugin_list" \
           | "$claude_jq" -e --arg plugin "$plugin_name" \
             'any(.[]; .id == $plugin)' >/dev/null 2>&1; then
+          # A plugin the manifest turns off is never installed; a missing one
+          # is already as off as it gets.
+          [ "$plugin_enabled" = true ] || continue
           if plugin_install="$(${pkgs.claude-code}/bin/claude plugin install "$plugin_name" 2>&1)"; then
             :
           else
@@ -1279,11 +1285,16 @@ in
             continue
           fi
         fi
-        if plugin_enable="$(${pkgs.claude-code}/bin/claude plugin enable "$plugin_name" 2>&1)"; then
+        if [ "$plugin_enabled" = true ]; then
+          plugin_toggle=enable
+        else
+          plugin_toggle=disable
+        fi
+        if plugin_toggled="$(${pkgs.claude-code}/bin/claude plugin "$plugin_toggle" "$plugin_name" 2>&1)"; then
           :
         else
           plugin_status="$?"
-          claude_handle_failure "$plugin_enable" "$plugin_status" || return 1
+          claude_handle_failure "$plugin_toggled" "$plugin_status" || return 1
         fi
       done < <("$claude_jq" -r --arg profile "$claude_profile_name" \
         '.[$profile].plugins // {} | to_entries[] | [.key, (.value | tostring)] | @tsv' \

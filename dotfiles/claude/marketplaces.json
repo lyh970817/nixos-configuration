@@ -1,6 +1,10 @@
 {
   "standard": {
     "marketplaces": {
+      "claude-plugins-official": {
+        "source": "github",
+        "repo": "anthropics/claude-plugins-official"
+      },
       "last30days-skill": {
         "source": "github",
         "repo": "mvanhorn/last30days-skill"
@@ -11,7 +15,8 @@
       }
     },
     "plugins": {
-      "last30days@last30days-skill": true,
+      "skill-creator@claude-plugins-official": true,
+      "last30days@last30days-skill": false,
       "compact-adviser@compact-adviser": true
     }
   },
