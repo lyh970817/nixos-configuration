@@ -16,12 +16,9 @@ direnv. Nothing is installed globally.
 2. Missing program: add the package to the existing `shell.nix`, preserving
    its entries. Missing variable: add it to `.envrc`, preserving other lines.
    Create either file only if absent; a new `.envrc` must contain `use nix`.
-3. If `.envrc` was created or changed, run `direnv allow` and tell the user to
-   re-enter the directory (`cd .. && cd -`). The current session will not see
-   the new environment until then, so do not demand post-setup verification.
-4. To check the edited shell itself, `nix-shell shell.nix --run '<cmd>'` is
-   fine; do not use it to run the project's ordinary work once `.envrc` has
-   `use nix`.
+3. If `.envrc` was created or changed, run `direnv allow`. Confirm the
+   addition with `nix-shell shell.nix --run '<cmd>'`: this session's
+   environment predates the edit, so a bare run cannot show it.
 
 Never reach for `nix-env -i`, `nix profile install`, `pip install --user`,
 `/tmp` installs, or custom code standing in for a package that nixpkgs has.
