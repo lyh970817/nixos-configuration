@@ -56,13 +56,16 @@
 # transfer to the new one.
 #
 # The reasoning, not a result: the prompt was restructured (534ad33f) so every
-# rewrite now opens with a complete plain-English retelling of the message
-# before any section. A short message therefore yields a short retelling rather
-# than a page of near-empty headings, which makes a low threshold more
-# defensible than it was under the previous section-only structure. The known
-# cost is real either way -- more messages cross the gate, so more turns pay the
-# 11-43s wait, and the sections under those short rewrites will be largely the
-# empty-section sentences.
+# rewrite opened with a complete plain-English retelling of the message before
+# any section. A short message therefore yielded a short retelling rather than
+# a page of near-empty headings, which made a low threshold more defensible
+# than it was under the previous section-only structure. On 2026-09-20 the
+# retelling was removed again at the user's request -- the original is legible
+# enough on its own and only the sorted sections and the summary are wanted --
+# so the output is section-only once more, and the ~152% length figure above
+# no longer describes it. The known cost is real either way -- more messages
+# cross the gate, so more turns pay the 11-43s wait, and the sections under
+# those short rewrites will be largely the empty-section sentences.
 #
 # Sample sizes differ by measurement, and only these apply to this prompt:
 # length and shape-selection accuracy are n=41; the blind retention comparison
@@ -226,7 +229,19 @@ prompt_file="${CLAUDE_CONFIG_DIR:-$HOME/.config/claude}/response-simplifier.md"
 # Claude, I can't test that for you") instead of rewriting, and that reply is
 # what the user would have seen. Wrapped, the same input rewrites correctly.
 # Keep the tags and the prompt's first paragraph in step.
+#
+# The child runs from the buffer root, not from the session's cwd. Claude Code
+# files every session's transcript under a project directory derived from its
+# cwd, so a child started in the repo wrote its own transcript next to the real
+# sessions of that repo -- at one count 83 of 107 files there were rewriter
+# output -- and every tool that reads that store (backpass, corpus builds,
+# usage stats) took them for conversations. The buffer root is a tmpfs path
+# outside any repository, so all rewriter transcripts now land in one
+# dedicated project directory and never associate with a checkout. It also
+# keeps project-level settings out of the child, which safe mode already
+# intended for CLAUDE.md.
 rewrite="$(
+  cd "$buffer_root" || exit 1
   printf '<message>\n%s\n</message>' "$message" | MAX_THINKING_TOKENS=0 timeout 120 claude \
     --safe-mode \
     --model claude-sonnet-5 \
