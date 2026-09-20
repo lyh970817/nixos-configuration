@@ -425,11 +425,11 @@ let
   codexSkillNames = [
     "nix-environment-setup"
     "commit-guidelines"
-    "domain-context"
     "herdr"
     "kcl-create-hpc"
     "r-dev-shell"
     "session-handoff"
+    "setup-domain-docs"
     "show-me"
     "social-bookmarks"
     "tuicr"
@@ -1630,11 +1630,11 @@ in
       link "dotfiles/claude/hooks/explain-session-register.sh";
     "claude/skills/nix-environment-setup".source = link "dotfiles/claude/skills/nix-environment-setup";
     "claude/skills/visual-verification".source = link "dotfiles/claude/skills/visual-verification";
-    "claude/skills/domain-context".source = link "dotfiles/claude/skills/domain-context";
     "claude/skills/domain-modeling".source = link "dotfiles/claude/skills/domain-modeling";
     "claude/skills/herdr".source = link "dotfiles/claude/skills/herdr";
     "claude/skills/kcl-create-hpc".source = link "dotfiles/claude/skills/kcl-create-hpc";
     "claude/skills/r-dev-shell".source = link "dotfiles/claude/skills/r-dev-shell";
+    "claude/skills/setup-domain-docs".source = link "dotfiles/claude/skills/setup-domain-docs";
     "claude/skills/show-me".source = link "dotfiles/claude/skills/show-me";
     "claude/skills/social-bookmarks".source = link "dotfiles/claude/skills/social-bookmarks";
     "claude/skills/tuicr".source = link "dotfiles/claude/skills/tuicr";
@@ -1673,16 +1673,16 @@ in
       source = link "dotfiles/claude/skills/visual-verification";
       force = true;
     };
-    "claude-mattpocock/skills/domain-context" = {
-      source = link "dotfiles/claude/skills/domain-context";
-      force = true;
-    };
     "claude-mattpocock/skills/herdr" = {
       source = link "dotfiles/claude/skills/herdr";
       force = true;
     };
     "claude-mattpocock/skills/r-dev-shell" = {
       source = link "dotfiles/claude/skills/r-dev-shell";
+      force = true;
+    };
+    "claude-mattpocock/skills/setup-domain-docs" = {
+      source = link "dotfiles/claude/skills/setup-domain-docs";
       force = true;
     };
     "claude-mattpocock/skills/show-me" = {
