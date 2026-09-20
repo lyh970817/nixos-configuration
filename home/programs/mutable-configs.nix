@@ -424,7 +424,6 @@ let
 
   codexSkillNames = [
     "nix-environment-setup"
-    "bro"
     "commit-guidelines"
     "domain-context"
     "herdr"
@@ -1630,7 +1629,6 @@ in
     "claude/hooks/explain-session-register.sh".source =
       link "dotfiles/claude/hooks/explain-session-register.sh";
     "claude/skills/nix-environment-setup".source = link "dotfiles/claude/skills/nix-environment-setup";
-    "claude/skills/bro".source = link "dotfiles/claude/skills/bro";
     "claude/skills/visual-verification".source = link "dotfiles/claude/skills/visual-verification";
     "claude/skills/domain-context".source = link "dotfiles/claude/skills/domain-context";
     "claude/skills/domain-modeling".source = link "dotfiles/claude/skills/domain-modeling";
@@ -1673,10 +1671,6 @@ in
     };
     "claude-mattpocock/skills/visual-verification" = {
       source = link "dotfiles/claude/skills/visual-verification";
-      force = true;
-    };
-    "claude-mattpocock/skills/bro" = {
-      source = link "dotfiles/claude/skills/bro";
       force = true;
     };
     "claude-mattpocock/skills/domain-context" = {

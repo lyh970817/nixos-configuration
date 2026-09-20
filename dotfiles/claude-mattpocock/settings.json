@@ -13,7 +13,6 @@
   },
   "skipDangerousModePermissionPrompt": true,
   "skillOverrides": {
-    "bro": "user-invocable-only",
     "claude-api": "user-invocable-only",
     "code-review": "user-invocable-only",
     "dataviz": "user-invocable-only",
