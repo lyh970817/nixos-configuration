@@ -429,6 +429,7 @@ let
     "kcl-create-hpc"
     "r-dev-shell"
     "session-handoff"
+    "setup-domain-docs"
     "show-me"
     "social-bookmarks"
     "tuicr"
@@ -1633,6 +1634,7 @@ in
     "claude/skills/herdr".source = link "dotfiles/claude/skills/herdr";
     "claude/skills/kcl-create-hpc".source = link "dotfiles/claude/skills/kcl-create-hpc";
     "claude/skills/r-dev-shell".source = link "dotfiles/claude/skills/r-dev-shell";
+    "claude/skills/setup-domain-docs".source = link "dotfiles/claude/skills/setup-domain-docs";
     "claude/skills/show-me".source = link "dotfiles/claude/skills/show-me";
     "claude/skills/social-bookmarks".source = link "dotfiles/claude/skills/social-bookmarks";
     "claude/skills/tuicr".source = link "dotfiles/claude/skills/tuicr";
@@ -1677,6 +1679,10 @@ in
     };
     "claude-mattpocock/skills/r-dev-shell" = {
       source = link "dotfiles/claude/skills/r-dev-shell";
+      force = true;
+    };
+    "claude-mattpocock/skills/setup-domain-docs" = {
+      source = link "dotfiles/claude/skills/setup-domain-docs";
       force = true;
     };
     "claude-mattpocock/skills/show-me" = {

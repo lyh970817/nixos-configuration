@@ -30,6 +30,7 @@
     "schedule": "user-invocable-only",
     "security-review": "user-invocable-only",
     "session-handoff": "user-invocable-only",
+    "setup-domain-docs": "user-invocable-only",
     "show-me": "user-invocable-only",
     "simplify": "user-invocable-only",
     "social-bookmarks": "user-invocable-only",

@@ -1,0 +1,7 @@
+interface:
+  display_name: "Setup Domain Docs"
+  short_description: "Set up docs/agents/domain.md and the AGENTS.md pointer"
+  default_prompt: "Use $setup-domain-docs to set up this project's domain documentation for agents."
+
+policy:
+  allow_implicit_invocation: false
