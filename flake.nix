@@ -88,6 +88,9 @@
           outlineColor = "#0A100C";
           accentColor = "#${palette.bright}";
         };
+        acpx = final.callPackage ./pkgs/acpx.nix { };
+        backpass = final.callPackage ./pkgs/backpass.nix { };
+        claude-agent-acp = final.callPackage ./pkgs/claude-agent-acp.nix { };
         claude-code = final.callPackage ./pkgs/claude-code.nix { };
         claude-science = final.callPackage ./pkgs/claude-science.nix { };
         cli-proxy-api = final.callPackage ./pkgs/cli-proxy-api.nix { };

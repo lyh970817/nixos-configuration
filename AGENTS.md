@@ -110,6 +110,11 @@ Where the notes live:
 
 - Claude Code —
   `https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md`.
+- backpass (`pkgs/backpass.nix`, with `pkgs/acpx.nix` and
+  `pkgs/claude-agent-acp.nix` behind it) —
+  `https://raw.githubusercontent.com/kunchenguid/backpass/main/CHANGELOG.md`.
+  The two adapters need their checked-in `*-package-lock.json` regenerated
+  from a package.json stripped of `devDependencies` and `scripts`.
 - Codex CLI — the GitHub release for tag `rust-v<version>`
   (`https://api.github.com/repos/openai/codex/releases/tags/rust-v<version>`),
   whose body is categorized by hand. The repo's `CHANGELOG.md` is a stub that
@@ -118,6 +123,17 @@ Where the notes live:
 - ChatGPT/Codex desktop — none. No public per-version changelog exists, the
   release-notes pages refuse automated fetches, and its `src` tracks a `latest`
   URL rather than a version. Report that the build moved and stop; do not hunt.
+
+## Training AGENTS.md with backpass
+
+`backpass` (`home/programs/backpass.nix`, project settings in `.backpassrc.json`)
+reads the Claude, Codex and pi transcripts of this repo on both hosts and
+proposes evidence-backed edits to this file and `.agents/skills/`. A plain
+`backpass` run never writes; `backpass apply` shows each edit with its quotes
+for accept or reject, and `backpass --scope user` does the same for the
+user-level Claude CLAUDE.md. Its model calls are tagged and excluded from the
+corpus, so running it inside an agent session does not pollute the evidence.
+Never accept its edits on behalf of the user.
 
 ## Coding Style & Naming Conventions
 
