@@ -263,11 +263,11 @@ class OriginTest(unittest.TestCase):
         origin = core.resolve_origin(
             "sid-flag",
             "/tmp",
-            "claude-gpt56",
+            "claude",
             environ={"CLAUDE_CODE_SESSION_ID": "sid-env"},
         )
         self.assertEqual(origin["session_id"], "sid-flag")
-        self.assertEqual(origin["launcher"], "claude-gpt56")
+        self.assertEqual(origin["launcher"], "claude")
         self.assertIsNone(origin["config_dir"])
 
     def test_env_fallback_infers_launcher(self):
@@ -277,12 +277,12 @@ class OriginTest(unittest.TestCase):
             None,
             environ={
                 "CLAUDE_CODE_SESSION_ID": "sid-env",
-                "CLAUDE_CONFIG_DIR": "/home/user/.config/claude-gpt56",
+                "CLAUDE_CONFIG_DIR": "/home/user/.config/claude",
             },
             process_cwd="/tmp",
         )
         self.assertEqual(origin["session_id"], "sid-env")
-        self.assertEqual(origin["launcher"], "claude-gpt56")
+        self.assertEqual(origin["launcher"], "claude")
         self.assertIsNone(origin["config_dir"])
 
     def test_unknown_profile_records_config_dir(self):

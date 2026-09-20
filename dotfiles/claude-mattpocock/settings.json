@@ -37,5 +37,12 @@
     "social-bookmarks": "user-invocable-only",
     "tuicr": "user-invocable-only",
     "visual-verification": "user-invocable-only"
+  },
+  "pluginConfigs": {
+    "agents-md@builtin": {
+      "options": {
+        "instructionFiles": "claude-md-and-agents-md"
+      }
+    }
   }
 }

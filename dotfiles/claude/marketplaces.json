@@ -35,21 +35,5 @@
       "mattpocock-skills@mattpocock": true,
       "compact-adviser@compact-adviser": true
     }
-  },
-  "gpt56": {
-    "marketplaces": {
-      "mattpocock": {
-        "source": "github",
-        "repo": "mattpocock/skills"
-      },
-      "compact-adviser": {
-        "source": "github",
-        "repo": "kunchenguid/compact-adviser"
-      }
-    },
-    "plugins": {
-      "mattpocock-skills@mattpocock": true,
-      "compact-adviser@compact-adviser": true
-    }
   }
 }

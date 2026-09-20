@@ -1,0 +1,7 @@
+{
+  "memoryFiles": ["AGENTS.md"],
+  "skillsDir": ".agents/skills",
+  "discovery": {
+    "harnesses": ["claude", "codex", "pi"]
+  }
+}

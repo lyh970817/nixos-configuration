@@ -276,9 +276,6 @@ in
       # Claude Code with the mattpocock skills profile (separate CLAUDE_CONFIG_DIR).
       alias claude-matt='CLAUDE_CONFIG_DIR="$HOME/.config/claude-mattpocock" claude'
 
-      # Claude Code through the isolated local GPT-5.6 gateway profile.
-      alias clg='claude-gpt56'
-
       # Orchestrator sessions: a model plus its own top-level system prompt.
       # --dangerously-skip-permissions, not --permission-mode bypassPermissions:
       # the latter silently downgrades to the default mode until the bypass
@@ -289,7 +286,6 @@ in
       # Claude Code profile launchers bypassing all permission checks.
       alias cly='claude --dangerously-skip-permissions'
       alias clty='claude-matt --dangerously-skip-permissions'
-      alias clgy='claude-gpt56 --dangerously-skip-permissions'
 
       # Git push shortcuts.
       alias gp='git push'

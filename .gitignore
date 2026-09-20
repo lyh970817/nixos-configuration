@@ -48,3 +48,4 @@ dotfiles/**/.DS_Store
 # tracking .pyc, which would reach the Nix store via `src = ./.` once tracked.
 __pycache__/
 *.pyc
+.backpass/

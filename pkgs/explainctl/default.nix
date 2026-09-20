@@ -20,9 +20,9 @@ stdenvNoCC.mkDerivation {
     runHook postCheck
   '';
 
-  # The wrapper only prefixes PATH: `claude`/`claude-gpt56`, `kitty`, and
-  # `nvim` must come from the user environment, because the launchers are
-  # Home Manager wrappers that own their gateway/proxy/theme setup.
+  # The wrapper only prefixes PATH: `claude`, `kitty`, and `nvim` must come
+  # from the user environment, because the launcher is a Home Manager wrapper
+  # that owns its proxy and theme setup.
   installPhase = ''
     runHook preInstall
     install -Dm755 explainctl.py $out/libexec/explainctl/explainctl.py

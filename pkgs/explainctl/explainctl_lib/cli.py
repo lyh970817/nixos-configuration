@@ -809,7 +809,7 @@ def cmd_doctor(_args) -> int:
     except OSError as error:
         check("data-dir", False, f"{store}: {error}")
 
-    for launcher, required in (("claude", True), ("claude-gpt56", False)):
+    for launcher, required in (("claude", True),):
         found = shutil.which(launcher)
         check(
             f"launcher-{launcher}",

@@ -70,9 +70,9 @@ let
   };
 in
 {
-  # Pi uses its native `openai-codex` provider, independently of the
-  # CLIProxyAPI gateway and OPENAI_API_KEY. Context compaction is offloaded to
-  # the OpenAI server by the openai-server-compaction extension.
+  # Pi uses its native `openai-codex` provider, independently of
+  # OPENAI_API_KEY. Context compaction is offloaded to the OpenAI server by the
+  # openai-server-compaction extension.
   #
   # One imperative bootstrap step remains: run `pi` once and use `/login` to
   # authorize the OAuth session. Pi keeps its own ~/.pi/agent/auth.json and

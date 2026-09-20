@@ -40,7 +40,6 @@ config_dir = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser(
 )
 launcher = {
     "claude": "claude",
-    "claude-gpt56": "claude-gpt56",
 }.get(os.path.basename(os.path.normpath(config_dir)))
 
 by_pane = os.path.join(runtime_dir, "explain-session", "by-pane")
