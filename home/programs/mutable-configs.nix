@@ -1150,6 +1150,10 @@ in
             # Same guard as hooks: only profiles whose template declares the
             # key get it, so the others are not handed a null.
             (if ($template.worktree | type) == "object" then .worktree = $template.worktree else . end) |
+            # Model-visibility map for skills: which ones the model may load
+            # unasked versus only on a user /invocation. Plugin skills are
+            # unaffected by it; those are governed by enabledPlugins below.
+            (if ($template.skillOverrides | type) == "object" then .skillOverrides = $template.skillOverrides else . end) |
             .extraKnownMarketplaces =
               (
                 if (.extraKnownMarketplaces | type) == "object"

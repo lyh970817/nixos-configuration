@@ -12,6 +12,32 @@
     "command": "~/.config/claude/statusline.sh"
   },
   "skipDangerousModePermissionPrompt": true,
+  "skillOverrides": {
+    "bro": "user-invocable-only",
+    "claude-api": "user-invocable-only",
+    "code-review": "user-invocable-only",
+    "dataviz": "user-invocable-only",
+    "design": "user-invocable-only",
+    "domain-context": "user-invocable-only",
+    "domain-modeling": "user-invocable-only",
+    "explain-session": "user-invocable-only",
+    "explain-session-sync": "user-invocable-only",
+    "fewer-permission-prompts": "off",
+    "herdr": "user-invocable-only",
+    "init": "user-invocable-only",
+    "kcl-create-hpc": "user-invocable-only",
+    "keybindings-help": "user-invocable-only",
+    "r-dev-shell": "user-invocable-only",
+    "run": "user-invocable-only",
+    "schedule": "user-invocable-only",
+    "security-review": "user-invocable-only",
+    "session-handoff": "user-invocable-only",
+    "show-me": "user-invocable-only",
+    "simplify": "user-invocable-only",
+    "social-bookmarks": "user-invocable-only",
+    "tuicr": "user-invocable-only",
+    "visual-verification": "user-invocable-only"
+  },
   "worktree": {
     "baseRef": "head"
   },
