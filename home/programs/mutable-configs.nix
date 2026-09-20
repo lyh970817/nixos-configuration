@@ -1154,6 +1154,12 @@ in
             # unasked versus only on a user /invocation. Plugin skills are
             # unaffected by it; those are governed by enabledPlugins below.
             (if ($template.skillOverrides | type) == "object" then .skillOverrides = $template.skillOverrides else . end) |
+            # Built-in plugin options (the AGENTS.md instruction-file mode).
+            # Merged rather than assigned: Claude writes the options of other plugins
+            # into the same object from /config.
+            (if ($template.pluginConfigs | type) == "object"
+             then .pluginConfigs = ((if (.pluginConfigs | type) == "object" then .pluginConfigs else {} end) * $template.pluginConfigs)
+             else . end) |
             # claude-plugins-official is auto-registered by Claude itself, but
             # mirroring it here is a no-op: the startup reconciler compares the
             # declared source with known_marketplaces.json and they match.
