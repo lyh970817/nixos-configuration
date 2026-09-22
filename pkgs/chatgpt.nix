@@ -42,9 +42,13 @@
 }:
 
 let
+  globalDisabledSkills = writeText "codex-global-disabled-skills.json" (
+    builtins.readFile ../dotfiles/codex/global-disabled-skills.json
+  );
   configureDesktop = writeShellScriptBin "configure-chatgpt-desktop" ''
     exec ${python3.withPackages (ps: [ ps.tomlkit ])}/bin/python ${./chatgpt-config.py} \
-      --resources ${chatgpt-unwrapped}/lib/chatgpt/resources "$@"
+      --resources ${chatgpt-unwrapped}/lib/chatgpt/resources \
+      --disabled-skills ${globalDisabledSkills} "$@"
   '';
   orchestratorConfig = writeText "chatgpt-orchestrator-config.toml" (
     builtins.readFile ../dotfiles/codex/profiles/orchestrator.config.toml

@@ -18,7 +18,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument("profile", type=Path)
 parser.add_argument("canonical", type=Path, nargs="?")
 parser.add_argument("--resources", type=Path, required=True)
+parser.add_argument("--disabled-skills", type=Path, required=True)
 args = parser.parse_args()
+disabled_skills = json.loads(args.disabled_skills.read_text())
 
 profile = args.profile
 profile.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -32,6 +34,25 @@ if args.canonical is not None:
     ):
         config[key] = canonical[key]
     config.setdefault("features", {})["multi_agent_v2"] = canonical["features"]["multi_agent_v2"]
+
+config.setdefault("plugins", {}).setdefault("figma@openai-curated-remote", {})["enabled"] = False
+skills = config.setdefault("skills", {})
+skill_config = skills.get("config")
+if skill_config is None:
+    skill_config = tomlkit.aot()
+    skills["config"] = skill_config
+disabled_entries = {
+    entry.get("name"): entry
+    for entry in skill_config
+    if entry.get("name") in disabled_skills
+}
+for name in disabled_skills:
+    entry = disabled_entries.get(name)
+    if entry is None:
+        entry = tomlkit.table()
+        entry["name"] = name
+        skill_config.append(entry)
+    entry["enabled"] = False
 
 # Old local marketplace snapshots survive application upgrades. Match the
 # browser client to the service shipped by the running application, without

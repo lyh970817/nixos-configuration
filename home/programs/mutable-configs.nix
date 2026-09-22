@@ -445,6 +445,9 @@ let
       };
     }) codexSkillNames)
   );
+  codexGlobalDisabledSkills = builtins.fromJSON (
+    builtins.readFile ../../dotfiles/codex/global-disabled-skills.json
+  );
   codexReconcile = pkgs.writeText "codex-reconcile.py" ''
     import argparse
     import json
@@ -458,7 +461,10 @@ let
     ASSIGNMENT = re.compile(
         r"^\s*(?:[A-Za-z0-9_-]+|\"(?:[^\"\\]|\\.)*\"|'[^']*')\s*="
     )
-    DISABLED_PLUGINS = [
+    GLOBAL_DISABLED_PLUGINS = [
+        "figma@openai-curated-remote",
+    ]
+    DISABLED_PLUGINS = GLOBAL_DISABLED_PLUGINS + [
         "browser@openai-bundled",
         "chrome@openai-bundled",
         "computer-use@openai-bundled",
@@ -501,6 +507,7 @@ let
         "openai-templates:artifact-template-team-alignment",
         "openai-templates:artifact-template-three-statement-forecast",
     ]
+    GLOBAL_DISABLED_SKILLS = ${builtins.toJSON codexGlobalDisabledSkills}
     DISABLED_SKILLS = [
         "build-iso",
         "kcl-fetch",
@@ -518,7 +525,7 @@ let
         "google-drive:google-docs",
         "google-drive:google-sheets",
         "google-drive:google-slides",
-    ] + OPENAI_TEMPLATE_SKILLS
+    ] + OPENAI_TEMPLATE_SKILLS + GLOBAL_DISABLED_SKILLS
     # These are explicit enables, rather than relying on Codex's default, so
     # an older mutable config cannot keep a required bundled skill hidden.
     ENABLED_SKILLS = [
@@ -943,10 +950,20 @@ let
         for plugin, settings in policy.get("plugins", {}).items():
             for key, setting in settings.items():
                 changed = table_key(lines, 'plugins."%s"' % plugin, key, value(setting)) or changed
+        for plugin in GLOBAL_DISABLED_PLUGINS:
+            changed = table_key(
+                lines, 'plugins."%s"' % plugin, "enabled", "false"
+            ) or changed
         for server, settings in policy.get("mcp_servers", {}).items():
             for key, setting in settings.items():
                 changed = table_key(lines, "mcp_servers.%s" % server, key, value(setting)) or changed
-        desired = policy.get("skills", {}).get("config", [])
+        desired = list(policy.get("skills", {}).get("config", []))
+        desired_names = {entry.get("name") for entry in desired}
+        desired.extend(
+            {"name": skill, "enabled": False}
+            for skill in GLOBAL_DISABLED_SKILLS
+            if skill not in desired_names
+        )
         desired_names = {entry.get("name") for entry in desired}
         obsolete_names = OBSOLETE_PROFILE_SKILLS.get(profile_name, set())
         existing = set()
