@@ -121,33 +121,55 @@ let
         exit 0
       fi
 
-      device_rows=$(printf '%s\n' "$status_json" | jq -r '
+      devices=$(printf '%s\n' "$status_json" | jq -ce '
         (.Self | . + {_self: true}) as $self |
         ([.Peer // {} | to_entries[] | .value + {_self: false}]) as $peers |
-        ([$self] + $peers)[] |
-        [
-          (.Online // false),
-          (.DNSName | rtrimstr(".") | split(".")[0]),
-          (._self // false),
-          (.Active // false),
-          (.LastSeen // "")
-        ] | @tsv
+        ([$self] + $peers)
+        | map(
+            select(.HostName != "funnel-ingress-node")
+            | (.DNSName // "") as $dns_name
+            | {
+                online: (.Online // false),
+                name: (
+                  if $dns_name != ""
+                  then ($dns_name | rtrimstr(".") | split(".")[0])
+                  else .HostName
+                  end
+                ),
+                self: (._self // false),
+                active: (.Active // false),
+                lastSeen: (.LastSeen // "")
+              }
+          )
       ' 2>/dev/null || true)
-      if [[ -z "$device_rows" ]]; then
+      if [[ -z "$devices" ]]; then
         printf 'unavailable\n'
         exit 0
       fi
 
+      # Keep device records structured until the fields are extracted. Each
+      # scalar gets its own line so an empty value (notably LastSeen) remains a
+      # real array element instead of collapsing and shifting adjacent fields.
+      mapfile -t device_fields < <(jq -r '
+        .[] | .online, .name, .self, .active, .lastSeen
+      ' <<< "$devices")
+
       printf '\n'
       indent='                     '
       name_width=0
-      while IFS=$'\t' read -r _online name _self _active _last_seen; do
+      for ((i = 0; i < ''${#device_fields[@]}; i += 5)); do
+        name="''${device_fields[i + 1]}"
         if (( ''${#name} > name_width )); then
           name_width=''${#name}
         fi
-      done <<< "$device_rows"
+      done
 
-      while IFS=$'\t' read -r online_state name is_self active last_seen; do
+      for ((i = 0; i < ''${#device_fields[@]}; i += 5)); do
+        online_state="''${device_fields[i]}"
+        name="''${device_fields[i + 1]}"
+        is_self="''${device_fields[i + 2]}"
+        active="''${device_fields[i + 3]}"
+        last_seen="''${device_fields[i + 4]}"
         symbol='○'
         detail='offline'
         if [[ "$online_state" == true ]]; then
@@ -167,7 +189,7 @@ let
           fi
         fi
         printf "%s%s %-''${name_width}s %s\n" "$indent" "$symbol" "$name" "$detail"
-      done <<< "$device_rows"
+      done
     '';
   };
   fastfetchBluetooth = pkgs.writeShellApplication {
