@@ -873,6 +873,15 @@ let
         fi
       }
 
+      active_history() {
+        local last_success="$1" started="$2"
+        if [[ -n "$last_success" ]]; then
+          last_detail "$last_success"
+        else
+          elapsed "$started"
+        fi
+      }
+
       finished_time() {
         local last_success="$1"
         if [[ -z "$last_success" ]]; then
@@ -909,19 +918,23 @@ let
               elif [[ "$service" == restic ]]; then
                 detail="preparing · $(elapsed "$started") · $(last_detail "$last_success")"
               elif [[ "$progress" =~ ^[0-9]+$ && "$total" =~ ^[1-9][0-9]*$ ]]; then
-                detail="$(progress_amounts "$progress" "$total" "$units") · $(last_detail "$last_success")"
+                detail="$(progress_amounts "$progress" "$total" "$units") · $(active_history "$last_success" "$started")"
               else
-                detail="running · $(elapsed "$started") · $(last_detail "$last_success")"
+                detail="running · $(active_history "$last_success" "$started")"
               fi
               ;;
             scanning)
               symbol='○'
-              detail="scanning · $(elapsed "$started") · $(last_detail "$last_success")"
+              detail="scanning · $(active_history "$last_success" "$started")"
               ;;
             finished)
               symbol='●'
               finished=$(finished_time "$last_success")
-              detail="$success_verb''${finished:+ · $finished}"
+              if [[ "$service" == restic ]]; then
+                detail="''${finished:+· $finished}"
+              else
+                detail="$success_verb''${finished:+ · $finished}"
+              fi
               ;;
             failed)
               symbol='×'
