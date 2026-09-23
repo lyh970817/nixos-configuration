@@ -29,7 +29,6 @@ let
       ${pkgs.jq}/bin/jq -r --arg key "$1" '.[$key] // empty' "$claude_environment"
     }
     export ALL_PROXY="''${ALL_PROXY:-$(claude_env_value ALL_PROXY)}"
-    export DISABLE_ERROR_REPORTING="''${DISABLE_ERROR_REPORTING:-$(claude_env_value DISABLE_ERROR_REPORTING)}"
     export HTTPS_PROXY="''${HTTPS_PROXY:-$(claude_env_value HTTPS_PROXY)}"
     export HTTP_PROXY="''${HTTP_PROXY:-$(claude_env_value HTTP_PROXY)}"
     export MCP_TIMEOUT="''${MCP_TIMEOUT:-$(claude_env_value MCP_TIMEOUT)}"
