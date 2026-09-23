@@ -55,11 +55,11 @@ let
   );
   chatgpt-unwrapped = stdenvNoCC.mkDerivation (finalAttrs: {
     pname = "chatgpt";
-    version = "26.915.31029";
+    version = "26.917.62051";
 
     src = fetchurl {
       url = "https://persistent.oaistatic.com/codex-app-prod/linux/deb/latest/chatgpt_amd64.deb";
-      hash = "sha256-kyglt2pB6AZDIEqaqcz9HLJHH/v8vh0xSZQ2D8qv+zU=";
+      hash = "sha256-dVNuPxl8bbiIGmNPi7mwUVGEqO/3zsm+X0CND0rm5pY=";
     };
 
     nativeBuildInputs = [
