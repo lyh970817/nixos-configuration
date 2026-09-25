@@ -1637,8 +1637,9 @@ in
     # --system-prompt-file.
     "claude/response-simplifier.md".source = link "dotfiles/claude/response-simplifier.md";
     "claude/skills/session-handoff".source = link "dotfiles/claude/skills/session-handoff";
-    "claude/skills/explain-session".source = link "dotfiles/claude/skills/explain-session";
-    "claude/skills/explain-session-sync".source = link "dotfiles/claude/skills/explain-session-sync";
+    # Explain-session skills disabled for now; restore both links to re-enable.
+    # "claude/skills/explain-session".source = link "dotfiles/claude/skills/explain-session";
+    # "claude/skills/explain-session-sync".source = link "dotfiles/claude/skills/explain-session-sync";
     # Prompt templates read by explainctl (pkgs/explainctl) at fork/resume
     # time; linked per launcher-backed profile so the recorded launcher finds
     # its own copy.
