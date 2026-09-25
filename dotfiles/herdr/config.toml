@@ -38,7 +38,6 @@ swap_pane_down = ["prefix+shift+j", "alt+shift+j"]
 swap_pane_up = ["prefix+shift+k", "alt+shift+k"]
 swap_pane_right = ["prefix+shift+l", "alt+shift+l"]
 split_vertical = "alt+enter"
-split_horizontal = "shift+f10"
 close_pane = "alt+q"
 # Ctrl+W closes the complete tab (and all of its panes); Alt+Q remains the
 # pane-only close action. Keep Herdr's native prefix binding as well.
@@ -70,90 +69,6 @@ key = "ctrl+shift+1"
 type = "shell"
 command = "$HOME/.nixos-config/scripts/herdr-scratch-note down"
 description = "open a scratch note below"
-
-# Start each orchestrator in the invoking pane's cwd. Plain function keys open
-# the interactive resume picker; Shift starts a fresh session. A vertical split
-# places the new pane to the right; a horizontal split places it below.
-[[keys.command]]
-key = "f1"
-type = "shell"
-command = "$HOME/.nixos-config/scripts/herdr-agent-launch claude tab resume"
-description = "resume a Claude orchestrator in a new tab"
-
-[[keys.command]]
-key = "shift+f1"
-type = "shell"
-command = "$HOME/.nixos-config/scripts/herdr-agent-launch claude tab new"
-description = "start a Claude orchestrator in a new tab"
-
-[[keys.command]]
-key = "f2"
-type = "shell"
-command = "$HOME/.nixos-config/scripts/herdr-agent-launch codex tab resume"
-description = "resume a Codex orchestrator in a new tab"
-
-[[keys.command]]
-key = "shift+f2"
-type = "shell"
-command = "$HOME/.nixos-config/scripts/herdr-agent-launch codex tab new"
-description = "start a Codex orchestrator in a new tab"
-
-[[keys.command]]
-key = "f3"
-type = "shell"
-command = "$HOME/.nixos-config/scripts/herdr-agent-launch claude right resume"
-description = "resume a Claude orchestrator in a vertical split"
-
-[[keys.command]]
-key = "shift+f3"
-type = "shell"
-command = "$HOME/.nixos-config/scripts/herdr-agent-launch claude right new"
-description = "start a Claude orchestrator in a vertical split"
-
-[[keys.command]]
-key = "f4"
-type = "shell"
-command = "$HOME/.nixos-config/scripts/herdr-agent-launch codex right resume"
-description = "resume a Codex orchestrator in a vertical split"
-
-[[keys.command]]
-key = "shift+f4"
-type = "shell"
-command = "$HOME/.nixos-config/scripts/herdr-agent-launch codex right new"
-description = "start a Codex orchestrator in a vertical split"
-
-[[keys.command]]
-key = "f5"
-type = "shell"
-command = "$HOME/.nixos-config/scripts/herdr-agent-launch claude down resume"
-description = "resume a Claude orchestrator in a horizontal split"
-
-[[keys.command]]
-key = "shift+f5"
-type = "shell"
-command = "$HOME/.nixos-config/scripts/herdr-agent-launch claude down new"
-description = "start a Claude orchestrator in a horizontal split"
-
-[[keys.command]]
-key = "f6"
-type = "shell"
-command = "$HOME/.nixos-config/scripts/herdr-agent-launch codex down resume"
-description = "resume a Codex orchestrator in a horizontal split"
-
-[[keys.command]]
-key = "shift+f6"
-type = "shell"
-command = "$HOME/.nixos-config/scripts/herdr-agent-launch codex down new"
-description = "start a Codex orchestrator in a horizontal split"
-
-# Out-of-band explanation fork: no prompt is sent to the agent and its
-# transcript is untouched. f7 is the next free function key after the f1-f6
-# launcher block.
-[[keys.command]]
-key = "f7"
-type = "shell"
-command = "$HOME/.nixos-config/scripts/herdr-explain-current"
-description = "fork the focused Claude session into an explanation workspace"
 
 [theme]
 name = "terminal"
@@ -205,7 +120,7 @@ delivery = "system"
 # Kitty graphics passthrough for panes. Off by default in herdr 0.8.0; without
 # it the pane emulator (libghostty-vt) silently drops every `ESC _G` APC, so
 # nvim math images (Snacks.image inline math, render-latex display math) in the
-# F7 explanation workspace leave blank regions. With the flag on, herdr decodes
+# explanation workspace leave blank regions. With the flag on, herdr decodes
 # pane graphics server-side and re-emits them to the attached client as
 # in-band direct transmissions (a=t,t=d base64 + a=p placements,
 # src/kitty_graphics.rs), so images survive the laptop's SSH hop — no file

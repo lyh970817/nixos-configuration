@@ -9,10 +9,10 @@ allowed-tools:
 
 # Explain session
 
-Fallback entry point: the preferred trigger is the Herdr `f7` binding
-(`scripts/herdr-explain-current`), which forks the focused Claude session with
-zero footprint in its transcript. Use this skill only outside Herdr, or when
-the external launcher cannot resolve the session.
+Fallback entry point: the preferred trigger is `scripts/herdr-explain-current`
+run from a Herdr pane, which forks the focused Claude session with zero
+footprint in its transcript. Use this skill only outside Herdr, or when the
+external launcher cannot resolve the session.
 
 Call:
 
