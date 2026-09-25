@@ -173,6 +173,17 @@ let
           ;;
       esac
 
+      if [ -n "''${HERDR_ENV:-}" ]; then
+        # Herdr advertises COLORTERM=truecolor, which makes Codex paint its
+        # accent, links and warning count in fixed RGB (ChatGPT blue, amber).
+        # At the 16-colour level those fall back to ANSI slots and follow the
+        # palette; the syntax theme still applies. Keep the override out of
+        # the commands Codex runs so their captured output stays uncoloured.
+        export FORCE_COLOR=1
+        exec ${pkgs.codex}/bin/codex -c "tui.theme=\"$theme\"" \
+          -c 'shell_environment_policy.filters.FORCE_COLOR="exclude"' "$@"
+      fi
+
       exec ${pkgs.codex}/bin/codex -c "tui.theme=\"$theme\"" "$@"
       WRAPPER
       chmod +x "$out/bin/codex"
