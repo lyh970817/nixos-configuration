@@ -54,23 +54,6 @@ let
     '';
   };
 
-  # Herdr restores every pane into the directory it was last in, which is not
-  # wanted here: after a reboot panes should come up in $HOME. Upstream 0.8.0
-  # has no knob for it — `restore()` (src/persist/restore.rs) threads no cwd
-  # policy at all, and `[terminal] new_cwd` governs only *newly created* panes
-  # (and must stay `follow`, because herdr-agent-launch and herdr-scratch-note
-  # rely on inheriting the calling pane's cwd). The restore source is the
-  # session snapshot on disk, so the snapshot is the only place to intervene:
-  # the script rewrites just the cwd fields and leaves the workspace/tab/pane
-  # layout, custom tab names and agent session refs alone.
-  herdrResetCwd = pkgs.writeShellApplication {
-    name = "herdr-reset-cwd";
-    runtimeInputs = [ pkgs.python3 ];
-    text = ''
-      exec python3 ${../../scripts/herdr-reset-cwd.py} "$@"
-    '';
-  };
-
   # Generate the Claude hook through Herdr's own installer so its payload stays
   # aligned with the pinned Herdr package. The matching SessionStart entry is
   # reconciled only into the standard Claude profile in mutable-configs.nix.
@@ -179,7 +162,6 @@ in
     herdrWrapped
     remoteHerdrClient
     herdrTitle
-    herdrResetCwd
   ];
 
   # herdr rewrites its own config.toml at runtime: `mark_onboarding_complete`
@@ -203,58 +185,6 @@ in
   xdg.configFile."claude/hooks/herdr-agent-state.sh" = {
     source = herdrClaudeSessionHook;
     executable = true;
-  };
-
-  # Runs once per boot, before the first terminal exists and therefore before
-  # the Herdr server starts and reads the snapshot. Once per boot is the whole
-  # requirement, but `WantedBy` alone does not give it: sd-switch restarts this
-  # unit whenever its own definition changes, which would reset a live session's
-  # directories mid-activation. The stamp under `%t` is the gate. `%t` is
-  # /run/user/$UID, a tmpfs, so a reboot empties it and nothing has to expire or
-  # clean up the stamp; every later start this boot fails the condition and is
-  # skipped. `ExecStartPost` stamps only on success, so a failed run retries.
-  #
-  # The script's live-socket probe is now belt-and-braces on this path, but it
-  # is still the only guard for a manual `herdr-reset-cwd`, where refusing to
-  # rewrite a session that is actually running matters. Named sessions under
-  # `sessions/` get the same treatment, since `remote-herdr-client` restores
-  # panes exactly the same way.
-  systemd.user.services.herdr-reset-cwd = {
-    Unit = {
-      Description = "Reset Herdr's saved pane directories to the home directory";
-      Before = [ "default.target" ];
-      ConditionPathExists = "!%t/herdr-reset-cwd.done";
-    };
-
-    Service = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      ExecStart = "${herdrResetCwd}/bin/herdr-reset-cwd";
-      ExecStartPost = "${pkgs.coreutils}/bin/touch %t/herdr-reset-cwd.done";
-      UMask = "0077";
-      NoNewPrivileges = true;
-      PrivateTmp = true;
-      PrivateDevices = true;
-      ProtectSystem = "strict";
-      # The snapshot rewrite is temp-file-plus-rename, so the directory itself
-      # has to be writable. `-` tolerates a host that has never run Herdr. `%t`
-      # is here because ProtectSystem=strict would otherwise leave the runtime
-      # directory read-only and the stamp could never be written.
-      ReadWritePaths = [
-        "-%h/.config/herdr"
-        "%t"
-      ];
-      ProtectKernelTunables = true;
-      ProtectKernelModules = true;
-      ProtectControlGroups = true;
-      RestrictSUIDSGID = true;
-      LockPersonality = true;
-      MemoryDenyWriteExecute = true;
-      # AF_UNIX only: the sole socket use is probing Herdr's API socket.
-      RestrictAddressFamilies = [ "AF_UNIX" ];
-    };
-
-    Install.WantedBy = [ "default.target" ];
   };
 
   systemd.user.services.herdr-title = {
