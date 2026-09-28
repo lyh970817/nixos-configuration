@@ -119,6 +119,9 @@ in
   # added to allowedTCPPorts; "tailscale0" being a trusted interface below is
   # what lets it through, so nothing is reachable on the physical NIC.
   services.tailscale.extraUpFlags = [ "--ssh" ];
+  # The home router forwards UDP 41641 to linglong so a laptop behind a hard
+  # NAT still gets a direct path instead of an overseas DERP relay.
+  services.tailscale.openFirewall = config.portable.role == "home";
   # Tailscale DNS stays disabled so mihomo keeps ownership of resolv.conf (its
   # domain rules need to see queries). Enforced on every start: left on, it
   # installs 100.100.100.100 with no upstream and SERVFAILs every public name.
