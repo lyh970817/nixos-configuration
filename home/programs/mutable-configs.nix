@@ -44,6 +44,18 @@ let
   claudeHerdrSessionCommand = "bash '${
     lib.replaceStrings [ "'" ] [ "'\\''" ] claudeHerdrSessionHook
   }' session";
+  # Records the launch profile (CLAUDE_LAUNCH_PROFILE, set by the claude
+  # launcher in claude.nix) against each session id, so a bare
+  # `claude --resume <id>` from a Herdr restore gets the profile's flags back.
+  # Silent, and a no-op for sessions launched without a profile.
+  claudeProfileRecordCommand = "${pkgs.writeShellScript "claude-profile-record" ''
+    [ -n "''${CLAUDE_LAUNCH_PROFILE:-}" ] || exit 0
+    id="$(${pkgs.jq}/bin/jq -r '.session_id // empty')"
+    [[ "$id" =~ ^[0-9a-f-]{36}$ ]] || exit 0
+    dir="$HOME/.local/state/claude-profiles"
+    mkdir -p "$dir"
+    printf '%s\n' "$CLAUDE_LAUNCH_PROFILE" > "$dir/$id"
+  ''}";
   # Silent per-pane session registration for scripts/herdr-explain-current;
   # linked into each launcher-backed profile's hooks/ below, so the command
   # path is per profile.
@@ -1082,6 +1094,7 @@ in
     claude_marketplaces=${lib.escapeShellArg "${claudeMarketplaces}"}
     claude_herdr_session_command=${lib.escapeShellArg claudeHerdrSessionCommand}
     claude_explain_register_standard=${lib.escapeShellArg (claudeExplainRegisterCommand ".config/claude")}
+    claude_profile_record_command=${lib.escapeShellArg claudeProfileRecordCommand}
 
     # Which ANSI-only theme matches this machine's current mode. Derived from
     # the hypr current-theme symlink, the same source the claude-theme helper
@@ -1106,6 +1119,7 @@ in
         --arg claude_theme "$claude_theme" \
         --arg claude_herdr_session_command "$claude_herdr_session_command" \
         --arg claude_explain_register_standard "$claude_explain_register_standard" \
+        --arg claude_profile_record_command "$claude_profile_record_command" \
         '
           ($template[0]) as $template |
           ($environment[0]) as $environment |
@@ -1140,6 +1154,10 @@ in
                 }, {
                   type: "command",
                   command: $claude_explain_register_standard,
+                  timeout: 10
+                }, {
+                  type: "command",
+                  command: $claude_profile_record_command,
                   timeout: 10
                 }]
               }]
@@ -1196,8 +1214,10 @@ in
         { [ "$profile_name" != "standard" ] ||
           "$claude_jq" -e --arg expected "$claude_herdr_session_command" \
             --arg register "$claude_explain_register_standard" \
+            --arg profile_record "$claude_profile_record_command" \
             '.hooks.SessionStart[0].hooks[0].command == $expected
-             and .hooks.SessionStart[0].hooks[1].command == $register' \
+             and .hooks.SessionStart[0].hooks[1].command == $register
+             and .hooks.SessionStart[0].hooks[2].command == $profile_record' \
             "$output" >/dev/null; }
     }
 

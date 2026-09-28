@@ -133,6 +133,18 @@ let
     '';
   };
 
+  # Launch profiles: the shell aliases (cly, clo, clfo) set CLAUDE_PROFILE and
+  # this launcher expands it into flags. Herdr resumes a restored pane with a
+  # bare `claude --resume <id>` (hardcoded in its src/agent_resume.rs), which
+  # would drop those flags. So the launcher hands the chosen profile to the
+  # session as CLAUDE_LAUNCH_PROFILE, the SessionStart hook in
+  # mutable-configs.nix records it per session id (again after /clear or a
+  # resume, which mint a new id), and a bare `--resume <id>` here reads it back.
+  # CLAUDE_LAUNCH_PROFILE is always set or cleared by this launcher, so a
+  # nested claude started from inside a profiled session is neither profiled
+  # nor recorded under the parent's profile.
+  claudeProfileStateDir = "$HOME/.local/state/claude-profiles";
+
   claudeHostLauncher = pkgs.writeShellApplication {
     name = "claude";
     text = ''
@@ -140,8 +152,41 @@ let
 
       ${claudeHostEnvironment}
 
+      claude_profile="''${CLAUDE_PROFILE:-}"
+      unset CLAUDE_PROFILE
+      if [ -z "$claude_profile" ] && [ "$#" -eq 2 ] && [ "$1" = "--resume" ] \
+        && [[ "$2" =~ ^[0-9a-f-]{36}$ ]]; then
+        claude_profile_file="${claudeProfileStateDir}/$2"
+        if [ -f "$claude_profile_file" ]; then
+          claude_profile="$(<"$claude_profile_file")"
+        fi
+      fi
+      claude_profile_args=()
+      case "$claude_profile" in
+        "") ;;
+        cly) claude_profile_args=(--dangerously-skip-permissions) ;;
+        clo)
+          claude_profile_args=(--dangerously-skip-permissions --model opus
+            --append-system-prompt-file "$HOME/.config/claude/orchestrator-opus.md")
+          ;;
+        clfo)
+          claude_profile_args=(--dangerously-skip-permissions --model claude-fable-5-1
+            --append-system-prompt-file "$HOME/.config/claude/orchestrator-fable.md")
+          ;;
+        *)
+          echo "claude: unknown CLAUDE_PROFILE: $claude_profile" >&2
+          exit 64
+          ;;
+      esac
+      if [ -n "$claude_profile" ]; then
+        export CLAUDE_LAUNCH_PROFILE="$claude_profile"
+      else
+        unset CLAUDE_LAUNCH_PROFILE
+      fi
+
       ${claudeThemeSettings}
-      exec ${pkgs.claude-code}/bin/claude --settings "$claude_flag_settings" "$@"
+      exec ${pkgs.claude-code}/bin/claude --settings "$claude_flag_settings" \
+        "''${claude_profile_args[@]}" "$@"
     '';
   };
 

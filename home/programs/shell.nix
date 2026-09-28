@@ -280,11 +280,13 @@ in
       # --dangerously-skip-permissions, not --permission-mode bypassPermissions:
       # the latter silently downgrades to the default mode until the bypass
       # disclaimer has been accepted interactively at least once.
-      alias clo='claude --dangerously-skip-permissions --model opus --append-system-prompt-file "$HOME/.config/claude/orchestrator-opus.md"'
-      alias clfo='claude --dangerously-skip-permissions --model claude-fable-5-1 --append-system-prompt-file "$HOME/.config/claude/orchestrator-fable.md"'
+      # The flags live in the claude launcher (home/programs/claude.nix), which
+      # records the profile per session so a Herdr restore resumes with them.
+      alias clo='CLAUDE_PROFILE=clo claude'
+      alias clfo='CLAUDE_PROFILE=clfo claude'
 
       # Claude Code profile launchers bypassing all permission checks.
-      alias cly='claude --dangerously-skip-permissions'
+      alias cly='CLAUDE_PROFILE=cly claude'
       alias clty='claude-matt --dangerously-skip-permissions'
 
       # Git push shortcuts.
