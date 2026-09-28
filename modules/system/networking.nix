@@ -119,12 +119,18 @@ in
   # added to allowedTCPPorts; "tailscale0" being a trusted interface below is
   # what lets it through, so nothing is reachable on the physical NIC.
   services.tailscale.extraUpFlags = [ "--ssh" ];
-  # Tailscale DNS is left disabled so mihomo keeps ownership of resolv.conf
-  # (its domain rules need to see queries). That costs the search domain
-  # --accept-dns would normally install, so set it explicitly: bare peer names
-  # then expand to MagicDNS FQDNs, which mihomo resolves via tailscaled's
-  # resolver. Without this, bare names only work from static hosts entries.
-  networking.search = [ "tail9abb26.ts.net" ];
+  # Tailscale DNS stays disabled so mihomo keeps ownership of resolv.conf (its
+  # domain rules need to see queries). Enforced on every start: left on, it
+  # installs 100.100.100.100 with no upstream and SERVFAILs every public name.
+  services.tailscale.extraSetFlags = [ "--accept-dns=false" ];
+  # That costs the search domain --accept-dns would normally install, so
+  # prepend it: bare peer names then expand to MagicDNS FQDNs, which mihomo
+  # resolves via tailscaled's resolver. It must precede any DHCP-supplied
+  # domain, because mihomo's fake-ip answers every name and the first search
+  # domain always wins (a router's `ys7.com` turned `home` into `home.ys7.com`).
+  networking.resolvconf.extraConfig = ''
+    search_domains='tail9abb26.ts.net'
+  '';
   networking.networkmanager.settings = {
     connectivity = {
       enabled = true;
