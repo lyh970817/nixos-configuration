@@ -20,6 +20,9 @@
     jq
     tealdeer
     yazi
+    # Yazi's image-preview fallback (Unicode blocks) when no graphics protocol
+    # reaches the terminal, as in the laptop's mosh session to home.
+    chafa
     duf
     ncdu
     lazygit
