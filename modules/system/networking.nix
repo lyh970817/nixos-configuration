@@ -260,6 +260,18 @@ in
   # restart freely instead.
   systemd.services.nscd.unitConfig.StartLimitIntervalSec = 0;
 
+  # The home host keeps wired and Wi-Fi both up on the same LAN. With the kernel
+  # defaults either card answers ARP for the other's address, so the router can
+  # learn the wired IP against the Wi-Fi MAC. Unbound sockets survive that, but
+  # mihomo binds its outbound sockets to the wired device (auto-detect-interface)
+  # and then never sees its replies: every dial sits in SYN-SENT and the whole
+  # TUN goes dark while the tailnet (IPv6, unbound) keeps working. Answer only for
+  # addresses on the receiving interface and announce only that interface's own.
+  boot.kernel.sysctl = {
+    "net.ipv4.conf.all.arp_ignore" = 1;
+    "net.ipv4.conf.all.arp_announce" = 2;
+  };
+
   # Firewall configuration
   networking.firewall.allowedTCPPorts = [
     9090
