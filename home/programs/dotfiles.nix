@@ -37,14 +37,11 @@ let
   # Runs inside the already-themed Kitty window on the laptop. It retries the
   # connection to home, handing the exact laptop viewer mode to the remote
   # session. If home is unavailable, the same terminal remains useful as a
-  # local shell without changing its captured laptop theme. mosh rather than
-  # SSH: its local echo hides the relayed round trip on every keystroke, and
-  # it survives network changes. Herdr cannot show Yazi image previews over
-  # mosh; that is accepted.
+  # local shell without changing its captured laptop theme.
   homeTerminalConnect = pkgs.writeShellApplication {
     name = "home-terminal-connect";
     runtimeInputs = [
-      pkgs.mosh
+      pkgs.openssh
       pkgs.coreutils
     ];
     text = ''
@@ -63,13 +60,7 @@ let
       fi
 
       for _ in 1 2 3; do
-        # Adaptive prediction disables local echo on fast links; force it on.
-        # mosh-server never times out by default and nothing else reaps it,
-        # so this bounds orphans from SIGKILL-class client deaths. 24h is long
-        # enough that a suspended laptop reconnects fine.
-        if mosh --server 'MOSH_SERVER_NETWORK_TMOUT=86400 mosh-server' \
-          --predict=always --predict-overwrite \
-          "$PEER" -- theme-hold "$THEME_MODE" remote-terminal-session; then
+        if ssh -t "$PEER" "theme-hold $THEME_MODE remote-terminal-session"; then
           exit 0
         fi
         sleep 2
@@ -81,7 +72,7 @@ let
   };
 
   # Laptop Super+Enter resolves the laptop monitor before Kitty starts, then
-  # the child above transports that immutable mode through mosh to home.
+  # the child above transports that immutable mode through SSH to home.
   homeTerminal = pkgs.writeShellApplication {
     name = "home-terminal";
     text = ''
@@ -102,7 +93,7 @@ let
     '';
   };
 
-  # Attaches (or creates) the local 'remote' Herdr session — the one mosh
+  # Attaches (or creates) the local 'remote' Herdr session — the one SSH
   # sessions from the laptop land in — from a terminal launched right here on
   # home. Non-modal: Super+Enter keeps meaning "my local session"; this is a
   # separate, deliberate action for the rare occasion of walking over to the
