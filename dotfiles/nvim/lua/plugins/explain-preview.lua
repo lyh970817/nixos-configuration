@@ -231,10 +231,9 @@ package.loaded["explain-preview"] = M
 return {
   {
     "brianhuster/live-preview.nvim",
-    -- Vendored: nixpkgs pin plus the uv.run() removal, applied as a Nix
-    -- patch -- see home/programs/explain-preview.nix, which symlinks the
-    -- patched source here. Drop the dir override (and the Nix block) when
-    -- the nixpkgs pin moves past the upstream fix.
+    -- Vendored from the nixpkgs pin by home/programs/explain-preview.nix,
+    -- which symlinks the store path here, so the plugin moves with the
+    -- flake instead of lazy-lock.json.
     dir = vim.fn.stdpath("config") .. "/vendor/live-preview.nvim",
     name = "live-preview.nvim",
     -- Loaded on demand by ensure_server above; ordinary Markdown sessions

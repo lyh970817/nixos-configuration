@@ -15,15 +15,12 @@ let
   viewerIsRemote = pkgs.callPackage ../../pkgs/viewer-is-remote.nix { };
 
   # live-preview.nvim serves the explanation tree from inside Neovim (KaTeX,
-  # scroll sync, websocket updates). The nixpkgs pin wedges the editor on
-  # start; see the patch header. dotfiles/nvim/lua/plugins/explain-preview.lua
-  # loads this store path via lazy's `dir`, same mechanism as the vendored
+  # scroll sync, websocket updates). Taken from nixpkgs rather than lazy so
+  # the pin moves with the flake; 0.9.7 carries the uv.run() fix that used to
+  # be a local patch. dotfiles/nvim/lua/plugins/explain-preview.lua loads this
+  # store path via lazy's `dir`, same mechanism as the vendored
   # render-markdown.nvim in dotfiles.nix.
-  livePreview = pkgs.applyPatches {
-    name = "live-preview.nvim-no-uv-run";
-    src = pkgs.vimPlugins.live-preview-nvim;
-    patches = [ ./live-preview-remove-uv-run.patch ];
-  };
+  livePreview = pkgs.vimPlugins.live-preview-nvim;
 
   # Network decisions and browser dispatch for the explanation preview, kept
   # out of the Lua config so the Neovim side stays host-agnostic. `info`
@@ -94,7 +91,7 @@ in
 {
   home.packages = [ explainPreview ];
 
-  # Patched live-preview.nvim source for the lazy `dir` spec in
+  # live-preview.nvim source for the lazy `dir` spec in
   # dotfiles/nvim/lua/plugins/explain-preview.lua; see livePreview above.
   xdg.configFile."nvim/vendor/live-preview.nvim".source = livePreview;
 }
