@@ -14,11 +14,11 @@
 # autoPatchelfHook or FHS wrapper is involved.
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "quicktui";
-  version = "20260725-02";
+  version = "20260809-09";
 
   src = fetchurl {
     url = "https://github.com/dualface/quicktui/releases/download/${finalAttrs.version}/quicktui-server-linux-amd64";
-    hash = "sha256-yTUpgLhm5jss7IjdSTt8iKvxxh99os7zW8tZAv8K2+w=";
+    hash = "sha256-40xgKyaKJFtmdBnFQVhuPCdtcJmWnrEieE8veB8C8bY=";
   };
 
   dontUnpack = true;

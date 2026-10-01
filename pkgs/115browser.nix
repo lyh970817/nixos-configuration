@@ -12,11 +12,11 @@
 
 let
   pname = "115browser";
-  version = "36.0.0";
+  version = "36.0.1";
 
   src = fetchurl {
     url = "https://down.115.com/client/115pc/lin/115br_v${version}.deb";
-    sha256 = "0j7wnihmd1i6vaczzi6kf6g8f4lbpp95lziig7hz2j3zdpiv97qk";
+    sha256 = "sha256-om+EYltcHKGn9uLrWokyfElif7fwTbG3HifEiQS4jYs=";
   };
 
   browserSrc = runCommand "115browser-source" { nativeBuildInputs = [ dpkg ]; } ''

@@ -9,6 +9,9 @@
   jinja2,
   lxml,
   mcp,
+  openpyxl,
+  pymupdf,
+  pymupdf4llm,
   pysocks,
   requests,
   typer,
@@ -29,13 +32,13 @@
 # process and never be imported into another tool.
 buildPythonApplication rec {
   pname = "scansci-pdf";
-  version = "1.9.0";
+  version = "1.18.0";
   pyproject = true;
 
   src = fetchPypi {
     pname = "scansci_pdf";
     inherit version;
-    hash = "sha256-FYkvD2WQZhMtadWg9gYsp+O3ljHPWLT7KP3dH4H9rHU=";
+    hash = "sha256-kIz+TcWaGnw3faEmwmWYFxf6nvJrnMROPODD6gUmMZ8=";
   };
 
   # setup.py encrypts data/webvpn.json -> webvpn.dat with pycryptodome at build
@@ -51,6 +54,9 @@ buildPythonApplication rec {
     jinja2
     lxml # fetcher.py hardcodes BeautifulSoup(html, "lxml")
     mcp
+    openpyxl
+    pymupdf
+    pymupdf4llm
     pysocks # the requests[socks] extra
     requests
     typer

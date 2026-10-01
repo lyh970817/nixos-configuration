@@ -8,14 +8,14 @@
 
 stdenv.mkDerivation rec {
   pname = "xberg-cli";
-  version = "1.0.14";
+  version = "1.3.0";
 
   # Kreuzberg was renamed to Xberg (kreuzberg-dev/kreuzberg now redirects to
   # xberg-io/xberg) and versioning reset to 1.0.x, so the old kreuzberg-cli
   # 4.2.13 asset no longer exists and cannot be pinned.
   src = fetchurl {
     url = "https://github.com/xberg-io/xberg/releases/download/v${version}/xberg-cli-x86_64-unknown-linux-gnu.tar.gz";
-    sha256 = "0k1nlx0phvs9cz8f7b7smf42r1q0b2q9dgbnqqclc9zgr3nn27ya";
+    sha256 = "sha256-+aI5mpk8RqsRGy/YTQD318ZkCJspcw5YgS20VAfUYnc=";
   };
 
   nativeBuildInputs = [ autoPatchelfHook ];

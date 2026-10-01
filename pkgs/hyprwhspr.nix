@@ -62,6 +62,16 @@ let
 in
 stdenvNoCC.mkDerivation rec {
   pname = "hyprwhspr";
+  # Pinned at 1.40.0: 1.41.0-1.46.1 restructure bin/hyprwhspr into a
+  # CLI-Python/venv-Python split plus a release.json/managed-launcher
+  # install path (added in v1.44.0's "managed, recoverable release
+  # installations"). That breaks this derivation's installPhase
+  # substituteInPlace calls below, which assume the 1.40.0 single-PATH
+  # launcher shape -- real packaging rework, not a patch refresh. Two of
+  # the six local patches (hyprwhspr-realtime-reopen.patch,
+  # hyprwhspr-filler-punctuation.patch) were confirmed upstreamed verbatim
+  # or superseded by 1.46.1 while investigating this; re-check them
+  # whenever the installPhase rework happens and the pin actually moves.
   version = "1.40.0";
 
   src = fetchFromGitHub {

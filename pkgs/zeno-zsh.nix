@@ -5,13 +5,13 @@
 }:
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "zeno-zsh";
-  version = "unstable-2026-04-05";
+  version = "unstable-2026-08-31";
 
   src = fetchFromGitHub {
     owner = "yuki-yano";
     repo = "zeno.zsh";
-    rev = "2e8fbecce0fc3692a5fcc9033ecca7ab35263e56";
-    hash = "sha256-05+w1WP/SHKp97JTGsvO3csI123U7py+fVSKnAWiUNY=";
+    rev = "490121876701f472e7596b606048a7e1b73b5b03";
+    hash = "sha256-sCZjmx13YjdUVJeG/OZ/O5hx34k5mo1enDS7smUv1K8=";
   };
 
   dontBuild = true;
