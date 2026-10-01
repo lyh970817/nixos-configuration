@@ -185,8 +185,6 @@ in
   # nixpkgs it installs a setcap udhcpc wrapper affected by CVE-2026-25740, and
   # its wrapper cannot take a runtime interface. See
   # docs/captive-browser-cve-2026-25740.md. The tool is driven directly instead.
-  # mosh is needed on both roles: the remote laptop dials `mosh home`, and the
-  # home machine needs the mosh-server binary to answer.
   environment.systemPackages = [
     pkgs.captive-browser
     publicWifiLogin
@@ -207,7 +205,6 @@ in
         "login"
       ];
     })
-    pkgs.mosh
   ];
 
   # tailscaled does not tear down its control connection when the kernel removes
@@ -279,8 +276,8 @@ in
   ];
   networking.firewall.allowedUDPPorts = [ 53 ];
   # "Meta" is the mihomo TUN device (mihomo's built-in default name; the config
-  # sets no tun.device override). "tailscale0" is added so mosh's UDP and
-  # Tailscale SSH flow freely over the tailnet without opening ports publicly.
+  # sets no tun.device override). "tailscale0" is added so Tailscale SSH flows
+  # freely over the tailnet without opening ports publicly.
   networking.firewall.trustedInterfaces = [
     "Meta"
     "tailscale0"
