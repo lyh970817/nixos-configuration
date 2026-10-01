@@ -106,10 +106,6 @@
         # 1.13.7 release tarball over the nixpkgs packaging; the explanation
         # vault needs its callout inline-math fix (see pkgs/obsidian.nix).
         obsidian = final.callPackage ./pkgs/obsidian.nix { obsidian = prev.obsidian; };
-        oh-my-pi = final.callPackage ./pkgs/oh-my-pi.nix { };
-        pi-coding-agent = final.callPackage ./pkgs/pi-coding-agent.nix { };
-        pi-openai-server-compaction = final.callPackage ./pkgs/pi-openai-server-compaction.nix { };
-        pi-web-access = final.callPackage ./pkgs/pi-web-access.nix { };
         quicktui = final.callPackage ./pkgs/quicktui.nix { };
         screen-record = final.callPackage ./pkgs/screen-record { };
         screen-shader-controller = final.callPackage ./pkgs/screen-shader-controller.nix { };

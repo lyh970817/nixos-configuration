@@ -127,7 +127,7 @@ Where the notes live:
 ## Training AGENTS.md with backpass
 
 `backpass` (`home/programs/backpass.nix`, project settings in `.backpassrc.json`)
-reads the Claude, Codex and pi transcripts of this repo on both hosts and
+reads the Claude and Codex transcripts of this repo on both hosts and
 proposes evidence-backed edits to this file and `.agents/skills/`. A plain
 `backpass` run never writes; `backpass apply` shows each edit with its quotes
 for accept or reject, and `backpass --scope user` does the same for the

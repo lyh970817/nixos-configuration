@@ -45,8 +45,6 @@
     ./programs/kcl-fetch.nix
     ./programs/herdr.nix
     ./programs/tuicr.nix
-    ./programs/pi.nix
-    ./programs/omp.nix
     ./programs/hyprwhspr.nix
     ./programs/quicktui.nix
     ./programs/screen-record.nix
