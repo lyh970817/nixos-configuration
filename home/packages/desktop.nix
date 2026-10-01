@@ -10,7 +10,6 @@
     brave
     chromium
     libnotify
-    calibre
     sioyek
     libreoffice-fresh
     bitwarden-desktop
@@ -46,7 +45,6 @@
     bibata-vt220-cursors-muted
     glib
     gsettings-desktop-schemas
-    slack
     # Windows apps (e.g. Mplus) via a 64+32-bit wine.
     wineWowPackages.stable
     winetricks

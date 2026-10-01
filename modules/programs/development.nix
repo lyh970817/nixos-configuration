@@ -17,11 +17,6 @@
 
   programs.ssh.startAgent = lib.mkForce false;
 
-  programs.localsend = {
-    enable = true;
-    openFirewall = true;
-  };
-
   programs.nm-applet.enable = true;
   programs.thunar.enable = true;
   programs.dconf.enable = true;
