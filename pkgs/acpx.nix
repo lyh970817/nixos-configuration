@@ -12,11 +12,11 @@
 # are dropped from package.json to match it.
 buildNpmPackage (finalAttrs: {
   pname = "acpx";
-  version = "0.17.1";
+  version = "0.19.4";
 
   src = fetchzip {
     url = "https://registry.npmjs.org/acpx/-/acpx-${finalAttrs.version}.tgz";
-    hash = "sha256-/+JZzKq/bDMq5Mdz75NR3kUzSQn/HRJG1FL6bvKKuK4=";
+    hash = "sha256-RTDnP4/XIr8lV6FCM2TmPmckTw3mdL1mg/S8K5vrJ3Y=";
   };
 
   postPatch = ''
@@ -26,7 +26,7 @@ buildNpmPackage (finalAttrs: {
     mv package.json.patched package.json
   '';
 
-  npmDepsHash = "sha256-PUTRvBb6Qe3pGoZtZ1aKmdn2DVRFpZWnwbPtq5QsKPk=";
+  npmDepsHash = "sha256-q9RAARKOgk6EhISyf6dFUCLDvh0CPSCQypSbzsZ6WMw=";
 
   inherit nodejs;
 

@@ -14,11 +14,11 @@
 # through acpx, named by store path rather than found on PATH.
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "backpass";
-  version = "0.1.25";
+  version = "0.1.31";
 
   src = fetchzip {
     url = "https://registry.npmjs.org/backpass/-/backpass-${finalAttrs.version}.tgz";
-    hash = "sha256-qsU3U43MzwNP0IYwFRut8m/CweC3CZsEwn571xkjkbs=";
+    hash = "sha256-1UiBQ9Ktj+TQMaL8rVhGLqsaXN6DoDc3sEFeKrNf7gg=";
   };
 
   nativeBuildInputs = [ makeWrapper ];

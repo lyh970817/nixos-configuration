@@ -16,11 +16,11 @@
 # conventional loader path.
 buildNpmPackage (finalAttrs: {
   pname = "claude-agent-acp";
-  version = "0.79.0";
+  version = "0.84.0";
 
   src = fetchzip {
     url = "https://registry.npmjs.org/@agentclientprotocol/claude-agent-acp/-/claude-agent-acp-${finalAttrs.version}.tgz";
-    hash = "sha256-WyVaA+Pp6BrPMevtu4nhMFz2xvP8OhkpsOkPig6uOEA=";
+    hash = "sha256-RZQIO8ZEkAOf27CPNVK8ZXBZYbC4I2FwcpQZcmAqG5M=";
   };
 
   postPatch = ''
@@ -30,7 +30,7 @@ buildNpmPackage (finalAttrs: {
     mv package.json.patched package.json
   '';
 
-  npmDepsHash = "sha256-gXNRr31ElsTO5ZnYO1TAXd5CpKXjjkP1wPvbjcmtFsI=";
+  npmDepsHash = "sha256-M767KGxkU448NHV7UkkoJ+s1G0pEehAxO+oClNZLcYQ=";
 
   inherit nodejs;
 
