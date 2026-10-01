@@ -87,8 +87,11 @@ return {
             "languageserver::run()",
           },
           filetypes = { "r", "rmd", "quarto" },
-          root_dir = function(fname)
-            return vim.fs.root(fname, {
+          -- vim.lsp.config hands root_dir a buffer number and a callback,
+          -- not a path; a lone script outside any project roots at its own
+          -- directory instead of erroring in vim.fs.dirname.
+          root_dir = function(bufnr, on_dir)
+            local root = vim.fs.root(bufnr, {
               "renv.lock",
               ".Rprofile",
               "DESCRIPTION",
@@ -96,7 +99,9 @@ return {
               ".Rbuildignore",
               ".here",
               ".git",
-            }) or vim.fs.dirname(fname)
+            })
+            local path = vim.api.nvim_buf_get_name(bufnr)
+            on_dir(root or (path ~= "" and vim.fs.dirname(path)) or vim.uv.cwd())
           end,
         })
       end
