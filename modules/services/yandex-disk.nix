@@ -10,16 +10,93 @@ let
   home = config.users.users.${user}.home;
   statusDir = "${home}/.cache/sync-status";
 
-  # Directories under ~/Yandex.Disk that must never be synced: the encrypted
-  # backup repository, plus local/ephemeral GWAS pipeline state that is large,
-  # regenerable, and churns too fast for cloud sync to track usefully.
-  excludeDirs = [
+  syncDir = "${home}/Yandex.Disk";
+  configFile = "${home}/.config/yandex-disk/config.cfg";
+  tokenFile = "${home}/.config/yandex-disk/token";
+
+  # Exclude list. yandex-disk-excludes (./yandex-disk-excludes.py) scans
+  # ~/Yandex.Disk and writes config.cfg's exclude-dirs= line; that line is
+  # what the daemon is started with. The list is the union of:
+  #   - staticExcludes below, always, whether or not the path exists;
+  #   - tool-owned directories found by name: .nf-test and .nf-test-*,
+  #     .nextflow, .worktrees, node_modules, .venv, __pycache__, .direnv,
+  #     .pytest_cache, .mypy_cache, .ruff_cache, .gradle, and worktrees/
+  #     directly under a dot directory (.claude/worktrees);
+  #   - guarded names: target beside a Cargo.toml, build beside a
+  #     (settings|build).gradle[.kts], work beside a .nextflow dir or
+  #     .nextflow.log* file;
+  #   - directories holding pyvenv.cfg, a signed CACHEDIR.TAG, or a
+  #     .yandex-nosync marker file -- `touch DIR/.yandex-nosync` excludes DIR.
+  # The scan never follows symlinks, crosses filesystems, or enters .git
+  # (which itself stays synced). A path containing , " \ or a control
+  # character cannot be written to the list: it is skipped with a warning.
+  # Add a permanent entry to staticExcludes, path relative to ~/Yandex.Disk.
+  # The list is rebuilt on every daemon start and every 30 minutes; a timer
+  # run restarts the daemon only when a path not already excluded appears.
+  staticExcludes = [
+    # The encrypted backup repository.
     "restic"
-    "Projects/Research/qc_dev/gwas/.nf-test"
-    "Projects/Research/qc_dev/gwas/.worktrees"
+    # Read-only companion checkouts that no churn rule matches.
     "Projects/Research/qc_dev/gwas/.references"
-    "Projects/Research/qc_dev/gwas/work"
   ];
+
+  yandexDiskExcludes = pkgs.writers.writePython3Bin "yandex-disk-excludes" {
+    flakeIgnore = [ "E501" ];
+  } (builtins.readFile ./yandex-disk-excludes.py);
+
+  excludesArgs = lib.escapeShellArgs (
+    [
+      "--sync-dir=${syncDir}"
+      "--config=${configFile}"
+    ]
+    ++ map (path: "--static=${path}") staticExcludes
+  );
+
+  # `yandex-disk start --no-daemon` never reads config.cfg (only the forking
+  # `start` does, re-executing itself with --exclude-dirs), so the list is
+  # passed on the command line from the exclude-dirs= line.
+  yandexDiskStart = pkgs.writeShellApplication {
+    name = "yandex-disk-start";
+    runtimeInputs = [ pkgs.yandex-disk ];
+    text = ''
+      excludes=
+      if [[ -r ${lib.escapeShellArg configFile} ]]; then
+        while IFS= read -r line || [[ -n "$line" ]]; do
+          if [[ "$line" == exclude-dirs=* ]]; then
+            excludes=''${line#exclude-dirs=}
+            excludes=''${excludes#\"}
+            excludes=''${excludes%\"}
+            break
+          fi
+        done < ${lib.escapeShellArg configFile}
+      fi
+      # A config.cfg rewritten by `yandex-disk setup` loses the line; never
+      # start without the static entries (the backup repository above all).
+      if [[ -z "$excludes" ]]; then
+        echo "yandex-disk-start: no exclude-dirs in config.cfg; using the static list" >&2
+        excludes=${lib.escapeShellArg (lib.concatStringsSep "," staticExcludes)}
+      fi
+      exec yandex-disk start --no-daemon \
+        --dir=${lib.escapeShellArg syncDir} \
+        --auth=${lib.escapeShellArg tokenFile} \
+        --exclude-dirs="$excludes"
+    '';
+  };
+
+  # Runs as root after the refresh unit's ExecStart (as the user): exit 1
+  # means a new path was added to the list, which the daemon only reads at
+  # start. try-restart leaves a deliberately stopped daemon stopped.
+  restartOnNewExcludes = pkgs.writeShellScript "yandex-disk-restart-on-new-excludes" ''
+    if [[ "$EXIT_CODE" == exited && "$EXIT_STATUS" == 1 ]]; then
+      exec ${pkgs.systemd}/bin/systemctl try-restart --no-block yandex-disk.service
+    fi
+  '';
+
+  # Exit 2 rather than 1 when the daemon is down: SuccessExitStatus=1 on the
+  # refresh unit also applies to ExecCondition and would let 1 through.
+  yandexDiskActive = pkgs.writeShellScript "yandex-disk-active" ''
+    ${pkgs.systemd}/bin/systemctl is-active --quiet yandex-disk.service || exit 2
+  '';
 
   yandexDiskStatus = pkgs.writeShellApplication {
     name = "yandex-disk-status";
@@ -158,16 +235,46 @@ in
   systemd.services.yandex-disk = {
     description = "Yandex.Disk daemon";
     after = [ "network.target" ];
-    unitConfig.ConditionPathExists = "${config.users.users.andongni.home}/.config/yandex-disk/token";
+    unitConfig.ConditionPathExists = tokenFile;
     wantedBy = [ "multi-user.target" ];
 
     serviceConfig = {
       User = "andongni";
-      # Foreground mode needs explicit options; never sync the directories in excludeDirs.
-      ExecStart = "${pkgs.yandex-disk}/bin/yandex-disk start --no-daemon --dir=${config.users.users.andongni.home}/Yandex.Disk --auth=${config.users.users.andongni.home}/.config/yandex-disk/token --exclude-dirs=${lib.concatStringsSep "," excludeDirs}";
+      # Refresh the list before each start. "-" and the timeout let the
+      # daemon start on the previous list if the scan fails or stalls.
+      ExecStartPre = "-${pkgs.coreutils}/bin/timeout 60 ${yandexDiskExcludes}/bin/yandex-disk-excludes ${excludesArgs}";
+      ExecStart = "${yandexDiskStart}/bin/yandex-disk-start";
       ExecStop = "${pkgs.yandex-disk}/bin/yandex-disk stop";
       Restart = "on-failure";
       RestartSec = "5s";
+    };
+  };
+
+  systemd.services.yandex-disk-excludes = {
+    description = "Refresh the Yandex.Disk exclude list";
+    after = [ "yandex-disk.service" ];
+    unitConfig.ConditionPathExists = tokenFile;
+    serviceConfig = {
+      Type = "oneshot";
+      User = user;
+      # Nothing to refresh while the daemon is stopped; its next start
+      # rebuilds the list anyway.
+      ExecCondition = "${yandexDiskActive}";
+      ExecStart = "${yandexDiskExcludes}/bin/yandex-disk-excludes --only-if-added ${excludesArgs}";
+      # Exit 1 means the list changed and was written.
+      SuccessExitStatus = "1";
+      ExecStopPost = "+${restartOnNewExcludes}";
+      Nice = 19;
+      IOSchedulingClass = "idle";
+    };
+  };
+
+  systemd.timers.yandex-disk-excludes = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "*:0/30";
+      Persistent = true;
+      RandomizedDelaySec = "2min";
     };
   };
 
