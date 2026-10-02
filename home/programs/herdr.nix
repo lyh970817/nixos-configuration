@@ -159,10 +159,18 @@ in
   # `portable.role`. The package comes from the pinned upstream flake input
   # via the overlay in flake.nix.
   home.packages = [
-    herdrWrapped
     remoteHerdrClient
     herdrTitle
   ];
+
+  # The upstream Home Manager module only installs the package here; its
+  # `settings` stay empty because config.toml is linked below. Publishing the
+  # wrapper as `programs.herdr.package` lets other modules (QuickTUI's
+  # `herdr_bin`) launch the same theme-resolving entry point.
+  programs.herdr = {
+    enable = true;
+    package = herdrWrapped;
+  };
 
   # herdr rewrites its own config.toml at runtime: `mark_onboarding_complete`
   # clears the first-run wizard and the in-app Settings screen saves through the
