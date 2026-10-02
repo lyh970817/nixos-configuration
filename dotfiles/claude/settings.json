@@ -31,7 +31,7 @@
     "security-review": "user-invocable-only",
     "session-handoff": "user-invocable-only",
     "setup-domain-docs": "user-invocable-only",
-    "show-me": "user-invocable-only",
+    "show-me": "name-only",
     "simplify": "user-invocable-only",
     "social-bookmarks": "user-invocable-only",
     "tuicr": "user-invocable-only",
