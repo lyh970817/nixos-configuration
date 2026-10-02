@@ -103,6 +103,13 @@ QWEN_COMMIT_TIMEOUT = float(_env("QWEN_COMMIT_TIMEOUT", "8"))
 QWEN_PASTE_NOTIFY_PORT = int(_env("QWEN_PASTE_NOTIFY_PORT", "8773"))
 QWEN_PASTE_WAIT_TIMEOUT = float(_env("QWEN_PASTE_WAIT_TIMEOUT", "10"))
 
+# Desktop notification for upstream failures. hyprwhspr only shows a generic
+# "✗ Error" bubble, so the shim, which sees the real cause, raises one that
+# says whether the network, the API key, the account balance or the Qwen
+# server is at fault. Empty disables; one bubble per failure burst and cause.
+QWEN_NOTIFY_SEND = _env("QWEN_NOTIFY_SEND", "notify-send")
+QWEN_NOTIFY_MIN_INTERVAL = float(_env("QWEN_NOTIFY_MIN_INTERVAL", "60"))
+
 # Silence-gate tuning (see _RealtimeSilenceGate). Floor measured over 1611
 # archived takes: quiet-room ambient ~40-140 RMS, speech mass >= ~1000;
 # high-ambient sessions idle at 500-1100 and cannot be gated safely by any
@@ -131,6 +138,82 @@ _ENV_REF_RE = re.compile(r"^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$")
 
 def log(msg):
     print(f"[qwen-asr-shim] {msg}", file=sys.stderr, flush=True)
+
+
+_CREDIT_WORDS = ("arrearage", "insufficient", "balance", "quota", "overdue",
+                 "allocation", "exhausted", "free tier")
+_AUTH_WORDS = ("invalidapikey", "invalid api", "unauthorized", "authentication",
+               "forbidden", "api key", "api-key", "token")
+
+
+def classify_upstream_failure(exc):
+    """Map an upstream connect/session failure to (kind, summary, body).
+
+    The summary names the responsible party so a failed dictation is never
+    mistaken for exhausted credits when the Beijing endpoint merely timed
+    out, and vice versa.
+    """
+    name = type(exc).__name__
+    text = str(exc)
+    resp = getattr(exc, "response", None)
+    status = getattr(resp, "status_code", None)
+    if status is None:
+        status = getattr(exc, "status_code", None)
+    body = getattr(resp, "body", b"") or b""
+    if isinstance(body, bytes):
+        body = body[:400].decode("utf-8", "replace")
+    low = f"{text} {body}".lower()
+    detail = (text or name)[:160]
+    if body.strip():
+        detail = body.strip()[:160]
+
+    if status == 402 or any(w in low for w in _CREDIT_WORDS):
+        return ("credits", "Dictation: Qwen account out of credits",
+                f"Alibaba Cloud refused the session: {detail}")
+    if status in (401, 403) or any(w in low for w in _AUTH_WORDS):
+        return ("auth", "Dictation: Qwen API key rejected",
+                f"HTTP {status or '?'}: {detail}")
+    if status == 429 or "throttl" in low or "rate limit" in low:
+        return ("ratelimit", "Dictation: Qwen rate limit hit", detail)
+    if status is not None:
+        return ("server", f"Dictation: Qwen server error (HTTP {status})", detail)
+    if isinstance(exc, (asyncio.TimeoutError, TimeoutError)) or "timed out" in low or "timeout" in low:
+        return ("network", "Dictation: connection to Qwen timed out",
+                "The network path to Alibaba Cloud (Beijing) is not answering. "
+                "Credits and API key are not the cause.")
+    if isinstance(exc, (ConnectionError, OSError)) or any(
+        w in low for w in ("reset", "refused", "unreachable", "name resolution",
+                           "no route", "network is down")
+    ):
+        return ("network", "Dictation: connection to Qwen failed",
+                f"Network error ({name}). Credits and API key are not the cause.")
+    if "closed" in low and ("1011" in low or "internal" in low):
+        return ("server", "Dictation: Qwen server dropped the session", detail)
+    return ("unknown", "Dictation: Qwen upstream failed", f"{name}: {detail}")
+
+
+_notify_last = {"kind": None, "t": 0.0}
+
+
+async def notify_upstream_failure(name, exc):
+    """Raise one desktop notification per failure burst, best effort."""
+    if not QWEN_NOTIFY_SEND:
+        return
+    kind, summary, body = classify_upstream_failure(exc)
+    now = time.monotonic()
+    if kind == _notify_last["kind"] and now - _notify_last["t"] < QWEN_NOTIFY_MIN_INTERVAL:
+        return
+    _notify_last["kind"], _notify_last["t"] = kind, now
+    log(f"translator[{name}]: notifying {kind}: {summary}")
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            QWEN_NOTIFY_SEND, "-a", "hyprwhspr", "-u", "critical", "-t", "10000",
+            "-i", "dialog-error", summary, body,
+            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+        )
+        await asyncio.wait_for(proc.wait(), 5)
+    except Exception as e:
+        log(f"translator[{name}]: notify-send failed: {e}")
 
 
 def get_api_key():
@@ -607,6 +690,7 @@ class RealtimeTranslator:
             delay = self.backoff.on_failure()
             reason = f"{type(exc).__name__}: {exc}"[:200]
             log(f"translator[{self.name}]: upstream connect failed ({reason}), backing off {delay:.1f}s")
+            await notify_upstream_failure(self.name, exc)
             raise
         self.backoff.on_success()
         return ws
@@ -908,6 +992,14 @@ class RealtimeTranslator:
                             # deliberately replaced canceled session.
                             continue
                         t = ev.get("type", "")
+                        if t == "error":
+                            # DashScope reports credit, key and quota problems
+                            # as error events on an open socket; the idle
+                            # 180 s close is routine and stays quiet.
+                            err = ev.get("error") or {}
+                            err_text = f"{err.get('code', '')} {err.get('message', '')}".strip()
+                            if "180 seconds" not in err_text:
+                                await notify_upstream_failure(self.name, RuntimeError(err_text or "error event"))
                         delete_ids = ()
                         if t == "conversation.item.deleted":
                             continue
@@ -1076,10 +1168,13 @@ class RealtimeTranslator:
                     # promptly rather than produce a plausible-looking suffix.
                     state["commit_error"] = "upstream closed during utterance"
                     state["commit_ack"].set()
-                    log(
-                        f"translator[{self.name}]: upstream closed during "
-                        "utterance; closing client"
+                    rcvd = getattr(ws, "close_rcvd", None)
+                    close_desc = (
+                        f"upstream closed during utterance (code {rcvd.code}: {rcvd.reason})"
+                        if rcvd is not None else "upstream closed during utterance"
                     )
+                    log(f"translator[{self.name}]: {close_desc}; closing client")
+                    await notify_upstream_failure(self.name, RuntimeError(close_desc))
                     stop.set()
                     try:
                         await client_ws.close(code=1011)

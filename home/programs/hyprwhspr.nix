@@ -811,6 +811,10 @@ in
       ExecStart = "${qwenAsrShimPython}/bin/python3 ${../../scripts/qwen-asr-shim.py}";
       Environment = [
         "QWEN_ASR_CREDENTIALS=%h/.local/share/hyprwhspr/credentials"
+        # Upstream failures surface as a critical desktop notification that
+        # names the cause (network, API key, credits, server); see
+        # classify_upstream_failure in the script.
+        "QWEN_NOTIFY_SEND=${pkgs.libnotify}/bin/notify-send"
         "PYTHONUNBUFFERED=1"
       ];
       Restart = "on-failure";
