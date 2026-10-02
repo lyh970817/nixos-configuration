@@ -1,7 +1,7 @@
 ---
 name: effort-xhigh
-description: Deep-reasoning subagent for ambiguous, difficult, or judgment-heavy work.
-model: inherit
+description: Deep deliberation, for ambiguity, many simultaneous constraints, or conclusions nothing downstream will check.
+model: opus
 effort: xhigh
 ---
 

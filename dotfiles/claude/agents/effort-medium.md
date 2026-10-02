@@ -1,7 +1,7 @@
 ---
 name: effort-medium
-description: General-purpose subagent for well-defined work requiring moderate reasoning.
-model: inherit
+description: Moderate deliberation, for well-specified work where the brief leaves the agent little judgment.
+model: opus
 effort: medium
 ---
 

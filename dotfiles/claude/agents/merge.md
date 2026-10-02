@@ -18,4 +18,10 @@ If a branch is fundamentally incompatible with what you have already merged,
 abort that merge and report which branches and why. Never leave the tree
 mid-merge.
 
+Once a merge is verified complete, clean up after it. If the branch came from
+a worktree under `.claude/worktrees/`, remove that worktree with `git worktree
+remove` — only if its tree is clean; if it is dirty, leave it and report.
+Then delete the branch with `git branch -d`. Never `-D`: if `-d` refuses, the
+branch is not fully merged, so leave it and report that.
+
 Report the order you used.

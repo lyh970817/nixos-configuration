@@ -1,7 +1,7 @@
 ---
 name: effort-max
-description: Maximum-reasoning subagent for the most demanding analysis and synthesis.
-model: inherit
+description: Maximum deliberation, for the hardest synthesis and root-cause work, where the first plausible answer is usually wrong.
+model: opus
 effort: max
 ---
 

@@ -1,7 +1,7 @@
 ---
 name: effort-low
-description: Fast, economical subagent for straightforward work that needs minimal reasoning.
-model: inherit
+description: Minimal deliberation, for mechanical, fully specified steps whose failures are loud and cheap to retry.
+model: opus
 effort: low
 ---
 

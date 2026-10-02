@@ -1,7 +1,7 @@
 ---
 name: effort-high
-description: Thorough subagent for complex implementation, debugging, and review.
-model: inherit
+description: Sustained deliberation, for work that can fail silently or where the brief delegates real judgment.
+model: opus
 effort: high
 ---
 
