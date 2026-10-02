@@ -10,6 +10,17 @@ let
   home = config.users.users.${user}.home;
   statusDir = "${home}/.cache/sync-status";
 
+  # Directories under ~/Yandex.Disk that must never be synced: the encrypted
+  # backup repository, plus local/ephemeral GWAS pipeline state that is large,
+  # regenerable, and churns too fast for cloud sync to track usefully.
+  excludeDirs = [
+    "restic"
+    "Projects/Research/qc_dev/gwas/.nf-test"
+    "Projects/Research/qc_dev/gwas/.worktrees"
+    "Projects/Research/qc_dev/gwas/.references"
+    "Projects/Research/qc_dev/gwas/work"
+  ];
+
   yandexDiskStatus = pkgs.writeShellApplication {
     name = "yandex-disk-status";
     runtimeInputs = with pkgs; [
@@ -152,8 +163,8 @@ in
 
     serviceConfig = {
       User = "andongni";
-      # Foreground mode needs explicit options; never sync the encrypted backup repository.
-      ExecStart = "${pkgs.yandex-disk}/bin/yandex-disk start --no-daemon --dir=${config.users.users.andongni.home}/Yandex.Disk --auth=${config.users.users.andongni.home}/.config/yandex-disk/token --exclude-dirs=restic";
+      # Foreground mode needs explicit options; never sync the directories in excludeDirs.
+      ExecStart = "${pkgs.yandex-disk}/bin/yandex-disk start --no-daemon --dir=${config.users.users.andongni.home}/Yandex.Disk --auth=${config.users.users.andongni.home}/.config/yandex-disk/token --exclude-dirs=${lib.concatStringsSep "," excludeDirs}";
       ExecStop = "${pkgs.yandex-disk}/bin/yandex-disk stop";
       Restart = "on-failure";
       RestartSec = "5s";
