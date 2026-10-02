@@ -27,7 +27,7 @@ if ! printf '<message>\n%s\n</message>' "$message" | timeout 120 codex exec \
   --ephemeral \
   --skip-git-repo-check \
   --sandbox read-only \
-  --model gpt-5.4 \
+  --model gpt-5.6-luna \
   --config 'approval_policy="never"' \
   --config 'model_reasoning_effort="medium"' \
   --output-last-message "$brief_file" \
