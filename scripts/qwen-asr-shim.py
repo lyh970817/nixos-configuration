@@ -603,9 +603,10 @@ class RealtimeTranslator:
                 ping_timeout=20,
             )
             await ws.send(json.dumps(_flat_session_update()))
-        except Exception:
+        except Exception as exc:
             delay = self.backoff.on_failure()
-            log(f"translator[{self.name}]: upstream connect failed, backing off {delay:.1f}s")
+            reason = f"{type(exc).__name__}: {exc}"[:200]
+            log(f"translator[{self.name}]: upstream connect failed ({reason}), backing off {delay:.1f}s")
             raise
         self.backoff.on_success()
         return ws
