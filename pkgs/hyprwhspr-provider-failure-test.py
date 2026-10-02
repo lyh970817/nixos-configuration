@@ -9,6 +9,7 @@ import io
 import json
 import os
 from pathlib import Path
+import socket
 import sys
 import tempfile
 
@@ -21,8 +22,10 @@ main = importlib.import_module("main")
 realtime_client_module = importlib.import_module("realtime_client")
 realtime_backend_module = importlib.import_module("backends.realtime_ws_backend")
 rest_backend_module = importlib.import_module("backends.rest_api_backend")
+text_injector_module = importlib.import_module("text_injector")
 np = importlib.import_module("numpy")
-requests = rest_backend_module.requests
+# The REST backend imports requests lazily since 1.46; it is the same module.
+requests = importlib.import_module("requests")
 
 
 class Config:
@@ -126,15 +129,18 @@ def run_realtime_sample_rate_checks(profile: dict[str, object]) -> None:
     assert len(resampled) == 1600
     assert resampled.dtype == np.float32
 
+    # Upstream's websocket_sample_rate wins over the local alias.
+    client.configure(
+        lambda key, default=None: 8000
+        if key == "websocket_sample_rate"
+        else profile.get(key, default)
+    )
+    assert client.sample_rate == 8000
+
     schema = json.loads((APPDIR / "share" / "config.schema.json").read_text())
     rate_schema = schema["properties"]["realtime_sample_rate"]
-    assert rate_schema == {
-        "type": "integer",
-        "minimum": 8000,
-        "maximum": 48000,
-        "default": 24000,
-        "description": "PCM sample rate required by the selected realtime provider",
-    }
+    assert rate_schema["type"] == ["integer", "null"]
+    assert rate_schema["default"] is None
 
 
 REST_CONFIG = {
@@ -170,16 +176,16 @@ def run_rest_case(post):
     manager = Manager(REST_CONFIG)
     backend = rest_backend_module.RestApiBackend(manager)
     original_credential = rest_backend_module.get_credential
-    original_post = rest_backend_module.requests.post
+    original_post = requests.post
     rest_backend_module.get_credential = lambda _provider: "credential-secret"
-    rest_backend_module.requests.post = post
+    requests.post = post
     output = io.StringIO()
     try:
         with contextlib.redirect_stdout(output):
             assert backend.initialize() is True
             result = backend.transcribe(np.zeros(1600, dtype=np.float32), 16000)
     finally:
-        rest_backend_module.requests.post = original_post
+        requests.post = original_post
         rest_backend_module.get_credential = original_credential
     log = output.getvalue()
     assert_redacted(log)
@@ -279,11 +285,37 @@ def run_archive_check() -> None:
             os.environ["HYPRWHSPR_DICTATION_TS"] = previous_dictation_ts
 
 
+def run_paste_notify_check() -> None:
+    previous_port = os.environ.get("HYPRWHSPR_PASTE_NOTIFY_PORT")
+    previous_dictation_ts = os.environ.get("HYPRWHSPR_DICTATION_TS")
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.settimeout(5)
+        try:
+            os.environ["HYPRWHSPR_PASTE_NOTIFY_PORT"] = str(listener.getsockname()[1])
+            os.environ["HYPRWHSPR_DICTATION_TS"] = "20260731T120000Z"
+            text_injector_module.TextInjector._notify_paste_complete(None, "pasted text")
+            message = json.loads(listener.recv(65536))
+        finally:
+            for name, value in (
+                ("HYPRWHSPR_PASTE_NOTIFY_PORT", previous_port),
+                ("HYPRWHSPR_DICTATION_TS", previous_dictation_ts),
+            ):
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
+    assert message["event"] == "paste_complete"
+    assert message["audio_ts"] == "20260731T120000Z"
+    assert message["text"] == "pasted text"
+
+
 def main_check() -> None:
     profile = load_profile()
     run_realtime_sample_rate_checks(profile)
     run_rest_redaction_checks()
     run_archive_check()
+    run_paste_notify_check()
     print("hyprwhspr package behavior checks passed")
 
 

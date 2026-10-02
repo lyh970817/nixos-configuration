@@ -27,6 +27,7 @@ let
       dbus-python
       elevenlabs
       evdev
+      jsonschema
       numpy
       psutil
       pulsectl
@@ -37,6 +38,7 @@ let
       requests
       rich
       sounddevice
+      soundfile
       soxr
       websocket-client
     ]
@@ -62,68 +64,92 @@ let
 in
 stdenvNoCC.mkDerivation rec {
   pname = "hyprwhspr";
-  # Pinned at 1.40.0: 1.41.0-1.46.1 restructure bin/hyprwhspr into a
-  # CLI-Python/venv-Python split plus a release.json/managed-launcher
-  # install path (added in v1.44.0's "managed, recoverable release
-  # installations"). That breaks this derivation's installPhase
-  # substituteInPlace calls below, which assume the 1.40.0 single-PATH
-  # launcher shape -- real packaging rework, not a patch refresh. Two of
-  # the six local patches (hyprwhspr-realtime-reopen.patch,
-  # hyprwhspr-filler-punctuation.patch) were confirmed upstreamed verbatim
-  # or superseded by 1.46.1 while investigating this; re-check them
-  # whenever the installPhase rework happens and the pin actually moves.
-  version = "1.40.0";
+  version = "1.47.0";
 
   src = fetchFromGitHub {
     owner = "goodroot";
     repo = "hyprwhspr";
     rev = "v${version}";
-    sha256 = "0r7d86kc23jjwbfif4nxccjbl2cdpk3sk3hjwpry2qkz7ykxr329";
+    sha256 = "09w4fyi4gcgf8sawr6h2cq55v9cjjr8lfig6r4n97ycvrj79ja64";
   };
 
-  # Local realtime behavior not provided by upstream:
-  # - custom OpenAI-compatible providers can select their required PCM rate;
-  #   the rate controls both resampling and the session.update declaration;
-  # - realtime short dictation archives the local mic capture under
-  #   ~/.local/share/hyprwhspr/short/audio/<UTC timestamp>.wav and exports
-  #   HYPRWHSPR_DICTATION_TS for matching downstream artifacts.
+  # Local patches (each must apply without fuzz):
+  # - nix-launcher: upstream 1.44+ installs "managed releases" -- the launcher
+  #   hands off to ~/.local/share/hyprwhspr/launcher when release.json exists,
+  #   probes /usr/bin for a 3.11-3.14 CLI Python, and runs the service from
+  #   ~/.local/share/hyprwhspr/venv. Pin both interpreters to @python@ (the
+  #   pythonEnv below), drop the hand-off, refuse `update` and
+  #   `install repair|status` (they would populate ~/.local/share/hyprwhspr/
+  #   releases), and report the pinned version instead of reading release.json
+  #   or `git describe`.
+  # - realtime-sample-rate: upstream 1.47 added `websocket_sample_rate`
+  #   (custom provider only), which sets both resampling and the
+  #   session.update rate. The patch is now only an alias: when it is unset,
+  #   the profiles' older `realtime_sample_rate` key supplies it. Renaming the
+  #   key in config/hyprwhspr/profiles/*.json would make this patch removable.
+  # - short-audio-archive: realtime short dictation archives the local mic
+  #   capture under ~/.local/share/hyprwhspr/short/audio/<UTC timestamp>.wav
+  #   and exports HYPRWHSPR_DICTATION_TS for matching downstream artifacts
+  #   (now in lib/src/app/recording.py after 1.46's main.py split).
+  # - notification-text: status notifications show only the state (e.g.
+  #   "● Recording…") as the summary, with a monochrome recording glyph.
+  # - paste-notify: after a successful text injection, send a best-effort
+  #   loopback UDP datagram (port 8773) with the paste timestamp and the exact
+  #   injected text; qwen-asr-shim uses it for paste-complete latency.
+  # - rest-redaction: REST backend logs never carry endpoint URLs, request
+  #   values, response bodies or exception strings.
   #
-  # Status-notification text shows only the state (e.g. "● Recording…",
-  # "Transcribing…") as the notification summary instead of a "hyprwhspr"
-  # title with the state in the body, and uses a monochrome recording glyph.
-  # hyprwhspr-realtime-reopen.patch: upstream's on-demand realtime reconnect
-  # calls close() before connect(), but close() latches _closed and connect()
-  # refuses while it is set — the first idle/server-side disconnect kills
-  # dictation until the service restarts. Let an explicit connect() clear
-  # the latch.
-  # hyprwhspr-paste-notify.patch: after a successful text injection, send a
-  # best-effort loopback UDP datagram (port 8773) carrying the paste
-  # timestamp and the exact injected text; qwen-asr-shim uses it for
-  # paste-complete latency.
-  # hyprwhspr-filler-punctuation.patch: upstream's filler-word filter strips
-  # only the letters, so an ASR backend that punctuates transcripts turns
-  # "Fair enough. Um. Uh, what" into "Fair enough. . , what". Remove a
-  # filler together with its own punctuation and re-capitalize the word
-  # that now starts the sentence.
+  # Retired at the 1.47.0 bump: realtime-reopen (upstreamed in 1.41.0, #229)
+  # and filler-punctuation (superseded by 1.42.3's lib/src/filler_filter.py,
+  # which fixed this user's report #242 more thoroughly).
+  #
+  # Upstream changes 1.40.0 -> 1.47.0 that touch this setup:
+  # - realtime-ws: `websocket_sample_rate`/`websocket_protocol`/
+  #   `websocket_session_format`/`websocket_live_text` for custom servers;
+  #   custom endpoints may be keyless; a malformed websocket_url now fails at
+  #   start. The converse session.update now carries the shipped English
+  #   capitalization prompt (`whisper_prompt_en`, 1.41) as instructions --
+  #   harmless here because qwen-asr-shim drops hyprwhspr's session.update.
+  # - text: trailing space is `append_trailing_space` ("auto": none after
+  #   CJK text), filler filtering rewritten (1.42.3), `clipboard_settle_delay`
+  #   (1.46, package default 0.02 s above).
+  # - notifications: "Transcribing…" stays until the text lands (timeout 0);
+  #   start/stop cues play through pw-play/paplay before ffplay.
+  # - CLI: `record copy-last|paste-last|clear-last|release`, `config
+  #   validate`, `status --report`, `transcribe FILE`; `uninstall` keeps
+  #   settings unless --purge. faster-whisper on CPU now defaults to int8
+  #   (unused: no local backend is packaged).
   patches = [
+    ./hyprwhspr-nix-launcher.patch
     ./hyprwhspr-realtime-sample-rate.patch
     ./hyprwhspr-short-audio-archive.patch
     ./hyprwhspr-notification-text.patch
-    ./hyprwhspr-realtime-reopen.patch
     ./hyprwhspr-paste-notify.patch
-    ./hyprwhspr-filler-punctuation.patch
+    ./hyprwhspr-rest-redaction.patch
   ];
+
+  postPatch = ''
+    substituteInPlace bin/hyprwhspr bin/meeting-recorder \
+      --subst-var-by python "${pythonEnv}/bin/python"
+    substituteInPlace lib/cli.py --subst-var-by version "${version}"
+  '';
 
   nativeBuildInputs = [ makeWrapper ];
 
   # Package the whole upstream runtime tree (bin, config, lib, share, scripts,
-  # utils) -- the shipped commands reach across all of it -- and expose every
-  # user-facing launcher as a wrapper in $out/bin. A tool that lives only under
-  # $out/lib/hyprwhspr/bin (meeting-recorder was one) is unreachable. Upstream
-  # docs, contrib files, and license material go to $out/share/doc/hyprwhspr.
+  # utils) -- the shipped commands reach across all of it -- under
+  # $out/lib/hyprwhspr, a fixed store layout rather than an emulation of the
+  # managed one: no release.json, no ~/.local/share/hyprwhspr/{launcher,venv,
+  # releases}. The patched bin/hyprwhspr and bin/meeting-recorder run
+  # everything (CLI subcommands and the service alike) on pythonEnv, and each
+  # is exposed as a wrapper in $out/bin. A tool that lives only under
+  # $out/lib/hyprwhspr/bin is unreachable. Upstream docs, contrib files, and
+  # license material go to $out/share/doc/hyprwhspr.
   #
-  # This host runs the REST backend. Local backends such as pywhispercpp work
-  # only if their Python dependencies are added to pythonEnv above.
+  # Both profiles run the realtime-ws backend against the local qwen-asr-shim.
+  # Local backends (pywhispercpp, faster-whisper, onnx-asr, ...) work only if
+  # their Python dependencies are added to pythonEnv above; `hyprwhspr setup`
+  # and `backend` would try to pip-install them into a user venv instead.
   installPhase = ''
     runHook preInstall
 
@@ -133,29 +159,14 @@ stdenvNoCC.mkDerivation rec {
     cp -R bin config lib share scripts utils requirements*.txt "$appdir/"
     cp -R README.md LICENSE contrib docs "$docdir/"
 
-    makeWrapper ${bash}/bin/bash "$out/bin/hyprwhspr" \
-      --add-flags "$appdir/bin/hyprwhspr" \
-      --set HYPRWHSPR_ROOT "$appdir" \
-      --set PYTHONUNBUFFERED "1" \
-      --prefix PATH : "${runtimePath}" \
-      --prefix PYTHONPATH : "$appdir/lib:$appdir/lib/src"
-
-    makeWrapper ${bash}/bin/bash "$out/bin/meeting-recorder" \
-      --add-flags "$appdir/bin/meeting-recorder" \
-      --set HYPRWHSPR_ROOT "$appdir" \
-      --set PYTHONUNBUFFERED "1" \
-      --prefix PATH : "${runtimePath}" \
-      --prefix PYTHONPATH : "$appdir/lib:$appdir/lib/src"
-
-    substituteInPlace "$appdir/bin/hyprwhspr" \
-      --replace-fail 'local system_path="/usr/bin:/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/sbin"' \
-        'local system_path="${pythonEnv}/bin"' \
-      --replace-fail 'VENV_PYTHON="''${XDG_DATA_HOME:-$HOME/.local/share}/hyprwhspr/venv/bin/python"' \
-        'VENV_PYTHON="${pythonEnv}/bin/python"'
-
-    substituteInPlace "$appdir/bin/meeting-recorder" \
-      --replace-fail 'VENV_PYTHON="''${XDG_DATA_HOME:-$HOME/.local/share}/hyprwhspr/venv/bin/python"' \
-        'VENV_PYTHON="${pythonEnv}/bin/python"'
+    for program in hyprwhspr meeting-recorder; do
+      makeWrapper ${bash}/bin/bash "$out/bin/$program" \
+        --add-flags "$appdir/bin/$program" \
+        --set HYPRWHSPR_ROOT "$appdir" \
+        --set PYTHONUNBUFFERED "1" \
+        --prefix PATH : "${runtimePath}" \
+        --prefix PYTHONPATH : "$appdir/lib:$appdir/lib/src"
+    done
 
     # Nixpkgs ydotoold reports "unknown" for --version; trust the pinned package version.
     substituteInPlace "$appdir/lib/src/cli/_shared.py" \
@@ -164,58 +175,19 @@ stdenvNoCC.mkDerivation rec {
     substituteInPlace "$appdir/lib/src/text_injector.py" \
       --replace-fail 'Env: HYPRWHSPR_MODEL, HYPRWHSPR_BACKEND. 5s timeout.' \
         'Env: HYPRWHSPR_MODEL, HYPRWHSPR_BACKEND. 12s timeout.' \
-      --replace-fail 'text=True, timeout=5.0, env=env,' 'text=True, timeout=12.0, env=env,' \
-      --replace-fail 'time.sleep(0.15)' 'time.sleep(0.02)'
-
-    # Keep remote failure diagnostics useful without logging request values,
-    # endpoint URLs, response bodies, or exception strings.
-    substituteInPlace "$appdir/lib/src/backends/rest_api_backend.py" \
-      --replace-fail "print(f'WARNING: REST endpoint URL should start with https:// or http://: {endpoint_url}')" \
-        "print('WARNING: REST endpoint URL must use HTTP or HTTPS')" \
-      --replace-fail "print(f'[BACKEND] Using REST API: {endpoint_url}')" \
-        "print('[BACKEND] Using configured REST API')" \
-      --replace-fail "print(f'WARNING: Skipping non-serializable rest_headers entry: {key}')" \
-        "print('WARNING: Skipping invalid REST header entry')" \
-      --replace-fail "print(f'WARNING: Skipping rest_body entry with non-stringable key: {key}')" \
-        "print('WARNING: Skipping REST body entry with invalid key')" \
-      --replace-fail "print(f'WARNING: rest_body values must be scalar (key: {key_str}); skipping entry')" \
-        "print('WARNING: Skipping non-scalar REST body entry')" \
-      --replace-fail "log_msg = f'[REST API] {endpoint_url} - model: {model_info}'" \
-        "log_msg = '[REST API] configured endpoint'" \
-      --replace-fail "log_msg = f'[REST API] {endpoint_url}'" \
-        "log_msg = '[REST API] configured endpoint'" \
-      --replace-fail "f'[REST] Audio: {audio_duration:.2f}s @ {sample_rate}Hz, {len(wav_bytes)} bytes'," \
-        "'[REST] Audio prepared in memory'," \
-      --replace-fail "param_summary = ', '.join(f'{k}={v[:20] + \"...\" if isinstance(v, str) and len(v) > 20 else v}' for k, v in data.items())" \
-        "param_summary = ', '.join(sorted(str(k) for k in data))" \
-      --replace-fail "print(f'[REST] Request params: {param_summary}', flush=True)" \
-        "print(f'[REST] Request fields: {param_summary}', flush=True)" \
-      --replace-fail "print(f'[REST] Sending request to {endpoint_url}...', flush=True)" \
-        "print('[REST] Sending transcription request', flush=True)" \
-      --replace-fail "error_msg += f': {error_detail}'" \
-        "error_msg += ' (provider error details redacted)'" \
-      --replace-fail "error_msg += f': {response.text[:200]}'" \
-        "error_msg += ' (non-JSON provider error details redacted)'" \
-      --replace-fail "print(f'ERROR: Failed to parse JSON response: {json_err}')" \
-        "print('ERROR: REST API returned invalid JSON')" \
-      --replace-fail "print(f'[REST] Raw response body: {raw_body}')" \
-        "print('[REST] Response body redacted')" \
-      --replace-fail "print(f'[REST] Content-Type: {response.headers.get(\"Content-Type\", \"not set\")}')" \
-        "print('[REST] Response metadata redacted')" \
-      --replace-fail "print(f'ERROR: Unexpected response format: {result}')" \
-        "print('ERROR: REST API returned an unexpected response schema')" \
-      --replace-fail "print(f'ERROR: REST API request timed out after {timeout}s')" \
-        "print('ERROR: REST API transcription request timed out')" \
-      --replace-fail "print(f'ERROR: Failed to connect to REST API: {e}')" \
-        "print('ERROR: REST API connection failed')" \
-      --replace-fail "print(f'ERROR: REST API request failed: {e}')" \
-        "print('ERROR: REST API transcription request failed')" \
-      --replace-fail "print(f'ERROR: REST transcription failed: {e}')" \
-        "print('ERROR: REST transcription failed unexpectedly')"
+      --replace-fail 'text=True, timeout=5.0, env=env,' 'text=True, timeout=12.0, env=env,'
 
     substituteInPlace "$appdir/share/config.schema.json" \
       --replace-fail 'Subject to a 5s timeout; other errors pass through the original text.' \
         'Subject to a 12s timeout; other errors pass through the original text.'
+
+    # Clipboard-to-paste settle time. 1.40.0 hard-coded 0.15 s and this
+    # package cut it to 0.02 s; 1.46.0 made it `clipboard_settle_delay`, so
+    # keep the package default at 0.02 s (a profile value still wins).
+    substituteInPlace "$appdir/lib/src/config_manager.py" \
+      --replace-fail "'clipboard_settle_delay': 0.15," "'clipboard_settle_delay': 0.02,"
+    substituteInPlace "$appdir/share/config.schema.json" \
+      --replace-fail '"default": 0.15,' '"default": 0.02,'
 
     runHook postInstall
   '';
@@ -226,6 +198,16 @@ stdenvNoCC.mkDerivation rec {
     HYPRWHSPR_APPDIR="$out/lib/hyprwhspr" \
       HYPRWHISPR_CONFIG=${../config/hyprwhspr/profiles/qwen-audio3.json} \
       ${pythonEnv}/bin/python ${./hyprwhspr-provider-failure-test.py}
+
+    # The launcher runs on the store layout and never reaches for the
+    # managed-release machinery.
+    export HOME="$TMPDIR/home"
+    [ "$("$out/bin/hyprwhspr" --version)" = "hyprwhspr v${version}" ]
+    if "$out/bin/hyprwhspr" update 2>/dev/null; then
+      echo "hyprwhspr update must refuse in the Nix package" >&2
+      exit 1
+    fi
+    [ ! -e "$HOME/.local/share/hyprwhspr" ]
     runHook postInstallCheck
   '';
 

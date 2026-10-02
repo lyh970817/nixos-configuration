@@ -1,8 +1,21 @@
---- a/lib/main.py
-+++ b/lib/main.py
-@@ -1392,6 +1392,23 @@
-             except Exception:
-                 pass  # Best effort cleanup
+diff --git a/lib/src/app/recording.py b/lib/src/app/recording.py
+index a0db880..79ef91a 100644
+--- a/lib/src/app/recording.py
++++ b/lib/src/app/recording.py
+@@ -1,8 +1,10 @@
+ """The recording lifecycle: start, stop, cancel, processing and injection."""
+ 
+ import json
++import os
+ import threading
+ import time
++from pathlib import Path
+ 
+ from paths import DEBUG_RECORDINGS_DIR
+ from text_injector import InjectionOutcome
+@@ -651,6 +653,23 @@ class RecordingMixin:
+             self._cancel_live_typing()
+             self._recording_finalizing.clear()
  
 +    def _archive_short_dictation_audio(self, audio_data) -> None:
 +        """Best-effort archive of a realtime short-dictation mic capture."""
@@ -19,21 +32,21 @@
 +                audio_data, str(audio_dir / (timestamp + '.wav'))
 +            )
 +        except Exception as e:
-+            print(f"[ARCHIVE] Failed to save short dictation audio: {e}", flush=True)
++            log(f"[ARCHIVE] Failed to save short dictation audio: {e}")
 +
      def _process_audio(self, audio_data):
          """Process captured audio through Whisper"""
-         if self.is_processing:
-@@ -1400,6 +1417,12 @@
+         with self._recording_lock:
+@@ -660,6 +679,12 @@ class RecordingMixin:
+ 
          success = False
          try:
-             self.is_processing = True
-+
 +            backend = normalize_backend(
 +                self.config.get_setting('transcription_backend', 'pywhispercpp')
 +            )
 +            if backend == 'realtime-ws':
 +                self._archive_short_dictation_audio(audio_data)
- 
++
              # Transcribe audio with language override if set
              transcription = self.whisper_manager.transcribe_audio(
+                 audio_data,

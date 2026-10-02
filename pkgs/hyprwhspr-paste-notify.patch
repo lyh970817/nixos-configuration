@@ -1,15 +1,17 @@
+diff --git a/lib/src/text_injector.py b/lib/src/text_injector.py
+index 700be20..967922d 100644
 --- a/lib/src/text_injector.py
 +++ b/lib/src/text_injector.py
-@@ -1150,12 +1150,39 @@
+@@ -1613,12 +1613,38 @@ except Exception:
                        f"Using clipboard+paste instead.")
  
-             injected = self._inject_via_clipboard_and_hotkey(processed_text)
+             injected = self._inject_via_clipboard_and_hotkey(processed_text, retain=True)
 +            if injected:
 +                self._notify_paste_complete(processed_text)
              return InjectionOutcome.INJECTED if injected else InjectionOutcome.FAILED
  
          except Exception as e:
-             print(f"Primary injection method failed: {e}")
+             log(f"Primary injection method failed: {e}")
              return InjectionOutcome.FAILED
  
 +    def _notify_paste_complete(self, text: str) -> None:
@@ -17,9 +19,8 @@
 +
 +        The qwen-asr-shim listens on this loopback UDP port to stamp the
 +        paste-complete timestamp on its per-dictation latency record and to
-+        store the exact injected text (post filler-filter/hook) so a raw
-+        revert can erase precisely what was pasted. No listener, no harm.
-+        Env: HYPRWHSPR_PASTE_NOTIFY_PORT (default 8773, 0 disables).
++        store the exact injected text (post filler-filter/hook). No listener,
++        no harm. Env: HYPRWHSPR_PASTE_NOTIFY_PORT (default 8773, 0 disables).
 +        """
 +        try:
 +            import socket
@@ -39,4 +40,4 @@
 +
      # ------------------------ Helpers ------------------------
  
-     def _preprocess_text(self, text: str) -> str:
+     def _should_append_trailing_space(self, text: str) -> bool:

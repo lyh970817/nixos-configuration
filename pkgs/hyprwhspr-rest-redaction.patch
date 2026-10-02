@@ -1,0 +1,131 @@
+diff --git a/lib/src/backends/rest_api_backend.py b/lib/src/backends/rest_api_backend.py
+index cff0c1c..f036f68 100644
+--- a/lib/src/backends/rest_api_backend.py
++++ b/lib/src/backends/rest_api_backend.py
+@@ -60,14 +60,14 @@ class RestApiBackend(TranscriptionBackend):
+             return False
+ 
+         if not endpoint_url.startswith('https://') and not endpoint_url.startswith('http://'):
+-            log(f'WARNING: REST endpoint URL should start with https:// or http://: {endpoint_url}')
++            log('WARNING: REST endpoint URL must use HTTP or HTTPS')
+ 
+         # Validate timeout is reasonable
+         timeout = self.config.get_setting('rest_timeout', 30)
+         if timeout < 1 or timeout > 300:
+             log(f'WARNING: REST timeout should be between 1-300 seconds, got {timeout}')
+ 
+-        log(f'[BACKEND] Using REST API: {endpoint_url}')
++        log('[BACKEND] Using configured REST API')
+         log(f'[REST] Timeout configured: {timeout}s')
+ 
+         # Log user-defined config objects (sanitized)
+@@ -156,7 +156,7 @@ class RestApiBackend(TranscriptionBackend):
+                 try:
+                     extra_headers[str(key)] = str(value)
+                 except Exception:
+-                    log(f'WARNING: Skipping non-serializable rest_headers entry: {key}')
++                    log('WARNING: Skipping invalid REST header entry')
+ 
+             extra_body = {}
+             for key, value in rest_body.items():
+@@ -165,11 +165,11 @@ class RestApiBackend(TranscriptionBackend):
+                 try:
+                     key_str = str(key)
+                 except Exception:
+-                    log(f'WARNING: Skipping rest_body entry with non-stringable key: {key}')
++                    log('WARNING: Skipping REST body entry with invalid key')
+                     continue
+ 
+                 if isinstance(value, (dict, list, tuple, set)):
+-                    log(f'WARNING: rest_body values must be scalar (key: {key_str}); skipping entry')
++                    log('WARNING: Skipping non-scalar REST body entry')
+                     continue
+ 
+                 extra_body[key_str] = value
+@@ -181,16 +181,16 @@ class RestApiBackend(TranscriptionBackend):
+             model_info = rest_body.get('model') if isinstance(rest_body, dict) else None
+ 
+             if model_info:
+-                log_msg = f'[REST API] {endpoint_url} - model: {model_info}'
++                log_msg = '[REST API] configured endpoint'
+             else:
+-                log_msg = f'[REST API] {endpoint_url}'
++                log_msg = '[REST API] configured endpoint'
+ 
+             log(log_msg)
+ 
+             # Convert audio to WAV format
+             wav_bytes = self._numpy_to_wav_bytes(audio_data, sample_rate)
+             audio_duration = len(audio_data) / sample_rate
+-            log(f'[REST] Audio: {audio_duration:.2f}s @ {sample_rate}Hz, {len(wav_bytes)} bytes')
++            log('[REST] Audio prepared in memory')
+ 
+             # Prepare the request
+             files = {'file': ('audio.wav', wav_bytes, 'audio/wav')}
+@@ -218,11 +218,11 @@ class RestApiBackend(TranscriptionBackend):
+             # Log request parameters for debugging
+             if data:
+                 # Sanitize - don't log full prompt, just keys
+-                param_summary = ', '.join(f'{k}={v[:20] + "..." if isinstance(v, str) and len(v) > 20 else v}' for k, v in data.items())
+-                log(f'[REST] Request params: {param_summary}')
++                param_summary = ', '.join(sorted(str(k) for k in data))
++                log(f'[REST] Request fields: {param_summary}')
+ 
+             # Send the request
+-            log(f'[REST] Sending request to {endpoint_url}...')
++            log('[REST] Sending transcription request')
+             start_time = time.time()
+             response = requests.post(endpoint_url, files=files, data=data, headers=headers, timeout=timeout)
+             response_time = time.time() - start_time
+@@ -233,9 +233,9 @@ class RestApiBackend(TranscriptionBackend):
+                 error_msg = f'REST API returned status {response.status_code}'
+                 try:
+                     error_detail = response.json()
+-                    error_msg += f': {error_detail}'
++                    error_msg += ' (provider error details redacted)'
+                 except Exception:
+-                    error_msg += f': {response.text[:200]}'
++                    error_msg += ' (non-JSON provider error details redacted)'
+                 log(f'ERROR: {error_msg}')
+                 return ''
+ 
+@@ -245,9 +245,9 @@ class RestApiBackend(TranscriptionBackend):
+             except Exception as json_err:
+                 # Show raw response for debugging
+                 raw_body = response.text[:500] if response.text else '(empty)'
+-                log(f'ERROR: Failed to parse JSON response: {json_err}')
+-                log(f'[REST] Raw response body: {raw_body}')
+-                log(f'[REST] Content-Type: {response.headers.get("Content-Type", "not set")}')
++                log('ERROR: REST API returned invalid JSON')
++                log('[REST] Response body redacted')
++                log('[REST] Response metadata redacted')
+                 return ''
+ 
+             # Try common response formats
+@@ -259,21 +259,21 @@ class RestApiBackend(TranscriptionBackend):
+             elif 'result' in result:
+                 transcription = result['result']
+             else:
+-                log(f'ERROR: Unexpected response format: {result}')
++                log('ERROR: REST API returned an unexpected response schema')
+                 return ''
+ 
+             log(f'[REST] Transcription received ({len(transcription)} chars)')
+             return transcription.strip()
+ 
+         except requests.exceptions.Timeout:
+-            log(f'ERROR: REST API request timed out after {timeout}s')
++            log('ERROR: REST API transcription request timed out')
+             return ''
+         except requests.exceptions.ConnectionError as e:
+-            log(f'ERROR: Failed to connect to REST API: {e}')
++            log('ERROR: REST API connection failed')
+             return ''
+         except requests.exceptions.RequestException as e:
+-            log(f'ERROR: REST API request failed: {e}')
++            log('ERROR: REST API transcription request failed')
+             return ''
+         except Exception as e:
+-            log(f'ERROR: REST transcription failed: {e}')
++            log('ERROR: REST transcription failed unexpectedly')
+             return ''

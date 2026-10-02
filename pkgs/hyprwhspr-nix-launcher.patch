@@ -1,0 +1,129 @@
+diff --git a/bin/hyprwhspr b/bin/hyprwhspr
+index b38031d..44f9410 100755
+--- a/bin/hyprwhspr
++++ b/bin/hyprwhspr
+@@ -10,8 +10,12 @@ unset PYTHONHOME
+ # Get the directory where this script is located
+ SCRIPT_DIR="$(cd "$(dirname $(readlink -f "$0"))" && pwd)"
+ PACKAGE_ROOT="$(dirname "$SCRIPT_DIR")"
+-if [[ -f "$PACKAGE_ROOT/release.json" && -x "${XDG_DATA_HOME:-$HOME/.local/share}/hyprwhspr/launcher" ]]; then
+-    exec "${XDG_DATA_HOME:-$HOME/.local/share}/hyprwhspr/launcher" "$@"
++# Nix: a store package, not a managed release. Never hand off to a
++# ~/.local/share/hyprwhspr/launcher, and refuse the self-update and managed
++# install-repair commands, which would populate ~/.local/share/hyprwhspr/releases.
++if [[ "$1" == "update" || ( "$1" == "install" && ( "$2" == "repair" || "$2" == "status" ) ) ]]; then
++    echo "hyprwhspr is installed by Nix; update it through the system configuration." >&2
++    exit 1
+ fi
+ 
+ # Determine the library directory
+@@ -33,61 +37,10 @@ fi
+ export HYPRWHSPR_ROOT="$PACKAGE_ROOT"
+ export PYTHONPATH="$LIB_DIR${PYTHONPATH:+:$PYTHONPATH}"
+ 
+-# Find system Python, avoiding mise/pyenv/asdf/homebrew managed versions
+-# CLI commands use system Python since deps are installed via package manager
+-SYSTEM_PYTHON_CANDIDATES=(
+-    /usr/bin/python3
+-    /usr/bin/python
+-    /bin/python3
+-    /bin/python
+-    /usr/local/bin/python3
+-    /usr/local/bin/python
+-)
+-
+-# hyprwhspr requires 3.11-3.14, matching managed_install.interpreter(),
+-# scripts/install.sh and scripts/managed-launcher.sh. Reject older interpreters
+-# here so the user gets this message instead of an AttributeError from
+-# hashlib.file_digest deeper in the CLI.
+-supported_python() {
+-    "$1" -c 'import sys; raise SystemExit(0 if (3, 11) <= sys.version_info[:2] <= (3, 14) else 1)' 2>/dev/null
+-}
+-
+-get_system_python() {
+-    local py
+-    for py in "${SYSTEM_PYTHON_CANDIDATES[@]}"; do
+-        [ -x "$py" ] && supported_python "$py" && { echo "$py"; return 0; }
+-    done
+-    py="$(command -v python3 2>/dev/null || command -v python 2>/dev/null || true)"
+-    if [ -n "$py" ] \
+-        && [ -z "${VIRTUAL_ENV:-}" ] \
+-        && [ -z "${MISE_SHELL:-}" ] \
+-        && [ -z "${__MISE_ACTIVATE:-}" ] \
+-        && { [ -z "${HOME:-}" ] || [[ "$py" != "$HOME/"* ]]; } \
+-        && [[ "$py" != *"/.local/share/mise/"* ]] \
+-        && [[ "$py" != *"/.pyenv/"* ]] \
+-        && [[ "$py" != *"/.asdf/"* ]] \
+-        && "$py" -c 'import sys; raise SystemExit(0 if sys.prefix == sys.base_prefix else 1)' \
+-        && supported_python "$py"; then
+-        echo "$py"
+-        return 0
+-    fi
+-    return 1
+-}
+-
+-# Always use system Python for CLI commands
+-# Dependencies (python-rich, etc.) are installed via package manager to system site-packages
+-# This avoids issues with mise/pyenv/asdf hijacking python3 to a version without those deps
+-CLI_PYTHON="$(get_system_python)"
+-if [[ -z "$CLI_PYTHON" ]]; then
+-    echo "Error: No supported system Python found (need 3.11-3.14)." >&2
+-    echo "hyprwhspr requires system Python with distro packages (python-rich, etc.)." >&2
+-    echo "Install a supported Python via your package manager, for example:" >&2
+-    echo "  pacman -S python     apt install python3.12     dnf install python3.12" >&2
+-    exit 1
+-fi
+-
+-# Find venv Python (for main app execution)
+-VENV_PYTHON="${XDG_DATA_HOME:-$HOME/.local/share}/hyprwhspr/venv/bin/python"
++# Nix: the CLI and the service share one fixed interpreter from the store,
++# which carries every dependency this package supports.
++CLI_PYTHON="@python@"
++VENV_PYTHON="@python@"
+ PYTHON_CMD="$VENV_PYTHON"
+ 
+ require_app_venv() {
+diff --git a/bin/meeting-recorder b/bin/meeting-recorder
+index 6f98c60..85b985e 100755
+--- a/bin/meeting-recorder
++++ b/bin/meeting-recorder
+@@ -30,7 +30,7 @@ export HYPRWHSPR_ROOT="$PACKAGE_ROOT"
+ export PYTHONPATH="$LIB_DIR:${LIB_DIR}/src:$PYTHONPATH"
+ 
+ # Find venv Python
+-VENV_PYTHON="${XDG_DATA_HOME:-$HOME/.local/share}/hyprwhspr/venv/bin/python"
++VENV_PYTHON="@python@"
+ if [ ! -f "$VENV_PYTHON" ]; then
+     echo "Error: hyprwhspr venv not found at $VENV_PYTHON" >&2
+     echo "Run: hyprwhspr setup" >&2
+diff --git a/lib/cli.py b/lib/cli.py
+index d19a3d5..6caacc0 100755
+--- a/lib/cli.py
++++ b/lib/cli.py
+@@ -23,24 +23,8 @@ except ImportError:
+ 
+ 
+ def _get_version():
+-    import subprocess
+-    import json
+-    metadata = Path(__file__).parent.parent / 'release.json'
+-    if metadata.is_file():
+-        try:
+-            version = json.loads(metadata.read_text(encoding="utf-8"))['version']
+-            return version if isinstance(version, str) and version else 'unknown'
+-        except (OSError, ValueError, KeyError, TypeError):
+-            return 'unknown'
+-    try:
+-        result = subprocess.run(
+-            ['git', 'describe', '--tags', '--abbrev=7'],
+-            cwd=Path(__file__).parent.parent,
+-            capture_output=True, text=True, check=True, timeout=2
+-        )
+-        return result.stdout.strip()
+-    except Exception:
+-        return 'unknown'
++    # Nix: the store holds neither release.json nor a git checkout.
++    return 'v@version@'
+ 
+ 
+ class _VersionAction(argparse.Action):
