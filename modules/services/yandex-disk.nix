@@ -31,8 +31,9 @@ let
   # (which itself stays synced). A path containing , " \ or a control
   # character cannot be written to the list: it is skipped with a warning.
   # Add a permanent entry to staticExcludes, path relative to ~/Yandex.Disk.
-  # The list is rebuilt on every daemon start and every 30 minutes; a timer
-  # run restarts the daemon only when a path not already excluded appears.
+  # The list is built on the first daemon start and refreshed every 30
+  # minutes; a timer run rewrites it and restarts the daemon only when a path
+  # not already excluded appears, so stale entries linger until then.
   staticExcludes = [
     # The encrypted backup repository.
     "restic"
@@ -51,6 +52,13 @@ let
     ]
     ++ map (path: "--static=${path}") staticExcludes
   );
+
+  excludesFirstScan = pkgs.writeShellScript "yandex-disk-excludes-first-scan" ''
+    if ${pkgs.gnugrep}/bin/grep -q '^exclude-dirs=' ${lib.escapeShellArg configFile} 2>/dev/null; then
+      exit 0
+    fi
+    exec ${pkgs.coreutils}/bin/timeout 60 ${yandexDiskExcludes}/bin/yandex-disk-excludes ${excludesArgs}
+  '';
 
   # `yandex-disk start --no-daemon` never reads config.cfg (only the forking
   # `start` does, re-executing itself with --exclude-dirs), so the list is
@@ -240,9 +248,10 @@ in
 
     serviceConfig = {
       User = "andongni";
-      # Refresh the list before each start. "-" and the timeout let the
-      # daemon start on the previous list if the scan fails or stalls.
-      ExecStartPre = "-${pkgs.coreutils}/bin/timeout 60 ${yandexDiskExcludes}/bin/yandex-disk-excludes ${excludesArgs}";
+      # Scan before start only when no list exists yet: a cold scan costs
+      # ~25s at boot, and the niced timer picks up new paths. "-" and the
+      # timeout let the daemon start on the static list if the scan fails.
+      ExecStartPre = "-${excludesFirstScan}";
       ExecStart = "${yandexDiskStart}/bin/yandex-disk-start";
       ExecStop = "${pkgs.yandex-disk}/bin/yandex-disk stop";
       Restart = "on-failure";
