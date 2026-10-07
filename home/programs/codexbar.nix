@@ -329,16 +329,21 @@ in
   # remain declaratively enabled: disabling a Home Manager unit through
   # systemctl would also remove its managed unit-file symlink. The marker and
   # unit conditions provide the durable disabled state instead.
+  # At boot HM activates before the user manager exists; skip like reloadSystemd.
   home.activation.reconcileClaudeLimitWatch = lib.hm.dag.entryAfter [ "reloadSystemd" ] ''
-    if [ -e ${lib.escapeShellArg claudeLimitWatchDisabledMarker} ]; then
-      run ${pkgs.systemd}/bin/systemctl --user stop \
+    limitWatchRuntime="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+    limitWatchSystemd=$(XDG_RUNTIME_DIR="$limitWatchRuntime" ${pkgs.systemd}/bin/systemctl --user is-system-running 2>&1 || true)
+    if [ "$limitWatchSystemd" != running ] && [ "$limitWatchSystemd" != degraded ]; then
+      echo "User systemd daemon not running. Skipping claude-limit-watch reconcile."
+    elif [ -e ${lib.escapeShellArg claudeLimitWatchDisabledMarker} ]; then
+      XDG_RUNTIME_DIR="$limitWatchRuntime" run ${pkgs.systemd}/bin/systemctl --user stop \
         claude-limit-watch.path claude-limit-watch.timer claude-limit-watch.service
-      run ${pkgs.systemd}/bin/systemctl --user reset-failed \
+      XDG_RUNTIME_DIR="$limitWatchRuntime" run ${pkgs.systemd}/bin/systemctl --user reset-failed \
         claude-limit-watch.path claude-limit-watch.timer claude-limit-watch.service
     else
-      run ${pkgs.systemd}/bin/systemctl --user reset-failed \
+      XDG_RUNTIME_DIR="$limitWatchRuntime" run ${pkgs.systemd}/bin/systemctl --user reset-failed \
         claude-limit-watch.path claude-limit-watch.timer claude-limit-watch.service
-      run ${pkgs.systemd}/bin/systemctl --user start \
+      XDG_RUNTIME_DIR="$limitWatchRuntime" run ${pkgs.systemd}/bin/systemctl --user start \
         claude-limit-watch.path claude-limit-watch.timer
     fi
   '';
