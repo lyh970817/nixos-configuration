@@ -276,6 +276,13 @@ let
     '';
   };
 
+  # Yield CPU and disk to the desktop.
+  backgroundPriority = {
+    Nice = 19;
+    IOSchedulingClass = "idle";
+    CPUWeight = "idle";
+  };
+
   secretsPresent = [
     rcloneConfigFile
     homePasswordFile
@@ -298,9 +305,10 @@ in
     # per-run overhead is a couple of seconds of remote round trips, and the
     # payoff is that a file created and destroyed between two dailies is no
     # longer invisible to every tier at once.
+    # No catch-up run at boot: the next slot is at most 15 minutes away.
     timerConfig = {
       OnCalendar = "*:0/15";
-      Persistent = true;
+      Persistent = false;
       RandomizedDelaySec = "60";
     };
 
@@ -324,7 +332,8 @@ in
       # still runs ExecStopPost, so reflect that lifecycle failure while
       # leaving a successful wrapper's finished state intact.
       ExecStopPost = [ "${restic-backup-status}/bin/restic-backup-status finalize" ];
-    };
+    }
+    // backgroundPriority;
   };
 
   systemd.services.restic-prune-home = {
@@ -336,7 +345,8 @@ in
       Type = "oneshot";
       User = user;
       ExecStart = "${restic-prune-home}/bin/restic-prune-home";
-    };
+    }
+    // backgroundPriority;
   };
 
   systemd.timers.restic-prune-home = {
