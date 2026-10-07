@@ -7,15 +7,22 @@
 let
   allowed = pkgs.writeShellApplication {
     name = "sync-power-allowed";
-    runtimeInputs = [ pkgs.power-profiles-daemon ];
+    runtimeInputs = [
+      pkgs.power-profiles-daemon
+      pkgs.systemd
+      pkgs.coreutils
+    ];
+    # Check AC from sysfs first, and never D-Bus-activate the daemon: it is
+    # After=multi-user.target, so a boot-time query deadlocks until timeout.
     text = ''
-      [[ $(powerprofilesctl get) != power-saver ]] && exit 0
       for supply in /sys/class/power_supply/*; do
         if [[ -f "$supply/online" ]] && [[ $(< "$supply/online") == 1 ]]; then
           exit 0
         fi
       done
-      exit 1
+      systemctl is-active --quiet power-profiles-daemon.service || exit 0
+      profile=$(timeout 3 powerprofilesctl get) || exit 0
+      [[ $profile != power-saver ]]
     '';
   };
   reconcile = pkgs.writeShellApplication {
