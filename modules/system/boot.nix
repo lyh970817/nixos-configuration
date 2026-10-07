@@ -12,4 +12,6 @@
   # modules/system/nix.nix does the real work.
   boot.loader.systemd-boot.configurationLimit = 20;
   boot.loader.efi.canTouchEfiVariables = true;
+  # Any key in that second stops the countdown.
+  boot.loader.timeout = 1;
 }
