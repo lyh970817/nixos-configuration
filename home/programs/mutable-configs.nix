@@ -1224,7 +1224,7 @@ in
       failure_status="$2"
       if printf '%s\n' "$failure_output" \
         | ${pkgs.gnugrep}/bin/grep -Eiq \
-          'network|dns|resolve|github|remote|timed[ -]?out|timeout|connection|fetch|tls|temporar|unavailable|clone|premature|out[ -]?of[ -]?date|already (enabled|disabled|installed|exists)|502|503|429'; then
+          'network|dns|resolve|github|remote|timed[ -]?out|timeout|connection|fetch|tls|temporar|unavailable|clone|premature|out[ -]?of[ -]?date|already (installed|exists)|502|503|429'; then
         echo "warning: transient Claude marketplace failure (status $failure_status); will retry on next activation: $failure_output" >&2
         return 0
       fi
@@ -1271,23 +1271,27 @@ in
         return 0
       fi
 
-      while IFS="$(printf '\t')" read -r plugin_name plugin_enabled; do
-        [ -n "$plugin_name" ] || continue
+      # One listing per profile; each `claude` call is slow at boot.
+      claude_plugin_list() {
         if plugin_list="$(${pkgs.claude-code}/bin/claude plugin list --json 2>&1)"; then
           :
         else
           plugin_status="$?"
-          if claude_handle_failure "$plugin_list" "$plugin_status"; then
-            continue
-          else
-            return 1
-          fi
+          claude_handle_failure "$plugin_list" "$plugin_status" || return 1
+          plugin_list=""
+          return 0
         fi
         if ! printf '%s\n' "$plugin_list" \
           | "$claude_jq" -e 'type == "array"' >/dev/null 2>&1; then
           echo "error: Claude plugin list returned invalid JSON: $plugin_list" >&2
           return 1
         fi
+      }
+      claude_plugin_list || return 1
+      [ -n "$plugin_list" ] || return 0
+
+      while IFS="$(printf '\t')" read -r plugin_name plugin_enabled; do
+        [ -n "$plugin_name" ] || continue
         if ! printf '%s\n' "$plugin_list" \
           | "$claude_jq" -e --arg plugin "$plugin_name" \
             'any(.[]; .id == $plugin)' >/dev/null 2>&1; then
@@ -1301,6 +1305,13 @@ in
             claude_handle_failure "$plugin_install" "$plugin_status" || return 1
             continue
           fi
+          claude_plugin_list || return 1
+          [ -n "$plugin_list" ] || continue
+        fi
+        if printf '%s\n' "$plugin_list" \
+          | "$claude_jq" -e --arg plugin "$plugin_name" --argjson enabled "$plugin_enabled" \
+            'any(.[]; .id == $plugin and .enabled == $enabled)' >/dev/null 2>&1; then
+          continue
         fi
         if [ "$plugin_enabled" = true ]; then
           plugin_toggle=enable
@@ -1311,7 +1322,11 @@ in
           :
         else
           plugin_status="$?"
-          claude_handle_failure "$plugin_toggled" "$plugin_status" || return 1
+          # A race with another session can still leave it already toggled.
+          if ! printf '%s\n' "$plugin_toggled" \
+            | ${pkgs.gnugrep}/bin/grep -Eiq 'already (enabled|disabled)'; then
+            claude_handle_failure "$plugin_toggled" "$plugin_status" || return 1
+          fi
         fi
       done < <("$claude_jq" -r --arg profile "$claude_profile_name" \
         '.[$profile].plugins // {} | to_entries[] | [.key, (.value | tostring)] | @tsv' \
