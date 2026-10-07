@@ -167,11 +167,11 @@ let
         cly) claude_profile_args=(--dangerously-skip-permissions) ;;
         clo)
           claude_profile_args=(--dangerously-skip-permissions --model opus
-            --append-system-prompt-file "$HOME/.config/claude/orchestrator-opus.md")
+            --append-system-prompt-file "$HOME/.config/claude/orchestrator.md")
           ;;
         clfo)
           claude_profile_args=(--dangerously-skip-permissions --model claude-fable-5-1
-            --append-system-prompt-file "$HOME/.config/claude/orchestrator-fable.md")
+            --append-system-prompt-file "$HOME/.config/claude/orchestrator.md")
           ;;
         *)
           echo "claude: unknown CLAUDE_PROFILE: $claude_profile" >&2

@@ -36,13 +36,13 @@ Default case — fresh worktree, prompt first; `-w` creates or reuses
 `.claude/worktrees/<name>` on branch `worktree-<name>`:
 
 ```sh
-claude --bg "<handoff briefing>" --append-system-prompt-file ~/.config/claude/orchestrator-opus.md -w handoff-auth
+claude --bg "<handoff briefing>" --append-system-prompt-file ~/.config/claude/orchestrator.md -w handoff-auth
 ```
 
 Repository-untouching case — same directory, no worktree:
 
 ```sh
-claude --bg "<handoff briefing>" --append-system-prompt-file ~/.config/claude/orchestrator-opus.md
+claude --bg "<handoff briefing>" --append-system-prompt-file ~/.config/claude/orchestrator.md
 ```
 
 Inline variant, if the prompt text is not kept in a file:
@@ -159,7 +159,7 @@ the new job's transcript. Marker absent confirms the above.
   prompt text has to exist somewhere the skill can read at launch time.
 
 Recommended either way: keep the text in a file —
-`~/.config/claude/orchestrator-{opus,fable}.md`, out-of-store symlinks to
+`~/.config/claude/orchestrator.md`, an out-of-store symlink into
 `dotfiles/claude/` — and have both the user's launcher
 and this skill pass `--append-system-prompt-file <path>`. Reasons: the skill
 never has to reconstruct or quote multi-line text; launcher and handoff cannot

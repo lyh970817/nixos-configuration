@@ -5,7 +5,7 @@ script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 test_dir=$(mktemp -d)
 trap 'rm -rf -- "$test_dir"' EXIT
 mkdir -p "$test_dir/bin" "$test_dir/home/.config/claude"
-: >"$test_dir/home/.config/claude/orchestrator-opus.md"
+: >"$test_dir/home/.config/claude/orchestrator.md"
 
 cat >"$test_dir/bin/herdr" <<'MOCK'
 #!/usr/bin/env bash
@@ -99,7 +99,7 @@ run_launch() {
 run_launch claude tab resume
 grep -Fx "tab create --workspace w9 --cwd /work/project --no-focus " "$test_dir/log"
 grep -Fx \
-  "agent start claude-orch-w9p2 --kind claude --pane w9:p2 -- --dangerously-skip-permissions --model claude-opus-5 --append-system-prompt-file $test_dir/home/.config/claude/orchestrator-opus.md --resume " \
+  "agent start claude-orch-w9p2 --kind claude --pane w9:p2 -- --dangerously-skip-permissions --model claude-opus-5 --append-system-prompt-file $test_dir/home/.config/claude/orchestrator.md --resume " \
   "$test_dir/log"
 grep -Fx "agent focus claude-orch-w9p2 " "$test_dir/log"
 

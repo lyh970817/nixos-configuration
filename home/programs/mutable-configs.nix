@@ -1631,10 +1631,9 @@ in
     "claude/CLAUDE.md".source = link "dotfiles/claude/CLAUDE.md";
     "claude/statusline.sh".source = link "dotfiles/claude/statusline.sh";
     "claude/hooks/response-simplifier.sh".source = link "dotfiles/claude/hooks/response-simplifier.sh";
-    # Orchestrator system prompts, passed by the `clo` alias and by the
+    # Orchestrator system prompt, passed by the `clo`/`clfo` aliases and by the
     # session-handoff skill with --append-system-prompt-file.
-    "claude/orchestrator-opus.md".source = link "dotfiles/claude/orchestrator-opus.md";
-    "claude/orchestrator-fable.md".source = link "dotfiles/claude/orchestrator-fable.md";
+    "claude/orchestrator.md".source = link "dotfiles/claude/orchestrator.md";
     # Rewrite prompt for the MessageDisplay hook above, passed with
     # --system-prompt-file.
     "claude/response-simplifier.md".source = link "dotfiles/claude/response-simplifier.md";

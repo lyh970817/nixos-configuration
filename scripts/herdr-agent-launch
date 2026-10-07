@@ -54,7 +54,7 @@ export HERDR_WORKSPACE_ID="$workspace_id"
 export HERDR_PANE_ID="$pane_id"
 
 if [[ $agent_kind == claude ]]; then
-  orchestrator_prompt="$HOME/.config/claude/orchestrator-opus.md"
+  orchestrator_prompt="$HOME/.config/claude/orchestrator.md"
   if [[ ! -r $orchestrator_prompt ]]; then
     herdr notification show "Claude launch failed" \
       --body "Missing orchestrator prompt: $orchestrator_prompt" \

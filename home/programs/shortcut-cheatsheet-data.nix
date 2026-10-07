@@ -673,7 +673,7 @@
         key = "cly";
       }
       {
-        description = "Opus 5 orchestrator (yolo)";
+        description = "Opus orchestrator (yolo)";
         key = "clo";
       }
       {

@@ -16,12 +16,12 @@ arguments and will swallow a trailing prompt.
 
 ```sh
 claude --bg "<briefing>" --model <this session's model> \
-  --append-system-prompt-file ~/.config/claude/orchestrator-opus.md \
+  --append-system-prompt-file ~/.config/claude/orchestrator.md \
   -w <name>
 ```
 
-Use `orchestrator-fable.md` for a Fable session. `--append-system-prompt-file`
-is required: a `--bg` session inherits nothing from this one.
+`--append-system-prompt-file` is required: a `--bg` session inherits nothing
+from this one.
 
 `-w <name>` create-or-reuses `.claude/worktrees/<name>` on branch
 `worktree-<name>`, branched from the local HEAD (`worktree.baseRef: "head"`).
