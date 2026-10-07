@@ -10,8 +10,10 @@
 # side. `key_file` is still required: without it Yazi falls back to
 # $SSH_AUTH_SOCK, which points at a Bitwarden agent socket that is often
 # absent, and the connection fails with "No such file or directory".
-[services.home]
-type = "sftp"
+#
+# Yazi 26.9 keys services as `[<scheme>.<domain>]`; the sftp scheme implies
+# the service kind, so there is no `type`/`kind` field.
+[sftp.home]
 host = "home"
 user = "andongni"
 port = 22
