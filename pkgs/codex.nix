@@ -10,11 +10,11 @@
 
 stdenv.mkDerivation (finalAttrs: {
   pname = "codex";
-  version = "0.159.3";
+  version = "0.160.1";
 
   src = fetchzip {
     url = "https://registry.npmjs.org/@openai/codex/-/codex-${finalAttrs.version}-linux-x64.tgz";
-    hash = "sha256-G+SLUI/veC47fDKDh3zRzuZtesLXd06BWeCOHtgyfD8=";
+    hash = "sha256-krzg1UZPgKZerrSaenECQhnpd/4/YxFL6fnWyxlN1Kw=";
   };
 
   dontBuild = true;
