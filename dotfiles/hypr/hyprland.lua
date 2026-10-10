@@ -507,6 +507,7 @@ local autofloat = {
     "kitty-btop",
     "brave-browser",
     "chatgpt",
+    "chatgpt-orchestrator",
     "115Browser",
     "Thunar",
     "thunar",
@@ -752,11 +753,13 @@ hl.window_rule({
 })
 
 -- ChatGPT Desktop opens on workspace 9 (autostarted by the `chatgpt` user
--- service). A workspace rule only applies when the window maps, so the window
--- stays freely movable afterwards -- nothing pulls it back.
+-- service, whose orchestrator profile maps as `chatgpt-orchestrator`; a
+-- manually launched plain profile maps as `chatgpt`). A workspace rule only
+-- applies when the window maps, so the window stays freely movable afterwards
+-- -- nothing pulls it back.
 hl.window_rule({
   name = "chatgpt-workspace-9",
-  match = { class = "^(chatgpt)$" },
+  match = { class = "^(chatgpt|chatgpt-orchestrator)$" },
   workspace = "9 silent",
 })
 
@@ -778,7 +781,7 @@ quiet_graphite_rule({
 
 quiet_graphite_rule({
   name = "quiet-graphite-apps",
-  match = { class = "^(brave-browser|chatgpt)$" },
+  match = { class = "^(brave-browser|chatgpt|chatgpt-orchestrator)$" },
   border_size = 2,
   border_color = "rgba(48504Bff) rgba(282E2Aff)",
   rounding = 12,
