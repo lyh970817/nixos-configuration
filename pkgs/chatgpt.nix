@@ -5,6 +5,7 @@
   fetchurl,
   autoPatchelfHook,
   brave,
+  bubblewrap,
   chromium,
   dpkg,
   python3,
@@ -180,7 +181,10 @@ let
       export XDG_DATA_HOME="$HOME/.local/share/${stateName}"
       export XDG_CACHE_HOME="$HOME/.cache/${stateName}"
       export CODEX_ELECTRON_USER_DATA_PATH="$XDG_CONFIG_HOME/Codex"
-      export PATH="${lib.makeBinPath browserLaunchers}:$PATH"
+      # The phone client probes the host with read-only `command/exec`
+      # requests whatever the profile's permissions are, and the app-server
+      # panics before running them when no bwrap is on PATH.
+      export PATH="${lib.makeBinPath (browserLaunchers ++ [ bubblewrap ])}:$PATH"
       export CODEX_CHROME_USER_DATA_DIR="$HOME/.config/chromium"
       export CODEX_CHROME_PREFERENCES_PATH="$HOME/.config/chromium/Default/Preferences"
       export CODEX_CHROME_NATIVE_HOST_MANIFEST_PATH="$HOME/.config/chromium/NativeMessagingHosts/com.openai.codexextension.json"
