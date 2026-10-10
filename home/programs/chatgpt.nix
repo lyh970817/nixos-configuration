@@ -16,6 +16,11 @@ in
 {
   home.packages = [
     pkgs.chatgpt
+    # The phone client probes the host with read-only `command/exec` requests
+    # whatever the profile's permissions are, and the app-server panics before
+    # running them when no bwrap is on PATH. The app replaces the launcher's
+    # PATH with the login shell's, so bwrap has to be in the user profile.
+    pkgs.bubblewrap
   ];
 
   home.file.".codex-desktop/AGENTS.md".source = link "dotfiles/codex/desktop-AGENTS.md";
