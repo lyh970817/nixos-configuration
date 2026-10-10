@@ -15,7 +15,7 @@
       }
     },
     "plugins": {
-      "skill-creator@claude-plugins-official": true,
+      "skill-creator@claude-plugins-official": false,
       "last30days@last30days-skill": false,
       "compact-adviser@compact-adviser": true
     }
