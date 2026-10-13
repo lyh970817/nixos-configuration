@@ -58,8 +58,8 @@ let
   };
 
   # Yazi always runs its opener on the machine Yazi itself runs on. Inside a
-  # mosh session that means the opener fires on home while the screen is on
-  # the laptop, so a plain `brave` would paint a window nobody is sitting in
+  # mosh or SSH session that means the opener fires on home while the screen is
+  # on the laptop, so a plain `brave` would paint a window nobody is sitting in
   # front of. Serve the page over the tailnet and let the peer open it --
   # copying the single file would break the sibling `*_files/` asset trees
   # that R Markdown and Quarto emit next to their output.

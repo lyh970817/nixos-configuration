@@ -1,5 +1,6 @@
-# Exits 0 when the human is at the far end of a mosh link, i.e. when this
-# machine's own screen is not the one being looked at. Shared by every opener
+# Exits 0 when the human is at the far end of a mosh link or an interactive
+# SSH session, i.e. when this machine's own screen is not the one being looked
+# at. Shared by every opener
 # that has to decide between painting a local window and pushing to the peer;
 # a second copy of this detection would drift.
 {
@@ -23,8 +24,27 @@ writeShellApplication {
     gawk
   ];
   text = ''
-    # Walk a process ancestry looking for mosh-server.
-    ancestry_has_mosh() {
+    # Tailscale SSH, the only SSH server on these hosts, runs each session
+    # under a `tailscaled be-child ssh` process whose arguments record whether
+    # the client asked for a terminal. Only a TTY session counts: a scripted
+    # `ssh host cmd` from the peer is an agent or a dispatcher, not someone
+    # looking at a screen.
+    is_tailscale_tty_session() {
+      local arg
+      local -a argv
+      mapfile -d "" -t argv 2>/dev/null < "/proc/$1/cmdline" || return 1
+      if [ "''${argv[1]:-}" != be-child ] || [ "''${argv[2]:-}" != ssh ]; then
+        return 1
+      fi
+      for arg in "''${argv[@]}"; do
+        [ "$arg" = --has-tty=true ] && return 0
+      done
+      return 1
+    }
+
+    # Walk a process ancestry looking for mosh-server or an interactive SSH
+    # session.
+    ancestry_has_remote_link() {
       local pid="$1" comm
       while [ -n "$pid" ]; do
         case "$pid" in
@@ -32,7 +52,7 @@ writeShellApplication {
         esac
         [ "$pid" -gt 1 ] || return 1
         comm="$(ps -o comm= -p "$pid" 2>/dev/null | tr -d ' ' || true)"
-        if [ "$comm" = "mosh-server" ]; then
+        if [ "$comm" = "mosh-server" ] || is_tailscale_tty_session "$pid"; then
           return 0
         fi
         pid="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ' || true)"
@@ -60,8 +80,9 @@ writeShellApplication {
 
     # A Herdr server is shared by local and remote attachments, so its name
     # alone cannot identify who is viewing it. The remote client creates one
-    # PID/starttime lease for each live mosh attachment; compare starttime to
-    # reject both stale files and recycled PIDs without deleting foreign state.
+    # PID/starttime lease for each live mosh or SSH attachment; compare
+    # starttime to reject both stale files and recycled PIDs without deleting
+    # foreign state.
     has_remote_view_lease() {
       local uid runtime_dir lease_dir lease pid_line starttime_line pid starttime actual_starttime
       local -a lease_lines
@@ -110,18 +131,18 @@ writeShellApplication {
         ' >/dev/null
     }
 
-    # Direct mosh shells and any remaining tmux sessions need different checks:
-    # the former descend from mosh-server, while the latter need their attached
-    # client PIDs inspected.
+    # Direct mosh or SSH shells and any remaining tmux sessions need different
+    # checks: the former descend from the remote link, while the latter need
+    # their attached client PIDs inspected.
     viewer_is_remote() {
-      # No tmux: the caller's own ancestry reaches mosh-server directly.
-      if ancestry_has_mosh "$$"; then
+      # No tmux: the caller's own ancestry reaches the remote link directly.
+      if ancestry_has_remote_link "$$"; then
         return 0
       fi
 
-      # Herdr panes are children of the persistent server, not of mosh. Match
-      # the injected socket to the named remote session, then require a live
-      # remote-view lease; HERDR_SESSION and process-name guesses are not a
+      # Herdr panes are children of the persistent server, not of the link.
+      # Match the injected socket to the named remote session, then require a
+      # live remote-view lease; HERDR_SESSION and process-name guesses are not a
       # trustworthy indication of who is attached. A final client can exit
       # after this check, so one opener may still route remotely once.
       if herdr_pane_is_remote && has_remote_view_lease; then
@@ -129,7 +150,7 @@ writeShellApplication {
       fi
 
       # Under tmux the pane's shell descends from the tmux server, not from
-      # mosh, so the ancestry above stops short. Ask tmux which clients are
+      # the link, so the ancestry above stops short. Ask tmux which clients are
       # attached and test those instead. Control-mode clients (editor and
       # agent integrations) are skipped -- nobody is looking at those.
       [ -n "''${TMUX:-}" ] || return 1
@@ -138,7 +159,7 @@ writeShellApplication {
       session="$(tmux display-message -p '#{session_name}' 2>/dev/null)" || return 1
 
       while read -r pid; do
-        if ancestry_has_mosh "$pid"; then
+        if ancestry_has_remote_link "$pid"; then
           return 0
         fi
       done < <(

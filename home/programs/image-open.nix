@@ -56,8 +56,8 @@ let
   };
 
   # Yazi always runs its opener on the machine Yazi itself runs on. Inside a
-  # mosh session that means the opener fires on home while the screen is on
-  # the laptop, so a plain `imv` would paint a window nobody is sitting in
+  # mosh or SSH session that means the opener fires on home while the screen is
+  # on the laptop, so a plain `imv` would paint a window nobody is sitting in
   # front of. Detect that case and ship the bytes to the peer instead.
   openImage = pkgs.writeShellApplication {
     name = "yazi-open-image";
