@@ -17,7 +17,7 @@ prepend_keymap = [
 	# Operation
 	{ on = "<C-l>", run = "link" },
 
-	{ on = "Y", run = 'shell "cp -rL --reflink=auto -- $@ $0" --confirm', desc = "Yank (copy) following symlinks"},
+	{ on = "Y", run = 'shell "cp -rL --reflink=auto -- %s %h" --confirm', desc = "Yank (copy) following symlinks"},
 
 	# Archives
 	{ on = "E", run = 'shell "ya pub extract --list %s"', desc = "Extract selected archives here" },
