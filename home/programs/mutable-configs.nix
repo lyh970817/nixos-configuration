@@ -439,6 +439,7 @@ let
     "commit-guidelines"
     "herdr"
     "kcl-create-hpc"
+    "peer-device-access"
     "r-dev-shell"
     "session-handoff"
     "setup-domain-docs"
@@ -1667,6 +1668,7 @@ in
     "claude/skills/domain-modeling".source = link "dotfiles/claude/skills/domain-modeling";
     "claude/skills/herdr".source = link "dotfiles/claude/skills/herdr";
     "claude/skills/kcl-create-hpc".source = link "dotfiles/claude/skills/kcl-create-hpc";
+    "claude/skills/peer-device-access".source = link "dotfiles/claude/skills/peer-device-access";
     "claude/skills/r-dev-shell".source = link "dotfiles/claude/skills/r-dev-shell";
     "claude/skills/setup-domain-docs".source = link "dotfiles/claude/skills/setup-domain-docs";
     "claude/skills/show-me".source = link "dotfiles/claude/skills/show-me";
@@ -1709,6 +1711,10 @@ in
     };
     "claude-mattpocock/skills/herdr" = {
       source = link "dotfiles/claude/skills/herdr";
+      force = true;
+    };
+    "claude-mattpocock/skills/peer-device-access" = {
+      source = link "dotfiles/claude/skills/peer-device-access";
       force = true;
     };
     "claude-mattpocock/skills/r-dev-shell" = {
