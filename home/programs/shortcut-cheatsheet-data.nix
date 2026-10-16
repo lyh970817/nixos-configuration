@@ -123,7 +123,7 @@
       }
       {
         description = "Lower / raise output volume";
-        key = "Super + - / =";
+        key = "Super + [ / ]";
       }
       {
         description = "Toggle output mute";
@@ -131,7 +131,7 @@
       }
       {
         description = "Lower / raise display brightness";
-        key = "Super + [ / ]";
+        key = "Super + - / =";
       }
       {
         description = "Full screenshot";
