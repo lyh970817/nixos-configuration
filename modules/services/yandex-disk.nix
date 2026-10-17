@@ -42,6 +42,8 @@ let
     # Git object store of the xiaobao checkout: sync misfiled 11 objects on
     # 2026-10-15 (git fsck hash-path mismatch); the repo lives on GitHub.
     "Projects/xiaobao/.git"
+    # Same reason: the iOS keyboard spike's object store; the repo lives on GitHub.
+    "Projects/xiaobao-keyboard-spike/.git"
   ];
 
   yandexDiskExcludes = pkgs.writers.writePython3Bin "yandex-disk-excludes" {
