@@ -10,11 +10,11 @@
 
 stdenv.mkDerivation (finalAttrs: {
   pname = "codex";
-  version = "0.160.1";
+  version = "0.163.0";
 
   src = fetchzip {
     url = "https://registry.npmjs.org/@openai/codex/-/codex-${finalAttrs.version}-linux-x64.tgz";
-    hash = "sha256-krzg1UZPgKZerrSaenECQhnpd/4/YxFL6fnWyxlN1Kw=";
+    hash = "sha256-jIzsma/5H6d0sFJzWqmcJlu91QT0ybsUFF8H8B2p1gw=";
   };
 
   dontBuild = true;
@@ -30,8 +30,7 @@ stdenv.mkDerivation (finalAttrs: {
     chmod +x "$out/lib/codex/vendor/x86_64-unknown-linux-musl/bin/codex" \
       "$out/lib/codex/vendor/x86_64-unknown-linux-musl/bin/codex-code-mode-host" \
       "$out/lib/codex/vendor/x86_64-unknown-linux-musl/codex-path/rg" \
-      "$out/lib/codex/vendor/x86_64-unknown-linux-musl/codex-resources/bwrap" \
-      "$out/lib/codex/vendor/x86_64-unknown-linux-musl/codex-resources/zsh/bin/zsh"
+      "$out/lib/codex/vendor/x86_64-unknown-linux-musl/codex-resources/bwrap"
 
     mkdir -p "$out/bin"
     makeWrapper "$out/lib/codex/vendor/x86_64-unknown-linux-musl/bin/codex" "$out/bin/codex" \
