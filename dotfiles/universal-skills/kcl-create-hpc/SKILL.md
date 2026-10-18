@@ -17,6 +17,14 @@ Use CREATE as a scheduler-managed research system. Confirm the SSH identity, dat
 - Check `ceph_quota` before staging data, creating environments or images, or launching output-producing jobs. A full or over-quota destination is a blocker, not permission to delete old work or switch to another allocation.
 - Source access does not by itself authorize derived data, logs, or caches in personal scratch. Confirm the requested destination is permitted for the data classification, and budget for images, caches, temporary/intermediate data, final output, and headroom.
 
+## Run work as jobs, not SSH sessions
+
+SSH access to CREATE depends on MFA that lapses after a while. Anything longer than a quick one-off command, such as tests, pipelines, environment builds or container pulls, goes into a self-contained `sbatch` job, so it keeps running whether or not SSH still works. Have the job write its results and a summary to scratch.
+
+1. Submit the job and record its job ID.
+2. Estimate when it will finish, then check once around that time, not by polling continuously.
+3. If SSH is refused when you check because MFA has lapsed, notify the user (for example with a push notification) and ask them to approve MFA at https://portal.er.kcl.ac.uk/mfa/. Do not retry in a loop or work around it.
+
 ## Route the task
 
 - For SSH, login-versus-compute behavior, Slurm resources, job monitoring, and scheduler policy, read [references/access-and-slurm.md](references/access-and-slurm.md).
