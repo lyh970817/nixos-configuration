@@ -1,18 +1,11 @@
 -- Read mode for rendered Markdown (issue #11). Explanation documents are
 -- mostly read, not edited, but the rendering stack is tuned for editing:
--- render-markdown's anti-conceal re-opens the cursor line and render-latex
--- reveals the raw TeX of any display equation the cursor rests on. In READ
--- mode the buffer stays fully rendered while scrolling with the cursor:
+-- render-markdown's anti-conceal re-opens the cursor line. In READ mode the
+-- buffer stays fully rendered while scrolling with the cursor:
 --
 -- - render-markdown: anti-conceal off, concealcursor=nvc (per-buffer, by
 --   mutating the plugin's cached buffer config -- it has no runtime
 --   per-buffer API; the fields are read live on every update).
--- - render-latex: rc4 hard-wires cursor reveal (renderer.sync_focus runs
---   unconditionally in the render path and config.lua has no knob for it), so
---   the cursor is hopped over display-equation blocks instead; it never rests
---   inside one, and the image never opens. Uses only the public
---   current_equation() API.
--- - Snacks.image inline math respects concealcursor and keeps its images.
 -- - The buffer is made non-modifiable as an edit guard.
 -- - Long lines soft-wrap to the window (wrap/linebreak/breakindent), set
 --   directly per window: render-markdown's win_options channel only manages
@@ -30,14 +23,10 @@
 --   (state.get ignores it once the buffer config is cached) and
 --   overrides.* resolve at attach time, so the cache mutation stays. Its own
 --   api.expand/contract mutate the same cached fields.
--- - Snacks.zen/zoom (and zen-mode.nvim etc.) are floating-window overlays;
---   render-latex clears every equation image while any floating window is
---   open (set_suppressed("floating", ...)), so zen blanks the math this mode
---   exists to keep visible.
--- - :RenderMarkdown preview mirrors into a scratch split (not an in-place
---   toggle) and does nothing about render-latex's cursor reveal.
+-- - :RenderMarkdown preview mirrors into a scratch split, not an in-place
+--   toggle.
 -- - glow.nvim/markdown-preview.nvim render outside the buffer and lose the
---   render-latex/Snacks.image stack entirely.
+--   render-markdown/Snacks.image stack entirely.
 --
 -- :ReadMode (or <localleader>r) toggles; EDIT restores exactly the previous
 -- behaviour. Buffers inside an explanation tree (a `.explain.json` root, same
@@ -102,39 +91,6 @@ local function rm_refresh(buf)
   end)
 end
 
---- Move the cursor off the display equation it just landed on, in the
---- direction it was travelling, so render-latex never reveals raw TeX.
-local function hop_off_equation(buf)
-  local ok, renderer = pcall(require, "render_latex.renderer")
-  if not ok then
-    return
-  end
-  local win = vim.api.nvim_get_current_win()
-  if vim.api.nvim_win_get_buf(win) ~= buf then
-    return
-  end
-  local row = vim.api.nvim_win_get_cursor(win)[1]
-  local last = vim.b[buf].read_mode_last_row or row
-  local eq_ok, eq = pcall(renderer.current_equation, buf)
-  if eq_ok and eq ~= nil then
-    -- eq rows are 0-indexed: line above is start_row, line below end_row + 2.
-    local before, after = eq.start_row, eq.end_row + 2
-    local last_line = vim.api.nvim_buf_line_count(buf)
-    local target = row >= last and after or before
-    if target < 1 then
-      target = after
-    end
-    if target > last_line then
-      target = before
-    end
-    if target >= 1 and target <= last_line and target ~= row then
-      vim.api.nvim_win_set_cursor(win, { target, 0 })
-      row = target
-    end
-  end
-  vim.b[buf].read_mode_last_row = row
-end
-
 local function set_read_mode(buf, on, opts)
   opts = opts or {}
   if vim.b[buf].read_mode == on then
@@ -188,17 +144,6 @@ local function set_read_mode(buf, on, opts)
     end
     apply_win_options(buf, read_opts)
     vim.bo[buf].modifiable = false
-    vim.b[buf].read_mode_last_row = nil
-    vim.api.nvim_create_autocmd("CursorMoved", {
-      group = group,
-      buffer = buf,
-      callback = function(ev)
-        if vim.b[ev.buf].read_mode then
-          hop_off_equation(ev.buf)
-        end
-      end,
-    })
-    hop_off_equation(buf)
   else
     local saved = vim.b[buf].read_mode_saved or {}
     if cfg then
@@ -213,16 +158,10 @@ local function set_read_mode(buf, on, opts)
     end
     apply_win_options(buf, restore)
     vim.bo[buf].modifiable = saved.modifiable ~= false and true or false
-    vim.api.nvim_clear_autocmds({ group = group, buffer = buf, event = "CursorMoved" })
     vim.b[buf].read_mode_saved = nil
     vim.b[buf].read_mode_wrap_suppressed = nil
   end
   rm_refresh(buf)
-  -- Toggling wrap shifts screen rows; rc4 re-places equation images only on
-  -- its own events, so the next one would otherwise leave them blank.
-  pcall(function()
-    require("render_latex.renderer").queue(buf)
-  end)
   if not opts.silent then
     local msg = "Markdown " .. (on and "READ" or "EDIT") .. " mode"
     if on and vim.b[buf].read_mode_wrap_suppressed then
@@ -259,7 +198,7 @@ vim.api.nvim_create_autocmd("FileType", {
     end, { buffer = ev.buf, desc = "Toggle read mode" })
 
     -- Explanation documents open reading-first. Deferred so render-markdown
-    -- and render-latex have attached before their config is touched.
+    -- has attached before its config is touched.
     if in_explanation_tree(ev.buf) then
       vim.schedule(function()
         if vim.api.nvim_buf_is_valid(ev.buf) and not vim.b[ev.buf].read_mode then

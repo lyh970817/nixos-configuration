@@ -4,8 +4,7 @@
 # see dotfiles/hypr/hyprland.lua and home/programs/dotfiles.nix) and also
 # hosts the dedicated explanation Neovim window (launched as
 # `kitty --detach --class explanation-nvim ... nvim <file>` by explainctl),
-# drawing images through the Kitty Graphics Protocol for Snacks.image and
-# render-latex.nvim. Foot stays installed until the migration settles; its
+# drawing images through the Kitty Graphics Protocol for Snacks.image. Foot stays installed until the migration settles; its
 # signal/relink phosphor path (home/desktop/phosphor-switch.nix,
 # home/desktop/theming.nix) remains the theme state kitty reads at startup.
 { lib, pkgs, ... }:
@@ -259,10 +258,6 @@ in
     # the explanation stack stays self-describing.)
     pkgs.imagemagick
     pkgs.ghostscript
-    # Snacks.image math: compiles the `$...$` inline-math snippets to PDF
-    # (small self-contained engine; fetches TeX assets into ~/.cache/Tectonic
-    # on first use). Display math stays with render-latex.nvim's own worker.
-    pkgs.tectonic
   ];
 
   xdg.configFile = {

@@ -404,12 +404,8 @@ local creating = false
 -- One Snacks notification carries the whole creation run: shown with
 -- timeout = false so it cannot fade while the forked `claude -p` run (tens of
 -- seconds to minutes) is in flight, then replaced in place -- same id, normal
--- timeout -- by the outcome toast. Replacing rather than stacking matters
--- twice: the outcome never sits under a stale "Creating…" float, and
--- render-latex blanks equation images while any notification float is
--- visible, so the persistent float must be gone the moment the root document
--- opens (during creation there is no rendered document yet, so it is
--- harmless until then).
+-- timeout -- by the outcome toast. Replacing rather than stacking means the
+-- outcome never sits under a stale "Creating…" float.
 local CREATE_PROGRESS_ID = "explain-create-progress"
 
 -- Creation runs against the buffer Neovim happened to open with (usually the

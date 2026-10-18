@@ -44,7 +44,6 @@ let
     "org.gnome.FileRoller"
     "rofi"
     "rofi-theme-selector"
-    "tectonic"
     "thunar-bulk-rename"
     "thunar-settings"
     "winetricks"
