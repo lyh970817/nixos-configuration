@@ -45,6 +45,7 @@
     ./programs/kcl-fetch.nix
     ./programs/herdr.nix
     ./programs/terminal-browser.nix
+    ./programs/termium.nix
     ./programs/tuicr.nix
     ./programs/hyprwhspr.nix
     ./programs/quicktui.nix
