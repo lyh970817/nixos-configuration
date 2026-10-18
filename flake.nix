@@ -95,6 +95,7 @@
         claude-science = final.callPackage ./pkgs/claude-science.nix { };
         codex = final.callPackage ./pkgs/codex.nix { };
         codexbar = final.callPackage ./pkgs/codexbar.nix { };
+        terminal-browser = final.callPackage ./pkgs/terminal-browser.nix { };
         chatgpt = final.callPackage ./pkgs/chatgpt.nix { };
         xberg-cli = final.callPackage ./pkgs/xberg-cli.nix { };
         matrix-icons = final.callPackage ./pkgs/matrix-icons.nix { };

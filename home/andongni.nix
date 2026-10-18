@@ -44,6 +44,7 @@
     ./programs/annas-books.nix
     ./programs/kcl-fetch.nix
     ./programs/herdr.nix
+    ./programs/terminal-browser.nix
     ./programs/tuicr.nix
     ./programs/hyprwhspr.nix
     ./programs/quicktui.nix
