@@ -28,10 +28,22 @@ python3Packages.buildPythonApplication rec {
 
   # Terminal paste (Ctrl+Shift+V) is chosen by exact window class; add the
   # per-instance kitty/foot classes from home/programs/kitty.nix and foot.nix.
+  #
+  # Recording status goes to mako as hyprwhspr's notification bubbles instead
+  # of the bottom overlay (doubao-say-notifications.py); delivery reports its
+  # outcome so the bubble can say "✓ Inserted".
   postPatch = ''
     substituteInPlace src/doubao_input/inject/injector.py \
       --replace-fail '"foot", "footclient", "kitty",' \
         '"foot", "footclient", "kitty", "kitty-float", "kitty-main", "foot-float", "foot-main",'
+
+    cp ${./doubao-say-notifications.py} src/doubao_input/ui/notification_overlay.py
+    substituteInPlace src/doubao_input/app_runtime.py \
+      --replace-fail 'from doubao_input.ui.overlay import Overlay' \
+        'from doubao_input.ui.notification_overlay import NotificationOverlay as Overlay'
+    substituteInPlace src/doubao_input/app_voice.py \
+      --replace-fail $'if status != "pending":\n            self._overlay.hide()' \
+        $'if status != "pending":\n            self._overlay.finish(status)'
   '';
 
   build-system = [ python3Packages.setuptools ];
