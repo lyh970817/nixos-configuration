@@ -12,7 +12,7 @@ set -euo pipefail
 
 readonly state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/dictation-engine"
 readonly state_file="$state_dir/engine"
-readonly hyprwhspr_runtime="${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}/hyprwhspr"
+readonly hyprwhspr_runtime="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/hyprwhspr"
 readonly first_profile=qwen-omni-realtime
 readonly last_profile=qwen-audio3
 readonly service=doubao-say.service
