@@ -755,6 +755,32 @@ hl.window_rule({
   no_initial_focus = true,
 })
 
+-- Typeless (home/programs/dictation-engine.nix) maps its recording HUD as a
+-- transparent window titled "Status" and its answers as "AI result". Both
+-- float and follow across workspaces, and the HUD never takes focus. Rules
+-- from github.com/howiehu/typeless-omarchy.
+hl.window_rule({
+  name = "typeless-status",
+  match = { class = "^(Typeless)$", title = "^(Status)$" },
+  float = true,
+  pin = true,
+  border_size = 0,
+  no_shadow = true,
+  no_blur = true,
+  no_focus = true,
+  no_initial_focus = true,
+})
+
+hl.window_rule({
+  name = "typeless-answer",
+  match = { class = "^(Typeless)$", title = "^(AI result)$" },
+  float = true,
+  pin = true,
+  border_size = 0,
+  no_shadow = true,
+  no_blur = true,
+})
+
 -- ChatGPT Desktop opens on workspace 9 (autostarted by the `chatgpt` user
 -- service, whose orchestrator profile maps as `chatgpt-orchestrator`; a
 -- manually launched plain profile maps as `chatgpt`). A workspace rule only
