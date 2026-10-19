@@ -8,6 +8,7 @@
   gtk4-layer-shell,
   webkitgtk_6_0,
   glib-networking,
+  coreutils,
   pipewire,
   wl-clipboard,
   wtype,
@@ -74,6 +75,8 @@ python3Packages.buildPythonApplication rec {
       --set DOUBAO_LAYER_SHELL_PRELOADED 1
       --prefix PATH : ${
         lib.makeBinPath [
+          # wl-copy runs `cat` to buffer its input.
+          coreutils
           pipewire
           wl-clipboard
           wtype
