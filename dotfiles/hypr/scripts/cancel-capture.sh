@@ -128,6 +128,12 @@ dictation_active && cancel_dictation=1
 recording_active && cancel_recording=1
 
 if ((cancel_dictation == 0 && cancel_recording == 0)); then
+  # doubao-say reads Escape from evdev and cancels itself with its own overlay,
+  # and its state is not visible from here, so stay quiet rather than claim
+  # there was nothing to cancel.
+  if command -v dictation-engine > /dev/null && dictation-engine is-doubao-say; then
+    exit 0
+  fi
   notify "Nothing to cancel"
   exit 0
 fi

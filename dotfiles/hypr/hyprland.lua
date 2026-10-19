@@ -262,9 +262,11 @@ hl.bind(mainMod .. " + CTRL + C", hl.dsp.exec_cmd(scripts .. "/screenshot.sh reg
 hl.bind(mainMod .. " + I", hl.dsp.exec_cmd("screen-record screen"), { description = "Record screen / pause / resume" })
 hl.bind(mainMod .. " + ALT + I", hl.dsp.exec_cmd("screen-record region"), { description = "Record region / pause / resume" })
 hl.bind(mainMod .. " + SHIFT + I", hl.dsp.exec_cmd("screen-record stop"), { description = "Stop recording and save" })
-hl.bind("SUPER + O", hl.dsp.exec_cmd("hyprwhispr-record toggle"), { description = "Speech-to-text" })
+-- Short dictation goes to whichever engine `dictation-engine` has selected;
+-- Ctrl+Shift+P cycles hyprwhspr's profiles and then doubao-say.
+hl.bind("SUPER + O", hl.dsp.exec_cmd("dictation-engine record"), { description = "Speech-to-text" })
 hl.bind("CTRL + SHIFT + L", hl.dsp.exec_cmd("hyprwhspr-longform toggle"), { description = "Long-form dictation" })
-hl.bind("CTRL + SHIFT + P", hl.dsp.exec_cmd("hyprwhispr-profile toggle"), { description = "Toggle dictation profile" })
+hl.bind("CTRL + SHIFT + P", hl.dsp.exec_cmd("dictation-engine toggle"), { description = "Toggle dictation profile" })
 -- Two cancel keys, and both of them act on both captures. The SHIFT variant is
 -- back, but it no longer means what it did: the original split was by subsystem
 -- (Super+Escape cancelled dictation, Super+Shift+Escape discarded a recording),

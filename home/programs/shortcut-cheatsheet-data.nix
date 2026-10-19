@@ -171,7 +171,7 @@
         key = "Ctrl + Shift + l";
       }
       {
-        description = "Switch dictation profile";
+        description = "Switch dictation profile / engine";
         key = "Ctrl + Shift + p";
       }
       {

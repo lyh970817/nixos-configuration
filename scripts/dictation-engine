@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Which engine owns short dictation on Super+O: hyprwhspr (the default) or
+# doubao-say. Ctrl+Shift+P steps through hyprwhspr's profiles and then
+# doubao-say, and from doubao-say back to the first hyprwhspr profile.
+#
+# doubao-say has no command to start or stop dictation; it reads its trigger
+# (set to Super+O in its settings) straight from evdev, Escape included, so
+# Super+Escape cancels it too. In that mode the Hyprland bind only swallows the
+# key. Long-form dictation (Ctrl+Shift+L) stays on hyprwhspr either way.
+
+readonly state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/dictation-engine"
+readonly state_file="$state_dir/engine"
+readonly hyprwhspr_runtime="${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}/hyprwhspr"
+readonly first_profile=qwen-omni-realtime
+readonly last_profile=qwen-audio3
+readonly service=doubao-say.service
+
+usage() {
+  printf '%s\n' 'usage: dictation-engine {toggle|record|current|is-doubao-say}' >&2
+}
+
+current() {
+  if [[ -r $state_file && $(< "$state_file") == doubao-say ]]; then
+    printf '%s\n' doubao-say
+  else
+    printf '%s\n' hyprwhspr
+  fi
+}
+
+write_engine() {
+  local temporary
+  mkdir -p "$state_dir"
+  temporary="$(mktemp "$state_dir/.engine.XXXXXX")"
+  printf '%s\n' "$1" > "$temporary"
+  mv -f "$temporary" "$state_file"
+}
+
+# The same two files scripts/hyprwhispr-record consults.
+hyprwhspr_recording() {
+  [[ -r $hyprwhspr_runtime/recording_status && $(< "$hyprwhspr_runtime/recording_status") == true ]] && return 0
+  [[ -r $hyprwhspr_runtime/visualizer_state && $(< "$hyprwhspr_runtime/visualizer_state") == recording ]] && return 0
+  return 1
+}
+
+to_doubao_say() {
+  # Super+O would stop reaching hyprwhspr mid-recording.
+  if hyprwhspr_recording; then
+    notify-send 'Dictation engine unchanged' 'hyprwhspr is recording.' || true
+    return 3
+  fi
+  write_engine doubao-say
+  if systemctl --user start "$service"; then
+    notify-send 'Dictation engine active' 'doubao-say' || true
+    return 0
+  fi
+  write_engine hyprwhspr
+  notify-send 'Dictation engine change failed' 'doubao-say did not start; staying on hyprwhspr.' || true
+  return 1
+}
+
+to_hyprwhspr() {
+  write_engine hyprwhspr
+  systemctl --user stop "$service" || true
+  # Announces the profile it lands on.
+  hyprwhispr-profile set "$first_profile"
+}
+
+toggle() {
+  mkdir -p "$state_dir"
+  exec 9> "$state_dir/.lock"
+  flock -x 9
+  if [[ $(current) == doubao-say ]]; then
+    to_hyprwhspr
+  elif [[ $(hyprwhispr-profile status 2> /dev/null) == "$last_profile" ]]; then
+    to_doubao_say
+  else
+    hyprwhispr-profile toggle
+  fi
+}
+
+record() {
+  if [[ $(current) == hyprwhspr ]]; then
+    exec hyprwhispr-record toggle
+  fi
+  if ! systemctl --user is-active --quiet "$service"; then
+    notify-send 'doubao-say is not running' 'Ctrl+Shift+P switches dictation back to hyprwhspr.' || true
+    return 1
+  fi
+}
+
+main() {
+  [[ $# == 1 ]] || { usage; return 2; }
+  case "$1" in
+    toggle) toggle ;;
+    record) record ;;
+    current) current ;;
+    is-doubao-say) [[ $(current) == doubao-say ]] ;;
+    *) usage; return 2 ;;
+  esac
+}
+
+main "$@"
