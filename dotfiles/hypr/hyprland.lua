@@ -263,8 +263,7 @@ hl.bind(mainMod .. " + I", hl.dsp.exec_cmd("screen-record screen"), { descriptio
 hl.bind(mainMod .. " + ALT + I", hl.dsp.exec_cmd("screen-record region"), { description = "Record region / pause / resume" })
 hl.bind(mainMod .. " + SHIFT + I", hl.dsp.exec_cmd("screen-record stop"), { description = "Stop recording and save" })
 -- Short dictation goes to whichever engine `dictation-engine` has selected;
--- Ctrl+Shift+P cycles hyprwhspr's profiles, then doubao-say, Typeless and
--- Wispr Flow.
+-- Ctrl+Shift+P cycles hyprwhspr's profiles, then doubao-say and Wispr Flow.
 hl.bind("SUPER + O", hl.dsp.exec_cmd("dictation-engine record"), { description = "Speech-to-text" })
 hl.bind("CTRL + SHIFT + L", hl.dsp.exec_cmd("hyprwhspr-longform toggle"), { description = "Long-form dictation" })
 hl.bind("CTRL + SHIFT + P", hl.dsp.exec_cmd("dictation-engine toggle"), { description = "Toggle dictation profile" })
@@ -753,32 +752,6 @@ hl.window_rule({
   border_size = 0,
   rounding = 0,
   no_initial_focus = true,
-})
-
--- Typeless (home/programs/dictation-engine.nix) maps its recording HUD as a
--- transparent window titled "Status" and its answers as "AI result". Both
--- float and follow across workspaces, and the HUD never takes focus. Rules
--- from github.com/howiehu/typeless-omarchy.
-hl.window_rule({
-  name = "typeless-status",
-  match = { class = "^(Typeless)$", title = "^(Status)$" },
-  float = true,
-  pin = true,
-  border_size = 0,
-  no_shadow = true,
-  no_blur = true,
-  no_focus = true,
-  no_initial_focus = true,
-})
-
-hl.window_rule({
-  name = "typeless-answer",
-  match = { class = "^(Typeless)$", title = "^(AI result)$" },
-  float = true,
-  pin = true,
-  border_size = 0,
-  no_shadow = true,
-  no_blur = true,
 })
 
 -- ChatGPT Desktop opens on workspace 9 (autostarted by the `chatgpt` user

@@ -52,6 +52,9 @@ let
         Environment = environment;
         Restart = "on-failure";
         RestartSec = "2s";
+        # Electron apps may ignore SIGTERM and minimise to the tray; the
+        # default 90 s wait would stall dictation-engine's switch.
+        TimeoutStopSec = "5s";
       };
 
       Install = {
@@ -62,7 +65,6 @@ in
 {
   home.packages = [
     pkgs.doubao-say
-    pkgs.typeless
     pkgs.wispr-flow
     dictationEngine
   ];
@@ -77,14 +79,6 @@ in
       "PATH=${lib.makeBinPath [ pkgs.hyprland ]}"
       "PYTHONUNBUFFERED=1"
     ];
-  };
-
-  systemd.user.services.typeless = appEngineService {
-    name = "typeless";
-    description = "Typeless voice dictation";
-    documentation = "https://www.typeless.com";
-    execStart = "${pkgs.typeless}/bin/typeless";
-    environment = [ ];
   };
 
   systemd.user.services.wispr-flow = appEngineService {

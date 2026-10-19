@@ -12,7 +12,7 @@ set -euo pipefail
 # started only while selected. Long-form dictation (Ctrl+Shift+L) stays on
 # hyprwhspr either way.
 
-readonly app_engines=(doubao-say typeless wispr-flow)
+readonly app_engines=(doubao-say wispr-flow)
 readonly state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/dictation-engine"
 readonly state_file="$state_dir/engine"
 readonly hyprwhspr_runtime="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/hyprwhspr"
@@ -85,7 +85,12 @@ toggle() {
   local engine next
   mkdir -p "$state_dir"
   exec 9> "$state_dir/.lock"
-  flock -x 9
+  # Drop presses made while a switch is still running; queued, each would
+  # advance the cycle once more when it finally ran.
+  if ! flock -n 9; then
+    notify-send 'Dictation engine is still switching' 'Press Ctrl+Shift+P again once it settles.' || true
+    return 3
+  fi
   engine="$(current)"
   if [[ $engine == hyprwhspr ]]; then
     if [[ $(hyprwhispr-profile status 2> /dev/null) != "$last_profile" ]]; then
