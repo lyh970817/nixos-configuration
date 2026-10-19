@@ -12,7 +12,7 @@ set -euo pipefail
 # started only while selected. Long-form dictation (Ctrl+Shift+L) stays on
 # hyprwhspr either way.
 
-readonly app_engines=(doubao-say wispr-flow)
+readonly app_engines=(doubao-say typeless wispr-flow)
 readonly state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/dictation-engine"
 readonly state_file="$state_dir/engine"
 readonly hyprwhspr_runtime="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/hyprwhspr"

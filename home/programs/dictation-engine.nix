@@ -62,6 +62,7 @@ in
 {
   home.packages = [
     pkgs.doubao-say
+    pkgs.typeless
     pkgs.wispr-flow
     dictationEngine
   ];
@@ -76,6 +77,14 @@ in
       "PATH=${lib.makeBinPath [ pkgs.hyprland ]}"
       "PYTHONUNBUFFERED=1"
     ];
+  };
+
+  systemd.user.services.typeless = appEngineService {
+    name = "typeless";
+    description = "Typeless voice dictation";
+    documentation = "https://www.typeless.com";
+    execStart = "${pkgs.typeless}/bin/typeless";
+    environment = [ ];
   };
 
   systemd.user.services.wispr-flow = appEngineService {

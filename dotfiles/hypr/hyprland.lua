@@ -263,7 +263,8 @@ hl.bind(mainMod .. " + I", hl.dsp.exec_cmd("screen-record screen"), { descriptio
 hl.bind(mainMod .. " + ALT + I", hl.dsp.exec_cmd("screen-record region"), { description = "Record region / pause / resume" })
 hl.bind(mainMod .. " + SHIFT + I", hl.dsp.exec_cmd("screen-record stop"), { description = "Stop recording and save" })
 -- Short dictation goes to whichever engine `dictation-engine` has selected;
--- Ctrl+Shift+P cycles hyprwhspr's profiles, then doubao-say and Wispr Flow.
+-- Ctrl+Shift+P cycles hyprwhspr's profiles, then doubao-say, Typeless and
+-- Wispr Flow.
 hl.bind("SUPER + O", hl.dsp.exec_cmd("dictation-engine record"), { description = "Speech-to-text" })
 hl.bind("CTRL + SHIFT + L", hl.dsp.exec_cmd("hyprwhspr-longform toggle"), { description = "Long-form dictation" })
 hl.bind("CTRL + SHIFT + P", hl.dsp.exec_cmd("dictation-engine toggle"), { description = "Toggle dictation profile" })
