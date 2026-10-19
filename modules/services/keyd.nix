@@ -56,6 +56,16 @@ in
           };
         };
       };
+
+      # Wispr Flow's virtual keyboard (home/programs/dictation-engine.nix)
+      # pastes with Ctrl+V everywhere: it cannot see that kitty is a terminal,
+      # and kitty only pastes on Ctrl+Shift+V (wispr-flow-linux issue #35).
+      # Send Ctrl+Shift+V from this device only; GUI apps read it as a plain
+      # paste. 1234:5678 is its fixed placeholder id.
+      wispr-flow = {
+        ids = [ "k:1234:5678" ];
+        settings.control.v = "C-S-v";
+      };
     };
   };
 }
