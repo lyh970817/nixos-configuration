@@ -1,32 +1,51 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Which engine owns short dictation on Super+O: hyprwhspr (the default) or
-# doubao-say. Ctrl+Shift+P steps through hyprwhspr's profiles and then
-# doubao-say, and from doubao-say back to the first hyprwhspr profile.
+# Which engine owns short dictation on Super+O: hyprwhspr (the default) or one
+# of the app engines below. Ctrl+Shift+P steps through hyprwhspr's profiles,
+# then each app engine in turn, and from the last one back to the first
+# hyprwhspr profile.
 #
-# doubao-say has no command to start or stop dictation; it reads its trigger
-# (set to Super+O in its settings) straight from evdev, Escape included, so
-# Super+Escape cancels it too. In that mode the Hyprland bind only swallows the
-# key. Long-form dictation (Ctrl+Shift+L) stays on hyprwhspr either way.
+# The app engines have no command to start or stop dictation; each reads its
+# own trigger (set to Super+O in its settings) straight from evdev, so in their
+# mode the Hyprland bind only swallows the key. Each runs as <engine>.service,
+# started only while selected. Long-form dictation (Ctrl+Shift+L) stays on
+# hyprwhspr either way.
 
+readonly app_engines=(doubao-say wispr-flow)
 readonly state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/dictation-engine"
 readonly state_file="$state_dir/engine"
 readonly hyprwhspr_runtime="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/hyprwhspr"
 readonly first_profile=qwen-omni-realtime
 readonly last_profile=qwen-audio3
-readonly service=doubao-say.service
 
 usage() {
-  printf '%s\n' 'usage: dictation-engine {toggle|record|current|is-doubao-say}' >&2
+  printf '%s\n' 'usage: dictation-engine {toggle|record|current|is ENGINE}' >&2
 }
 
 current() {
-  if [[ -r $state_file && $(< "$state_file") == doubao-say ]]; then
-    printf '%s\n' doubao-say
-  else
-    printf '%s\n' hyprwhspr
+  local stored engine
+  if [[ -r $state_file ]]; then
+    stored="$(< "$state_file")"
+    for engine in "${app_engines[@]}"; do
+      if [[ $stored == "$engine" ]]; then
+        printf '%s\n' "$engine"
+        return
+      fi
+    done
   fi
+  printf '%s\n' hyprwhspr
+}
+
+# The app engine after $1, or nothing after the last one.
+next_app_engine() {
+  local i count="${#app_engines[@]}"
+  for ((i = 0; i < count - 1; i++)); do
+    if [[ ${app_engines[i]} == "$1" ]]; then
+      printf '%s\n' "${app_engines[i + 1]}"
+      return
+    fi
+  done
 }
 
 write_engine() {
@@ -44,60 +63,78 @@ hyprwhspr_recording() {
   return 1
 }
 
-to_doubao_say() {
-  # Super+O would stop reaching hyprwhspr mid-recording.
-  if hyprwhspr_recording; then
-    notify-send 'Dictation engine unchanged' 'hyprwhspr is recording.' || true
-    return 3
-  fi
-  write_engine doubao-say
-  if systemctl --user start "$service"; then
-    notify-send 'Dictation engine active' 'doubao-say' || true
-    return 0
-  fi
-  write_engine hyprwhspr
-  notify-send 'Dictation engine change failed' 'doubao-say did not start; staying on hyprwhspr.' || true
-  return 1
-}
-
 to_hyprwhspr() {
   write_engine hyprwhspr
-  systemctl --user stop "$service" || true
   # Announces the profile it lands on.
   hyprwhispr-profile set "$first_profile"
 }
 
+to_app_engine() {
+  local engine="$1"
+  write_engine "$engine"
+  if systemctl --user start "$engine.service"; then
+    notify-send 'Dictation engine active' "$engine" || true
+    return 0
+  fi
+  notify-send 'Dictation engine change failed' "$engine did not start; back to hyprwhspr." || true
+  to_hyprwhspr
+  return 1
+}
+
 toggle() {
+  local engine next
   mkdir -p "$state_dir"
   exec 9> "$state_dir/.lock"
   flock -x 9
-  if [[ $(current) == doubao-say ]]; then
-    to_hyprwhspr
-  elif [[ $(hyprwhispr-profile status 2> /dev/null) == "$last_profile" ]]; then
-    to_doubao_say
+  engine="$(current)"
+  if [[ $engine == hyprwhspr ]]; then
+    if [[ $(hyprwhispr-profile status 2> /dev/null) != "$last_profile" ]]; then
+      hyprwhispr-profile toggle
+      return
+    fi
+    # Super+O would stop reaching hyprwhspr mid-recording.
+    if hyprwhspr_recording; then
+      notify-send 'Dictation engine unchanged' 'hyprwhspr is recording.' || true
+      return 3
+    fi
+    to_app_engine "${app_engines[0]}"
+    return
+  fi
+  systemctl --user stop "$engine.service" || true
+  next="$(next_app_engine "$engine")"
+  if [[ -n $next ]]; then
+    to_app_engine "$next"
   else
-    hyprwhispr-profile toggle
+    to_hyprwhspr
   fi
 }
 
 record() {
-  if [[ $(current) == hyprwhspr ]]; then
+  local engine
+  engine="$(current)"
+  if [[ $engine == hyprwhspr ]]; then
     exec hyprwhispr-record toggle
   fi
-  if ! systemctl --user is-active --quiet "$service"; then
-    notify-send 'doubao-say is not running' 'Ctrl+Shift+P switches dictation back to hyprwhspr.' || true
+  if ! systemctl --user is-active --quiet "$engine.service"; then
+    notify-send "$engine is not running" 'Ctrl+Shift+P switches to the next dictation engine.' || true
     return 1
   fi
 }
 
 main() {
-  [[ $# == 1 ]] || { usage; return 2; }
-  case "$1" in
-    toggle) toggle ;;
-    record) record ;;
-    current) current ;;
-    is-doubao-say) [[ $(current) == doubao-say ]] ;;
-    *) usage; return 2 ;;
+  case "${1:-}" in
+    toggle | record | current)
+      [[ $# == 1 ]] || { usage; return 2; }
+      "$1"
+      ;;
+    is)
+      [[ $# == 2 ]] || { usage; return 2; }
+      [[ $(current) == "$2" ]]
+      ;;
+    *)
+      usage
+      return 2
+      ;;
   esac
 }
 

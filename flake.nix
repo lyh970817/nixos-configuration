@@ -102,6 +102,7 @@
         matrix-icons = final.callPackage ./pkgs/matrix-icons.nix { };
         digg-pp-cli = final.callPackage ./pkgs/digg-pp-cli.nix { };
         doubao-say = final.callPackage ./pkgs/doubao-say.nix { };
+        wispr-flow = final.callPackage ./pkgs/wispr-flow.nix { };
         # Upstream flake ships the package directly; take it from the pinned
         # input.
         herdr = herdr.packages.${system}.default;

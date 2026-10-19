@@ -604,8 +604,8 @@ let
   };
 in
 {
-  # The alternative short-dictation engine, switched in by `dictation-engine`.
-  imports = [ ./doubao-say.nix ];
+  # The alternative short-dictation engines, switched in by `dictation-engine`.
+  imports = [ ./dictation-engine.nix ];
 
   home.packages = [
     pkgs.hyprwhspr
