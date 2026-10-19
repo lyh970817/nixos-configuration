@@ -120,13 +120,13 @@ stdenv.mkDerivation rec {
     substituteInPlace $out/share/applications/typeless.desktop \
       --replace-fail 'Exec=/opt/Typeless/typeless' 'Exec=typeless'
 
-    # chrome-sandbox would need setuid root; Electron runs unsandboxed
-    # instead, as the AppImage builds of these apps do. Native Wayland with
-    # DISPLAY unset: its X11 helper hits BadWindow on Wayland surfaces
-    # (github.com/howiehu/typeless-omarchy, bin/typeless-omarchy).
+    # The bundled chrome-sandbox cannot be setuid in the store; Chromium
+    # prefers its user-namespace sandbox over it anyway, so leave the sandbox
+    # on. Native Wayland with DISPLAY unset: its X11 helper hits BadWindow on
+    # Wayland surfaces (github.com/howiehu/typeless-omarchy).
     makeWrapper $out/opt/Typeless/typeless $out/bin/typeless \
       --unset DISPLAY \
-      --add-flags "--no-sandbox --ozone-platform=wayland" \
+      --add-flags --ozone-platform=wayland \
       --prefix PATH : ${
         lib.makeBinPath [
           acl

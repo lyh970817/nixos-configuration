@@ -2,6 +2,7 @@
   lib,
   appimageTools,
   fetchurl,
+  runCommand,
 }:
 
 # Community repackage of the proprietary Wispr Flow Electron app
@@ -20,9 +21,21 @@ let
   };
 
   contents = appimageTools.extractType2 { inherit pname version src; };
+
+  # AppRun passes --no-sandbox for AppImages, whose FUSE mount drops the
+  # chrome-sandbox setuid bit. Unpacked here, Chromium can use its
+  # user-namespace sandbox instead, so launch as the "nix" package type,
+  # which keeps the sandbox on.
+  sandboxed = runCommand "${pname}-${version}-sandboxed" { } ''
+    cp -r ${contents} $out
+    chmod -R u+w $out
+    substituteInPlace $out/AppRun \
+      --replace-fail "build_electron_args 'appimage'" "build_electron_args 'nix'"
+  '';
 in
-appimageTools.wrapType2 {
-  inherit pname version src;
+appimageTools.wrapAppImage {
+  inherit pname version;
+  src = sandboxed;
 
   extraPkgs = pkgs: [ pkgs.wl-clipboard ];
 
