@@ -21,6 +21,8 @@
     ./modules/system/locale.nix
     ./modules/system/portable.nix
     ./modules/system/lid.nix
+    ./modules/system/earlyoom.nix
+    ./modules/system/watchdog.nix
     ./modules/system/peer-home-mount.nix
     ./modules/system/tmp-aging.nix
 
