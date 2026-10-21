@@ -18,7 +18,7 @@ let
   # ~/Yandex.Disk and writes config.cfg's exclude-dirs= line; that line is
   # what the daemon is started with. The list is the union of:
   #   - staticExcludes below, always, whether or not the path exists;
-  #   - tool-owned directories found by name: .nf-test and .nf-test-*,
+  #   - tool-owned directories found by name: .git, .nf-test and .nf-test-*,
   #     .nextflow, .worktrees, node_modules, .venv, __pycache__, .direnv,
   #     .pytest_cache, .mypy_cache, .ruff_cache, .gradle, and worktrees/
   #     directly under a dot directory (.claude/worktrees);
@@ -27,9 +27,13 @@ let
   #     .nextflow.log* file;
   #   - directories holding pyvenv.cfg, a signed CACHEDIR.TAG, or a
   #     .yandex-nosync marker file -- `touch DIR/.yandex-nosync` excludes DIR.
-  # The scan never follows symlinks, crosses filesystems, or enters .git
-  # (which itself stays synced). A path containing , " \ or a control
-  # character cannot be written to the list: it is skipped with a warning.
+  # Every .git directory is excluded by name and never entered: on 2026-10-15
+  # sync misfiled 11 objects in Projects/xiaobao/.git (git fsck hash-path
+  # mismatch), so a git object store is not safe to sync. Working trees stay
+  # synced; history is covered by the restic backup of $HOME.
+  # The scan never follows symlinks or crosses filesystems, and enters no
+  # excluded directory. A path containing , " \ or a control character
+  # cannot be written to the list: it is skipped with a warning.
   # Add a permanent entry to staticExcludes, path relative to ~/Yandex.Disk.
   # The list is built on the first daemon start and refreshed every 30
   # minutes; a timer run rewrites it and restarts the daemon only when a path
@@ -39,11 +43,11 @@ let
     "restic"
     # Read-only companion checkouts that no churn rule matches.
     "Projects/Research/qc_dev/gwas/.references"
-    # Git object store of the xiaobao checkout: sync misfiled 11 objects on
-    # 2026-10-15 (git fsck hash-path mismatch); the repo lives on GitHub.
-    "Projects/xiaobao/.git"
-    # Same reason: the iOS keyboard spike's object store; the repo lives on GitHub.
-    "Projects/xiaobao-keyboard-spike/.git"
+    # Temporary: the old xiaobao path is a symlink into Projects/xiaobao-workspace
+    # (moved 2026-10-18) until the session that started there ends. The daemon
+    # resolves symlinks while the scan does not, so the link would sync the
+    # checkout twice, .git included. Drop with the symlink.
+    "Projects/xiaobao"
   ];
 
   yandexDiskExcludes = pkgs.writers.writePython3Bin "yandex-disk-excludes" {

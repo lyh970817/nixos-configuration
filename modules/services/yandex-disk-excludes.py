@@ -21,8 +21,10 @@ KEY = "exclude-dirs="
 CACHEDIR_SIGNATURE = b"Signature: 8a477f597d28d172789f06886806bc55"
 
 # Tool caches and checkouts excluded by directory name alone: each name is
-# owned by the tool that creates it and never holds hand-made data.
+# owned by the tool that creates it and never holds hand-made data. A matched
+# directory is listed and never entered.
 NAMED = {
+    ".git": "git object store; sync corrupts it",
     ".nextflow": "Nextflow cache",
     ".worktrees": "git worktrees",
     "node_modules": "npm packages",
@@ -125,7 +127,7 @@ def scan(root, static):
             warn(f"ignoring {reason} at the top of the sync dir")
         for name, e in dirs.items():
             child = os.path.join(rel, name) if rel else name
-            if name == ".git" or (not rel and name == ".sync") or child in static:
+            if (not rel and name == ".sync") or child in static:
                 continue
             try:
                 if e.stat(follow_symlinks=False).st_dev != root_dev:
