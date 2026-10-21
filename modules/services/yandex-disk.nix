@@ -253,7 +253,11 @@ in
     description = "Yandex.Disk daemon";
     after = [ "network.target" ];
     unitConfig.ConditionPathExists = tokenFile;
-    wantedBy = [ "multi-user.target" ];
+    # The home desktop does not start the daemon at boot: it peaks near 3 GB
+    # on a 12 GB machine that runs unattended, and was part of the 2026-10-20
+    # memory exhaustion. It stays installed for `systemctl start yandex-disk`.
+    # The laptop keeps auto-start, gated on AC power by sync-power-policy.nix.
+    wantedBy = lib.mkIf (config.portable.role != "home") [ "multi-user.target" ];
 
     serviceConfig = {
       User = "andongni";
