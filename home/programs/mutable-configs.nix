@@ -1134,6 +1134,9 @@ in
             .permissions.deny = $template.permissions.deny |
             .skipDangerousModePermissionPrompt = $template.skipDangerousModePermissionPrompt |
             .statusLine = $template.statusLine |
+            # Keep transcripts indefinitely: the 30-day default purged session
+            # transcripts. 36500 days makes cleanup effectively never run.
+            .cleanupPeriodDays = $template.cleanupPeriodDays |
             # Fallback presentation for sessions the launcher never sees.
             # Rationale above the activation block; keep apostrophes out of
             # this jq program, it is inside a single-quoted shell string.

@@ -12,6 +12,7 @@
     "command": "~/.config/claude/statusline.sh"
   },
   "skipDangerousModePermissionPrompt": true,
+  "cleanupPeriodDays": 36500,
   "skillOverrides": {
     "claude-api": "user-invocable-only",
     "code-review": "user-invocable-only",
