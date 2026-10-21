@@ -66,7 +66,6 @@
         yaml-language-server
         hunspell
         hunspellDicts.en_GB-large
-        gemini-cli
         xberg-cli
         digg-pp-cli
         (writeShellScriptBin "zcf" ''

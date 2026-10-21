@@ -37,7 +37,6 @@
     ./programs/claude-desktop.nix
     ./programs/visual-verification.nix
     ./programs/explain-session.nix
-    ./programs/gemini.nix
     ./programs/twitter-cli.nix
     ./programs/xiaohongshu-cli.nix
     ./programs/scansci-oa.nix
