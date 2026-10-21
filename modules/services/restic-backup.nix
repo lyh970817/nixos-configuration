@@ -21,11 +21,11 @@ let
   archiveRepository = "rclone:yandex:restic/archive";
   statusDir = "${home}/.cache/sync-status";
 
-  # Two repositories, because these are different lifecycles rather than two
-  # halves of one. `home` holds live data on a rolling retention. `archive`
-  # holds the only remaining copy of things deleted from disk, and is never
-  # forgotten or pruned -- a normal retention policy applied to it would
-  # silently garbage-collect the archive once its snapshot aged out.
+  # Two repositories. `home` keeps every snapshot indefinitely: nothing is
+  # ever forgotten, so anything that existed under $HOME at some 15-minute
+  # slot remains restorable from it. `archive` is not created by this module;
+  # if it is ever initialised it is only useful for paths the home backup
+  # excludes, since everything else is already retained in `home`.
 
   # Derived from a full inventory of $HOME (282 GB across 3.9M entries).
   # Everything here regenerates from something else, and together it accounts
@@ -92,20 +92,12 @@ let
     exec ${pkgs.restic}/bin/restic "$@"
   '';
 
-  # Retention keeps the fine granularity the 15-minute cadence exists to
-  # provide: a full day of it, then thinning out.
-  retention = [
-    "--keep-last 96"
-    "--keep-hourly 48"
-    "--keep-daily 14"
-    "--keep-weekly 8"
-    "--keep-monthly 24"
-  ];
-
+  # No forget, ever: every snapshot is kept for a complete history. With
+  # nothing forgotten, prune only reclaims data left unreferenced by
+  # interrupted backups.
   restic-prune-home = pkgs.writeShellScriptBin "restic-prune-home" ''
     set -euo pipefail
     ${resticEnv homeRepository homePasswordFile}
-    ${pkgs.restic}/bin/restic forget ${lib.concatStringsSep " " retention}
     # Prune rewrites pack files containing unreferenced chunks, which over a
     # remote means downloading and re-uploading them. --max-unused buys
     # tolerance for some slack instead of compacting aggressively.
@@ -313,8 +305,9 @@ in
     };
 
     # Deliberately no pruneOpts: the NixOS module would then forget and prune
-    # after *every* backup, and prune is the one genuinely expensive operation
-    # over a network repository. It runs monthly on its own timer below.
+    # after *every* backup, and every snapshot is kept. Prune alone, the one
+    # genuinely expensive operation over a network repository, runs monthly on
+    # its own timer below.
   };
 
   # Stay cleanly inactive until the credentials have been placed in secrets/,
@@ -337,7 +330,7 @@ in
   };
 
   systemd.services.restic-prune-home = {
-    description = "Forget and prune the Yandex restic home repository";
+    description = "Prune the Yandex restic home repository";
     unitConfig.ConditionPathExists = secretsPresent;
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
