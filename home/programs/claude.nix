@@ -184,9 +184,24 @@ let
         unset CLAUDE_LAUNCH_PROFILE
       fi
 
+      # Per-directory extra roots: each non-blank, non-# line of
+      # ./.claude/add-dirs (relative to the launch directory) becomes an
+      # --add-dir, since Claude persists --add-dir neither across launches nor
+      # into --resume. The --add-dir=PATH form keeps the variadic option from
+      # swallowing a following prompt or subcommand.
+      claude_add_dir_args=()
+      if [ -f .claude/add-dirs ]; then
+        while IFS= read -r claude_add_dir || [ -n "$claude_add_dir" ]; do
+          claude_add_dir="''${claude_add_dir#"''${claude_add_dir%%[![:space:]]*}"}"
+          claude_add_dir="''${claude_add_dir%"''${claude_add_dir##*[![:space:]]}"}"
+          case "$claude_add_dir" in "" | "#"*) continue ;; esac
+          claude_add_dir_args+=("--add-dir=$(${pkgs.coreutils}/bin/realpath -m -- "$claude_add_dir")")
+        done < .claude/add-dirs
+      fi
+
       ${claudeThemeSettings}
       exec ${pkgs.claude-code}/bin/claude --settings "$claude_flag_settings" \
-        "''${claude_profile_args[@]}" "$@"
+        "''${claude_profile_args[@]}" "''${claude_add_dir_args[@]}" "$@"
     '';
   };
 
