@@ -739,26 +739,18 @@ hl.window_rule({
 -- into), and keeps its own size, centred
 -- horizontally with its bottom edge 6% of the monitor height above the
 -- bottom. Matched on the title too so the preferences dialog (same class) is
--- left alone.
+-- left alone. While unfocused the strip draws no Hyprland border (transparent
+-- inactive border colour, kept transparent rather than border_size 0 so the
+-- window does not shift on focus change); the active colour is left to the
+-- theme, and the app's own 1px outline is hidden separately via GTK :backdrop
+-- in home/desktop/theming.nix.
 hl.window_rule({
   name = "livecaptions-float",
   match = { class = "^(net\\.sapples\\.LiveCaptions)$", title = "^(Live Captions)$" },
   float = true,
   no_initial_focus = true,
+  inactive_border_color = "rgba(00000000)",
   move = { "(monitor_w-window_w)*0.5", "monitor_h*0.94-window_h" },
-})
-
--- While unfocused the caption strip drops its border. Per the window-rules
--- wiki, `border_color` with one colour paints the border that colour, and
--- matching `focus = false` confines it to the inactive state; the active
--- border is not set here, so it stays whatever the current theme gives
--- (general.col.active_border). Transparent rather than border_size = 0 so the
--- window does not shift by the border width on focus change. The app's own
--- 1px outline is hidden separately via GTK :backdrop (home/desktop/theming.nix).
-hl.window_rule({
-  name = "livecaptions-unfocused-border",
-  match = { class = "^(net\\.sapples\\.LiveCaptions)$", title = "^(Live Captions)$", focus = false },
-  border_color = "rgba(00000000)",
 })
 
 -- --- Workspace Specific Rules ---
