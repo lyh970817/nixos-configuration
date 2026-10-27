@@ -421,16 +421,15 @@ in
   xdg.dataFile."themes/VT220-Amber".source = vt220Theme;
 
   # LiveCaptions (laptop only) draws its own 1px #3a3a3a outline on
-  # .main-window-parent. Hide it while the window is unfocused (:backdrop) so
-  # the caption strip sits borderless, matching the Hyprland inactive-border
-  # rule; focused, it keeps the outline. Its mic/settings/menu buttons and the
-  # close control are always collapsed (GTK CSS has no display:none), leaving
-  # only the caption text; preferences stay on Ctrl+comma. A 0 icon size trips
-  # Gtk-CRITICAL assertions, hence 1px. The selectors are LiveCaptions-specific,
-  # so other GTK4 apps reading this file are unaffected.
+  # .main-window-parent. It is hidden always: :backdrop never applies to this
+  # never-activated window (it opens unfocused), so a backdrop rule never fires.
+  # Hyprland's active border still marks focus. The mic/settings/menu buttons
+  # and close control are collapsed (GTK CSS has no display:none; a 0 icon size
+  # trips Gtk-CRITICAL, hence 1px); preferences stay on Ctrl+comma. The
+  # selectors are LiveCaptions-specific, so other GTK4 apps are unaffected.
   xdg.configFile."gtk-4.0/gtk.css" = lib.mkIf (osConfig.portable.role == "remote") {
     text = ''
-      .main-window-parent:backdrop {
+      .main-window-parent {
         border-color: transparent;
       }
 
