@@ -419,4 +419,17 @@ in
   xdg.dataFile."wallpapers/Petroglyph_frieze.png".source =
     ../../assets/wallpapers/Petroglyph_frieze.png;
   xdg.dataFile."themes/VT220-Amber".source = vt220Theme;
+
+  # LiveCaptions (laptop only) draws its own 1px #3a3a3a outline on
+  # .main-window-parent. Hide it while the window is unfocused (:backdrop) so
+  # the caption strip sits borderless, matching the Hyprland inactive-border
+  # rule; focused, it keeps the outline. The selector is LiveCaptions-specific,
+  # so other GTK4 apps reading this file are unaffected.
+  xdg.configFile."gtk-4.0/gtk.css" = lib.mkIf (osConfig.portable.role == "remote") {
+    text = ''
+      .main-window-parent:backdrop {
+        border-color: transparent;
+      }
+    '';
+  };
 }

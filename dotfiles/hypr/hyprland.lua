@@ -748,6 +748,19 @@ hl.window_rule({
   move = { "(monitor_w-window_w)*0.5", "monitor_h*0.94-window_h" },
 })
 
+-- While unfocused the caption strip drops its border. Per the window-rules
+-- wiki, `border_color` with one colour paints the border that colour, and
+-- matching `focus = false` confines it to the inactive state; the active
+-- border is not set here, so it stays whatever the current theme gives
+-- (general.col.active_border). Transparent rather than border_size = 0 so the
+-- window does not shift by the border width on focus change. The app's own
+-- 1px outline is hidden separately via GTK :backdrop (home/desktop/theming.nix).
+hl.window_rule({
+  name = "livecaptions-unfocused-border",
+  match = { class = "^(net\\.sapples\\.LiveCaptions)$", title = "^(Live Captions)$", focus = false },
+  border_color = "rgba(00000000)",
+})
+
 -- --- Workspace Specific Rules ---
 
 -- Force tiling on Workspace 10
