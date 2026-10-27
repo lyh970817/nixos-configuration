@@ -735,7 +735,8 @@ hl.window_rule({
 })
 
 -- LiveCaptions (laptop): the caption strip floats, stays on the workspace
--- where it was opened, never takes focus, and keeps its own size, centred
+-- where it was opened, opens without taking focus (it can still be clicked
+-- into), and keeps its own size, centred
 -- horizontally with its bottom edge 6% of the monitor height above the
 -- bottom. Matched on the title too so the preferences dialog (same class) is
 -- left alone.
@@ -743,7 +744,7 @@ hl.window_rule({
   name = "livecaptions-float",
   match = { class = "^(net\\.sapples\\.LiveCaptions)$", title = "^(Live Captions)$" },
   float = true,
-  no_focus = true,
+  no_initial_focus = true,
   move = { "(monitor_w-window_w)*0.5", "monitor_h*0.94-window_h" },
 })
 
