@@ -423,12 +423,28 @@ in
   # LiveCaptions (laptop only) draws its own 1px #3a3a3a outline on
   # .main-window-parent. Hide it while the window is unfocused (:backdrop) so
   # the caption strip sits borderless, matching the Hyprland inactive-border
-  # rule; focused, it keeps the outline. The selector is LiveCaptions-specific,
+  # rule; focused, it keeps the outline. Its mic/settings/menu buttons and the
+  # close control are always collapsed (GTK CSS has no display:none), leaving
+  # only the caption text; preferences stay on Ctrl+comma. A 0 icon size trips
+  # Gtk-CRITICAL assertions, hence 1px. The selectors are LiveCaptions-specific,
   # so other GTK4 apps reading this file are unaffected.
   xdg.configFile."gtk-4.0/gtk.css" = lib.mkIf (osConfig.portable.role == "remote") {
     text = ''
       .main-window-parent:backdrop {
         border-color: transparent;
+      }
+
+      .main-window-parent button.flat,
+      .main-window-parent menubutton,
+      .main-window-parent windowcontrols,
+      .main-window-parent windowcontrols button {
+        opacity: 0;
+        min-width: 0;
+        min-height: 0;
+        padding: 0;
+        margin: 0;
+        border: 0;
+        -gtk-icon-size: 1px;
       }
     '';
   };
