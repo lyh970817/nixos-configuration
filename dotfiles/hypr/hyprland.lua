@@ -516,6 +516,7 @@ local autofloat = {
     "localsend_app",
     "mandala-wallpaper",
     "imv", -- floated at 1000x700 below, which is over the threshold
+    "net\\.sapples\\.LiveCaptions", -- floated and pinned below
   },
 }
 
@@ -731,6 +732,17 @@ hl.window_rule({
   float = true,
   size = "800 600",
   center = true,
+})
+
+-- LiveCaptions (laptop): the caption strip floats and is pinned, so it shows
+-- on every workspace and stays above tiled windows. Its own "keep on top"
+-- setting does nothing here -- the compositor has to do it. Matched on the
+-- title too so the preferences dialog (same class) is left alone.
+hl.window_rule({
+  name = "livecaptions-pin",
+  match = { class = "^(net\\.sapples\\.LiveCaptions)$", title = "^(Live Captions)$" },
+  float = true,
+  pin = true,
 })
 
 -- --- Workspace Specific Rules ---

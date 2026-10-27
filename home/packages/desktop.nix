@@ -59,5 +59,10 @@
     ++ lib.optionals (osConfig.portable.role == "home") [
       wineWowPackages.stable
       winetricks
+    ]
+    # Live subtitles for system audio, transcribed by a local April-ASR model.
+    # Laptop only.
+    ++ lib.optionals (osConfig.portable.role == "remote") [
+      livecaptions
     ];
 }
