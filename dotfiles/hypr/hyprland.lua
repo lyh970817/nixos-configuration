@@ -739,19 +739,27 @@ hl.window_rule({
 -- into), and keeps its own size, centred
 -- horizontally with its bottom edge 6% of the monitor height above the
 -- bottom. Matched on the title too so the preferences dialog (same class) is
--- left alone. While unfocused the strip draws no Hyprland border (transparent
--- inactive border colour, kept transparent rather than border_size 0 so the
--- window does not shift on focus change); the active colour is left to the
--- theme, and the app's own 1px outline is hidden separately via GTK :backdrop
--- in home/desktop/theming.nix.
+-- left alone. While unfocused the strip draws no Hyprland border; the
+-- window.open hook below does this because in 0.56.2 the border_color rule
+-- effect can only set the active colour (or both, pinning the theme's active
+-- colour) and the inactive_border_color rule field parses but does nothing.
+-- The app's own 1px outline is hidden separately via GTK :backdrop in
+-- home/desktop/theming.nix.
 hl.window_rule({
   name = "livecaptions-float",
   match = { class = "^(net\\.sapples\\.LiveCaptions)$", title = "^(Live Captions)$" },
   float = true,
   no_initial_focus = true,
-  inactive_border_color = "rgba(00000000)",
   move = { "(monitor_w-window_w)*0.5", "monitor_h*0.94-window_h" },
 })
+
+hl.on("window.open", function(w)
+  if w.class ~= "net.sapples.LiveCaptions" or w.title ~= "Live Captions" then
+    return
+  end
+
+  hl.dispatch(hl.dsp.window.set_prop({ prop = "inactive_border_color", value = "rgba(00000000)", window = w }))
+end)
 
 -- --- Workspace Specific Rules ---
 
