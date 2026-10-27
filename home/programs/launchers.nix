@@ -1,4 +1,9 @@
-{ config, pkgs, ... }:
+{
+  config,
+  osConfig,
+  pkgs,
+  ...
+}:
 let
   profileBin = "/etc/profiles/per-user/${config.home.username}/bin";
   # Package-provided .desktop entries the user hides from the rofi launcher to
@@ -293,6 +298,26 @@ in
           StartupWMClass=zoom
           MimeType=x-scheme-handler/zoommtg;x-scheme-handler/zoomus;x-scheme-handler/tel;x-scheme-handler/callto;x-scheme-handler/zoomphonecall;x-scheme-handler/zoomphonesms;x-scheme-handler/zoomcontactcentercall;application/x-zoom
           X-KDE-Protocols=zoommtg;zoomus;tel;callto;zoomphonecall;zoomphonesms;zoomcontactcentercall;
+        '';
+      };
+    }
+    # LiveCaptions is installed on the remote laptop only; the package entry has
+    # no GenericName, so rofi would show it bare.
+    // pkgs.lib.optionalAttrs (osConfig.portable.role == "remote") {
+      "applications/net.sapples.LiveCaptions.desktop" = {
+        force = true;
+        text = ''
+          [Desktop Entry]
+          Type=Application
+          Name=Live Captions
+          GenericName=System
+          Comment=Provides live captioning for desktop and microphone audio
+          Icon=net.sapples.LiveCaptions
+          Exec=livecaptions
+          Terminal=false
+          Categories=Accessibility;GTK;Utility;
+          Keywords=Closed Captions;Speech to text;Subtitles;Deaf;livecaptions;closedcaptions;stt;asr;microphone;
+          StartupNotify=true
         '';
       };
     };
