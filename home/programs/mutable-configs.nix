@@ -136,6 +136,13 @@ let
       inherit name;
       value = pkgs.writeText "codex-${name}.config.toml" (
         builtins.readFile ../../dotfiles/codex/profiles/${name}.config.toml
+        # Desktop reads the same orchestrator template but uses its own bundled
+        # browser plugin. This marketplace selection belongs to the CLI only.
+        + lib.optionalString (name == "orchestrator") ''
+
+          [plugins."chrome@${codexChromePluginId}"]
+          enabled = true
+        ''
       );
     }) codexProfileNames
   );
@@ -811,6 +818,7 @@ let
                 return
         lines = old.splitlines(True)
         changed = table_key(lines, "features", "remote_plugin", "false")
+        changed = remove_map_key(lines, "features", "realtime_conversation") or changed
         # Keep a dark fallback for direct store-path/headless invocations. The
         # user-facing wrapper in programs/codex-theme.nix supplies a stronger,
         # process-local light/dark override, so concurrent sessions never

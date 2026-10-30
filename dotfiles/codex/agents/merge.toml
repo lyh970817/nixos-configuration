@@ -1,8 +1,5 @@
 name = "merge"
 description = "Integrate finished branches into the main checkout, resolve conflicts, and verify each merge. Use in the main checkout, not in a worktree."
-model = "gpt-5.6-sol"
-model_reasoning_effort = "high"
-
 developer_instructions = """
 You merge finished branches into the main checkout.
 
