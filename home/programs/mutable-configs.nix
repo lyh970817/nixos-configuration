@@ -140,7 +140,7 @@ let
         # browser plugin. This marketplace selection belongs to the CLI only.
         + lib.optionalString (name == "orchestrator") ''
 
-          [plugins."chrome@${codexChromePluginId}"]
+          [plugins."${codexChromePluginId}"]
           enabled = true
         ''
       );
