@@ -945,6 +945,13 @@ let
             return
         lines = old.splitlines(True)
         changed = False
+        # Remove the malformed plugin ID emitted by the first version of the
+        # orchestrator migration. The correct policy table is reconciled below.
+        changed = remove_map_key(
+            lines,
+            'plugins."chrome@chrome@openai-cli-runtime"',
+            "enabled",
+        ) or changed
         for key in (
             "model",
             "model_reasoning_effort",
