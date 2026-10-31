@@ -1,4 +1,3 @@
-model = "gpt-5.5"
 model_reasoning_effort = "high"
 # Profile for the Superpowers plugin and related local skills.
 # Select it with: codex --profile superpowers

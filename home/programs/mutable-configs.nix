@@ -615,6 +615,14 @@ let
     OBSOLETE_BASE_SKILL_PATHS = {
         os.path.expanduser("~/.codex/skills/superpowers-domain-context/SKILL.md"),
     }
+    # Retire the shipped model pins without overwriting later user choices.
+    # Profiles now inherit the base model unless the user selects one there.
+    OBSOLETE_PROFILE_MODELS = {
+        "orchestrator": "gpt-5.6-sol",
+        "last30days": "gpt-5.6-terra",
+        "mattpocock": "gpt-5.6-terra",
+        "superpowers": "gpt-5.5",
+    }
 
     def value(item):
         return json.dumps(item, separators=(",", ":"))
@@ -719,17 +727,21 @@ let
         return True
 
     def remove_map_key(lines, table, key, case_insensitive=False):
-        table_index = next(
-            (
-                index
-                for index, opening, name in headers(lines)
-                if opening == "[" and name == table
-            ),
-            None,
-        )
-        if table_index is None:
-            return False
-        start, end = bounds(lines, table_index)
+        if table:
+            table_index = next(
+                (
+                    index
+                    for index, opening, name in headers(lines)
+                    if opening == "[" and name == table
+                ),
+                None,
+            )
+            if table_index is None:
+                return False
+            start, end = bounds(lines, table_index)
+        else:
+            start = -1
+            end = next((index for index, _, _ in headers(lines)), len(lines))
         matches = []
         index = start + 1
         while index < end:
@@ -752,9 +764,10 @@ let
             return False
         for match_start, match_stop in reversed(matches):
             del lines[match_start:match_stop]
-        _, end = bounds(lines, table_index)
-        if all(not line.strip() for line in lines[table_index + 1:end]):
-            del lines[table_index:end]
+        if table:
+            _, end = bounds(lines, table_index)
+            if all(not line.strip() for line in lines[table_index + 1:end]):
+                del lines[table_index:end]
         return True
 
     def skill_blocks(lines):
@@ -818,6 +831,8 @@ let
                 return
         lines = old.splitlines(True)
         changed = table_key(lines, "features", "remote_plugin", "false")
+        if old and tomllib.loads(old).get("model") == "gpt-5.6-sol":
+            changed = remove_map_key(lines, "", "model") or changed
         changed = remove_map_key(lines, "features", "realtime_conversation") or changed
         # Keep a dark fallback for direct store-path/headless invocations. The
         # user-facing wrapper in programs/codex-theme.nix supplies a stronger,
@@ -945,6 +960,8 @@ let
             return
         lines = old.splitlines(True)
         changed = False
+        if tomllib.loads(old).get("model") == OBSOLETE_PROFILE_MODELS.get(profile_name):
+            changed = remove_map_key(lines, "", "model") or changed
         # Remove the malformed plugin ID emitted by the first version of the
         # orchestrator migration. The correct policy table is reconciled below.
         changed = remove_map_key(
@@ -953,7 +970,6 @@ let
             "enabled",
         ) or changed
         for key in (
-            "model",
             "model_reasoning_effort",
             "include_collaboration_mode_instructions",
             "developer_instructions",
