@@ -734,9 +734,9 @@ hl.window_rule({
   center = true,
 })
 
--- LiveCaptions (laptop): the caption strip floats, stays on the workspace
--- where it was opened, opens without taking focus (it can still be clicked
--- into), and keeps its own size, centred
+-- LiveCaptions (laptop): pin the floating strip above fullscreen windows and
+-- across workspaces on its monitor. It opens without taking focus (it can
+-- still be clicked into) and keeps its own size, centred
 -- horizontally with its bottom edge 6% of the monitor height above the
 -- bottom. Matched on the title too so the preferences dialog (same class) is
 -- left alone. While unfocused the strip draws no Hyprland border; the
@@ -749,6 +749,7 @@ hl.window_rule({
   name = "livecaptions-float",
   match = { class = "^(net\\.sapples\\.LiveCaptions)$", title = "^(Live Captions)$" },
   float = true,
+  pin = true,
   no_initial_focus = true,
   move = { "(monitor_w-window_w)*0.5", "monitor_h*0.94-window_h" },
 })
