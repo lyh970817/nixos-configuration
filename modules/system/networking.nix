@@ -14,7 +14,8 @@ let
   # pointed at via XDG_CONFIG_HOME. The interface lands in bind-device (parsed
   # verbatim, not shell-expanded) and in the dhcp-dns command.
   captiveBrowserTomlTemplate = pkgs.writeText "captive-browser.toml.in" ''
-    browser = """env XDG_CONFIG_HOME="@PREV_CONFIG_HOME@" ${pkgs.chromium}/bin/chromium --user-data-dir=''${XDG_DATA_HOME:-$HOME/.local/share}/chromium-captive --proxy-server="socks5://$PROXY" --host-resolver-rules="MAP * ~NOTFOUND , EXCLUDE localhost" --no-first-run --new-window --incognito -no-default-browser-check http://cache.nixos.org/"""
+    # Keep a dedicated regular profile: incognito's HTTPS upgrade interrupts the HTTP portal probe.
+    browser = """env XDG_CONFIG_HOME="@PREV_CONFIG_HOME@" ${pkgs.chromium}/bin/chromium --user-data-dir="''${XDG_DATA_HOME:-$HOME/.local/share}/chromium-captive" --proxy-server="socks5://$PROXY" --no-first-run --new-window --no-default-browser-check http://cache.nixos.org/"""
     dhcp-dns = """${pkgs.networkmanager}/bin/nmcli dev show @IFACE@ | ${pkgs.gnugrep}/bin/fgrep IP4.DNS"""
     socks5-addr = """localhost:1666"""
     bind-device = """@IFACE@"""
@@ -31,7 +32,8 @@ let
       -e "s|@PREV_CONFIG_HOME@|$prev_config_home|g" \
       ${captiveBrowserTomlTemplate} > "$cfgdir/captive-browser.toml"
     export XDG_CONFIG_HOME="$cfgdir"
-    ${pkgs.captive-browser}/bin/captive-browser
+    # Some captive DHCP DNS servers drop EDNS queries instead of answering them.
+    GODEBUG="''${GODEBUG:+$GODEBUG,}netedns0=0" ${pkgs.captive-browser}/bin/captive-browser
   '';
 
   publicWifiLogin = pkgs.writeShellScriptBin "public-wifi-login" ''
