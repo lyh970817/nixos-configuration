@@ -734,13 +734,13 @@ hl.window_rule({
   center = true,
 })
 
--- LiveCaptions (laptop): pin the floating strip above fullscreen windows and
--- across workspaces on its monitor. It opens without taking focus (it can
+-- LiveCaptions (laptop): raise the floating strip above fullscreen windows on
+-- its own workspace. It opens without taking focus (it can
 -- still be clicked into) and keeps its own size, centred
 -- horizontally with its bottom edge 6% of the monitor height above the
 -- bottom. Matched on the title too so the preferences dialog (same class) is
 -- left alone. While unfocused the strip draws no Hyprland border; the
--- window.open hook below does this because in 0.56.2 the border_color rule
+-- hooks below do this because in 0.56.2 the border_color rule
 -- effect can only set the active colour (or both, pinning the theme's active
 -- colour) and the inactive_border_color rule field parses but does nothing.
 -- The app's own 1px outline is hidden separately via GTK :backdrop in
@@ -749,17 +749,44 @@ hl.window_rule({
   name = "livecaptions-float",
   match = { class = "^(net\\.sapples\\.LiveCaptions)$", title = "^(Live Captions)$" },
   float = true,
-  pin = true,
   no_initial_focus = true,
   move = { "(monitor_w-window_w)*0.5", "monitor_h*0.94-window_h" },
 })
 
-hl.on("window.open", function(w)
+local function raiseLiveCaptions(w)
   if w.class ~= "net.sapples.LiveCaptions" or w.title ~= "Live Captions" then
     return
   end
 
   hl.dispatch(hl.dsp.window.set_prop({ prop = "inactive_border_color", value = "rgba(00000000)", window = w }))
+  -- Migrate strips left pinned by the former rule when the config reloads.
+  if w.pinned then
+    hl.dispatch(hl.dsp.window.pin({ action = "disable", window = w }))
+  end
+  -- Unlike pin, raising also permits rendering above fullscreen without
+  -- making the strip visible on other workspaces or taking keyboard focus.
+  hl.dispatch(hl.dsp.window.alter_zorder({ mode = "top", window = w }))
+end
+
+local function raiseWorkspaceLiveCaptions(w)
+  if not w then
+    return -- Focus can clear when switching to an empty workspace.
+  end
+  for _, caption in ipairs(hl.get_workspace_windows(w.workspace)) do
+    raiseLiveCaptions(caption)
+  end
+end
+
+hl.on("window.open", raiseWorkspaceLiveCaptions)
+hl.on("window.active", raiseWorkspaceLiveCaptions)
+hl.on("window.move_to_workspace", raiseWorkspaceLiveCaptions)
+-- Entering fullscreen resets allowed_over_fullscreen on the other windows.
+hl.on("window.fullscreen", raiseWorkspaceLiveCaptions)
+
+hl.on("config.reloaded", function()
+  for _, w in ipairs(hl.get_windows()) do
+    raiseLiveCaptions(w)
+  end
 end)
 
 -- --- Workspace Specific Rules ---
