@@ -25,6 +25,17 @@ SSH access to CREATE depends on MFA that lapses after a while. Anything longer t
 2. Estimate when it will finish, then check once around that time, not by polling continuously.
 3. If SSH is refused when you check because MFA has lapsed, notify the user (for example with a push notification) and ask them to approve MFA at https://portal.er.kcl.ac.uk/mfa/. Do not retry in a loop or work around it.
 
+## Use one multiplexed connection
+
+Connect through a persistent master connection rather than a fresh SSH handshake per command. The `create` host in
+`~/.ssh/config` sets `ControlMaster auto`, `ControlPath ~/.ssh/cm-%C` and `ControlPersist 4h`, so the first
+`ssh create` (or `scp`) authenticates once and leaves a background master open; every later `ssh`/`scp`/`sacct`
+call reuses it without a new handshake or MFA check. `ssh -O check create` reports whether the master is alive and
+`ssh -O exit create` closes it. If the config is not active yet (home-manager not rebuilt), pass the same three
+options with `-o` on the first call. A handshake refused with `Exceeded MaxStartups` is the login node throttling
+unauthenticated connections; a live master is immune to it, and without one the only remedy is to wait, not to
+loop.
+
 ## Route the task
 
 - For SSH, login-versus-compute behavior, Slurm resources, job monitoring, and scheduler policy, read [references/access-and-slurm.md](references/access-and-slurm.md).
