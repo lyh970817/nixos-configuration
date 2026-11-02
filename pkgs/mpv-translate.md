@@ -14,9 +14,11 @@ a separate application for system audio.
 
 The initial setup uses multilingual Whisper **base** on CPU/int8 (four threads)
 and **Helsinki-NLP/opus-mt-en-zh** for English-to-Chinese translation. OCR and
-the additional Whisper speech-gate model are disabled. The first use downloads
-models into the normal Hugging Face cache (`~/.cache/huggingface`); later use
-reuses them. Allow roughly 500 MB for the two model downloads and several GB of
+the additional Whisper speech-gate model are disabled. Before first playback,
+run `mpv-translate-models` once on each machine to download the configured models
+into the normal Hugging Face cache (`~/.cache/huggingface`); later playback reuses
+them. The upstream recognizer requires an existing cache and does not download
+its model automatically. Allow roughly 500 MB for both models and several GB of
 RAM for the Python/PyTorch runtime and inference. Models are mutable user data,
 not part of the Nix store. Model loading finishes before the player opens.
 
@@ -42,7 +44,9 @@ and translation quality need checking on representative material.
 
 For diagnosis, run `mpv-translate --loglevel DEBUG /path/to/video.mkv`. For an
 offline subtitle-generation pilot, `mpv-translate-direct /path/to/video.mkv
---language en --echo` runs the same recognizer/translator without a player.
+--language en` runs the same recognizer/translator without a player and writes
+the SRT cache. Upstream's `--echo` flag currently does not print the emitted
+segment lists, so inspect the SRT itself.
 Use accessible local media first. Browser authentication, DRM, Blu-ray playlists,
 and every URL supported by mpv are not necessarily accessible to PyAV's separate
 decoder.

@@ -53,6 +53,7 @@ python3Packages.buildPythonApplication {
   '';
 
   postInstall = ''
+    install -Dm755 ${./mpv-translate-models.py} "$out/bin/mpv-translate-models"
     install -Dm644 README.md "$out/share/doc/mpv-translate/README-upstream.md"
     install -Dm644 ${./mpv-translate.md} "$out/share/doc/mpv-translate/README.md"
   '';
