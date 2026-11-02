@@ -100,6 +100,7 @@
         chatgpt = final.callPackage ./pkgs/chatgpt.nix { };
         xberg-cli = final.callPackage ./pkgs/xberg-cli.nix { };
         matrix-icons = final.callPackage ./pkgs/matrix-icons.nix { };
+        mpv-translate = final.callPackage ./pkgs/mpv-translate.nix { };
         digg-pp-cli = final.callPackage ./pkgs/digg-pp-cli.nix { };
         doubao-say = final.callPackage ./pkgs/doubao-say.nix { };
         wispr-flow = final.callPackage ./pkgs/wispr-flow.nix { };

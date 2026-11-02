@@ -13,6 +13,7 @@
     ./programs/peer-dashboards.nix
     ./programs/ssh.nix
     ./programs/mpv.nix
+    ./programs/mpv-translate.nix
     ./programs/gnome-keyring.nix
     ./programs/starship.nix
     ./programs/tmux.nix
