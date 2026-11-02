@@ -244,7 +244,7 @@ rewrite="$(
   cd "$buffer_root" || exit 1
   printf '<message>\n%s\n</message>' "$message" | MAX_THINKING_TOKENS=0 timeout 120 claude \
     --safe-mode \
-    --model claude-sonnet-5 \
+    --model claude-sonnet-5-5 \
     --system-prompt-file "$prompt_file" \
     --tools "" \
     -p 2>/dev/null

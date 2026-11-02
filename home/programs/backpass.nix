@@ -67,13 +67,13 @@ let
     ladders = {
       analysis = [
         {
-          model = "claude-sonnet-5";
+          model = "claude-sonnet-5-5";
           agents = [ "claude" ];
         }
       ];
       synthesis = [
         {
-          model = "claude-opus-5";
+          model = "claude-opus-5-5";
           agents = [ "claude" ];
         }
       ];
