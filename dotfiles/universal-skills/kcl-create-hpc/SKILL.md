@@ -27,7 +27,10 @@ SSH access to CREATE depends on MFA that lapses after a while. Anything longer t
 
 ## Use one multiplexed connection
 
-Connect through a persistent master connection rather than a fresh SSH handshake per command. The `create` host in
+A Slurm job never depends on an SSH session, so the default stays submit, then check once at the expected
+finish. Open a persistent master connection when the step is a burst of small commands (inspecting results,
+staging several files, submit-fix-resubmit, polling a job), or when a check will come back later and should not
+need the MFA to still be valid. The `create` host in
 `~/.ssh/config` sets `ControlMaster auto`, `ControlPath ~/.ssh/cm-%C` and `ControlPersist 4h`, so the first
 `ssh create` (or `scp`) authenticates once and leaves a background master open; every later `ssh`/`scp`/`sacct`
 call reuses it without a new handshake or MFA check. `ssh -O check create` reports whether the master is alive and
