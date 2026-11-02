@@ -15,7 +15,7 @@ python3Packages.buildPythonApplication {
     owner = "alexkoay";
     repo = "mpv-whisper";
     rev = "31dbbf60acd23f182fbc87c56b84f401de14418a";
-    hash = "08xfvympkbxna7pdzw3ylxsca78fsbkc32i6qxxcc09azs5sq6sf";
+    sha256 = "08xfvympkbxna7pdzw3ylxsca78fsbkc32i6qxxcc09azs5sq6sf";
   };
 
   build-system = [ python3Packages.setuptools ];
