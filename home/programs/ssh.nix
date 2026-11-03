@@ -16,15 +16,6 @@ in
         hostname = "hpc.create.kcl.ac.uk";
         user = "k1764630";
         identityFile = "~/.ssh/id_ed25519";
-        # One multiplexed connection: the first ssh/scp authenticates (MFA) and
-        # stays open in the background; every later command rides on it, so
-        # repeated one-off commands neither re-check MFA nor count against the
-        # login node's MaxStartups throttle. `ssh -O check create` shows it,
-        # `ssh -O exit create` closes it.
-        controlMaster = "auto";
-        controlPath = "~/.ssh/cm-%C";
-        controlPersist = "4h";
-        serverAliveInterval = 60;
       };
     }
     // lib.optionalAttrs (peerHost != "") {

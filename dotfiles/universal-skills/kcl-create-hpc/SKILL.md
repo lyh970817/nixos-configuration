@@ -17,27 +17,11 @@ Use CREATE as a scheduler-managed research system. Confirm the SSH identity, dat
 - Check `ceph_quota` before staging data, creating environments or images, or launching output-producing jobs. A full or over-quota destination is a blocker, not permission to delete old work or switch to another allocation.
 - Source access does not by itself authorize derived data, logs, or caches in personal scratch. Confirm the requested destination is permitted for the data classification, and budget for images, caches, temporary/intermediate data, final output, and headroom.
 
-## Run work as jobs, not SSH sessions
+## Workflow
 
-SSH access to CREATE depends on MFA that lapses after a while. Anything longer than a quick one-off command, such as tests, pipelines, environment builds or container pulls, goes into a self-contained `sbatch` job, so it keeps running whether or not SSH still works. Have the job write its results and a summary to scratch.
-
-1. Submit the job and record its job ID.
-2. Estimate when it will finish, then check once around that time, not by polling continuously.
-3. If SSH is refused when you check because MFA has lapsed, notify the user (for example with a push notification) and ask them to approve MFA at https://portal.er.kcl.ac.uk/mfa/. Do not retry in a loop or work around it.
-
-## Use one multiplexed connection
-
-A Slurm job never depends on an SSH session, so the default stays submit, then check once at the expected
-finish. Open a persistent master connection when the step is a burst of small commands (inspecting results,
-staging several files, submit-fix-resubmit, polling a job), or when a check will come back later and should not
-need the MFA to still be valid. The `create` host in
-`~/.ssh/config` sets `ControlMaster auto`, `ControlPath ~/.ssh/cm-%C` and `ControlPersist 4h`, so the first
-`ssh create` (or `scp`) authenticates once and leaves a background master open; every later `ssh`/`scp`/`sacct`
-call reuses it without a new handshake or MFA check. `ssh -O check create` reports whether the master is alive and
-`ssh -O exit create` closes it. If the config is not active yet (home-manager not rebuilt), pass the same three
-options with `-o` on the first call. A handshake refused with `Exceeded MaxStartups` is the login node throttling
-unauthenticated connections; a live master is immune to it, and without one the only remedy is to wait, not to
-loop.
+The job-first workflow, the MFA-lapse rule and the multiplexed-connection rule live in the global agent
+instructions (`~/.config/claude/CLAUDE.md`, section "KCL CREATE HPC"). This skill owns the cluster boundaries,
+paths and reference notes only.
 
 ## Route the task
 
