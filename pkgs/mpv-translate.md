@@ -1,25 +1,33 @@
 # mpv-translate on these machines
 
-Run `mpv-translate /path/to/video.mkv`, or choose **mpv (English + Chinese)**
-from a video's **Open With** menu. Running `mpv-translate` without a file opens
+Run `mpv-translate /path/to/video.mkv` for English audio, or
+`mpv-translate-ja /path/to/video.mkv` for Japanese audio, or choose **mpv
+(English + Chinese)** / **mpv (Japanese + Chinese)** from a video's **Open With**
+menu. Running `mpv-translate` without a file opens
 an idle player after model loading; drag a local video into that window.
 Ordinary `mpv` playback does not start translation. This setup launches its own
 player rather than attaching to an existing player. Use one translated player
-at a time on each machine (its IPC socket is `~/.cache/mpv-translate.sock`).
+per profile on each machine (IPC sockets `~/.cache/mpv-translate.sock` and
+`~/.cache/mpv-translate-ja.sock`).
 
 Inside that player, **Ctrl+.** turns translation off/on, **Space** pauses, and
 **q** closes the session. Caption models remain in memory while translation is
 toggled off. To release them, close the translated player. LiveCaptions remains
 a separate application for system audio.
 
-The initial setup uses multilingual Whisper **base** on CPU/int8 (four threads)
-and **Helsinki-NLP/opus-mt-en-zh** for English-to-Chinese translation. OCR and
-the additional Whisper speech-gate model are disabled. Before first playback,
-run `mpv-translate-models` once on each machine to download the configured models
-into the normal Hugging Face cache (`~/.cache/huggingface`); later playback reuses
-them. The upstream recognizer requires an existing cache and does not download
-its model automatically. Allow roughly 500 MB for both models and several GB of
-RAM for the Python/PyTorch runtime and inference. Models are mutable user data,
+The English profile uses multilingual Whisper **base** on CPU/int8 (four
+threads) and **Helsinki-NLP/opus-mt-en-zh**. The Japanese profile uses Whisper
+**small** (base recognizes Japanese poorly) and **NLLB-200 distilled 600M**:
+Helsinki-NLP publishes no direct ja→zh OPUS model, and upstream's hard-coded
+NLLB 3.3B is about 13 GB of float32 weights on these CPU-only hosts, so the
+entry script swaps in the distilled model without patching upstream. OCR and the
+additional Whisper speech-gate model are disabled. Before first playback, run
+`mpv-translate-models` once on each machine; it downloads every profile's models
+into the normal Hugging Face cache (`~/.cache/huggingface`); later playback
+reuses them. The upstream recognizer requires an existing cache and does not
+download its model automatically. Allow roughly 500 MB (English) plus 3 GB
+(Japanese) of cache and several GB of RAM for the Python/PyTorch runtime and
+inference. Models are mutable user data,
 not part of the Nix store. Model loading finishes before the player opens.
 
 PyAV independently reads upcoming audio from the media file. The player waits
@@ -28,12 +36,16 @@ the first result is ready or the timeout expires. This is an initial wait, not
 a continuous guarantee: slow recognition can still fall behind. Processing
 throttles when its next chunk is over 30 seconds ahead of playback. English and
 Chinese cues use the same media timestamps. Generated bilingual SRT files go to
-`~/.cache/mpv-translate/subs`; no subtitle is written beside the original video.
+`~/.cache/mpv-translate/subs` (`subs-ja` for Japanese); no subtitle is written
+beside the original video.
 Different files sharing a basename share the upstream subtitle-cache filename.
 
 The managed settings live in `home/programs/mpv-translate.nix`, which generates
-`~/.config/mpv-translate/config.toml`. Change `translate.language` for a different
-spoken source language, then commit and rebuild both hosts. Whisper base is
+`~/.config/mpv-translate/config.toml` (default profile) and one
+`~/.config/mpv-translate/<profile>.toml` per extra source language. The entry
+script dispatches on its executable name, `mpv-translate[-<profile>][-direct]`;
+a named profile reads only its own file. Add a source language as another
+profile and executable name, then commit and rebuild both hosts. Whisper base is
 multilingual, but OPUS requires an available **direct** Helsinki-NLP language
 pair for that source and target; Whisper's language coverage alone does not
 establish translation-pair support. Keep the source explicit: this upstream
@@ -57,4 +69,4 @@ The pinned code is dayo6/mpv-translate commit
 network. No upstream Python source is patched. Its wheel excludes bundled TOML,
 allowing the managed user config to be read. Upstream reads the first config it
 finds, despite its README describing merging: a working-directory file named
-`mpv-translate.toml` takes precedence over the user config.
+`mpv-translate.toml` takes precedence over the default-profile user config.

@@ -49,13 +49,15 @@ python3Packages.buildPythonApplication {
     test ! -e "$out/${python3Packages.python.sitePackages}/mpv_translate/config.toml"
     "$out/bin/mpv-translate" --help > /dev/null
     "$out/bin/mpv-translate-direct" --help > /dev/null
+    "$out/bin/mpv-translate-ja-direct" --help > /dev/null
     runHook postInstallCheck
   '';
 
   postInstall = ''
-    install -m755 ${./mpv-translate-entry.py} "$out/bin/mpv-translate"
-    install -m755 ${./mpv-translate-entry.py} "$out/bin/mpv-translate-direct"
-    install -Dm755 ${./mpv-translate-models.py} "$out/bin/mpv-translate-models"
+    # The entry dispatches on its own name; -ja selects ~/.config/mpv-translate/ja.toml.
+    for name in mpv-translate{,-direct,-models,-ja,-ja-direct}; do
+      install -m755 ${./mpv-translate-entry.py} "$out/bin/$name"
+    done
     install -Dm644 README.md "$out/share/doc/mpv-translate/README-upstream.md"
     install -Dm644 ${./mpv-translate.md} "$out/share/doc/mpv-translate/README.md"
   '';
