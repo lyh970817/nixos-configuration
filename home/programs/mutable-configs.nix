@@ -1703,6 +1703,7 @@ in
     "claude/skills/herdr".source = link "dotfiles/claude/skills/herdr";
     "claude/skills/kcl-create-hpc".source = link "dotfiles/claude/skills/kcl-create-hpc";
     "claude/skills/peer-device-access".source = link "dotfiles/claude/skills/peer-device-access";
+    "claude/skills/pull-request-ci".source = link "dotfiles/claude/skills/pull-request-ci";
     "claude/skills/r-dev-shell".source = link "dotfiles/claude/skills/r-dev-shell";
     "claude/skills/setup-domain-docs".source = link "dotfiles/claude/skills/setup-domain-docs";
     "claude/skills/show-me".source = link "dotfiles/claude/skills/show-me";
@@ -1749,6 +1750,10 @@ in
     };
     "claude-mattpocock/skills/peer-device-access" = {
       source = link "dotfiles/claude/skills/peer-device-access";
+      force = true;
+    };
+    "claude-mattpocock/skills/pull-request-ci" = {
+      source = link "dotfiles/claude/skills/pull-request-ci";
       force = true;
     };
     "claude-mattpocock/skills/r-dev-shell" = {
