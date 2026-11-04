@@ -1,4 +1,10 @@
-{ config, pkgs, ... }:
+{
+  config,
+  lib,
+  osConfig,
+  pkgs,
+  ...
+}:
 
 let
   toml = pkgs.formats.toml { };
@@ -80,40 +86,44 @@ let
       ];
     };
 in
-{
-  home.packages = [ pkgs.mpv-translate ];
+lib.mkMerge [
+  {
+    home.packages = [ pkgs.mpv-translate ];
 
-  xdg.configFile."mpv-translate/config.toml".source = profile {
-    suffix = "";
-    # Multilingual, so changing the source language does not need an .en model swap.
-    whisper = "base";
-    translate = {
-      language = "en";
-      translator = "opus";
+    xdg.configFile."mpv-translate/config.toml".source = profile {
+      suffix = "";
+      # Multilingual, so changing the source language does not need an .en model swap.
+      whisper = "base";
+      translate = {
+        language = "en";
+        translator = "opus";
+      };
     };
-  };
 
-  # No direct OPUS ja→zh model exists, so Japanese goes through NLLB
-  # (distilled 600M, selected in pkgs/mpv-translate-entry.py). Base Whisper
-  # recognizes Japanese poorly; small is the lightest usable model.
-  xdg.configFile."mpv-translate/ja.toml".source = profile {
-    suffix = "-ja";
-    whisper = "small";
-    translate = {
-      language = "ja";
-      translator = "nllb";
+    xdg.desktopEntries.mpv-translate = launcher {
+      command = "mpv-translate";
+      name = "mpv (English + Chinese)";
+      comment = "Translate English audio locally; Ctrl+. toggles captions";
     };
-  };
+  }
+  (lib.mkIf (osConfig.portable.role != "home") {
+    # Japanese is laptop-only; without ja.toml, mpv-translate-models skips its
+    # ~3 GB of models on the desktop. No direct OPUS ja→zh model exists, so it
+    # goes through NLLB (distilled 600M, selected in pkgs/mpv-translate-entry.py).
+    # Base Whisper recognizes Japanese poorly; small is the lightest usable model.
+    xdg.configFile."mpv-translate/ja.toml".source = profile {
+      suffix = "-ja";
+      whisper = "small";
+      translate = {
+        language = "ja";
+        translator = "nllb";
+      };
+    };
 
-  xdg.desktopEntries.mpv-translate = launcher {
-    command = "mpv-translate";
-    name = "mpv (English + Chinese)";
-    comment = "Translate English audio locally; Ctrl+. toggles captions";
-  };
-
-  xdg.desktopEntries.mpv-translate-ja = launcher {
-    command = "mpv-translate-ja";
-    name = "mpv (Japanese + Chinese)";
-    comment = "Translate Japanese audio locally; Ctrl+. toggles captions";
-  };
-}
+    xdg.desktopEntries.mpv-translate-ja = launcher {
+      command = "mpv-translate-ja";
+      name = "mpv (Japanese + Chinese)";
+      comment = "Translate Japanese audio locally; Ctrl+. toggles captions";
+    };
+  })
+]

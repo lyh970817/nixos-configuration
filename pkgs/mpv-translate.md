@@ -1,9 +1,9 @@
 # mpv-translate on these machines
 
 Run `mpv-translate /path/to/video.mkv` for English audio, or
-`mpv-translate-ja /path/to/video.mkv` for Japanese audio, or choose **mpv
-(English + Chinese)** / **mpv (Japanese + Chinese)** from a video's **Open With**
-menu. Running `mpv-translate` without a file opens
+`mpv-translate-ja /path/to/video.mkv` for Japanese audio (laptop only), or
+choose **mpv (English + Chinese)** / **mpv (Japanese + Chinese)** from a video's
+**Open With** menu. Running `mpv-translate` without a file opens
 an idle player after model loading; drag a local video into that window.
 Ordinary `mpv` playback does not start translation. This setup launches its own
 player rather than attaching to an existing player. Use one translated player
