@@ -106,6 +106,13 @@ worktrees and background agents, skills (repo-local ones live in
 file-based memory, context handling in long sessions, driving the peer host over
 SSH, and anything that widens what an agent may do unasked or undoably.
 
+Keep orchestrator profiles on each vendor's most capable generally available
+model at explicit `medium` effort. Recheck the official model catalog on every
+Codex or Claude Code update and update the managed profile templates, activation
+reconciliation, launchers and labels together, including the shared Codex desktop
+orchestrator template. This default applies to orchestrators; choose subagent
+models and effort for their assigned tasks.
+
 Where the notes live:
 
 - Claude Code —

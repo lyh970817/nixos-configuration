@@ -970,6 +970,7 @@ let
             "enabled",
         ) or changed
         for key in (
+            "model",
             "model_reasoning_effort",
             "include_collaboration_mode_instructions",
             "developer_instructions",

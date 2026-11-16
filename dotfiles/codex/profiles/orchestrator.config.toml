@@ -1,4 +1,5 @@
-model_reasoning_effort = "high"
+model = "gpt-6-astra"
+model_reasoning_effort = "medium"
 include_collaboration_mode_instructions = false
 
 # Top-level orchestration profile. Select it with: codex --profile orchestrator

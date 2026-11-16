@@ -673,11 +673,11 @@
         key = "cly";
       }
       {
-        description = "Opus orchestrator (yolo)";
+        description = "Fable 5.2 orchestrator (yolo)";
         key = "clo";
       }
       {
-        description = "Fable 5.1 orchestrator (yolo)";
+        description = "Fable 5.2 orchestrator (yolo)";
         key = "clfo";
       }
       {

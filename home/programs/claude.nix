@@ -166,11 +166,11 @@ let
         "") ;;
         cly) claude_profile_args=(--dangerously-skip-permissions) ;;
         clo)
-          claude_profile_args=(--dangerously-skip-permissions --model opus
+          claude_profile_args=(--dangerously-skip-permissions --model claude-fable-5-2 --effort medium
             --append-system-prompt-file "$HOME/.config/claude/orchestrator.md")
           ;;
         clfo)
-          claude_profile_args=(--dangerously-skip-permissions --model claude-fable-5-1
+          claude_profile_args=(--dangerously-skip-permissions --model claude-fable-5-2 --effort medium
             --append-system-prompt-file "$HOME/.config/claude/orchestrator.md")
           ;;
         *)
