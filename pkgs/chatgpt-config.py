@@ -31,7 +31,7 @@ if config.get("model") == "gpt-5.6-sol":
 if args.canonical is not None:
     canonical = tomlkit.parse(args.canonical.read_text())
     for key in (
-        "model_reasoning_effort", "include_collaboration_mode_instructions",
+        "model", "model_reasoning_effort", "include_collaboration_mode_instructions",
         "developer_instructions",
     ):
         config[key] = canonical[key]
