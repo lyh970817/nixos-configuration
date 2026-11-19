@@ -85,7 +85,7 @@ in
     name = "wispr-flow";
     description = "Wispr Flow voice dictation";
     documentation = "https://github.com/wispr-flow-linux/wispr-flow-linux";
-    execStart = "${pkgs.wispr-flow}/bin/wispr-flow";
+    execStart = "${pkgs.wispr-flow}/bin/wispr-flow --hidden";
     environment = [
       # XWayland keeps its transparent status pill click-through on Hyprland
       # (upstream issues #44, #126).
