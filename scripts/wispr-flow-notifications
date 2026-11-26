@@ -1,0 +1,71 @@
+# Follow Wispr Flow's existing production log from its current end. Only
+# fixed lifecycle messages reach the notification server.
+readonly log_path="${XDG_CACHE_HOME:-$HOME/.cache}/wispr-flow/launcher.log"
+readonly log_prefix='^[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3} › '
+readonly empty_result='^Text lengths - ASR: [0-9]+ chars, LLM: [0-9]+ chars, To paste: 0 chars([[:space:]]|$)'
+readonly nonempty_paste='^Paste initiated, text length: [1-9][0-9]*,'
+
+phase=idle
+notification_id=0
+
+show_notification() {
+  local summary=$1 duration=$2 next_id
+  if next_id=$(timeout 2s notify-send --app-name=wispr-flow --transient \
+    --expire-time="$duration" --replace-id="$notification_id" --print-id "$summary"); then
+    notification_id=$next_id
+  fi
+}
+
+close_notification() {
+  if [[ $notification_id != 0 ]]; then
+    busctl --user --timeout=1s call org.freedesktop.Notifications \
+      /org/freedesktop/Notifications org.freedesktop.Notifications \
+      CloseNotification u "$notification_id" > /dev/null || true
+    notification_id=0
+  fi
+}
+
+trap close_notification EXIT
+trap 'exit 0' INT TERM
+
+while IFS= read -r line; do
+  [[ $line =~ $log_prefix ]] || continue
+  event=${line#*' › '}
+  case $event in
+    'Received first real audio packet'*)
+      if [[ $phase != recording ]]; then
+        phase=recording
+        show_notification '● Recording…' 0
+      fi
+      ;;
+    'Received audio:stop message'*)
+      if [[ $phase == recording ]]; then
+        phase=transcribing
+        # Let the bubble expire if a network failure leaves no final event.
+        show_notification 'Transcribing…' 30000
+      fi
+      ;;
+    'Paste initiated, text length: '*)
+      if [[ $phase == transcribing && $event =~ $nonempty_paste ]]; then
+        phase=pasting
+      fi
+      ;;
+    'Electron -> Helper: PasteText request sent'*)
+      if [[ $phase == pasting ]]; then
+        # The request is sent, but the Linux helper's ACK is private IPC.
+        phase=idle
+        show_notification 'Inserting…' 2000
+      fi
+      ;;
+    'Dismissing dictation '*)
+      phase=idle
+      close_notification
+      ;;
+    'Text lengths - ASR: '*)
+      if [[ $phase == transcribing && $event =~ $empty_result ]]; then
+        phase=idle
+        close_notification
+      fi
+      ;;
+  esac
+done < <(tail -n 0 -F -- "$log_path" 2> /dev/null)

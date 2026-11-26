@@ -19,6 +19,16 @@ let
     text = builtins.readFile ../../scripts/dictation-engine;
   };
 
+  wisprFlowNotifications = pkgs.writeShellApplication {
+    name = "wispr-flow-notifications";
+    runtimeInputs = with pkgs; [
+      coreutils
+      libnotify
+      systemd
+    ];
+    text = builtins.readFile ../../scripts/wispr-flow-notifications;
+  };
+
   # A user service that runs only while its engine is selected; otherwise its
   # evdev trigger would fire alongside hyprwhspr on Super+O.
   appEngineService =
@@ -81,15 +91,31 @@ in
     ];
   };
 
-  systemd.user.services.wispr-flow = appEngineService {
-    name = "wispr-flow";
-    description = "Wispr Flow voice dictation";
-    documentation = "https://github.com/wispr-flow-linux/wispr-flow-linux";
-    execStart = "${pkgs.wispr-flow}/bin/wispr-flow --hidden";
-    environment = [
-      # XWayland keeps its transparent status pill click-through on Hyprland
-      # (upstream issues #44, #126).
-      "WISPR_USE_X11=1"
-    ];
+  systemd.user.services.wispr-flow =
+    lib.recursiveUpdate
+      (appEngineService {
+        name = "wispr-flow";
+        description = "Wispr Flow voice dictation";
+        documentation = "https://github.com/wispr-flow-linux/wispr-flow-linux";
+        execStart = "${pkgs.wispr-flow}/bin/wispr-flow --hidden";
+        environment = [
+          # XWayland keeps its transparent status pill click-through on Hyprland
+          # (upstream issues #44, #126).
+          "WISPR_USE_X11=1"
+        ];
+      })
+      {
+        # Start the watcher only after ExecCondition selects Wispr Flow. It is
+        # ordered after this service, so queue the start without waiting for it.
+        Service.ExecStartPost = "-${pkgs.systemd}/bin/systemctl --user --no-block start wispr-flow-notifications.service";
+      };
+
+  systemd.user.services.wispr-flow-notifications = {
+    Unit = {
+      Description = "Wispr Flow dictation status notifications";
+      BindsTo = [ "wispr-flow.service" ];
+      After = [ "wispr-flow.service" ];
+    };
+    Service.ExecStart = "${wisprFlowNotifications}/bin/wispr-flow-notifications";
   };
 }
